@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-i18n-title="page.title.dashboard">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula Account</title>
+  <link rel="stylesheet" href="/shared/css/general.css">
+  <link rel="stylesheet" href="/account/assets/css/common.css">
+  <link rel="stylesheet" href="/account/assets/css/auth.css">
+  <link rel="stylesheet" href="/account/assets/css/dashboard.css">
+  <script src="/shared/js/translations.js"></script>
+</head>
+<body>
+  <header class="top-header">
+    <div class="brand"><span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span></div>
+  </header>
+  
+  <div id="language-switcher-placeholder"></div>
+  
+  <div id="page-loader" class="page-loader">
+    <div class="loader-spinner"></div>
+  </div>
+  
+  <main class="dashboard-main">
+    <!-- 用户头像和欢迎区 -->
+    <section class="profile-header">
+      <div class="avatar-large" id="user-avatar">U</div>
+      <div class="profile-welcome">
+        <h1 id="display-username" data-i18n="dashboard.loading"></h1>
+        <p id="display-email" data-i18n="dashboard.loadingEmail"></p>
+      </div>
+    </section>
+    
+    <!-- 账户信息�?-->
+    <section class="account-section">
+      <h2 class="section-title" data-i18n="dashboard.accountInfo"></h2>
+      
+      <div class="info-list">
+        <div class="info-item clickable" id="change-username-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.username"></span>
+            <span class="info-value" id="info-username">-</span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
+        <div class="info-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.email"></span>
+            <span class="info-value" id="info-email">-</span>
+          </div>
+        </div>
+        
+        <div class="info-item clickable" id="microsoft-link-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.microsoftAccount"></span>
+            <span class="info-value" id="info-microsoft" data-i18n="dashboard.notLinked"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
+        <div class="info-item clickable" id="change-avatar-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.changeAvatar"></span>
+            <span class="info-hint" data-i18n="dashboard.changeAvatarHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- 快捷登录区（仅移动端显示�?-->
+    <section class="account-section is-hidden" id="quick-login-section">
+      <h2 class="section-title" data-i18n="dashboard.quickLogin"></h2>
+      
+      <div class="info-list">
+        <div class="info-item clickable" id="qr-scan-login-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13 2h-2v2h2v2h2v-4h2v-2h-4v2zm0-6h2v2h-2v-2zm-4 4h2v4h-2v-4z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.qrScanLogin"></span>
+            <span class="info-hint" data-i18n="dashboard.qrScanLoginHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- 安全设置�?-->
+    <section class="account-section">
+      <h2 class="section-title" data-i18n="dashboard.security"></h2>
+      
+      <div class="info-list">
+        <div class="info-item clickable" id="change-password-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.changePassword"></span>
+            <span class="info-hint" data-i18n="dashboard.changePasswordHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
+        <div class="info-item clickable logout-item" id="logout-btn">
+          <div class="info-icon logout-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.logout"></span>
+            <span class="info-hint" data-i18n="dashboard.logoutHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
+        <div class="info-item clickable delete-account-item" id="delete-account-item">
+          <div class="info-icon delete-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.deleteAccount"></span>
+            <span class="info-hint" data-i18n="dashboard.deleteAccountHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <footer class="dashboard-footer" data-i18n="footer.copyright"></footer>
+  </main>
+
+  <!-- 通用提示弹窗 -->
+  <div id="alert-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content">
+        <h2 id="alert-title" class="modal-title" data-i18n="modal.alert"></h2>
+        <div class="modal-body">
+          <p id="alert-message" class="modal-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="alert-close-btn" class="button-primary modal-close" data-i18n="modal.close"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div id="confirm-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content">
+        <h2 id="confirm-title" class="modal-title" data-i18n="modal.confirm"></h2>
+        <div class="modal-body">
+          <p id="confirm-message" class="modal-message"></p>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="confirm-no-btn" class="button-secondary" data-i18n="modal.cancel"></button>
+          <button id="confirm-yes-btn" class="button-primary" data-i18n="modal.confirm"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 更改头像弹窗 -->
+  <div id="avatar-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content avatar-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.changeAvatar"></h2>
+        <div class="modal-body">
+          <div class="avatar-preview-row">
+            <div class="avatar-preview-item">
+              <div class="avatar-preview current" id="current-avatar-preview">U</div>
+              <span class="avatar-label" data-i18n="dashboard.currentAvatar"></span>
+            </div>
+            <div class="avatar-arrow">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+            </div>
+            <div class="avatar-preview-item">
+              <div class="avatar-preview new" id="new-avatar-preview"></div>
+              <span class="avatar-label" data-i18n="dashboard.newAvatar"></span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="avatar-url-input" class="sr-only" data-i18n="dashboard.avatarUrlPlaceholder"></label>
+            <input type="text" id="avatar-url-input" data-i18n-placeholder="dashboard.avatarUrlPlaceholder" placeholder="https://example.com/avatar.png" aria-label="Avatar URL" autocomplete="url">
+            <p id="avatar-error" class="form-error is-hidden"></p>
+          </div>
+          <div class="form-group">
+            <button id="use-microsoft-avatar-btn" class="button-secondary is-hidden" data-i18n="dashboard.useMicrosoftAvatar" aria-label="Use Microsoft Avatar">
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="avatar-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+          <button id="avatar-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div id="change-password-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content change-password-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.changePassword"></h2>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="current-password-input" class="sr-only" data-i18n="dashboard.currentPasswordPlaceholder"></label>
+            <input type="password" id="current-password-input" data-i18n-placeholder="dashboard.currentPasswordPlaceholder" aria-label="Current Password" autocomplete="current-password">
+            <p id="current-password-error" class="form-error is-hidden"></p>
+          </div>
+          <div class="form-group">
+            <label for="new-password-input" class="sr-only" data-i18n="dashboard.newPasswordPlaceholder"></label>
+            <input type="password" id="new-password-input" data-i18n-placeholder="dashboard.newPasswordPlaceholder" aria-label="New Password" autocomplete="new-password">
+            <div class="password-requirements">
+              <div class="req-item" id="pwd-req-length" data-i18n="register.reqLength"></div>
+              <div class="req-item" id="pwd-req-number" data-i18n="register.reqNumber"></div>
+              <div class="req-item" id="pwd-req-special" data-i18n="register.reqSpecial"></div>
+              <div class="req-item" id="pwd-req-case" data-i18n="register.reqCase"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="confirm-new-password-input" class="sr-only" data-i18n="dashboard.confirmNewPasswordPlaceholder"></label>
+            <input type="password" id="confirm-new-password-input" data-i18n-placeholder="dashboard.confirmNewPasswordPlaceholder" aria-label="Confirm New Password" autocomplete="new-password">
+            <p id="confirm-password-error" class="form-error is-hidden"></p>
+          </div>
+          
+          <div id="change-password-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="change-password-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+          <button id="change-password-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改用户名弹�?-->
+  <div id="change-username-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.changeUsername"></h2>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-username-input" class="sr-only" data-i18n="dashboard.newUsernamePlaceholder"></label>
+            <input type="text" id="new-username-input" maxlength="15" data-i18n-placeholder="dashboard.newUsernamePlaceholder" aria-label="New Username" autocomplete="username">
+            <p id="username-error" class="form-error is-hidden"></p>
+          </div>
+          
+          <div id="change-username-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="change-username-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+          <button id="change-username-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除账户弹窗 -->
+  <div id="delete-account-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content delete-account-modal-content">
+        <h2 class="modal-title delete-title" data-i18n="dashboard.deleteAccount"></h2>
+        <div class="modal-body">
+          <p class="delete-warning" data-i18n="dashboard.deleteAccountWarning"></p>
+          
+          <div class="form-group">
+            <label for="delete-code-input" class="sr-only" data-i18n="dashboard.verificationCodePlaceholder"></label>
+            <input type="text" id="delete-code-input" maxlength="6" data-i18n-placeholder="dashboard.verificationCodePlaceholder" aria-label="Verification Code" autocomplete="one-time-code">
+            <p id="delete-code-error" class="form-error is-hidden"></p>
+          </div>
+          <div class="form-group">
+            <button id="delete-send-code-btn" class="button-secondary" data-i18n="dashboard.sendCode" aria-label="Send verification code"></button>
+          </div>
+          
+          <div id="delete-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+          
+          <div class="form-group">
+            <label for="delete-password-input" class="sr-only" data-i18n="dashboard.passwordPlaceholder"></label>
+            <input type="password" id="delete-password-input" data-i18n-placeholder="dashboard.passwordPlaceholder" aria-label="Password" autocomplete="current-password">
+            <p id="delete-password-error" class="form-error is-hidden"></p>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="delete-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+          <button id="delete-confirm-btn" class="button-primary button-danger" disabled data-i18n="dashboard.confirmDelete" aria-label="Confirm Delete"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 扫码登录弹窗 -->
+  <div id="qr-scan-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content qr-scan-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.scanQrCode"></h2>
+        <div class="modal-body">
+          <div id="qr-scanner-container" class="qr-scanner-container">
+            <video id="qr-scanner-video" autoplay playsinline></video>
+            <div class="qr-scanner-overlay">
+              <div class="qr-scanner-frame"></div>
+            </div>
+          </div>
+          <p id="qr-scan-status" class="qr-scan-status" data-i18n="dashboard.scanQrHint"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="qr-scan-close-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 扫码登录确认弹窗 -->
+  <div id="qr-login-confirm-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content qr-login-confirm-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.qrLoginConfirmTitle"></h2>
+        <div class="modal-body">
+          <p class="qr-login-confirm-desc" data-i18n="dashboard.qrLoginConfirmDesc"></p>
+          <div class="pc-info-card">
+            <div class="pc-info-item">
+              <span class="pc-info-label" data-i18n="dashboard.pcInfoIP"></span>
+              <span class="pc-info-value" id="pc-info-ip">-</span>
+            </div>
+            <div class="pc-info-item">
+              <span class="pc-info-label" data-i18n="dashboard.pcInfoBrowser"></span>
+              <span class="pc-info-value" id="pc-info-browser">-</span>
+            </div>
+            <div class="pc-info-item">
+              <span class="pc-info-label" data-i18n="dashboard.pcInfoOS"></span>
+              <span class="pc-info-value" id="pc-info-os">-</span>
+            </div>
+          </div>
+          <p class="qr-login-warning" data-i18n="dashboard.qrLoginWarning"></p>
+        </div>
+        <div class="modal-footer modal-footer-buttons">
+          <button id="qr-login-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
+          <button id="qr-login-confirm-btn" class="button-primary" data-i18n="dashboard.confirmLogin" aria-label="Confirm Login"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/account/assets/js/dashboard.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+  <script src="https://s3.gendome.net/activity/js/jsQR.js" async></script>
+</body>
+</html>

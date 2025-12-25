@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-i18n-title="page.title.linkConfirm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula Account</title>
+  <link rel="stylesheet" href="/shared/css/general.css">
+  <link rel="stylesheet" href="/account/assets/css/common.css">
+  <link rel="stylesheet" href="/account/assets/css/auth.css">
+  <link rel="stylesheet" href="/account/assets/css/link-confirm.css">
+  <script src="/shared/js/translations.js"></script>
+</head>
+<body>
+  <header class="top-header">
+    <div class="brand"><span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span></div>
+  </header>
+  
+  <div id="language-switcher-placeholder"></div>
+  
+  <!-- 页面加载遮罩 -->
+  <div id="page-loader" class="page-loader">
+    <div class="loader-spinner"></div>
+  </div>
+  
+  <div class="content-container">
+    <div class="card">
+      <h1 class="card-title" data-i18n="linkConfirm.title"></h1>
+      <p class="subtitle" data-i18n="linkConfirm.subtitle"></p>
+      
+      <!-- 账户绑定可视�?-->
+      <div class="link-visual">
+        <!-- 已有账户头像 -->
+        <div class="link-avatar-item">
+          <div class="link-avatar" id="user-avatar">U</div>
+          <span class="link-avatar-label" id="user-username">-</span>
+        </div>
+        
+        <!-- 链接图标 -->
+        <div class="link-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+        </div>
+        
+        <!-- 微软账户头像 -->
+        <div class="link-avatar-item">
+          <div class="link-avatar" id="microsoft-avatar">M</div>
+          <span class="link-avatar-label" id="microsoft-name">-</span>
+        </div>
+      </div>
+      
+      <p class="link-warning" data-i18n="linkConfirm.warning"></p>
+      
+      <div class="button-group">
+        <button type="button" id="confirm-btn" class="button-primary" data-i18n="linkConfirm.confirmLink" aria-label="Confirm Link"></button>
+        <button type="button" id="cancel-btn" class="button-secondary" data-i18n="linkConfirm.cancel" aria-label="Cancel"></button>
+      </div>
+    </div>
+    <div class="page-footer" data-i18n="footer.copyright"></div>
+  </div>
+
+  <!-- 通用提示弹窗 -->
+  <div id="alert-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content">
+        <h2 id="alert-title" class="modal-title" data-i18n="modal.alert"></h2>
+        <div class="modal-body">
+          <p id="alert-message" class="modal-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="alert-close-btn" class="button-primary modal-close" data-i18n="modal.close"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/account/assets/js/link-confirm.js"></script>
+</body>
+</html>

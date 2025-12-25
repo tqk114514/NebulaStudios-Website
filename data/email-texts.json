@@ -1,0 +1,95 @@
+{
+  "zh-CN": {
+    "common": {
+      "greeting": "您好！",
+      "buttonText": "获取验证码",
+      "textBody": "请点击以下链接获取您的验证码：\n\n{{VERIFY_URL}}\n\n链接有效期为5分钟。",
+      "linkHint": "如果按钮无法点击，请复制以下链接到浏览器：",
+      "expireNotice": "此链接有效期为 <strong style=\"color: #333333;\">5分钟</strong>",
+      "securityTip": "<strong>安全提示：</strong>如果这不是您本人的操作，请忽略此邮件。请勿将链接分享给他人。",
+      "footer": "&copy; 2025 Nebula Studios 版权所有"
+    },
+    "register": {
+      "subject": "【Nebula Studios】您的注册验证码",
+      "pageTitle": "验证码 - Nebula Studios",
+      "description": "您正在注册 Nebula Studios 账户，请点击下方按钮获取您的验证码："
+    },
+    "reset_password": {
+      "subject": "【Nebula Studios】重置密码",
+      "pageTitle": "重置密码 - Nebula Studios",
+      "description": "您正在重置 Nebula Studios 账户密码，请点击下方按钮获取验证码："
+    },
+    "change_password": {
+      "subject": "【Nebula Studios】修改密码验证",
+      "pageTitle": "修改密码 - Nebula Studios",
+      "description": "您正在修改 Nebula Studios 账户密码，请点击下方按钮获取验证码："
+    },
+    "delete_account": {
+      "subject": "【Nebula Studios】删除账户确认",
+      "pageTitle": "删除账户 - Nebula Studios",
+      "description": "您正在申请删除 Nebula Studios 账户，请点击下方按钮获取验证码："
+    }
+  },
+  "zh-TW": {
+    "common": {
+      "greeting": "您好！",
+      "buttonText": "獲取驗證碼",
+      "textBody": "請點擊以下連結獲取您的驗證碼：\n\n{{VERIFY_URL}}\n\n連結有效期為5分鐘。",
+      "linkHint": "如果按鈕無法點擊，請複製以下連結到瀏覽器：",
+      "expireNotice": "此連結有效期為 <strong style=\"color: #333333;\">5分鐘</strong>",
+      "securityTip": "<strong>安全提示：</strong>如果這不是您本人的操作，請忽略此郵件。請勿將連結分享給他人。",
+      "footer": "&copy; 2025 Nebula Studios 版權所有"
+    },
+    "register": {
+      "subject": "【Nebula Studios】您的註冊驗證碼",
+      "pageTitle": "驗證碼 - Nebula Studios",
+      "description": "您正在註冊 Nebula Studios 帳戶，請點擊下方按鈕獲取您的驗證碼："
+    },
+    "reset_password": {
+      "subject": "【Nebula Studios】重置密碼",
+      "pageTitle": "重置密碼 - Nebula Studios",
+      "description": "您正在重置 Nebula Studios 帳戶密碼，請點擊下方按鈕獲取驗證碼："
+    },
+    "change_password": {
+      "subject": "【Nebula Studios】修改密碼驗證",
+      "pageTitle": "修改密碼 - Nebula Studios",
+      "description": "您正在修改 Nebula Studios 帳戶密碼，請點擊下方按鈕獲取驗證碼："
+    },
+    "delete_account": {
+      "subject": "【Nebula Studios】刪除帳戶確認",
+      "pageTitle": "刪除帳戶 - Nebula Studios",
+      "description": "您正在申請刪除 Nebula Studios 帳戶，請點擊下方按鈕獲取驗證碼："
+    }
+  },
+  "en": {
+    "common": {
+      "greeting": "Hello!",
+      "buttonText": "Get Code",
+      "textBody": "Please click the following link to get your verification code:\n\n{{VERIFY_URL}}\n\nThis link is valid for 5 minutes.",
+      "linkHint": "If the button doesn't work, copy and paste this link into your browser:",
+      "expireNotice": "This link is valid for <strong style=\"color: #333333;\">5 minutes</strong>",
+      "securityTip": "<strong>Security Notice:</strong> If you didn't request this, please ignore this email. Do not share this link with anyone.",
+      "footer": "&copy; 2025 Nebula Studios All Rights Reserved"
+    },
+    "register": {
+      "subject": "[Nebula Studios] Your Verification Code",
+      "pageTitle": "Verification - Nebula Studios",
+      "description": "You are registering a Nebula Studios account. Please click the button below to get your verification code:"
+    },
+    "reset_password": {
+      "subject": "[Nebula Studios] Reset Password",
+      "pageTitle": "Reset Password - Nebula Studios",
+      "description": "You are resetting your Nebula Studios account password. Please click the button below to get your verification code:"
+    },
+    "change_password": {
+      "subject": "[Nebula Studios] Change Password Verification",
+      "pageTitle": "Change Password - Nebula Studios",
+      "description": "You are changing your Nebula Studios account password. Please click the button below to get your verification code:"
+    },
+    "delete_account": {
+      "subject": "[Nebula Studios] Delete Account Confirmation",
+      "pageTitle": "Delete Account - Nebula Studios",
+      "description": "You are requesting to delete your Nebula Studios account. Please click the button below to get your verification code:"
+    }
+  }
+}
