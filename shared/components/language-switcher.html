@@ -1,0 +1,66 @@
+<!-- 语言切换器组件（下拉列表式） -->
+<div class="language-switcher-container">
+  <div class="language-switcher" role="listbox" aria-label="Language selection">
+    <button class="language-current" aria-haspopup="listbox" aria-expanded="false">
+      <svg class="lang-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span class="lang-text">简体中文</span>
+      <svg class="lang-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="language-dropdown" role="listbox">
+      <button class="language-option active" data-lang="zh-CN" role="option" aria-selected="true">
+        <span>简体中文</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="zh-TW" role="option" aria-selected="false">
+        <span>繁體中文</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="en" role="option" aria-selected="false">
+        <span>English</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="ja" role="option" aria-selected="false">
+        <span>日本語</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="ko" role="option" aria-selected="false">
+        <span>한국어</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="es" role="option" aria-selected="false">
+        <span>Espanol</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="fr" role="option" aria-selected="false">
+        <span>Francais</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="language-option" data-lang="de" role="option" aria-selected="false">
+        <span>Deutsch</span>
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,180 @@
+/* assets/css/auth.css */
+/* 登录/注册页面共用样式 */
+
+/* Password Requirements */
+.password-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 0 5px;
+  justify-content: center;
+}
+
+.req-item {
+  color: var(--text-disabled);
+  transition: 
+    color 0.3s ease, 
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    text-shadow 0.3s ease;
+}
+
+.req-item.is-valid {
+  color: var(--success);
+  transform: scale(1.05);
+  text-shadow: 0 0 8px rgba(var(--success-rgb), 0.4);
+}
+
+/* 注册表单元素动画（使用 general.css 中的 slideUpFade） */
+#register-form > .form-group { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+#register-form > .form-group:nth-of-type(1) { animation-delay: 0.1s; }  /* 用户名 */
+#register-form > .form-group:nth-of-type(2) { animation-delay: 0.15s; } /* 邮箱 */
+#register-form > .form-group:nth-of-type(3) { animation-delay: 0.2s; }  /* 验证码 */
+#register-form > .form-group:nth-of-type(4) { animation-delay: 0.25s; } /* 发送验证码 */
+#register-form > .form-group:nth-of-type(5) { animation-delay: 0.3s; }  /* 密码 */
+#register-form > .form-group:nth-of-type(6) { animation-delay: 0.35s; } /* 确认密码 */
+#register-form > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s backwards; }
+
+/* 登录表单元素动画 */
+#login-form > .form-group:nth-child(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#login-form > .form-group:nth-child(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#login-form > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
+
+/* 忘记密码表单元素动画 */
+#email-step > .form-group:nth-of-type(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#email-step > .form-group:nth-of-type(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#reset-step > .form-group:nth-of-type(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#reset-step > .form-group:nth-of-type(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#reset-step > .form-group:nth-of-type(3) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
+#reset-step > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards; }
+
+/* 步骤表单切换 */
+.step-form.is-hidden { display: none; }
+
+.footer-links {
+  animation: fadeIn 0.5s ease 0.5s backwards;
+}
+
+
+/* OAuth 分隔线 */
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  animation: fadeIn 0.5s ease 0.45s backwards;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--white-rgb), 0.15), transparent);
+}
+
+.oauth-divider span {
+  padding: 0 16px;
+}
+
+/* OAuth 按钮容器 */
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s backwards;
+}
+
+/* ==================== 扫码登录弹窗（仅特定样式） ==================== */
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px auto;
+  padding: 16px;
+  background: var(--text);
+  border-radius: 12px;
+  width: fit-content;
+  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.qr-login-hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+/* 扫描成功图标 */
+.qr-scanned-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px auto;
+  padding: 16px;
+  background: var(--text);
+  border-radius: 12px;
+  width: 200px;
+  height: 200px;
+  box-sizing: border-box;
+  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.qr-scanned-icon svg {
+  width: 80px;
+  height: 80px;
+  animation: checkPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+}
+
+@keyframes checkPop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+.qr-scanned-icon .icon-check {
+  color: var(--success);
+}
+
+.qr-scanned-icon .icon-cancel {
+  display: none;
+  color: var(--danger);
+}
+
+.qr-scanned-icon.is-cancelled .icon-check {
+  display: none;
+}
+
+.qr-scanned-icon.is-cancelled .icon-cancel {
+  display: block;
+}
+
+.qr-scanned-icon.is-hidden {
+  display: none;
+}
+
+/* 二维码加载状态（复用 general.css 的 spin 动画） */
+.qr-loading {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-loading::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s ease-in-out infinite;
+  box-shadow: var(--glow-primary);
+}
