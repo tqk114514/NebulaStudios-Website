@@ -1,0 +1,558 @@
+/* Dashboard Layout */
+html:has(.dashboard-main) {
+  overflow: hidden;
+}
+
+html:has(.dashboard-main.is-overflow) {
+  overflow: auto;
+}
+
+.dashboard-main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  padding-top: 85px; /* 70px 顶框 + 15px 间距 */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.dashboard-main.is-overflow {
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+/* Profile Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+
+.avatar-large {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--gradient-avatar);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 40px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  box-shadow: 
+    0 4px 20px rgba(var(--accent-rgb), 0.3),
+    0 0 0 3px rgba(var(--accent-rgb), 0.1);
+  overflow: hidden;
+  transition: 
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s ease;
+}
+
+.avatar-large:hover {
+  transform: scale(1.05);
+  box-shadow: 
+    0 8px 30px rgba(var(--accent-rgb), 0.4),
+    0 0 0 4px rgba(var(--accent-rgb), 0.15);
+}
+
+.avatar-large .avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-welcome h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.profile-welcome p {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Account Sections */
+.account-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 16px 0;
+  padding-left: 4px;
+}
+
+/* Info List */
+.info-list {
+  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: height 0.3s ease;
+  box-shadow: 0 4px 20px rgba(var(--black-rgb), 0.2);
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  transition: 
+    background 0.25s ease,
+    transform 0.2s ease;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-item.clickable {
+  cursor: pointer;
+}
+
+.info-item.clickable:hover {
+  background: rgba(var(--white-rgb), 0.03);
+  transform: translateX(4px);
+}
+
+.info-item.clickable:active {
+  transform: translateX(2px);
+}
+
+.info-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.info-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.info-value {
+  display: block;
+  font-size: 15px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-hint {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.info-arrow {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.info-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 绑定/解绑按钮 */
+.link-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+  background-color: rgba(var(--white-rgb), 0.05);
+  color: var(--text);
+  border: 1px solid rgba(var(--white-rgb), 0.2);
+  backdrop-filter: blur(5px);
+}
+
+.link-btn:hover {
+  background-color: rgba(var(--white-rgb), 0.1);
+  border-color: var(--primary);
+  color: var(--text);
+  box-shadow: 0 0 20px rgba(112, 0, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.link-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.link-btn.is-unlink {
+  background: rgba(var(--danger-rgb), 0.1);
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  color: var(--danger);
+}
+
+.link-btn.is-unlink:hover {
+  background: rgba(var(--danger-rgb), 0.2);
+  border-color: var(--danger);
+  box-shadow: 0 0 20px rgba(var(--danger-rgb), 0.25);
+  transform: translateY(-2px);
+}
+
+/* Linked Status */
+.info-value.is-linked {
+  color: var(--success);
+}
+
+.info-value.is-not-linked {
+  color: var(--text-secondary);
+}
+
+/* Dashboard Footer */
+.dashboard-footer {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .dashboard-main {
+    padding: 24px 16px;
+    padding-top: 85px;
+  }
+  
+  .dashboard-main:not(.is-overflow) {
+    padding-top: 85px;
+  }
+  
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+  
+  .avatar-large {
+    width: 80px;
+    height: 80px;
+    font-size: 32px;
+  }
+  
+  .profile-welcome h1 {
+    font-size: 24px;
+  }
+  
+  .info-item {
+    padding: 14px 16px;
+  }
+}
+
+/* Animations（使用 general.css 中的 fadeIn 和 slideUpFade） */
+.profile-header {
+  animation: fadeIn 0.4s ease;
+}
+
+.account-section {
+  animation: fadeIn 0.4s ease backwards;
+}
+
+.account-section:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.account-section:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* 语言切换动画 */
+.dashboard-main.lang-switching .profile-header,
+.dashboard-main.lang-switching .account-section {
+  animation: slideUpFade 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.dashboard-main.lang-switching .profile-header {
+  animation-delay: 0s;
+}
+
+.dashboard-main.lang-switching .account-section:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.dashboard-main.lang-switching .account-section:nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+
+
+
+
+
+
+/* 退出登录项样式 */
+.logout-item .info-label {
+  color: var(--danger);
+}
+
+.logout-item:hover {
+  background: rgba(var(--danger-rgb), 0.05);
+}
+
+.logout-icon {
+  background: rgba(var(--danger-rgb), 0.1) !important;
+}
+
+.logout-icon svg {
+  color: var(--danger) !important;
+}
+
+/* 更改头像弹窗 */
+.avatar-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.avatar-preview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.avatar-preview.current {
+  background: var(--gradient-avatar);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
+}
+
+.avatar-preview.new {
+  background: var(--bg-input);
+  border: 2px dashed var(--border);
+}
+
+.avatar-preview.new.is-loaded {
+  border: 2px solid var(--success);
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.avatar-arrow {
+  color: var(--text-secondary);
+}
+
+.avatar-arrow svg {
+  width: 32px;
+  height: 32px;
+}
+
+/* 头像输入框只读状态 */
+#avatar-url-input.readonly-placeholder {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* 微软头像按钮图标 */
+#use-microsoft-avatar-btn::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%23ffffff' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z'/%3E%3C/svg%3E");
+  background-size: contain;
+}
+
+#use-microsoft-avatar-btn.is-hidden {
+  display: none;
+}
+
+/* 删除账户项样式 */
+.delete-account-item .info-label {
+  color: var(--danger);
+}
+
+.delete-account-item:hover {
+  background: rgba(var(--danger-rgb), 0.05);
+}
+
+.delete-icon {
+  background: rgba(var(--danger-rgb), 0.1) !important;
+}
+
+.delete-icon svg {
+  color: var(--danger) !important;
+}
+
+/* 删除账户弹窗 */
+.delete-title {
+  color: var(--danger) !important;
+}
+
+.delete-warning {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+/* Turnstile 在弹窗中的样式 */
+.delete-account-modal-content .turnstile-wrapper {
+  margin: 16px 0;
+}
+
+.delete-account-modal-content .turnstile-wrapper.is-hidden {
+  display: none;
+}
+
+
+/* ==================== 扫码弹窗样式（仅特定样式） ==================== */
+
+.qr-scanner-container {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1;
+  margin: 0 auto 16px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#qr-scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-scanner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.qr-scanner-frame {
+  width: 200px;
+  height: 200px;
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(var(--black-rgb), 0.5);
+  animation: scanPulse 2s ease-in-out infinite;
+}
+
+@keyframes scanPulse {
+  0%, 100% { border-color: var(--primary-color); }
+  50% { border-color: rgba(var(--primary-rgb), 0.5); }
+}
+
+.qr-scan-status {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.qr-scan-status.error { color: var(--danger); }
+.qr-scan-status.success { color: var(--success); }
+
+/* ==================== 扫码登录确认弹窗（仅特定样式） ==================== */
+
+.pc-info-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.pc-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.pc-info-item:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.pc-info-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pc-info-value {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.qr-login-warning {
+  color: var(--warning);
+  font-size: 12px;
+  margin: 0;
+}

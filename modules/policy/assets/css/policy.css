@@ -1,0 +1,239 @@
+/**
+ * modules/policy/assets/css/policy.css
+ * Policy 模块样式
+ * 
+ * 包含：
+ * - 文档容器
+ * - 标题、段落
+ * - 列表样式
+ */
+
+/* --- 文档容器 --- */
+.policy-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 100px 40px 60px;
+  box-sizing: border-box;
+  animation: policyFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes policyFadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+}
+
+/* --- 文档标题 --- */
+.policy-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px;
+  letter-spacing: -0.5px;
+}
+
+.policy-meta {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 40px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- 章节 --- */
+.policy-section {
+  margin-bottom: 40px;
+  animation: sectionFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+.policy-section:nth-child(1) { animation-delay: 0.1s; }
+.policy-section:nth-child(2) { animation-delay: 0.15s; }
+.policy-section:nth-child(3) { animation-delay: 0.2s; }
+.policy-section:nth-child(4) { animation-delay: 0.25s; }
+.policy-section:nth-child(5) { animation-delay: 0.3s; }
+.policy-section:nth-child(n+6) { animation-delay: 0.35s; }
+
+@keyframes sectionFadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(15px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+}
+
+.policy-section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 16px;
+}
+
+.policy-section p {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+
+.policy-section p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- 列表 --- */
+.policy-section ul {
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+
+.policy-section li {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.policy-section li:last-child {
+  margin-bottom: 0;
+}
+
+/* --- 有序列表 --- */
+.policy-section ol {
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+
+.policy-section ol li {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+/* --- 表格 --- */
+.policy-section table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.policy-section th,
+.policy-section td {
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+}
+
+.policy-section th {
+  background-color: rgba(var(--white-rgb), 0.05);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.policy-section td {
+  color: var(--text-muted);
+}
+
+/* --- 子标题 --- */
+.policy-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 24px 0 12px;
+}
+
+/* --- 链接 --- */
+.policy-section a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: 
+    opacity 0.2s ease,
+    text-shadow 0.2s ease;
+  position: relative;
+}
+
+.policy-section a::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--primary);
+  transition: width 0.25s ease;
+}
+
+.policy-section a:hover {
+  opacity: 0.9;
+  text-shadow: 0 0 8px rgba(var(--primary-rgb), 0.3);
+}
+
+.policy-section a:hover::after {
+  width: 100%;
+}
+
+/* --- 强调文本 --- */
+.policy-section strong {
+  color: var(--text);
+}
+
+/* --- 联系信息 --- */
+.policy-contact {
+  margin-top: 40px;
+  padding: 24px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: 
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+.policy-contact:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.policy-contact a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.policy-contact a:hover {
+  opacity: 0.8;
+}
+
+/* --- 页脚 --- */
+.policy-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-disabled);
+  font-size: 12px;
+}
+
+/* --- 响应式 --- */
+@media (max-width: 600px) {
+  .policy-container {
+    padding: 90px 20px 40px;
+  }
+  
+  .policy-title {
+    font-size: 28px;
+  }
+  
+  .policy-section h2 {
+    font-size: 18px;
+  }
+}

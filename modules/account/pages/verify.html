@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-i18n-title="page.title.verify">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula Account</title>
+  <link rel="stylesheet" href="/shared/css/general.css">
+  <link rel="stylesheet" href="/account/assets/css/common.css">
+  <link rel="stylesheet" href="/account/assets/css/verify.css">
+  <script src="/shared/js/translations.js"></script>
+</head>
+<body>
+  <header class="top-header">
+    <div class="brand"><span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span></div>
+  </header>
+  
+  <!-- 语言切换器占位符 -->
+  <div id="language-switcher-placeholder"></div>
+  
+  <!-- 页面加载遮罩 -->
+  <div id="page-loader" class="page-loader">
+    <div class="loader-spinner"></div>
+  </div>
+  
+  <div class="content-container">
+    <div class="card">
+      <!-- Loading State -->
+      <div id="loading-state">
+        <div class="verify-title" data-i18n="verify.loading"></div>
+        <div class="loading-spinner"></div>
+      </div>
+      
+      <!-- Success State -->
+      <div id="success-state" style="display: none;">
+        <div class="verify-title" data-i18n="verify.title"></div>
+        <div class="verify-subtitle" data-i18n="verify.subtitle"></div>
+        
+        <div class="code-display">
+          <div class="code-boxes" id="verification-code">
+            <div class="code-box">-</div>
+            <div class="code-box">-</div>
+            <div class="code-box">-</div>
+            <div class="code-box">-</div>
+            <div class="code-box">-</div>
+            <div class="code-box">-</div>
+          </div>
+          <div class="code-hint" data-i18n="verify.copyHint"></div>
+        </div>
+        
+        <div class="expire-notice">
+          <p class="expire-text" data-i18n="verify.expireNotice"></p>
+        </div>
+        
+        <button type="button" id="success-back-btn" class="button-secondary" data-i18n="verify.backButton" aria-label="Go back"></button>
+      </div>
+      
+      <!-- Error State -->
+      <div id="error-state" style="display: none;">
+        <div class="error-container">
+          <div class="error-title" data-i18n="verify.errorTitle"></div>
+          <p class="error-text" id="error-message" data-i18n="verify.errorDefault"></p>
+        </div>
+        <button type="button" id="error-back-btn" class="button-secondary" data-i18n="verify.backButton" aria-label="Go back"></button>
+      </div>
+    </div>
+    <!-- 页面底部版权信息 -->
+    <div class="page-footer" data-i18n="footer.copyright"></div>
+  </div>
+  
+  <!-- 页面专属脚本 -->
+  <script type="module" src="/account/assets/js/verify.js"></script>
+</body>
+</html>
