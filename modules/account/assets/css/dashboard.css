@@ -457,12 +457,12 @@ html:has(.dashboard-main.is-overflow) {
   text-align: center;
 }
 
-/* Turnstile 在弹窗中的样式 */
-.delete-account-modal-content .turnstile-wrapper {
+/* Captcha 在弹窗中的样式 */
+.delete-account-modal-content .captcha-wrapper {
   margin: 16px 0;
 }
 
-.delete-account-modal-content .turnstile-wrapper.is-hidden {
+.delete-account-modal-content .captcha-wrapper.is-hidden {
   display: none;
 }
 

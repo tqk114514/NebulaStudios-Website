@@ -5,7 +5,7 @@
  * 功能：
  * - 静态文件服务（HTML 页面，Brotli 压缩）
  * - 页面路由（Account、Policy 模块）
- * - 配置 API（Turnstile 站点密钥）
+ * - 配置 API（验证码站点密钥）
  * - 健康检查 API（数据库、缓存、WebSocket 状态）
  * - 404 页面处理
  *
@@ -13,7 +13,7 @@
  * - internal/cache (用户缓存统计)
  * - internal/config (应用配置)
  * - internal/models (数据库连接池)
- * - internal/services (WebSocket 服务)
+ * - internal/services (WebSocket 服务、验证码服务)
  *
  * 页面模块：
  * - Account 模块：登录、注册、验证、忘记密码、仪表盘、链接确认
@@ -76,9 +76,10 @@ var IsProduction bool
 // StaticHandler 静态文件 Handler
 // 处理静态文件服务和配置 API
 type StaticHandler struct {
-	cfg       *config.Config             // 应用配置
-	userCache *cache.UserCache           // 用户缓存
-	wsService *services.WebSocketService // WebSocket 服务
+	cfg            *config.Config             // 应用配置
+	userCache      *cache.UserCache           // 用户缓存
+	wsService      *services.WebSocketService // WebSocket 服务
+	captchaService *services.CaptchaService   // 验证码服务
 }
 
 // ====================  构造函数 ====================
@@ -89,11 +90,12 @@ type StaticHandler struct {
 //   - cfg: 应用配置（必需）
 //   - userCache: 用户缓存（必需，用于健康检查）
 //   - wsService: WebSocket 服务（必需，用于健康检查）
+//   - captchaService: 验证码服务（必需，用于配置 API）
 //
 // 返回：
 //   - *StaticHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
-func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService *services.WebSocketService) (*StaticHandler, error) {
+func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService *services.WebSocketService, captchaService *services.CaptchaService) (*StaticHandler, error) {
 	// 参数验证
 	if cfg == nil {
 		log.Println("[STATIC] ERROR: cfg is nil")
@@ -107,26 +109,31 @@ func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService 
 		log.Println("[STATIC] ERROR: wsService is nil")
 		return nil, errors.New("wsService is required")
 	}
+	if captchaService == nil {
+		log.Println("[STATIC] ERROR: captchaService is nil")
+		return nil, errors.New("captchaService is required")
+	}
 
 	log.Println("[STATIC] StaticHandler initialized")
 
 	return &StaticHandler{
-		cfg:       cfg,
-		userCache: userCache,
-		wsService: wsService,
+		cfg:            cfg,
+		userCache:      userCache,
+		wsService:      wsService,
+		captchaService: captchaService,
 	}, nil
 }
 
 // ====================  配置 API ====================
 
-// GetTurnstileSiteKey 获取 Turnstile 站点密钥
-// GET /api/config/turnstile-site-key
+// GetCaptchaConfig 获取验证码配置
+// GET /api/config/captcha
 //
 // 响应：
-//   - siteKey: Turnstile 站点密钥
-func (h *StaticHandler) GetTurnstileSiteKey(c *gin.Context) {
-	if h.cfg == nil {
-		log.Println("[STATIC] ERROR: Config is nil in GetTurnstileSiteKey")
+//   - providers: 可用验证器列表 [{type, siteKey}, ...]
+func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
+	if h.captchaService == nil {
+		log.Println("[STATIC] ERROR: CaptchaService is nil in GetCaptchaConfig")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
 			"errorCode": "CONFIG_NOT_LOADED",
@@ -134,12 +141,14 @@ func (h *StaticHandler) GetTurnstileSiteKey(c *gin.Context) {
 		return
 	}
 
-	siteKey := h.cfg.TurnstileSiteKey
-	if siteKey == "" {
-		log.Println("[STATIC] WARN: Turnstile site key is empty")
+	providers := h.captchaService.GetConfig()
+	if len(providers) == 0 {
+		log.Println("[STATIC] WARN: No captcha providers configured")
 	}
 
-	c.JSON(http.StatusOK, gin.H{"siteKey": siteKey})
+	c.JSON(http.StatusOK, gin.H{
+		"providers": providers,
+	})
 }
 
 // GetHealth 健康检查（增强版）

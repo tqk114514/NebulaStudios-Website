@@ -12,7 +12,7 @@
  * - UserRepository: 用户数据访问
  * - TokenService: 验证码管理
  * - EmailService: 邮件发送
- * - TurnstileService: 人机验证
+ * - CaptchaService: 人机验证
  * - UserCache: 用户缓存
  */
 
@@ -43,8 +43,8 @@ var (
 	ErrUserHandlerNilTokenService = errors.New("token service is nil")
 	// ErrUserHandlerNilEmailService 邮件服务为空
 	ErrUserHandlerNilEmailService = errors.New("email service is nil")
-	// ErrUserHandlerNilTurnstileService Turnstile 服务为空
-	ErrUserHandlerNilTurnstileService = errors.New("turnstile service is nil")
+	// ErrUserHandlerNilCaptchaService 验证码服务为空
+	ErrUserHandlerNilCaptchaService = errors.New("captcha service is nil")
 	// ErrUserHandlerNilUserCache 用户缓存为空
 	ErrUserHandlerNilUserCache = errors.New("user cache is nil")
 	// ErrUserHandlerEmptyBaseURL BaseURL 为空
@@ -56,17 +56,18 @@ var (
 // UserHandler 用户管理 Handler
 type UserHandler struct {
 	userRepo         *models.UserRepository
-	tokenService     *services.TokenService
-	emailService     *services.EmailService
-	turnstileService *services.TurnstileService
-	userCache        *cache.UserCache
+	tokenService   *services.TokenService
+	emailService   *services.EmailService
+	captchaService *services.CaptchaService
+	userCache      *cache.UserCache
 	baseURL          string
 }
 
 // updateUsernameRequest 更新用户名请求
 type updateUsernameRequest struct {
-	Username       string `json:"username"`
-	TurnstileToken string `json:"turnstileToken"`
+	Username     string `json:"username"`
+	CaptchaToken string `json:"captchaToken"`
+	CaptchaType  string `json:"captchaType"`
 }
 
 // updateAvatarRequest 更新头像请求
@@ -76,8 +77,9 @@ type updateAvatarRequest struct {
 
 // sendDeleteCodeRequest 发送删除验证码请求
 type sendDeleteCodeRequest struct {
-	TurnstileToken string `json:"turnstileToken"`
-	Language       string `json:"language"`
+	CaptchaToken string `json:"captchaToken"`
+	CaptchaType  string `json:"captchaType"`
+	Language     string `json:"language"`
 }
 
 // deleteAccountRequest 删除账户请求
@@ -93,7 +95,7 @@ type deleteAccountRequest struct {
 //   - userRepo: 用户数据仓库
 //   - tokenService: Token 服务
 //   - emailService: 邮件服务
-//   - turnstileService: Turnstile 验证服务
+//   - captchaService: 验证码服务
 //   - userCache: 用户缓存
 //   - baseURL: 基础 URL
 //
@@ -104,7 +106,7 @@ func NewUserHandler(
 	userRepo *models.UserRepository,
 	tokenService *services.TokenService,
 	emailService *services.EmailService,
-	turnstileService *services.TurnstileService,
+	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
 	baseURL string,
 ) (*UserHandler, error) {
@@ -118,8 +120,8 @@ func NewUserHandler(
 	if emailService == nil {
 		return nil, ErrUserHandlerNilEmailService
 	}
-	if turnstileService == nil {
-		return nil, ErrUserHandlerNilTurnstileService
+	if captchaService == nil {
+		return nil, ErrUserHandlerNilCaptchaService
 	}
 	if userCache == nil {
 		return nil, ErrUserHandlerNilUserCache
@@ -132,10 +134,10 @@ func NewUserHandler(
 
 	return &UserHandler{
 		userRepo:         userRepo,
-		tokenService:     tokenService,
-		emailService:     emailService,
-		turnstileService: turnstileService,
-		userCache:        userCache,
+		tokenService:   tokenService,
+		emailService:   emailService,
+		captchaService: captchaService,
+		userCache:      userCache,
 		baseURL:          baseURL,
 	}, nil
 }
@@ -161,10 +163,10 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		return
 	}
 
-	// Turnstile 验证
-	if err := h.verifyTurnstile(req.TurnstileToken, c.ClientIP()); err != nil {
-		log.Printf("[USER] WARN: Turnstile verification failed for username change: userID=%d", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "TURNSTILE_FAILED"})
+	// 验证码验证
+	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
+		log.Printf("[USER] WARN: Captcha verification failed for username change: userID=%d", userID)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "CAPTCHA_FAILED"})
 		return
 	}
 
@@ -278,10 +280,10 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 		return
 	}
 
-	// Turnstile 验证
-	if err := h.verifyTurnstile(req.TurnstileToken, c.ClientIP()); err != nil {
-		log.Printf("[USER] WARN: Turnstile verification failed for delete code: userID=%d", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "TURNSTILE_FAILED"})
+	// 验证码验证
+	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
+		log.Printf("[USER] WARN: Captcha verification failed for delete code: userID=%d", userID)
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "CAPTCHA_FAILED"})
 		return
 	}
 
@@ -405,18 +407,19 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 
 // ====================  私有方法 ====================
 
-// verifyTurnstile 验证 Turnstile Token
+// verifyCaptcha 验证人机验证 Token
 // 参数：
-//   - token: Turnstile Token
+//   - token: 验证码 Token
+//   - captchaType: 验证码类型
 //   - clientIP: 客户端 IP
 //
 // 返回：
 //   - error: 验证失败时返回错误
-func (h *UserHandler) verifyTurnstile(token, clientIP string) error {
+func (h *UserHandler) verifyCaptcha(token, captchaType, clientIP string) error {
 	if token == "" {
-		return errors.New("turnstile token is empty")
+		return errors.New("captcha token is empty")
 	}
-	return h.turnstileService.VerifyToken(token, clientIP)
+	return h.captchaService.Verify(token, captchaType, clientIP)
 }
 
 // invalidateUserCache 使用户缓存失效
