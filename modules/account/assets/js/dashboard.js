@@ -14,7 +14,7 @@
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, loadLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.js';
 import { verifySession, logout } from './lib/auth-service.js';
-import { loadTurnstileConfig, getTurnstileSiteKey, initTurnstile, clearTurnstile, getTurnstileToken } from './lib/turnstile.js';
+import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.js';
 import { showAlert as showAlertBase, showConfirm as showConfirmBase } from './lib/ui-feedback.js';
 import { validateAvatarUrl, validatePassword } from './lib/validators.js';
 
@@ -284,10 +284,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 等待翻译加载完成
     await waitForTranslations();
     
-    // 并行加载语言切换器和 Turnstile 配置
+    // 并行加载语言切换器和验证码配置
     await Promise.all([
       loadLanguageSwitcher(),
-      loadTurnstileConfig()
+      loadCaptchaConfig()
     ]);
     
     // 验证用户会话
@@ -573,13 +573,13 @@ function showDeleteAccountModal() {
   const cancelBtn = document.getElementById('delete-cancel-btn');
   const codeError = document.getElementById('delete-code-error');
   const passwordError = document.getElementById('delete-password-error');
-  const turnstileContainer = document.getElementById('delete-turnstile-container');
+  const captchaContainer = document.getElementById('delete-captcha-container');
   
   if (!modal) return;
   
-  // 先清理可能残留的 Turnstile
-  clearTurnstile('delete-turnstile-container');
-  turnstileContainer.classList.add('is-hidden');
+  // 先清理可能残留的验证组件
+  clearCaptcha('delete-captcha-container');
+  captchaContainer.classList.add('is-hidden');
   
   // 重置弹窗状�?
   codeInput.value = '';
@@ -613,7 +613,7 @@ function showDeleteAccountModal() {
    * 发送删除账户验证码
    */
   async function handleSendCode() {
-    // 如果弹窗已关闭，不执�?
+    // 如果弹窗已关闭，不执行
     if (isCleanedUp) return;
     
     try {
@@ -621,7 +621,11 @@ function showDeleteAccountModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ turnstileToken: getTurnstileToken(), language: document.documentElement.lang || 'zh-CN' })
+        body: JSON.stringify({ 
+          captchaToken: getCaptchaToken(), 
+          captchaType: getCaptchaType(),
+          language: document.documentElement.lang || 'zh-CN' 
+        })
       });
       const result = await response.json();
       
@@ -633,9 +637,9 @@ function showDeleteAccountModal() {
         showAlert(t('dashboard.codeSent'));
         startCountdown();
       } else {
-        // 根据错误码显示对应错误信�?
+        // 根据错误码显示对应错误信息
         sendCodeBtn.disabled = false;
-        if (result.errorCode === 'TURNSTILE_FAILED') {
+        if (result.errorCode === 'CAPTCHA_FAILED') {
           showAlert(t('register.humanVerifyFailed'));
         } else if (result.errorCode === 'RATE_LIMIT') {
           showAlert(t('error.rateLimitExceeded') || '请求过于频繁，请稍后再试');
@@ -649,7 +653,7 @@ function showDeleteAccountModal() {
       showAlert(t('error.networkError'));
     }
     
-    clearTurnstile('delete-turnstile-container');
+    clearCaptcha('delete-captcha-container');
   }
   
   /**
@@ -679,32 +683,32 @@ function showDeleteAccountModal() {
     sendCodeBtn.disabled = true;
     codeError.classList.add('is-hidden');
     
-    // 无需人机验证时直接发�?
-    if (!getTurnstileSiteKey()) {
+    // 无需人机验证时直接发送
+    if (!getCaptchaSiteKey()) {
       await handleSendCode();
     } else {
       // 显示人机验证
-      turnstileContainer.classList.remove('is-hidden');
-      await initTurnstile(
+      captchaContainer.classList.remove('is-hidden');
+      await initCaptcha(
         async () => {
-          // 如果弹窗已关闭，不执�?
+          // 如果弹窗已关闭，不执行
           if (isCleanedUp) return;
           // 验证成功，隐藏验证容器并发送验证码
-          turnstileContainer.classList.add('is-hidden');
+          captchaContainer.classList.add('is-hidden');
           await handleSendCode();
         },
         () => {
           if (isCleanedUp) return;
           showAlert(t('register.humanVerifyFailed'));
           sendCodeBtn.disabled = false;
-          clearTurnstile('delete-turnstile-container');
+          clearCaptcha('delete-captcha-container');
         },
         () => {
           if (isCleanedUp) return;
           sendCodeBtn.disabled = false;
-          clearTurnstile('delete-turnstile-container');
+          clearCaptcha('delete-captcha-container');
         },
-        'delete-turnstile-container'
+        'delete-captcha-container'
       );
     }
   };
@@ -781,8 +785,8 @@ function showDeleteAccountModal() {
       clearInterval(countdownTimer);
       countdownTimer = null;
     }
-    clearTurnstile('delete-turnstile-container');
-    turnstileContainer.classList.add('is-hidden');
+    clearCaptcha('delete-captcha-container');
+    captchaContainer.classList.add('is-hidden');
     sendCodeBtn.removeEventListener('click', handleSendCodeClick);
     confirmBtn.removeEventListener('click', handleConfirm);
     cancelBtn.removeEventListener('click', cleanup);
@@ -821,9 +825,9 @@ function showChangePasswordModal() {
   const cancelBtn = document.getElementById('change-password-cancel-btn');
   const currentPasswordError = document.getElementById('current-password-error');
   const confirmPasswordError = document.getElementById('confirm-password-error');
-  const turnstileContainer = document.getElementById('change-password-turnstile-container');
+  const captchaContainer = document.getElementById('change-password-captcha-container');
   
-  // 密码强度指示�?
+  // 密码强度指示器
   const reqLength = document.getElementById('pwd-req-length');
   const reqNumber = document.getElementById('pwd-req-number');
   const reqSpecial = document.getElementById('pwd-req-special');
@@ -831,9 +835,9 @@ function showChangePasswordModal() {
   
   if (!modal) return;
   
-  // 先清理可能残留的 Turnstile
-  clearTurnstile('change-password-turnstile-container');
-  turnstileContainer.classList.add('is-hidden');
+  // 先清理可能残留的验证组件
+  clearCaptcha('change-password-captcha-container');
+  captchaContainer.classList.add('is-hidden');
   
   // 重置弹窗状�?
   currentPasswordInput.value = '';
@@ -918,7 +922,12 @@ function showChangePasswordModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ currentPassword, newPassword, turnstileToken: getTurnstileToken() })
+        body: JSON.stringify({ 
+          currentPassword, 
+          newPassword, 
+          captchaToken: getCaptchaToken(),
+          captchaType: getCaptchaType()
+        })
       });
       const result = await response.json();
       
@@ -928,7 +937,7 @@ function showChangePasswordModal() {
         cleanup();
         showAlert(t('dashboard.changePasswordSuccess'));
       } else {
-        // 根据错误码显示对应错误信�?
+        // 根据错误码显示对应错误信息
         if (result.errorCode === 'WRONG_PASSWORD') {
           currentPasswordError.textContent = t('dashboard.wrongCurrentPassword');
           currentPasswordError.classList.remove('is-hidden');
@@ -936,7 +945,7 @@ function showChangePasswordModal() {
         } else if (result.errorCode === 'SAME_PASSWORD') {
           confirmPasswordError.textContent = t('dashboard.samePassword');
           confirmPasswordError.classList.remove('is-hidden');
-        } else if (result.errorCode === 'TURNSTILE_FAILED') {
+        } else if (result.errorCode === 'CAPTCHA_FAILED') {
           showAlert(t('register.humanVerifyFailed'));
         } else {
           showAlert(t('dashboard.changePasswordFailed'));
@@ -949,8 +958,8 @@ function showChangePasswordModal() {
       confirmBtn.disabled = false;
     }
     
-    clearTurnstile('change-password-turnstile-container');
-    turnstileContainer.classList.add('is-hidden');
+    clearCaptcha('change-password-captcha-container');
+    captchaContainer.classList.add('is-hidden');
   }
   
   /**
@@ -977,13 +986,13 @@ function showChangePasswordModal() {
     
     confirmBtn.disabled = true;
     
-    // 无需人机验证时直接提�?
-    if (!getTurnstileSiteKey()) {
+    // 无需人机验证时直接提交
+    if (!getCaptchaSiteKey()) {
       await doChangePassword();
     } else {
       // 显示人机验证
-      turnstileContainer.classList.remove('is-hidden');
-      await initTurnstile(
+      captchaContainer.classList.remove('is-hidden');
+      await initCaptcha(
         async () => {
           if (isCleanedUp) return;
           await doChangePassword();
@@ -992,16 +1001,16 @@ function showChangePasswordModal() {
           if (isCleanedUp) return;
           showAlert(t('register.humanVerifyFailed'));
           confirmBtn.disabled = false;
-          clearTurnstile('change-password-turnstile-container');
-          turnstileContainer.classList.add('is-hidden');
+          clearCaptcha('change-password-captcha-container');
+          captchaContainer.classList.add('is-hidden');
         },
         () => {
           if (isCleanedUp) return;
           confirmBtn.disabled = false;
-          clearTurnstile('change-password-turnstile-container');
-          turnstileContainer.classList.add('is-hidden');
+          clearCaptcha('change-password-captcha-container');
+          captchaContainer.classList.add('is-hidden');
         },
-        'change-password-turnstile-container'
+        'change-password-captcha-container'
       );
     }
   };
@@ -1014,8 +1023,8 @@ function showChangePasswordModal() {
     isCleanedUp = true;
     
     modal.classList.add('is-hidden');
-    clearTurnstile('change-password-turnstile-container');
-    turnstileContainer.classList.add('is-hidden');
+    clearCaptcha('change-password-captcha-container');
+    captchaContainer.classList.add('is-hidden');
     currentPasswordInput.removeEventListener('input', handleCurrentInput);
     newPasswordInput.removeEventListener('input', handleNewInput);
     confirmPasswordInput.removeEventListener('input', handleConfirmInput);
@@ -1051,13 +1060,13 @@ function showChangeUsernameModal(user, onSuccess) {
   const usernameError = document.getElementById('username-error');
   const confirmBtn = document.getElementById('change-username-confirm-btn');
   const cancelBtn = document.getElementById('change-username-cancel-btn');
-  const turnstileContainer = document.getElementById('change-username-turnstile-container');
+  const captchaContainer = document.getElementById('change-username-captcha-container');
   
   if (!modal) return;
   
-  // 先清理可能残留的 Turnstile
-  clearTurnstile('change-username-turnstile-container');
-  turnstileContainer.classList.add('is-hidden');
+  // 先清理可能残留的验证组件
+  clearCaptcha('change-username-captcha-container');
+  captchaContainer.classList.add('is-hidden');
   
   // 重置弹窗状�?
   usernameInput.value = user.username;
@@ -1109,7 +1118,11 @@ function showChangeUsernameModal(user, onSuccess) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ username: newUsername, turnstileToken: getTurnstileToken() })
+        body: JSON.stringify({ 
+          username: newUsername, 
+          captchaToken: getCaptchaToken(),
+          captchaType: getCaptchaType()
+        })
       });
       const result = await response.json();
       
@@ -1120,7 +1133,7 @@ function showChangeUsernameModal(user, onSuccess) {
         onSuccess(result.username);
         showAlert(t('dashboard.usernameUpdateSuccess'));
       } else {
-        // 根据错误码显示对应错误信�?
+        // 根据错误码显示对应错误信息
         if (result.errorCode === 'USERNAME_ALREADY_EXISTS') {
           usernameError.textContent = t('register.usernameExists');
           usernameError.classList.remove('is-hidden');
@@ -1129,7 +1142,7 @@ function showChangeUsernameModal(user, onSuccess) {
           usernameError.textContent = t('register.usernameTooLong');
           usernameError.classList.remove('is-hidden');
           usernameInput.classList.add('is-error');
-        } else if (result.errorCode === 'TURNSTILE_FAILED') {
+        } else if (result.errorCode === 'CAPTCHA_FAILED') {
           showAlert(t('register.humanVerifyFailed'));
         } else {
           showAlert(t('dashboard.usernameUpdateFailed'));
@@ -1142,8 +1155,8 @@ function showChangeUsernameModal(user, onSuccess) {
       confirmBtn.disabled = false;
     }
     
-    clearTurnstile('change-username-turnstile-container');
-    turnstileContainer.classList.add('is-hidden');
+    clearCaptcha('change-username-captcha-container');
+    captchaContainer.classList.add('is-hidden');
   }
   
   /**
@@ -1162,13 +1175,13 @@ function showChangeUsernameModal(user, onSuccess) {
     
     confirmBtn.disabled = true;
     
-    // 无需人机验证时直接提�?
-    if (!getTurnstileSiteKey()) {
+    // 无需人机验证时直接提交
+    if (!getCaptchaSiteKey()) {
       await doChangeUsername();
     } else {
       // 显示人机验证
-      turnstileContainer.classList.remove('is-hidden');
-      await initTurnstile(
+      captchaContainer.classList.remove('is-hidden');
+      await initCaptcha(
         async () => {
           if (isCleanedUp) return;
           await doChangeUsername();
@@ -1177,16 +1190,16 @@ function showChangeUsernameModal(user, onSuccess) {
           if (isCleanedUp) return;
           showAlert(t('register.humanVerifyFailed'));
           confirmBtn.disabled = false;
-          clearTurnstile('change-username-turnstile-container');
-          turnstileContainer.classList.add('is-hidden');
+          clearCaptcha('change-username-captcha-container');
+          captchaContainer.classList.add('is-hidden');
         },
         () => {
           if (isCleanedUp) return;
           confirmBtn.disabled = false;
-          clearTurnstile('change-username-turnstile-container');
-          turnstileContainer.classList.add('is-hidden');
+          clearCaptcha('change-username-captcha-container');
+          captchaContainer.classList.add('is-hidden');
         },
-        'change-username-turnstile-container'
+        'change-username-captcha-container'
       );
     }
   };
@@ -1199,8 +1212,8 @@ function showChangeUsernameModal(user, onSuccess) {
     isCleanedUp = true;
     
     modal.classList.add('is-hidden');
-    clearTurnstile('change-username-turnstile-container');
-    turnstileContainer.classList.add('is-hidden');
+    clearCaptcha('change-username-captcha-container');
+    captchaContainer.classList.add('is-hidden');
     usernameInput.removeEventListener('input', handleInput);
     confirmBtn.removeEventListener('click', handleConfirm);
     cancelBtn.removeEventListener('click', cleanup);

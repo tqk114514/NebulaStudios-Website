@@ -164,13 +164,13 @@ func initDatabase(cfg *config.Config) error {
 
 // Services 服务容器，持有所有服务实例
 type Services struct {
-	userRepo         *models.UserRepository
-	tokenService     *services.TokenService
-	sessionService   *services.SessionService
-	turnstileService *services.TurnstileService
-	wsService        *services.WebSocketService
-	emailService     *services.EmailService
-	userCache        *cache.UserCache
+	userRepo       *models.UserRepository
+	tokenService   *services.TokenService
+	sessionService *services.SessionService
+	captchaService *services.CaptchaService
+	wsService      *services.WebSocketService
+	emailService   *services.EmailService
+	userCache      *cache.UserCache
 }
 
 // initServices 初始化所有服务
@@ -200,12 +200,12 @@ func initServices(cfg *config.Config) (*Services, error) {
 	}
 	log.Println("[SERVICES] SessionService initialized")
 
-	// Turnstile 服务
-	svcs.turnstileService = services.NewTurnstileService(cfg)
-	if svcs.turnstileService == nil {
-		return nil, errors.New("failed to create turnstile service")
+	// 验证码服务
+	svcs.captchaService = services.NewCaptchaService(cfg)
+	if svcs.captchaService == nil {
+		return nil, errors.New("failed to create captcha service")
 	}
-	log.Println("[SERVICES] TurnstileService initialized")
+	log.Println("[SERVICES] CaptchaService initialized")
 
 	// WebSocket 服务
 	svcs.wsService = services.NewWebSocketService()
@@ -268,7 +268,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.tokenService,
 		svcs.sessionService,
 		svcs.emailService,
-		svcs.turnstileService,
+		svcs.captchaService,
 		svcs.userCache,
 		cfg.IsProduction,
 	)
@@ -286,7 +286,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.userRepo,
 		svcs.tokenService,
 		svcs.emailService,
-		svcs.turnstileService,
+		svcs.captchaService,
 		svcs.userCache,
 		baseURL,
 	)
@@ -320,7 +320,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	log.Println("[HANDLERS] QRLoginHandler initialized")
 
 	// Static Handler
-	hdlrs.staticHandler, err = handlers.NewStaticHandler(cfg, svcs.userCache, svcs.wsService)
+	hdlrs.staticHandler, err = handlers.NewStaticHandler(cfg, svcs.userCache, svcs.wsService, svcs.captchaService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static handler: %w", err)
 	}
@@ -529,7 +529,7 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 func setupConfigAPI(r *gin.Engine, hdlrs *Handlers) {
 	configAPI := r.Group("/api/config")
 	{
-		configAPI.GET("/turnstile", hdlrs.staticHandler.GetTurnstileSiteKey)
+		configAPI.GET("/captcha", hdlrs.staticHandler.GetCaptchaConfig)
 	}
 }
 

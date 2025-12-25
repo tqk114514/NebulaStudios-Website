@@ -3,7 +3,7 @@
  * 
  * 功能：
  * - 用户登录表单处理
- * - Turnstile 人机验证
+ * - 人机验证（Turnstile/hCaptcha）
  * - OAuth 错误处理
  * - 会话检查（已登录自动跳转）
  */
@@ -13,7 +13,7 @@ import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/
 import { validateLoginForm } from './lib/validators.js';
 import { login, verifySession, errorCodeMap } from './lib/auth-service.js';
 import { initLanguageSwitcher, loadLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.js';
-import { loadTurnstileConfig, getTurnstileSiteKey, initTurnstile, clearTurnstile, getTurnstileToken } from './lib/turnstile.js';
+import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.js';
 import { initQrLogin } from './lib/qr-login.js';
 
 // ==================== 全局变量 ====================
@@ -38,10 +38,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     
-    // 并行加载语言切换器和 Turnstile 配置
+    // 并行加载语言切换器和验证码配置
     await Promise.all([
       loadLanguageSwitcher(),
-      loadTurnstileConfig()
+      loadCaptchaConfig()
     ]);
     hidePageLoader();
     
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loginEmailInput = document.getElementById('login-email');
     const loginPasswordInput = document.getElementById('login-password');
     const loginButton = document.querySelector('#login-form .button-primary');
-    const turnstileContainer = document.getElementById('turnstile-container');
+    const captchaContainer = document.getElementById('captcha-container');
     
     // DOM 元素检查
     if (!loginEmailInput || !loginPasswordInput || !loginButton) {
@@ -73,13 +73,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function performLogin() {
       try {
         const { email, password } = pendingLogin;
-        const token = getTurnstileToken();
+        const token = getCaptchaToken();
+        const captchaType = getCaptchaType();
         
         // 禁用按钮，显示加载状态
         loginButton.disabled = true;
         loginButton.textContent = t('login.loggingIn') || '登录中...';
         
-        const result = await login(email, password, token);
+        const result = await login(email, password, token, captchaType);
         
         if (result.success) {
           // token 已通过 httpOnly cookie 存储，直接跳转
@@ -96,11 +97,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         loginButton.disabled = false;
         loginButton.textContent = t('login.submitButton');
         pendingLogin = null;
-        clearTurnstile();
+        clearCaptcha();
         
-        // 隐藏 Turnstile 容器
-        if (turnstileContainer) {
-          turnstileContainer.classList.add('is-hidden');
+        // 隐藏验证容器
+        if (captchaContainer) {
+          captchaContainer.classList.add('is-hidden');
           if (card) delayedExecution(() => adjustCardHeight(card));
         }
       }
@@ -125,28 +126,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         pendingLogin = { email, password };
         
-        // 如果未配置 Turnstile，直接登录
-        if (!getTurnstileSiteKey()) {
+        // 如果未配置验证码，直接登录
+        if (!getCaptchaSiteKey()) {
           await performLogin();
         } else {
-          // 禁用登录按钮，显示 Turnstile 验证
+          // 禁用登录按钮，显示验证组件
           loginButton.disabled = true;
           
-          if (turnstileContainer) {
-            turnstileContainer.classList.remove('is-hidden');
+          if (captchaContainer) {
+            captchaContainer.classList.remove('is-hidden');
             if (card) delayedExecution(() => adjustCardHeight(card));
           }
           
-          await initTurnstile(
+          await initCaptcha(
             async () => { await performLogin(); },
             () => {
               // 验证失败
               showAlertWithTranslation(t('login.humanVerifyFailed'));
               pendingLogin = null;
               loginButton.disabled = false;
-              clearTurnstile();
-              if (turnstileContainer) {
-                turnstileContainer.classList.add('is-hidden');
+              clearCaptcha();
+              if (captchaContainer) {
+                captchaContainer.classList.add('is-hidden');
                 if (card) delayedExecution(() => adjustCardHeight(card));
               }
             },
@@ -154,9 +155,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               // 验证过期
               pendingLogin = null;
               loginButton.disabled = false;
-              clearTurnstile();
-              if (turnstileContainer) {
-                turnstileContainer.classList.add('is-hidden');
+              clearCaptcha();
+              if (captchaContainer) {
+                captchaContainer.classList.add('is-hidden');
                 if (card) delayedExecution(() => adjustCardHeight(card));
               }
             }

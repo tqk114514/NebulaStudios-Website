@@ -410,8 +410,8 @@ input.violation {
   border-bottom-color: var(--primary);
 }
 
-/* --- Turnstile --- */
-.turnstile-wrapper {
+/* --- Captcha --- */
+.captcha-wrapper {
   margin: 20px auto;
   padding: 0;
   display: flex;
@@ -423,7 +423,7 @@ input.violation {
   position: relative;
 }
 
-.turnstile-wrapper .loading-spinner {
+.captcha-wrapper .loading-spinner {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -432,8 +432,8 @@ input.violation {
   z-index: 0;
 }
 
-.turnstile-wrapper iframe { position: relative; z-index: 1; }
-.turnstile-wrapper.is-hidden { display: none; }
+.captcha-wrapper iframe { position: relative; z-index: 1; }
+.captcha-wrapper.is-hidden { display: none; }
 
 
 /* --- 弹窗 --- */

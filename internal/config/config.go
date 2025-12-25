@@ -72,6 +72,10 @@ type Config struct {
 	TurnstileSiteKey   string // Cloudflare Turnstile 站点密钥
 	TurnstileSecretKey string // Cloudflare Turnstile 密钥
 
+	// hCaptcha 配置
+	HCaptchaSiteKey   string // hCaptcha 站点密钥
+	HCaptchaSecretKey string // hCaptcha 密钥
+
 	// Microsoft OAuth 配置
 	MicrosoftClientID     string // Microsoft 应用 ID
 	MicrosoftClientSecret string // Microsoft 应用密钥
@@ -169,6 +173,10 @@ func loadConfig() error {
 	newCfg.TurnstileSiteKey = getEnv("TURNSTILE_SITE_KEY", "")
 	newCfg.TurnstileSecretKey = getEnv("TURNSTILE_SECRET_KEY", "")
 
+	// 加载 hCaptcha 配置
+	newCfg.HCaptchaSiteKey = getEnv("HCAPTCHA_SITE_KEY", "")
+	newCfg.HCaptchaSecretKey = getEnv("HCAPTCHA_SECRET_KEY", "")
+
 	// 加载 Microsoft OAuth 配置
 	newCfg.MicrosoftClientID = getEnv("MICROSOFT_CLIENT_ID", "")
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
@@ -224,8 +232,8 @@ func validateConfig(c *Config) error {
 	}
 
 	// 可选但建议配置
-	if c.TurnstileSecretKey == "" {
-		warnings = append(warnings, "TURNSTILE_SECRET_KEY is empty (Turnstile verification will fail)")
+	if c.TurnstileSecretKey == "" && c.HCaptchaSecretKey == "" {
+		warnings = append(warnings, "No captcha configured (both TURNSTILE and HCAPTCHA are empty)")
 	}
 
 	if c.SMTPUser == "" || c.SMTPPassword == "" {
@@ -332,6 +340,12 @@ func (c *Config) IsEmailConfigured() bool {
 // 返回 Turnstile 验证是否可用
 func (c *Config) IsTurnstileConfigured() bool {
 	return c.TurnstileSiteKey != "" && c.TurnstileSecretKey != ""
+}
+
+// IsHCaptchaConfigured 检查 hCaptcha 配置是否完整
+// 返回 hCaptcha 验证是否可用
+func (c *Config) IsHCaptchaConfigured() bool {
+	return c.HCaptchaSiteKey != "" && c.HCaptchaSecretKey != ""
 }
 
 // IsMicrosoftOAuthConfigured 检查 Microsoft OAuth 配置是否完整

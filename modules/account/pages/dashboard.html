@@ -250,7 +250,7 @@
             <p id="confirm-password-error" class="form-error is-hidden"></p>
           </div>
           
-          <div id="change-password-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+          <div id="change-password-captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
         <div class="modal-footer modal-footer-buttons">
           <button id="change-password-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
@@ -272,7 +272,7 @@
             <p id="username-error" class="form-error is-hidden"></p>
           </div>
           
-          <div id="change-username-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+          <div id="change-username-captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
         <div class="modal-footer modal-footer-buttons">
           <button id="change-username-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
@@ -299,7 +299,7 @@
             <button id="delete-send-code-btn" class="button-secondary" data-i18n="dashboard.sendCode" aria-label="Send verification code"></button>
           </div>
           
-          <div id="delete-turnstile-container" class="turnstile-wrapper is-hidden"></div>
+          <div id="delete-captcha-container" class="captcha-wrapper is-hidden"></div>
           
           <div class="form-group">
             <label for="delete-password-input" class="sr-only" data-i18n="dashboard.passwordPlaceholder"></label>
@@ -368,7 +368,6 @@
   </div>
 
   <script type="module" src="/account/assets/js/dashboard.js"></script>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <script src="https://s3.gendome.net/activity/js/jsQR.js" async></script>
 </body>
 </html>

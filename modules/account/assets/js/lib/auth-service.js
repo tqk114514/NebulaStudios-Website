@@ -14,10 +14,11 @@
 /**
  * 发送验证码
  * @param {string} email - 邮箱地址
- * @param {string} turnstileToken - Turnstile 验证 token
+ * @param {string} captchaToken - 验证码 token
+ * @param {string} captchaType - 验证码类型
  * @returns {Promise<Object>} 响应结果
  */
-export async function sendVerificationCode(email, turnstileToken) {
+export async function sendVerificationCode(email, captchaToken, captchaType) {
   try {
     const currentLanguage = window.currentLanguage || 'zh-CN';
     
@@ -26,7 +27,8 @@ export async function sendVerificationCode(email, turnstileToken) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email,
-        turnstileToken: turnstileToken,
+        captchaToken: captchaToken,
+        captchaType: captchaType,
         language: currentLanguage
       })
     });
@@ -83,10 +85,11 @@ export async function register(formData) {
  * 用户登录
  * @param {string} email - 邮箱或用户名
  * @param {string} password - 密码
- * @param {string} turnstileToken - Turnstile 验证 token
+ * @param {string} captchaToken - 验证码 token
+ * @param {string} captchaType - 验证码类型
  * @returns {Promise<Object>} 响应结果
  */
-export async function login(email, password, turnstileToken) {
+export async function login(email, password, captchaToken, captchaType) {
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -95,7 +98,8 @@ export async function login(email, password, turnstileToken) {
       body: JSON.stringify({
         email: email,
         password: password,
-        turnstileToken: turnstileToken
+        captchaToken: captchaToken,
+        captchaType: captchaType
       })
     });
     
@@ -161,7 +165,7 @@ export const errorCodeMap = {
   // 通用错误
   'RATE_LIMIT': 'register.waitRetry',
   'LOGIN_RATE_LIMIT': 'login.rateLimitExceeded',
-  'TURNSTILE_FAILED': 'login.humanVerifyFailed',
+  'CAPTCHA_FAILED': 'login.humanVerifyFailed',
   'NETWORK_ERROR': 'error.networkError',
   'UNKNOWN_ERROR': 'register.sendFailed',
   'MISSING_PARAMETERS': 'register.fillAllFields',

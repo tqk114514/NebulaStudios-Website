@@ -35,7 +35,7 @@
           <input type="password" id="login-password" name="password" placeholder="" data-i18n-placeholder="login.passwordPlaceholder" aria-label="Password" autocomplete="current-password" required>
         </div>
         <button type="submit" class="button-primary" data-i18n="login.submitButton" aria-label="Sign in"></button>
-        <div id="turnstile-container" class="turnstile-wrapper is-hidden"></div>
+        <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
       </form>
       
       <div class="oauth-divider">
@@ -107,6 +107,5 @@
 
   <script src="https://cdn.bootcdn.net/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script type="module" src="/account/assets/js/login.js"></script>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </body>
 </html>

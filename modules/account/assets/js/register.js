@@ -7,7 +7,7 @@
  * - 邮箱验证码发送与倒计时
  * - 用户名长度验证
  * - 密码强度实时验证
- * - Turnstile 人机验证集成
+ * - 人机验证集成（Turnstile/hCaptcha）
  * - 会话检查（已登录自动跳转）
  */
 
@@ -16,7 +16,7 @@ import { initializeModals, showAlert, showSupportedEmailsModal } from './lib/ui-
 import { startCountdown, resumeCountdown, isCountingDown, adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/helpers.js';
 import { loadEmailWhitelist, validateEmail, getEmailProviders, isUsernameTooLong, validateRegisterForm } from './lib/validators.js';
 import { clearCodeExpiryTimer, getCodeExpiryTime } from './lib/code-expiry.js';
-import { loadTurnstileConfig, getTurnstileSiteKey, initTurnstile, clearTurnstile, getTurnstileToken } from './lib/turnstile.js';
+import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.js';
 import { sendVerificationCode, register, verifySession, errorCodeMap } from './lib/auth-service.js';
 import { initLanguageSwitcher, loadLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.js';
 
@@ -49,10 +49,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // 并行加载邮箱白名单、Turnstile 配置、语言切换器
+    // 并行加载邮箱白名单、验证码配置、语言切换器
     const [emailWhitelistResult] = await Promise.all([
       loadEmailWhitelist(),
-      loadTurnstileConfig(),
+      loadCaptchaConfig(),
       loadLanguageSwitcher()
     ]);
     
@@ -175,9 +175,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function handleSendCode() {
     try {
       const email = pendingEmail;
-      const token = getTurnstileToken();
+      const token = getCaptchaToken();
+      const captchaType = getCaptchaType();
       
-      const result = await sendVerificationCode(email, token);
+      const result = await sendVerificationCode(email, token, captchaType);
       
       if (result.success) {
         // 发送成功，开始倒计时
@@ -201,8 +202,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       pendingEmail = '';
       updateSendCodeButtonState();
     } finally {
-      // 清理 Turnstile
-      clearTurnstile();
+      // 清理验证组件
+      clearCaptcha();
     }
   }
   
@@ -227,28 +228,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       pendingEmail = email;
       sendCodeButton.disabled = true;
       
-      // 显示 Turnstile 容器
-      const turnstileContainer = document.getElementById('turnstile-container');
-      if (turnstileContainer) {
-        turnstileContainer.classList.remove('is-hidden');
+      // 显示验证容器
+      const captchaContainer = document.getElementById('captcha-container');
+      if (captchaContainer) {
+        captchaContainer.classList.remove('is-hidden');
         if (card) delayedExecution(() => adjustCardHeight(card));
       }
       
       // 无需人机验证时直接发送
-      if (!getTurnstileSiteKey()) {
+      if (!getCaptchaSiteKey()) {
         await handleSendCode();
-        if (turnstileContainer) {
-          turnstileContainer.classList.add('is-hidden');
+        if (captchaContainer) {
+          captchaContainer.classList.add('is-hidden');
           if (card) delayedExecution(() => adjustCardHeight(card));
         }
       } else {
         // 初始化人机验证
-        await initTurnstile(
+        await initCaptcha(
           // 验证成功回调
           async () => {
             await handleSendCode();
-            if (turnstileContainer) {
-              turnstileContainer.classList.add('is-hidden');
+            if (captchaContainer) {
+              captchaContainer.classList.add('is-hidden');
               if (card) delayedExecution(() => adjustCardHeight(card));
             }
           },
@@ -260,9 +261,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               updateSendCodeButtonState();
             }
             pendingEmail = '';
-            clearTurnstile();
-            if (turnstileContainer) {
-              turnstileContainer.classList.add('is-hidden');
+            clearCaptcha();
+            if (captchaContainer) {
+              captchaContainer.classList.add('is-hidden');
               if (card) delayedExecution(() => adjustCardHeight(card));
             }
           },
@@ -273,9 +274,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               updateSendCodeButtonState();
             }
             pendingEmail = '';
-            clearTurnstile();
-            if (turnstileContainer) {
-              turnstileContainer.classList.add('is-hidden');
+            clearCaptcha();
+            if (captchaContainer) {
+              captchaContainer.classList.add('is-hidden');
               if (card) delayedExecution(() => adjustCardHeight(card));
             }
           }

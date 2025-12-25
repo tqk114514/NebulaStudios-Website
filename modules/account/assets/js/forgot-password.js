@@ -14,7 +14,7 @@ import { initializeModals, showAlert, showSupportedEmailsModal } from './lib/ui-
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/helpers.js';
 import { loadEmailWhitelist, validateEmail, validatePassword, getEmailProviders } from './lib/validators.js';
 import { initLanguageSwitcher, loadLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.js';
-import { loadTurnstileConfig, getTurnstileSiteKey, initTurnstile, clearTurnstile, getTurnstileToken } from './lib/turnstile.js';
+import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.js';
 
 // ==================== 全局变量 ====================
 
@@ -31,11 +31,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 等待翻译系统就绪
     await waitForTranslations();
     
-    // 并行加载邮箱白名单、语言切换器和 Turnstile 配置
+    // 并行加载邮箱白名单、语言切换器和验证码配置
     const [emailWhitelistResult] = await Promise.all([
       loadEmailWhitelist(),
       loadLanguageSwitcher(),
-      loadTurnstileConfig()
+      loadCaptchaConfig()
     ]);
     
     // 邮箱白名单加载失败时提示
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const codeInput = document.getElementById('reset-code');
     const passwordInput = document.getElementById('reset-password');
     const passwordConfirmInput = document.getElementById('reset-password-confirm');
-    const turnstileContainer = document.getElementById('turnstile-container');
+    const captchaContainer = document.getElementById('captcha-container');
     const emailError = document.getElementById('email-error');
     const emailErrorText = document.getElementById('email-error-text');
     const showSupportedEmailsLink = document.getElementById('show-supported-emails');
@@ -166,7 +166,8 @@ document.addEventListener('DOMContentLoaded', async () => {
    */
   async function sendResetCode() {
     const email = emailInput.value.trim().toLowerCase();
-    const token = getTurnstileToken();
+    const token = getCaptchaToken();
+    const captchaType = getCaptchaType();
     
     try {
       const response = await fetch('/api/auth/send-reset-code', {
@@ -174,7 +175,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           email, 
-          turnstileToken: token,
+          captchaToken: token,
+          captchaType: captchaType,
           language: document.documentElement.lang || 'zh-CN'
         })
       });
@@ -185,10 +187,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         showAlertWithTranslation(t('forgotPassword.codeSent'));
         showResetStep();
       } else {
-        // 根据错误码显示对应提�?
+        // 根据错误码显示对应提示
         const errorMessages = {
           'EMAIL_NOT_FOUND': 'forgotPassword.emailNotFound',
-          'TURNSTILE_FAILED': 'register.humanVerifyFailed',
+          'CAPTCHA_FAILED': 'register.humanVerifyFailed',
           'RATE_LIMIT': 'error.rateLimitExceeded',
           'SEND_FAILED': 'forgotPassword.sendFailed'
         };
@@ -200,10 +202,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     emailSubmitBtn.disabled = false;
-    clearTurnstile();
+    clearCaptcha();
     
-    if (turnstileContainer) {
-      turnstileContainer.classList.add('is-hidden');
+    if (captchaContainer) {
+      captchaContainer.classList.add('is-hidden');
       delayedExecution(() => adjustCardHeight(card));
     }
   }
@@ -226,32 +228,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 禁用按钮
       emailSubmitBtn.disabled = true;
       
-      // 如果未配�?Turnstile，直接发�?
-      if (!getTurnstileSiteKey()) {
+      // 如果未配置验证码，直接发送
+      if (!getCaptchaSiteKey()) {
         await sendResetCode();
       } else {
-        // 显示 Turnstile 验证
-        if (turnstileContainer) {
-          turnstileContainer.classList.remove('is-hidden');
+        // 显示验证组件
+        if (captchaContainer) {
+          captchaContainer.classList.remove('is-hidden');
           if (card) delayedExecution(() => adjustCardHeight(card));
         }
         
-        await initTurnstile(
+        await initCaptcha(
           async () => { await sendResetCode(); },
           () => {
             showAlertWithTranslation(t('register.humanVerifyFailed'));
             emailSubmitBtn.disabled = false;
-            clearTurnstile();
-            if (turnstileContainer) {
-              turnstileContainer.classList.add('is-hidden');
+            clearCaptcha();
+            if (captchaContainer) {
+              captchaContainer.classList.add('is-hidden');
               if (card) delayedExecution(() => adjustCardHeight(card));
             }
           },
           () => {
             emailSubmitBtn.disabled = false;
-            clearTurnstile();
-            if (turnstileContainer) {
-              turnstileContainer.classList.add('is-hidden');
+            clearCaptcha();
+            if (captchaContainer) {
+              captchaContainer.classList.add('is-hidden');
               if (card) delayedExecution(() => adjustCardHeight(card));
             }
           }
