@@ -75,10 +75,10 @@ const (
 type AuthHandler struct {
 	userRepo         *models.UserRepository     // 用户数据仓库
 	tokenService     *services.TokenService     // Token 服务
-	sessionService   *services.SessionService   // Session 服务
-	emailService     *services.EmailService     // 邮件服务
-	turnstileService *services.TurnstileService // Turnstile 验证服务
-	userCache        *cache.UserCache           // 用户缓存
+	sessionService  *services.SessionService  // Session 服务
+	emailService    *services.EmailService    // 邮件服务
+	captchaService  *services.CaptchaService  // 验证码服务
+	userCache       *cache.UserCache          // 用户缓存
 	isProduction     bool                       // 是否为生产环境
 	baseURL          string                     // 基础 URL
 }
@@ -92,7 +92,7 @@ type AuthHandler struct {
 //   - tokenService: Token 服务（必需）
 //   - sessionService: Session 服务（必需）
 //   - emailService: 邮件服务（必需）
-//   - turnstileService: Turnstile 验证服务（必需）
+//   - captchaService: 验证码服务（必需）
 //   - userCache: 用户缓存（必需）
 //   - isProduction: 是否为生产环境
 //
@@ -104,7 +104,7 @@ func NewAuthHandler(
 	tokenService *services.TokenService,
 	sessionService *services.SessionService,
 	emailService *services.EmailService,
-	turnstileService *services.TurnstileService,
+	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
 	isProduction bool,
 ) (*AuthHandler, error) {
@@ -125,9 +125,9 @@ func NewAuthHandler(
 		log.Println("[AUTH] ERROR: emailService is nil")
 		return nil, errors.New("emailService is required")
 	}
-	if turnstileService == nil {
-		log.Println("[AUTH] ERROR: turnstileService is nil")
-		return nil, errors.New("turnstileService is required")
+	if captchaService == nil {
+		log.Println("[AUTH] ERROR: captchaService is nil")
+		return nil, errors.New("captchaService is required")
 	}
 	if userCache == nil {
 		log.Println("[AUTH] ERROR: userCache is nil")
@@ -146,10 +146,10 @@ func NewAuthHandler(
 	return &AuthHandler{
 		userRepo:         userRepo,
 		tokenService:     tokenService,
-		sessionService:   sessionService,
-		emailService:     emailService,
-		turnstileService: turnstileService,
-		userCache:        userCache,
+		sessionService:  sessionService,
+		emailService:    emailService,
+		captchaService:  captchaService,
+		userCache:       userCache,
 		isProduction:     isProduction,
 		baseURL:          baseURL,
 	}, nil
@@ -242,7 +242,8 @@ func (h *AuthHandler) respondSuccess(c *gin.Context, data gin.H) {
 //
 // 请求体：
 //   - email: 邮箱地址（必需）
-//   - turnstileToken: Turnstile 验证 Token（必需）
+//   - captchaToken: 验证码 Token（必需）
+//   - captchaType: 验证码类型（必需）
 //   - language: 语言代码（可选，默认 zh-CN）
 //
 // 响应：
@@ -253,7 +254,7 @@ func (h *AuthHandler) respondSuccess(c *gin.Context, data gin.H) {
 // 错误码：
 //   - INVALID_REQUEST: 请求格式无效
 //   - INVALID_EMAIL / EMAIL_DOMAIN_NOT_ALLOWED: 邮箱验证失败
-//   - TURNSTILE_FAILED: Turnstile 验证失败
+//   - CAPTCHA_FAILED: 验证码验证失败
 //   - EMAIL_ALREADY_REGISTERED: 邮箱已注册
 //   - RATE_LIMIT: 发送频率超限
 //   - TOKEN_CREATE_FAILED: Token 创建失败
@@ -261,9 +262,10 @@ func (h *AuthHandler) respondSuccess(c *gin.Context, data gin.H) {
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 请求结构
 	var req struct {
-		Email          string `json:"email"`
-		TurnstileToken string `json:"turnstileToken"`
-		Language       string `json:"language"`
+		Email        string `json:"email"`
+		CaptchaToken string `json:"captchaToken"`
+		CaptchaType  string `json:"captchaType"`
+		Language     string `json:"language"`
 	}
 
 	// 解析请求
@@ -282,11 +284,11 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	}
 	validatedEmail := emailResult.Value
 
-	// Turnstile 验证
+	// 验证码验证
 	clientIP := h.getClientIP(c)
-	if err := h.turnstileService.VerifyToken(req.TurnstileToken, clientIP); err != nil {
-		log.Printf("[AUTH] WARN: Turnstile verification failed: email=%s, ip=%s, error=%v", validatedEmail, clientIP, err)
-		h.respondError(c, http.StatusBadRequest, "TURNSTILE_FAILED")
+	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+		log.Printf("[AUTH] WARN: Captcha verification failed: email=%s, ip=%s, error=%v", validatedEmail, clientIP, err)
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
@@ -638,7 +640,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // 请求体：
 //   - email: 邮箱或用户名（必需）
 //   - password: 密码（必需）
-//   - turnstileToken: Turnstile 验证 Token（必需）
+//   - captchaToken: 验证码 Token（必需）
+//   - captchaType: 验证码类型（必需）
 //
 // 响应：
 //   - success: 是否成功
@@ -647,14 +650,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 //
 // 错误码：
 //   - MISSING_PARAMETERS: 缺少参数
-//   - TURNSTILE_FAILED: Turnstile 验证失败
+//   - CAPTCHA_FAILED: 验证码验证失败
 //   - INVALID_CREDENTIALS: 用户名/密码错误
 //   - TOKEN_GENERATION_FAILED: Token 生成失败
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req struct {
-		Email          string `json:"email"`
-		Password       string `json:"password"`
-		TurnstileToken string `json:"turnstileToken"`
+		Email        string `json:"email"`
+		Password     string `json:"password"`
+		CaptchaToken string `json:"captchaToken"`
+		CaptchaType  string `json:"captchaType"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -673,11 +677,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Turnstile 验证
+	// 验证码验证
 	clientIP := h.getClientIP(c)
-	if err := h.turnstileService.VerifyToken(req.TurnstileToken, clientIP); err != nil {
-		log.Printf("[AUTH] WARN: Turnstile verification failed for login: email=%s, ip=%s, error=%v", email, clientIP, err)
-		h.respondError(c, http.StatusBadRequest, "TURNSTILE_FAILED")
+	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+		log.Printf("[AUTH] WARN: Captcha verification failed for login: email=%s, ip=%s, error=%v", email, clientIP, err)
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
@@ -874,7 +878,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 //
 // 请求体：
 //   - email: 邮箱地址（必需）
-//   - turnstileToken: Turnstile 验证 Token（必需）
+//   - captchaToken: 验证码 Token（必需）
+//   - captchaType: 验证码类型（必需）
 //   - language: 语言代码（可选，默认 zh-CN）
 //
 // 响应：
@@ -883,16 +888,17 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 //
 // 错误码：
 //   - MISSING_PARAMETERS: 缺少参数
-//   - TURNSTILE_FAILED: Turnstile 验证失败
+//   - CAPTCHA_FAILED: 验证码验证失败
 //   - EMAIL_NOT_FOUND: 邮箱未注册
 //   - RATE_LIMIT: 发送频率超限
 //   - TOKEN_CREATE_FAILED: Token 创建失败
 //   - SEND_FAILED: 邮件发送失败
 func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	var req struct {
-		Email          string `json:"email"`
-		TurnstileToken string `json:"turnstileToken"`
-		Language       string `json:"language"`
+		Email        string `json:"email"`
+		CaptchaToken string `json:"captchaToken"`
+		CaptchaType  string `json:"captchaType"`
+		Language     string `json:"language"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -911,11 +917,11 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 	normalizedEmail := strings.ToLower(email)
 
-	// Turnstile 验证
+	// 验证码验证
 	clientIP := h.getClientIP(c)
-	if err := h.turnstileService.VerifyToken(req.TurnstileToken, clientIP); err != nil {
-		log.Printf("[AUTH] WARN: Turnstile verification failed for reset: email=%s, ip=%s, error=%v", normalizedEmail, clientIP, err)
-		h.respondError(c, http.StatusBadRequest, "TURNSTILE_FAILED")
+	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+		log.Printf("[AUTH] WARN: Captcha verification failed for reset: email=%s, ip=%s, error=%v", normalizedEmail, clientIP, err)
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
@@ -1074,7 +1080,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 // 请求体：
 //   - currentPassword: 当前密码（必需）
 //   - newPassword: 新密码（必需）
-//   - turnstileToken: Turnstile 验证 Token（必需）
+//   - captchaToken: 验证码 Token（必需）
+//   - captchaType: 验证码类型（必需）
 //
 // 响应：
 //   - success: 是否成功
@@ -1082,7 +1089,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 // 错误码：
 //   - UNAUTHORIZED: 未登录
 //   - MISSING_PARAMETERS: 缺少参数
-//   - TURNSTILE_FAILED: Turnstile 验证失败
+//   - CAPTCHA_FAILED: 验证码验证失败
 //   - USER_NOT_FOUND: 用户不存在
 //   - WRONG_PASSWORD: 当前密码错误
 //   - PASSWORD_*: 新密码验证失败
@@ -1107,7 +1114,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req struct {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
-		TurnstileToken  string `json:"turnstileToken"`
+		CaptchaToken    string `json:"captchaToken"`
+		CaptchaType     string `json:"captchaType"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1127,11 +1135,11 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// Turnstile 验证
+	// 验证码验证
 	clientIP := h.getClientIP(c)
-	if err := h.turnstileService.VerifyToken(req.TurnstileToken, clientIP); err != nil {
-		log.Printf("[AUTH] WARN: Turnstile verification failed for change password: userID=%d, ip=%s, error=%v", userID, clientIP, err)
-		h.respondError(c, http.StatusBadRequest, "TURNSTILE_FAILED")
+	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+		log.Printf("[AUTH] WARN: Captcha verification failed for change password: userID=%d, ip=%s, error=%v", userID, clientIP, err)
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
