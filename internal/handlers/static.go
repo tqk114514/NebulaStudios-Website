@@ -291,9 +291,9 @@ func ServeVerifyPage(c *gin.Context) {
 }
 
 // ServeForgotPasswordPage 服务忘记密码页面
-// GET /account/forgot-password
+// GET /account/forgot
 func ServeForgotPasswordPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "forgot-password.html")
+	serveHTML(c, DistAccountPages, "forgot.html")
 }
 
 // ServeDashboardPage 服务仪表盘页面
@@ -303,9 +303,9 @@ func ServeDashboardPage(c *gin.Context) {
 }
 
 // ServeLinkConfirmPage 服务链接确认页面
-// GET /account/link-confirm
+// GET /account/link
 func ServeLinkConfirmPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "link-confirm.html")
+	serveHTML(c, DistAccountPages, "link.html")
 }
 
 // ====================  Policy 模块页面路由 ====================

@@ -67,23 +67,23 @@ var (
 
 	// Account 模块页面入口文件
 	accountPageEntries = []string{
-		"modules/account/assets/js/login.js",
-		"modules/account/assets/js/register.js",
-		"modules/account/assets/js/verify.js",
-		"modules/account/assets/js/forgot-password.js",
-		"modules/account/assets/js/dashboard.js",
-		"modules/account/assets/js/link-confirm.js",
-		"modules/account/assets/js/404.js",
+		"modules/account/assets/js/login.ts",
+		"modules/account/assets/js/register.ts",
+		"modules/account/assets/js/verify.ts",
+		"modules/account/assets/js/forgot.ts",
+		"modules/account/assets/js/dashboard.ts",
+		"modules/account/assets/js/link.ts",
+		"modules/account/assets/js/404.ts",
 	}
 
 	// Policy 模块页面入口文件
 	policyPageEntries = []string{
-		"modules/policy/assets/js/policy.js",
+		"modules/policy/assets/js/policy.ts",
 	}
 
 	// 支持的语言列表
 	supportedLanguages = []string{
-		"zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de",
+		"zh-CN", "zh-TW", "en", "ja", "ko",
 	}
 )
 
@@ -357,11 +357,11 @@ func buildTranslations() error {
 		return fmt.Errorf("failed to marshal translations: %w", err)
 	}
 
-	// 读取 translations.js 模板
-	templatePath := filepath.Join(sharedDir, "js", "translations.js")
+	// 读取 translations.ts 模板
+	templatePath := filepath.Join(sharedDir, "js", "translations.ts")
 	templateData, err := os.ReadFile(templatePath)
 	if err != nil {
-		return fmt.Errorf("failed to read translations.js template: %w", err)
+		return fmt.Errorf("failed to read translations.ts template: %w", err)
 	}
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(templateData)))
@@ -371,7 +371,7 @@ func buildTranslations() error {
 	output := injectedCode + string(templateData)
 
 	// 写入临时文件
-	tmpFile := filepath.Join(distDir, "shared/js/translations.tmp.js")
+	tmpFile := filepath.Join(distDir, "shared/js/translations.tmp.ts")
 	if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
@@ -623,6 +623,16 @@ func buildHTML() error {
 	return nil
 }
 
+// loadHeaderComponent 加载 header.html 组件内容
+func loadHeaderComponent() (string, error) {
+	headerPath := filepath.Join(sharedDir, "components", "header.html")
+	data, err := os.ReadFile(headerPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read header.html: %w", err)
+	}
+	return string(data), nil
+}
+
 // buildHTMLModule 构建单个 HTML 模块
 func buildHTMLModule(pattern, outdir, moduleName string) error {
 	files, err := filepath.Glob(pattern)
@@ -635,8 +645,23 @@ func buildHTMLModule(pattern, outdir, moduleName string) error {
 		return nil
 	}
 
+	// 加载 header 组件（用于替换 {{HEADER}}）
+	headerContent, err := loadHeaderComponent()
+	if err != nil {
+		log.Printf("[BUILD] WARN: Failed to load header component: %v", err)
+		headerContent = "" // 继续构建，但不替换
+	}
+
 	for _, src := range files {
-		if err := minifyHTMLFile(src, outdir); err != nil {
+		// 跳过 header.html 本身（不需要替换）
+		if filepath.Base(src) == "header.html" {
+			if err := minifyHTMLFile(src, outdir); err != nil {
+				return fmt.Errorf("failed to minify %s: %w", src, err)
+			}
+			continue
+		}
+
+		if err := minifyHTMLFileWithHeader(src, outdir, headerContent); err != nil {
 			return fmt.Errorf("failed to minify %s: %w", src, err)
 		}
 	}
@@ -656,6 +681,38 @@ func minifyHTMLFile(src, outDir string) error {
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
 	minified := minifyHTML(string(data))
+	filename := filepath.Base(src)
+	dst := filepath.Join(outDir, filename)
+
+	// 确保目标目录存在
+	if err := os.MkdirAll(outDir, dirPerm); err != nil {
+		return fmt.Errorf("failed to create output dir: %w", err)
+	}
+
+	if err := os.WriteFile(dst, []byte(minified), filePerm); err != nil {
+		return fmt.Errorf("failed to write: %w", err)
+	}
+
+	atomic.AddInt64(&stats.BytesWritten, int64(len(minified)))
+	return nil
+}
+
+// minifyHTMLFileWithHeader 压缩 HTML 文件并替换 {{HEADER}} 占位符
+func minifyHTMLFileWithHeader(src, outDir, headerContent string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("failed to read: %w", err)
+	}
+
+	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
+
+	// 替换 {{HEADER}} 占位符
+	content := string(data)
+	if headerContent != "" {
+		content = strings.ReplaceAll(content, "{{HEADER}}", headerContent)
+	}
+
+	minified := minifyHTML(content)
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
 

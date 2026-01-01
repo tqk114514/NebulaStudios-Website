@@ -10,11 +10,7 @@
   <script src="/shared/js/translations.js"></script>
 </head>
 <body>
-  <header class="top-header">
-    <div class="brand"><span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span></div>
-  </header>
-  
-  <div id="language-switcher-placeholder"></div>
+  {{HEADER}}
   
   <!-- 页面加载遮罩 -->
   <div id="page-loader" class="page-loader">
@@ -41,8 +37,9 @@
           <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
       </form>
+
       
-      <!-- 步骤 2: 输入验证码和新密�?-->
+      <!-- 步骤 2: 输入验证码和新密码 -->
       <form id="reset-step" class="step-form is-hidden">
         <div class="form-group">
           <label for="reset-code" class="sr-only" data-i18n="forgotPassword.codePlaceholder"></label>
@@ -72,7 +69,7 @@
     <div class="page-footer" data-i18n="footer.copyright"></div>
   </div>
 
-  <!-- 支持的邮箱弹�?-->
+  <!-- 支持的邮箱弹窗 -->
   <div id="modal-overlay" class="modal-overlay is-hidden">
     <div class="modal-container">
       <div class="modal-content">
@@ -118,6 +115,6 @@
     </div>
   </div>
 
-  <script type="module" src="/account/assets/js/forgot-password.js"></script>
+  <script type="module" src="/account/assets/js/forgot.js"></script>
 </body>
 </html>
