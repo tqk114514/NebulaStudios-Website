@@ -1024,7 +1024,7 @@ func (h *OAuthHandler) exchangeCodeForToken(code string) (map[string]interface{}
 	if err != nil {
 		return nil, fmt.Errorf("%w: request failed: %v", ErrOAuthTokenExchange, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
@@ -1080,7 +1080,7 @@ func (h *OAuthHandler) getMicrosoftUserInfo(accessToken string) (map[string]inte
 	if err != nil {
 		return nil, fmt.Errorf("%w: request failed: %v", ErrOAuthUserInfo, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
@@ -1140,7 +1140,7 @@ func (h *OAuthHandler) getMicrosoftAvatar(accessToken string) string {
 		log.Printf("[OAUTH] WARN: Avatar request failed: %v", err)
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 检查状态码（404 表示没有头像，不是错误）
 	if resp.StatusCode != http.StatusOK {

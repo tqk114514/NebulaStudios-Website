@@ -208,7 +208,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	// 注册客户端
 	if !ws.register(client) {
 		log.Printf("[WS] WARN: Failed to register client: token=%s", token)
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -253,10 +253,8 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	}
 
 	// 添加附加数据
-	if data != nil {
-		for k, v := range data {
-			message[k] = v
-		}
+	for k, v := range data {
+		message[k] = v
 	}
 
 	// 序列化消息
@@ -419,7 +417,7 @@ func (ws *WebSocketService) closeClient(client *WSClient) {
 
 	// 关闭连接
 	if client.conn != nil {
-		client.conn.Close()
+		_ = client.conn.Close()
 	}
 }
 
@@ -455,7 +453,7 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		client.conn.Close()
+		_ = client.conn.Close()
 	}()
 
 	for {
@@ -499,7 +497,7 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 func (ws *WebSocketService) readPump(client *WSClient) {
 	defer func() {
 		ws.unregister(client)
-		client.conn.Close()
+		_ = client.conn.Close()
 	}()
 
 	// 设置读取限制

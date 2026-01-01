@@ -1,0 +1,91 @@
+name: 部署
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: 下载依赖
+        run: go mod download
+
+      - name: 编译后端
+        run: GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+
+      - name: 编译前端
+        run: go run ./cmd/build
+
+      - name: 打包文件
+        run: |
+          TIMESTAMP=$(TZ='Asia/Shanghai' date +%Y%m%d_%H%M%S)
+          FILENAME="deploy_${TIMESTAMP}.tar.gz"
+          echo "DEPLOY_FILENAME=$FILENAME" >> $GITHUB_ENV
+          tar -czvf "$FILENAME" server dist/ .env
+
+      - name: 上传到 R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          pip install awscli
+          
+          # 上传新文件
+          aws s3 cp ${{ env.DEPLOY_FILENAME }} s3://nebula-deploy/${{ env.DEPLOY_FILENAME }} --endpoint-url $AWS_ENDPOINT_URL
+          
+          # 同时保留一个固定名称的最新版本（供 webhook 下载）
+          aws s3 cp ${{ env.DEPLOY_FILENAME }} s3://nebula-deploy/deploy.tar.gz --endpoint-url $AWS_ENDPOINT_URL
+          
+          # 删除旧文件，只保留最近 5 个
+          aws s3 ls s3://nebula-deploy/ --endpoint-url $AWS_ENDPOINT_URL | grep "deploy_" | sort -r | tail -n +6 | awk '{print $4}' | while read file; do
+            aws s3 rm s3://nebula-deploy/$file --endpoint-url $AWS_ENDPOINT_URL
+          done
+
+      - name: 触发部署并等待完成
+        run: |
+          WEBHOOK_URL="https://linux-webhook.nebulastudios.dpdns.org"
+          
+          # 触发部署，获取部署 ID
+          echo "🚀 触发部署..."
+          RESPONSE=$(curl -s -X POST "$WEBHOOK_URL/deploy" \
+            -H "Content-Type: application/json" \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
+            -d '{"version": "${{ github.sha }}"}')
+          
+          DEPLOY_ID=$(echo "$RESPONSE" | grep -o '"deployId":"[^"]*"' | cut -d'"' -f4)
+          
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "❌ 触发部署失败: $RESPONSE"
+            exit 1
+          fi
+          
+          echo "📋 部署 ID: $DEPLOY_ID"
+          
+          # 轮询状态，最多等待 2 分钟
+          for i in $(seq 1 24); do
+            sleep 5
+            STATUS_RESPONSE=$(curl -s "$WEBHOOK_URL/deploy/$DEPLOY_ID")
+            STATUS=$(echo "$STATUS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            
+            echo "⏳ [$i/24] 状态: $STATUS"
+            
+            if [ "$STATUS" = "success" ]; then
+              echo "✅ 部署成功！"
+              exit 0
+            elif [ "$STATUS" = "failed" ]; then
+              echo "❌ 部署失败: $STATUS_RESPONSE"
+              exit 1
+            fi
+          done
+          
+          echo "⏰ 部署超时"
+          exit 1

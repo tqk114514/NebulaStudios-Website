@@ -55,9 +55,6 @@ const (
 
 	// maxUpdateFields 最大更新字段数
 	maxUpdateFields = 10
-
-	// queryTimeout 查询超时时间
-	queryTimeout = 10 * time.Second
 )
 
 // allowedUpdateFields 允许更新的字段白名单
