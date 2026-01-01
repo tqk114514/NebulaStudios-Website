@@ -7,15 +7,11 @@
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
   <link rel="stylesheet" href="/account/assets/css/auth.css">
-  <link rel="stylesheet" href="/account/assets/css/link-confirm.css">
+  <link rel="stylesheet" href="/account/assets/css/link.css">
   <script src="/shared/js/translations.js"></script>
 </head>
 <body>
-  <header class="top-header">
-    <div class="brand"><span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span></div>
-  </header>
-  
-  <div id="language-switcher-placeholder"></div>
+  {{HEADER}}
   
   <!-- 页面加载遮罩 -->
   <div id="page-loader" class="page-loader">
@@ -27,7 +23,7 @@
       <h1 class="card-title" data-i18n="linkConfirm.title"></h1>
       <p class="subtitle" data-i18n="linkConfirm.subtitle"></p>
       
-      <!-- 账户绑定可视�?-->
+      <!-- 账户绑定可视化 -->
       <div class="link-visual">
         <!-- 已有账户头像 -->
         <div class="link-avatar-item">
@@ -46,6 +42,7 @@
           <span class="link-avatar-label" id="microsoft-name">-</span>
         </div>
       </div>
+
       
       <p class="link-warning" data-i18n="linkConfirm.warning"></p>
       
@@ -72,6 +69,6 @@
     </div>
   </div>
 
-  <script type="module" src="/account/assets/js/link-confirm.js"></script>
+  <script type="module" src="/account/assets/js/link.js"></script>
 </body>
 </html>
