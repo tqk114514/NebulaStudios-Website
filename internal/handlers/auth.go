@@ -508,7 +508,7 @@ func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	h.tokenService.InvalidateCodeByEmail(ctx, email, nil)
+	_ = h.tokenService.InvalidateCodeByEmail(ctx, email, nil)
 
 	log.Printf("[AUTH] Code invalidated: email=%s", email)
 	h.respondSuccess(c, nil)
@@ -628,7 +628,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// 清除验证码（忽略错误，不影响注册成功）
-	h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, nil)
+	_ = h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, nil)
 
 	log.Printf("[AUTH] User registered successfully: username=%s, email=%s", usernameResult.Value, emailResult.Value)
 	h.respondSuccess(c, gin.H{"message": "Registration successful"})
@@ -1063,7 +1063,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	// 清除验证码（忽略错误）
 	tokenType := services.TokenTypeResetPassword
-	h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
+	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
 
 	// 使缓存失效（密码已更改）
 	h.userCache.Invalidate(user.ID)

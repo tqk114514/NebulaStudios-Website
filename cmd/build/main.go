@@ -375,7 +375,11 @@ func buildTranslations() error {
 	if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
-	defer os.Remove(tmpFile) // 确保清理临时文件
+	defer func() {
+		if err := os.Remove(tmpFile); err != nil {
+			log.Printf("[BUILD] WARN: Failed to remove temp file: %v", err)
+		}
+	}() // 确保清理临时文件
 
 	// 使用 esbuild 压缩
 	sourcemap := api.SourceMapNone
@@ -907,19 +911,19 @@ func brotliFile(src string) (int64, int64, error) {
 	brWriter := brotli.NewWriterLevel(brFile, brotliLevel)
 	_, err = brWriter.Write(data)
 	if err != nil {
-		brFile.Close()
-		os.Remove(brPath) // 清理失败的文件
+		_ = brFile.Close()
+		_ = os.Remove(brPath) // 清理失败的文件
 		return 0, 0, fmt.Errorf("failed to write compressed data: %w", err)
 	}
 
 	if err := brWriter.Close(); err != nil {
-		brFile.Close()
-		os.Remove(brPath)
+		_ = brFile.Close()
+		_ = os.Remove(brPath)
 		return 0, 0, fmt.Errorf("failed to close brotli writer: %w", err)
 	}
 
 	if err := brFile.Close(); err != nil {
-		os.Remove(brPath)
+		_ = os.Remove(brPath)
 		return 0, 0, fmt.Errorf("failed to close file: %w", err)
 	}
 
@@ -947,7 +951,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	// 获取源文件信息
 	srcInfo, err := srcFile.Stat()
@@ -967,7 +971,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	// 复制内容
 	written, err := io.Copy(dstFile, srcFile)
