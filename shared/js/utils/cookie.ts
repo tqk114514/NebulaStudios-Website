@@ -1,6 +1,6 @@
 /**
  * Cookie 操作工具模块
- * 
+ *
  * 功能：
  * - Cookie 读写删除
  * - 用于倒计时状态持久化等
@@ -8,39 +8,39 @@
 
 /**
  * 设置 Cookie
- * @param {string} name - Cookie 名称
- * @param {*} value - Cookie 值
- * @param {number} seconds - 过期时间（秒）
+ * @param name - Cookie 名称
+ * @param value - Cookie 值
+ * @param seconds - 过期时间（秒）
  */
-export function setCookie(name, value, seconds) {
+export function setCookie(name: string, value: unknown, seconds: number): void {
   if (!name || typeof name !== 'string') {
     console.warn('[COOKIE] WARN: Invalid cookie name');
     return;
   }
-  
+
   try {
     const date = new Date();
     date.setTime(date.getTime() + ((seconds || 0) * 1000));
-    const expires = "expires=" + date.toUTCString();
-    document.cookie = name + "=" + (value ?? '') + ";" + expires + ";path=/";
+    const expires = 'expires=' + date.toUTCString();
+    document.cookie = name + '=' + (value ?? '') + ';' + expires + ';path=/';
   } catch (error) {
-    console.error('[COOKIE] ERROR: Failed to set cookie:', error.message);
+    console.error('[COOKIE] ERROR: Failed to set cookie:', (error as Error).message);
   }
 }
 
 /**
  * 获取 Cookie
- * @param {string} name - Cookie 名称
- * @returns {string|null} Cookie 值
+ * @param name - Cookie 名称
+ * @returns Cookie 值
  */
-export function getCookie(name) {
+export function getCookie(name: string): string | null {
   if (!name || typeof name !== 'string') {
     console.warn('[COOKIE] WARN: Invalid cookie name');
     return null;
   }
-  
+
   try {
-    const nameEQ = name + "=";
+    const nameEQ = name + '=';
     const ca = document.cookie.split(';');
     for (let i = 0; i < ca.length; i++) {
       let c = ca[i];
@@ -49,24 +49,24 @@ export function getCookie(name) {
     }
     return null;
   } catch (error) {
-    console.error('[COOKIE] ERROR: Failed to get cookie:', error.message);
+    console.error('[COOKIE] ERROR: Failed to get cookie:', (error as Error).message);
     return null;
   }
 }
 
 /**
  * 删除 Cookie
- * @param {string} name - Cookie 名称
+ * @param name - Cookie 名称
  */
-export function deleteCookie(name) {
+export function deleteCookie(name: string): void {
   if (!name || typeof name !== 'string') {
     console.warn('[COOKIE] WARN: Invalid cookie name');
     return;
   }
-  
+
   try {
-    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;";
+    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
   } catch (error) {
-    console.error('[COOKIE] ERROR: Failed to delete cookie:', error.message);
+    console.error('[COOKIE] ERROR: Failed to delete cookie:', (error as Error).message);
   }
 }

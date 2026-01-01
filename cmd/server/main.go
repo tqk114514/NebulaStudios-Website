@@ -449,9 +449,9 @@ func setupPageRoutes(r *gin.Engine) {
 		accountPages.GET("/login", handlers.ServeLoginPage)
 		accountPages.GET("/register", handlers.ServeRegisterPage)
 		accountPages.GET("/verify", handlers.ServeVerifyPage)
-		accountPages.GET("/forgot-password", handlers.ServeForgotPasswordPage)
+		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
 		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
-		accountPages.GET("/link-confirm", handlers.ServeLinkConfirmPage)
+		accountPages.GET("/link", handlers.ServeLinkConfirmPage)
 	}
 
 	// Policy 模块页面
@@ -471,10 +471,10 @@ func setupPageRoutes(r *gin.Engine) {
 // setupLegacyRedirects 配置旧路由重定向
 func setupLegacyRedirects(r *gin.Engine) {
 	redirects := map[string]string{
-		"/login":           "/account/login",
-		"/register":        "/account/register",
-		"/forgot-password": "/account/forgot-password",
-		"/dashboard":       "/account/dashboard",
+		"/login":     "/account/login",
+		"/register":  "/account/register",
+		"/forgot":    "/account/forgot",
+		"/dashboard": "/account/dashboard",
 	}
 
 	for old, new := range redirects {
@@ -495,9 +495,9 @@ func setupLegacyRedirects(r *gin.Engine) {
 		c.Redirect(http.StatusMovedPermanently, target)
 	})
 
-	r.GET("/link-confirm", func(c *gin.Context) {
+	r.GET("/link", func(c *gin.Context) {
 		query := c.Request.URL.RawQuery
-		target := "/account/link-confirm"
+		target := "/account/link"
 		if query != "" {
 			target += "?" + query
 		}

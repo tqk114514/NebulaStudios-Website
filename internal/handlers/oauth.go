@@ -678,7 +678,7 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 			linkMu.Unlock()
 
 			log.Printf("[OAUTH] Found existing user with same email, redirecting to confirm: email=%s, userID=%d", email, existingUser.ID)
-			c.Redirect(http.StatusFound, h.baseURL+"/account/link-confirm?token="+linkToken)
+			c.Redirect(http.StatusFound, h.baseURL+"/account/link?token="+linkToken)
 			return
 		}
 	}

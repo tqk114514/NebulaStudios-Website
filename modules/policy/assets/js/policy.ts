@@ -1,5 +1,5 @@
 /**
- * modules/policy/assets/js/policy.js
+ * modules/policy/assets/js/policy.ts
  * Policy 页面通用逻辑
  * 
  * 功能：
@@ -8,17 +8,49 @@
  * - 动态加载 policy 内容
  */
 
-import { initLanguageSwitcher, loadLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.js';
+import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.js';
+
+// ==================== 类型定义 ====================
+
+interface PolicySection {
+  id: string;
+  title: string;
+  content: string;
+}
+
+interface PolicyFooter {
+  lastUpdated: string;
+  statement?: string;
+  notice?: string;
+}
+
+interface PolicyContent {
+  title: string;
+  effectiveDate: string;
+  publisher?: string;
+  contactEmail?: string;
+  sections?: PolicySection[];
+  content?: string;
+  footer?: PolicyFooter;
+}
+
+interface PolicyData {
+  [lang: string]: {
+    privacy?: PolicyContent;
+    terms?: PolicyContent;
+    cookies?: PolicyContent;
+  };
+}
 
 // Policy 数据缓存
-let policyData = null;
+let policyData: PolicyData | null = null;
 
 // ==================== 数据加载 ====================
 
 /**
  * 加载 policy 翻译数据
  */
-async function loadPolicyData() {
+async function loadPolicyData(): Promise<PolicyData | null> {
   if (policyData) return policyData;
   
   try {
@@ -27,7 +59,7 @@ async function loadPolicyData() {
     policyData = await response.json();
     return policyData;
   } catch (error) {
-    console.error('[POLICY] ERROR: Failed to load policy data:', error.message);
+    console.error('[POLICY] ERROR: Failed to load policy data:', (error as Error).message);
     return null;
   }
 }
@@ -35,7 +67,7 @@ async function loadPolicyData() {
 /**
  * 获取当前语言的 policy 数据
  */
-function getPolicyContent(type) {
+function getPolicyContent(type: 'privacy' | 'terms' | 'cookies'): PolicyContent | null {
   if (!policyData) return null;
   
   const lang = getCurrentLanguage();
@@ -49,7 +81,7 @@ function getPolicyContent(type) {
 /**
  * 渲染隐私政策页面
  */
-function renderPrivacyPage() {
+function renderPrivacyPage(): void {
   const content = getPolicyContent('privacy');
   if (!content) return;
   
@@ -93,7 +125,7 @@ function renderPrivacyPage() {
 /**
  * 渲染服务条款页面
  */
-function renderTermsPage() {
+function renderTermsPage(): void {
   const content = getPolicyContent('terms');
   if (!content) return;
   
@@ -135,7 +167,7 @@ function renderTermsPage() {
 /**
  * 渲染 Cookie 政策页面
  */
-function renderCookiesPage() {
+function renderCookiesPage(): void {
   const content = getPolicyContent('cookies');
   if (!content) return;
   
@@ -176,7 +208,7 @@ function renderCookiesPage() {
 /**
  * 根据当前页面渲染内容
  */
-function renderCurrentPage() {
+function renderCurrentPage(): void {
   const path = window.location.pathname;
   
   if (path.includes('/privacy')) {
@@ -194,7 +226,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 等待翻译加载完成
     await waitForTranslations();
-    await loadLanguageSwitcher();
     
     // 加载 policy 数据并渲染
     await loadPolicyData();
@@ -213,7 +244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
   } catch (error) {
-    console.error('[POLICY] ERROR: Page initialization failed:', error.message);
+    console.error('[POLICY] ERROR: Page initialization failed:', (error as Error).message);
     hidePageLoader();
   }
 });

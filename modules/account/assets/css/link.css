@@ -1,5 +1,5 @@
 /**
- * assets/css/link-confirm.css
+ * assets/css/link.css
  * 微软账户绑定确认页面样式
  */
 
@@ -54,7 +54,6 @@
   height: 100%;
   object-fit: cover;
 }
-
 
 
 .link-avatar-label {
