@@ -420,7 +420,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if err != nil {
 		log.Printf("[QR-LOGIN] ERROR: Failed to marshal payload: %v", err)
 		// 清理已创建的 Token
-		pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
+		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -429,7 +429,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if err != nil {
 		log.Printf("[QR-LOGIN] ERROR: Failed to encrypt token: %v", err)
 		// 清理已创建的 Token
-		pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
+		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -633,7 +633,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	if time.Now().UnixMilli() > expireTime {
 		log.Printf("[QR-LOGIN] WARN: Token expired in Scan: token=%s", originalToken[:8]+"...")
 		// 删除过期 Token
-		pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -773,7 +773,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	// 检查是否过期
 	if time.Now().UnixMilli() > expireTime {
 		log.Printf("[QR-LOGIN] WARN: Token expired in MobileConfirm")
-		pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -811,8 +811,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	})
 
 	// 删除已使用的 Token
-	_, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
-	if err != nil {
+	if _, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken); err != nil {
 		log.Printf("[QR-LOGIN] WARN: Failed to delete token after confirm: %v", err)
 	}
 
