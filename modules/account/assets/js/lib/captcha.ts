@@ -151,11 +151,11 @@ function loadSDK(type: CaptchaType): Promise<void> {
     script.src = url;
     script.async = true;
     script.defer = true;
-    script.onload = () => {
+    script.onload = (): void => {
       console.log(`[CAPTCHA] SDK loaded: ${type}`);
       resolve();
     };
-    script.onerror = () => {
+    script.onerror = (): void => {
       reject(new Error(`Failed to load SDK: ${type}`));
     };
     document.head.appendChild(script);
@@ -249,7 +249,7 @@ export async function initCaptcha(
   const ready = await waitForAPI();
   if (!ready) {
     console.error('[CAPTCHA] ERROR: API not ready');
-    if (onError) onError();
+    if (onError) {onError();}
     return null;
   }
 
@@ -266,12 +266,12 @@ export async function initCaptcha(
         break;
       default:
         console.error('[CAPTCHA] ERROR: Unknown captcha type:', captchaType);
-        if (onError) onError();
+        if (onError) {onError();}
         return null;
     }
   } catch (error) {
     console.error('[CAPTCHA] ERROR: Failed to render widget:', (error as Error).message);
-    if (onError) onError();
+    if (onError) {onError();}
     return null;
   }
 
@@ -293,16 +293,16 @@ function renderTurnstile(
     size: 'normal',
     callback: (token: string) => {
       captchaToken = token;
-      if (onSuccess) onSuccess(token);
+      if (onSuccess) {onSuccess(token);}
     },
     'error-callback': () => {
       console.error('[CAPTCHA] ERROR: Turnstile verification failed');
-      if (onError) onError();
+      if (onError) {onError();}
     },
     'expired-callback': () => {
       console.warn('[CAPTCHA] WARN: Token expired');
       captchaToken = null;
-      if (onExpired) onExpired();
+      if (onExpired) {onExpired();}
     }
   });
 }
@@ -321,16 +321,16 @@ function renderHCaptcha(
     theme: 'dark',
     callback: (token: string) => {
       captchaToken = token;
-      if (onSuccess) onSuccess(token);
+      if (onSuccess) {onSuccess(token);}
     },
     'error-callback': () => {
       console.error('[CAPTCHA] ERROR: hCaptcha verification failed');
-      if (onError) onError();
+      if (onError) {onError();}
     },
     'expired-callback': () => {
       console.warn('[CAPTCHA] WARN: Token expired');
       captchaToken = null;
-      if (onExpired) onExpired();
+      if (onExpired) {onExpired();}
     }
   });
 }
@@ -339,15 +339,15 @@ function renderHCaptcha(
  * 移除当前 widget
  */
 function removeWidget(): void {
-  if (widgetId === null) return;
+  if (widgetId === null) {return;}
 
   try {
     switch (captchaType) {
       case 'turnstile':
-        if (window.turnstile) window.turnstile.remove(widgetId);
+        if (window.turnstile) {window.turnstile.remove(widgetId);}
         break;
       case 'hcaptcha':
-        if (window.hcaptcha) window.hcaptcha.remove(widgetId);
+        if (window.hcaptcha) {window.hcaptcha.remove(widgetId);}
         break;
     }
   } catch (error) {

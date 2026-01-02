@@ -15,7 +15,7 @@ import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/
 import { getUrlParameter } from './lib/utils/url.ts';
 
 // 翻译函数
-const t = window.t || ((key: string) => key);
+const t = window.t || ((key: string): string => key);
 
 // ==================== 类型定义 ====================
 
@@ -44,7 +44,6 @@ function showAlert(message: string): void {
   showAlertBase(message, '', t);
 }
 
-
 // ==================== 页面初始化 ====================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -61,11 +60,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化语言切换器
     initLanguageSwitcher(() => {
       updatePageTitle();
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
 
     // 启用卡片自动调整大小
-    if (card) enableCardAutoResize(card);
+    if (card) {enableCardAutoResize(card);}
 
     // 更新页面标题
     updatePageTitle();
@@ -107,8 +106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { microsoftName, microsoftAvatar, username, userAvatar } = result.data!;
 
       // 显示账户信息
-      if (microsoftNameEl) microsoftNameEl.textContent = microsoftName || '-';
-      if (userUsernameEl) userUsernameEl.textContent = username || '-';
+      if (microsoftNameEl) {microsoftNameEl.textContent = microsoftName || '-';}
+      if (userUsernameEl) {userUsernameEl.textContent = username || '-';}
 
       // 显示用户头像
       if (userAvatarEl) {
