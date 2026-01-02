@@ -54,7 +54,7 @@ const countdownInstances = new Map<string, CountdownInstance>();
 
 /**
  * 开始发送按钮倒计时
- * 
+ *
  * @returns 清理函数，调用后停止倒计时
  */
 export function startCountdown(
@@ -83,7 +83,7 @@ export function startCountdown(
   button.disabled = true;
 
   const getCompleteText = (): string => {
-    if (completeText) return completeText;
+    if (completeText) {return completeText;}
     return t ? t('register.sendCodeButton') : '发送验证码';
   };
 
@@ -93,9 +93,9 @@ export function startCountdown(
 
     if (remaining <= 0) {
       clearCountdown(cookieKey);
-      if (input) input.disabled = false;
+      if (input) {input.disabled = false;}
       button.textContent = getCompleteText();
-      if (onComplete) onComplete();
+      if (onComplete) {onComplete();}
     } else {
       button.textContent = `${remaining}s`;
     }
@@ -110,7 +110,7 @@ export function startCountdown(
 
 /**
  * 恢复发送按钮倒计时状态（页面刷新后）
- * 
+ *
  * @returns 剩余秒数，如果没有倒计时则返回 null
  */
 export function resumeCountdown(
@@ -145,11 +145,11 @@ export function resumeCountdown(
     if (remaining > 0) {
       // 清理同 key 的旧实例
       clearCountdown(cookieKey);
-      
+
       button.disabled = true;
 
       const getCompleteText = (): string => {
-        if (completeText) return completeText;
+        if (completeText) {return completeText;}
         return t ? t('register.sendCodeButton') : '发送验证码';
       };
 
@@ -159,9 +159,9 @@ export function resumeCountdown(
 
         if (remaining <= 0) {
           clearCountdown(cookieKey);
-          if (input) input.disabled = false;
+          if (input) {input.disabled = false;}
           button.textContent = getCompleteText();
-          if (onComplete) onComplete();
+          if (onComplete) {onComplete();}
         } else {
           button.textContent = `${remaining}s`;
         }
@@ -195,7 +195,7 @@ export function clearCountdown(cookieKey: string = 'countdown_end'): void {
  * 检查指定 key 是否正在倒计时
  */
 export function isCountingDown(cookieKey: string = 'countdown_end'): boolean {
-  if (countdownInstances.has(cookieKey)) return true;
+  if (countdownInstances.has(cookieKey)) {return true;}
   const endTime = getCookie(cookieKey);
   return !!(endTime && parseInt(endTime) > Date.now());
 }
@@ -247,7 +247,7 @@ export function startCodeExpiryTimer(
  * 更新验证码过期倒计时显示
  */
 function updateExpiryDisplay(timerElement: HTMLElement | null, onExpired?: ExpiredCallback): void {
-  if (!codeExpiryTime || !timerElement) return;
+  if (!codeExpiryTime || !timerElement) {return;}
 
   const now = Date.now();
   const remaining = codeExpiryTime - now;
@@ -291,7 +291,7 @@ async function checkCodeExpiry(onExpired?: ExpiredCallback): Promise<void> {
 
     if (result.success) {
       if (result.expired) {
-        if (onExpired) onExpired();
+        if (onExpired) {onExpired();}
       } else {
         if (result.expireTime) {
           const timerElement = document.getElementById('code-expiry-timer');
@@ -301,7 +301,7 @@ async function checkCodeExpiry(onExpired?: ExpiredCallback): Promise<void> {
     }
   } catch (error) {
     console.error('[COUNTDOWN] Check code expiry failed:', (error as Error).message);
-    if (onExpired) onExpired();
+    if (onExpired) {onExpired();}
   }
 }
 

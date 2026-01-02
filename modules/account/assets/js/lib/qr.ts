@@ -137,12 +137,12 @@ let currentStatus: LoginStatus = 'pending';
  * 初始化扫码登录功能
  */
 export function initQrLogin(button: HTMLElement | null, options: QrLoginOptions = {}): void {
-  if (!button) return;
+  if (!button) {return;}
 
-  if (options.showAlert) showAlertCallback = options.showAlert;
-  if (options.t) translateFn = options.t;
+  if (options.showAlert) {showAlertCallback = options.showAlert;}
+  if (options.t) {translateFn = options.t;}
 
-  if (isMobileDevice()) return;
+  if (isMobileDevice()) {return;}
 
   button.classList.remove('is-hidden');
 
@@ -196,11 +196,11 @@ function connectWebSocket(token: string): void {
   try {
     ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
+    ws.onopen = (): void => {
       console.log('[QR-LOGIN] WebSocket connected');
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (event): void => {
       try {
         const message: WSMessage = JSON.parse(event.data);
         console.log('[QR-LOGIN] WebSocket message:', message.type);
@@ -213,12 +213,12 @@ function connectWebSocket(token: string): void {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (): void => {
       console.log('[QR-LOGIN] WebSocket disconnected');
       ws = null;
     };
 
-    ws.onerror = (error) => {
+    ws.onerror = (error): void => {
       console.error('[QR-LOGIN] WebSocket error:', error);
     };
   } catch (error) {
@@ -279,7 +279,7 @@ async function setSessionAndRedirect(sessionToken: string): Promise<void> {
  * 显示扫码登录弹窗
  */
 export async function showQrLoginModal(): Promise<void> {
-  if (!modalController || !qrCodeContainer) return;
+  if (!modalController || !qrCodeContainer) {return;}
 
   qrCodeContainer.innerHTML = '<div class="qr-loading"></div>';
   modalController.open();
@@ -313,7 +313,7 @@ export async function showQrLoginModal(): Promise<void> {
  * 取消/删除当前 token
  */
 async function cancelCurrentToken(): Promise<void> {
-  if (!currentToken) return;
+  if (!currentToken) {return;}
 
   try {
     await fetch('/api/qr-login/cancel', {
@@ -342,7 +342,7 @@ export function closeQrLoginModal(): void {
 function resetModalState(): void {
   currentStatus = 'pending';
 
-  if (qrCodeContainer) qrCodeContainer.classList.remove('is-hidden');
+  if (qrCodeContainer) {qrCodeContainer.classList.remove('is-hidden');}
   if (qrScannedIcon) {
     qrScannedIcon.classList.add('is-hidden');
     qrScannedIcon.classList.remove('is-cancelled');
@@ -357,12 +357,12 @@ function resetModalState(): void {
  * 更新为已扫描状态
  */
 export function setScannedState(): void {
-  if (currentStatus !== 'pending') return;
+  if (currentStatus !== 'pending') {return;}
 
   currentStatus = 'scanned';
   console.log('[QR-LOGIN] Status changed to scanned');
 
-  if (qrCodeContainer) qrCodeContainer.classList.add('is-hidden');
+  if (qrCodeContainer) {qrCodeContainer.classList.add('is-hidden');}
   if (qrScannedIcon) {
     qrScannedIcon.classList.remove('is-hidden', 'is-cancelled');
   }
@@ -376,7 +376,7 @@ export function setScannedState(): void {
  * 更新为已取消状态
  */
 export function setCancelledState(): void {
-  if (currentStatus !== 'scanned') return;
+  if (currentStatus !== 'scanned') {return;}
 
   currentStatus = 'cancelled';
   console.log('[QR-LOGIN] Status changed to cancelled');

@@ -65,7 +65,7 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
       languageSwitcher.classList.remove('is-open');
       currentBtn.setAttribute('aria-expanded', 'false');
 
-      if (!selectedLang || selectedLang === window.currentLanguage) return;
+      if (!selectedLang || selectedLang === window.currentLanguage) {return;}
 
       // 切换语言
       if (window.switchLanguage) {
@@ -115,7 +115,6 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   }
 }
 
-
 /**
  * 手动应用翻译到页面元素
  * @returns 是否成功
@@ -124,7 +123,7 @@ export function applyTranslations(): boolean {
   if (typeof window.t !== 'function') {
     console.warn('[I18N] WARN: Translation function not available, retrying...');
     setTimeout(() => {
-      if (typeof window.t === 'function') applyTranslations();
+      if (typeof window.t === 'function') {applyTranslations();}
     }, 100);
     return false;
   }
@@ -132,30 +131,30 @@ export function applyTranslations(): boolean {
   // 翻译文本内容
   document.querySelectorAll('[data-i18n]').forEach(element => {
     const key = element.getAttribute('data-i18n');
-    if (!key) return;
+    if (!key) {return;}
 
     try {
-      const translation = window.t!(key);
+      const translation = window.t?.(key);
       if (translation && translation !== key) {
         element.textContent = translation;
       }
-    } catch (error) {
-      console.warn(`[I18N] WARN: Failed to translate key "${key}":`, (error as Error).message);
+    } catch (e) {
+      console.warn(`[I18N] WARN: Failed to translate key "${key}":`, (e as Error).message);
     }
   });
 
   // 翻译占位符
   document.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach(element => {
     const key = element.getAttribute('data-i18n-placeholder');
-    if (!key) return;
+    if (!key) {return;}
 
     try {
-      const translation = window.t!(key);
+      const translation = window.t?.(key);
       if (translation && translation !== key) {
         element.placeholder = translation;
       }
-    } catch (error) {
-      console.warn(`[I18N] WARN: Failed to translate placeholder key "${key}":`, (error as Error).message);
+    } catch (e) {
+      console.warn(`[I18N] WARN: Failed to translate placeholder key "${key}":`, (e as Error).message);
     }
   });
 
@@ -167,7 +166,7 @@ export function applyTranslations(): boolean {
  * 更新页面标题
  */
 export function updatePageTitle(): void {
-  if (typeof window.t !== 'function') return;
+  if (typeof window.t !== 'function') {return;}
 
   const titleKey = document.documentElement.getAttribute('data-i18n-title');
   if (titleKey) {
@@ -240,14 +239,14 @@ export function initializeModalTranslations(): void {
   document.querySelectorAll('.modal-close').forEach(btn => {
     if (btn.hasAttribute('data-i18n')) {
       const key = btn.getAttribute('data-i18n');
-      if (!key) return;
+      if (!key) {return;}
 
       try {
-        const translation = window.t!(key);
+        const translation = window.t?.(key);
         if (translation && translation !== key) {
           btn.textContent = translation;
         }
-      } catch (error) {
+      } catch {
         console.warn(`[I18N] WARN: Failed to translate modal button key "${key}"`);
       }
     }
@@ -257,14 +256,14 @@ export function initializeModalTranslations(): void {
   document.querySelectorAll('[data-i18n]').forEach(element => {
     if (element.closest('.modal-overlay')) {
       const key = element.getAttribute('data-i18n');
-      if (!key) return;
+      if (!key) {return;}
 
       try {
-        const translation = window.t!(key);
+        const translation = window.t?.(key);
         if (translation && translation !== key) {
           element.textContent = translation;
         }
-      } catch (error) {
+      } catch {
         console.warn(`[I18N] WARN: Failed to translate modal element key "${key}"`);
       }
     }

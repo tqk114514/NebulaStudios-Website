@@ -25,7 +25,7 @@ export function adjustCardHeight(
   loginView?: HTMLElement | null,
   registerView?: HTMLElement | null
 ): void {
-  if (!card) return;
+  if (!card) {return;}
 
   if (!loginView && !registerView) {
     // 单视图模式：自动计算高度
@@ -39,7 +39,7 @@ export function adjustCardHeight(
     card.style.height = `${targetHeight}px`;
   } else {
     // 双视图模式：根据可见视图计算
-    if (!loginView || !registerView) return;
+    if (!loginView || !registerView) {return;}
     const visibleView = registerView.classList.contains('is-hidden') ? loginView : registerView;
     card.style.transition = 'height 0.3s ease';
     card.style.height = `${visibleView.scrollHeight}px`;
@@ -53,7 +53,7 @@ const cardObservers = new WeakMap<HTMLElement, CardObservers>();
  * 启用卡片内容自动高度调整
  */
 export function enableCardAutoResize(card: HTMLElement | null): () => void {
-  if (!card || cardObservers.has(card)) return () => {};
+  if (!card || cardObservers.has(card)) {return () => {};}
 
   if (typeof ResizeObserver === 'undefined' || typeof MutationObserver === 'undefined') {
     console.warn('[UI] ResizeObserver or MutationObserver not supported');
@@ -62,7 +62,7 @@ export function enableCardAutoResize(card: HTMLElement | null): () => void {
 
   let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
   const debouncedAdjust = (): void => {
-    if (resizeTimeout) clearTimeout(resizeTimeout);
+    if (resizeTimeout) {clearTimeout(resizeTimeout);}
     resizeTimeout = setTimeout(() => {
       adjustCardHeight(card);
     }, 50);
@@ -109,7 +109,7 @@ export function enableCardAutoResize(card: HTMLElement | null): () => void {
  * 禁用卡片内容自动高度调整
  */
 export function disableCardAutoResize(card: HTMLElement | null): void {
-  if (!card) return;
+  if (!card) {return;}
 
   const observers = cardObservers.get(card);
   if (observers) {
@@ -157,6 +157,6 @@ export function conditionalDelayedExecution(
   condition?: () => boolean
 ): void {
   requestAnimationFrame(() => {
-    if (!condition || condition()) callback();
+    if (!condition || condition()) {callback();}
   });
 }

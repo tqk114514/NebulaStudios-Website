@@ -1,7 +1,7 @@
 /**
  * assets/js/register.ts
  * 注册页面逻辑
- * 
+ *
  * 功能：
  * - 用户注册表单处理
  * - 邮箱验证码发送与倒计时
@@ -23,7 +23,7 @@ import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoa
 // ==================== 全局变量 ====================
 
 // 翻译函数（从全局获取，若不存在则返回原始 key）
-const t = window.t || ((key: string) => key);
+const t = window.t || ((key: string): string => key);
 
 /**
  * 显示带翻译的提示弹窗
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 等待翻译加载完成
     await waitForTranslations();
-    
+
     // 检查是否已登录，已登录则跳转 dashboard
     const sessionResult = await verifySession();
     if (sessionResult.success) {
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadEmailWhitelist(),
       loadCaptchaConfig()
     ]);
-    
+
     // 邮箱白名单加载失败时提示
     if (!emailWhitelistResult.success) {
       hidePageLoader();
@@ -62,15 +62,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       showAlertWithTranslation(t('error.loadEmailWhitelistFailed') || '加载邮箱白名单失败，请刷新页面重试');
       return;
     }
-    
+
     // 隐藏页面加载遮罩
     hidePageLoader();
-    
+
     // 初始化弹窗组件
     initializeModals(t);
-    
+
     // ==================== DOM 元素获取 ====================
-    
+
     const registerUsernameInput = document.getElementById('register-username') as HTMLInputElement | null;
     const registerEmailInput = document.getElementById('register-email') as HTMLInputElement | null;
     const registerVerificationCodeInput = document.getElementById('register-verification-code') as HTMLInputElement | null;
@@ -82,9 +82,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const showSupportedEmailsLink = document.getElementById('show-supported-emails');
     const codeExpiryTimerElement = document.getElementById('code-expiry-timer');
     const card = document.querySelector('.card') as HTMLElement | null;
-    
+
     // DOM 元素检查
-    if (!registerUsernameInput || !registerEmailInput || !registerPasswordInput || 
+    if (!registerUsernameInput || !registerEmailInput || !registerPasswordInput ||
         !registerPasswordConfirmInput || !registerButton || !sendCodeButton) {
       console.error('[REGISTER] ERROR: Required DOM elements not found');
       return;
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const username = registerUsernameInput!.value.trim();
       const usernameErrorText = document.getElementById('username-error-text');
       const wasHidden = usernameError?.classList.contains('is-hidden');
-      
+
       // 空输入时隐藏错误
       if (username.length === 0) {
         if (!wasHidden) {
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         return;
       }
-      
+
       // 检查用户名长度
       if (isUsernameTooLong(username)) {
         if (usernameErrorText) {
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
     }
-    
+
     /**
      * 更新发送验证码按钮状态
      * 根据邮箱验证结果启用/禁用按钮
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const emailError = document.getElementById('email-error');
       const emailErrorText = document.getElementById('email-error-text');
       const wasHidden = emailError?.classList.contains('is-hidden');
-      
+
       // 始终检测邮箱格式并显示错误
       if (!validation.valid) {
         // 邮箱不在白名单时显示错误
@@ -147,10 +147,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             emailErrorText.setAttribute('data-i18n', validation.errorKey);
             emailErrorText.textContent = t(validation.errorKey);
           }
-          if (wasHidden) delayedExecution(() => adjustCardHeight(card));
+          if (wasHidden) {delayedExecution(() => adjustCardHeight(card));}
         } else {
           emailError?.classList.add('is-hidden');
-          if (!wasHidden) delayedExecution(() => adjustCardHeight(card));
+          if (!wasHidden) {delayedExecution(() => adjustCardHeight(card));}
         }
       } else {
         if (!emailError?.classList.contains('is-hidden')) {
@@ -158,12 +158,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           delayedExecution(() => adjustCardHeight(card));
         }
       }
-      
+
       // 倒计时中或输入框禁用时不更新按钮状态
       if (isCountingDown() || registerEmailInput!.disabled || /^\d+s$/.test(sendCodeButton!.textContent || '')) {
         return;
       }
-      
+
       // 更新按钮状态
       sendCodeButton!.disabled = !validation.valid;
     }
@@ -178,9 +178,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const email = pendingEmail;
         const token = getCaptchaToken();
         const captchaType = getCaptchaType();
-        
+
         const result = await sendVerificationCode(email, token || '', captchaType || '');
-        
+
         if (result.success) {
           // 发送成功，开始倒计时
           startCountdown(sendCodeButton!, {
@@ -212,41 +212,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearCaptcha();
       }
     }
-    
+
     /**
      * 发送验证码按钮点击处理
      */
     async function onSendCodeClick(): Promise<void> {
       // 倒计时中不处理
-      if (isCountingDown()) return;
+      if (isCountingDown()) {return;}
 
       try {
         const email = registerEmailInput!.value.trim();
         const validation = validateEmail(email);
-        
+
         // 邮箱验证失败
         if (!validation.valid) {
           showAlertWithTranslation(t(validation.errorKey || 'register.invalidEmail'));
           registerEmailInput!.focus();
           return;
         }
-        
+
         pendingEmail = email;
         sendCodeButton!.disabled = true;
-        
+
         // 显示验证容器
         const captchaContainer = document.getElementById('captcha-container');
         if (captchaContainer) {
           captchaContainer.classList.remove('is-hidden');
-          if (card) delayedExecution(() => adjustCardHeight(card));
+          if (card) {delayedExecution(() => adjustCardHeight(card));}
         }
-        
+
         // 无需人机验证时直接发送
         if (!getCaptchaSiteKey()) {
           await handleSendCode();
           if (captchaContainer) {
             captchaContainer.classList.add('is-hidden');
-            if (card) delayedExecution(() => adjustCardHeight(card));
+            if (card) {delayedExecution(() => adjustCardHeight(card));}
           }
         } else {
           // 初始化人机验证
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               await handleSendCode();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             },
             // 验证失败回调
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             },
             // 验证过期回调
@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             }
           );
@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateSendCodeButtonState();
       }
     }
-    
+
     /**
      * 验证码输入过滤（只允许数字和字母）
      */
@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     async function handleRegister(e: Event): Promise<void> {
       e.preventDefault();
-      
+
       try {
         // 收集表单数据
         const formData = {
@@ -323,21 +323,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           password: registerPasswordInput!.value,
           passwordConfirm: registerPasswordConfirmInput!.value
         };
-        
+
         // 表单验证
         const validation = validateRegisterForm(formData);
         if (!validation.valid) {
           showAlertWithTranslation(t(validation.errorKey || 'register.validationFailed'));
           return;
         }
-        
+
         // 禁用按钮，显示加载状态
         registerButton!.disabled = true;
         registerButton!.textContent = t('register.registering') || '注册中...';
-        
+
         // 发送注册请求
         const result = await register(formData);
-        
+
         if (result.success) {
           showAlertWithTranslation(t('register.success'));
           // 注册成功后跳转到登录页
@@ -356,21 +356,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         registerButton!.textContent = t('register.submitButton');
       }
     }
-    
+
     // ==================== 事件绑定 ====================
-    
+
     // 用户名输入验证
     registerUsernameInput.addEventListener('input', onUsernameInput);
-    
+
     // 邮箱输入验证
     registerEmailInput.addEventListener('input', updateSendCodeButtonState);
-    
+
     // 验证码输入过滤
     registerVerificationCodeInput?.addEventListener('input', onVerificationCodeInput);
-    
+
     // 发送验证码按钮
     sendCodeButton?.addEventListener('click', onSendCodeClick);
-    
+
     // 显示支持的邮箱列表
     showSupportedEmailsLink?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -389,12 +389,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 包含大小写字母
       document.getElementById('req-case')?.classList.toggle('is-valid', /[A-Z]/.test(password) && /[a-z]/.test(password));
     });
-    
+
     // 注册表单提交
     document.getElementById('register-form')?.addEventListener('submit', handleRegister);
-    
+
     // ==================== 初始化 ====================
-    
+
     // 清空所有输入框
     registerEmailInput.value = '';
     registerUsernameInput.value = '';
@@ -403,37 +403,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (registerVerificationCodeInput) {
       registerVerificationCodeInput.value = '';
     }
-    
+
     // 恢复倒计时状态（页面刷新后）
     resumeCountdown(sendCodeButton, {
       input: registerEmailInput,
       t,
       onComplete: () => {
         pendingEmail = '';
-        if (!getCodeExpiryTime()) updateSendCodeButtonState();
+        if (!getCodeExpiryTime()) {updateSendCodeButtonState();}
       }
     });
-    
+
     // 页面卸载时清理验证码过期定时器
     window.addEventListener('beforeunload', () => {
       clearCodeExpiryTimer(codeExpiryTimerElement);
     });
-    
+
     // 更新页面标题
     updatePageTitle();
-    
+
     // 调整卡片高度
     delayedExecution(() => adjustCardHeight(card));
-    
+
     // 启用卡片自动调整大小
     enableCardAutoResize(card);
-    
+
     // 初始化语言切换器
     initLanguageSwitcher(() => {
       initializeModals(t);
       updateSendCodeButtonState();
       updatePageTitle();
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
   } catch (error) {
     console.error('[REGISTER] ERROR: Page initialization failed:', (error as Error).message);

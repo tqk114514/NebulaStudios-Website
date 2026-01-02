@@ -25,7 +25,7 @@ interface PendingLoginData {
 
 // ==================== 全局变量 ====================
 
-const t = window.t || ((key: string) => key);
+const t = window.t || ((key: string): string => key);
 const showAlertWithTranslation = (message: string, title?: string): void => showAlert(message, title || '', t);
 
 /** 待处理的登录请求 */
@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 隐藏验证容器
         if (captchaContainer) {
           captchaContainer.classList.add('is-hidden');
-          if (card) delayedExecution(() => adjustCardHeight(card));
+          if (card) {delayedExecution(() => adjustCardHeight(card));}
         }
       }
     }
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
           if (captchaContainer) {
             captchaContainer.classList.remove('is-hidden');
-            if (card) delayedExecution(() => adjustCardHeight(card));
+            if (card) {delayedExecution(() => adjustCardHeight(card));}
           }
 
           await initCaptcha(
@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             },
             () => {
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             }
           );
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initLanguageSwitcher(() => {
       initializeModals(t);
       updatePageTitle();
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
 
   } catch (error) {

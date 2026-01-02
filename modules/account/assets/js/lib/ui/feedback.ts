@@ -62,7 +62,7 @@ export function createLoadingSpinner(): string {
  * 显示加载状态
  */
 export function showLoading(container: HTMLElement | null, message: string = ''): void {
-  if (!container) return;
+  if (!container) {return;}
 
   container.innerHTML = '';
 
@@ -87,9 +87,9 @@ export function showLoading(container: HTMLElement | null, message: string = '')
  * 隐藏加载状态
  */
 export function hideLoading(container: HTMLElement | null): void {
-  if (!container) return;
+  if (!container) {return;}
   const loadingState = container.querySelector('.loading-state');
-  if (loadingState) loadingState.remove();
+  if (loadingState) {loadingState.remove();}
 }
 
 // ==================== Toast ====================
@@ -156,8 +156,8 @@ export function showAlert(message: string, title: string = '', t?: TranslateFunc
   }
 
   alertMessage.textContent = message;
-  if (alertTitle) alertTitle.textContent = title || (t ? t('modal.alert') : '') || '提示';
-  if (alertCloseBtn) alertCloseBtn.textContent = (t ? t('modal.close') : '') || '关闭';
+  if (alertTitle) {alertTitle.textContent = title || (t ? t('modal.alert') : '') || '提示';}
+  if (alertCloseBtn) {alertCloseBtn.textContent = (t ? t('modal.close') : '') || '关闭';}
   alertModal.classList.remove('is-hidden');
 
   const handleClose = (): void => {
@@ -167,7 +167,7 @@ export function showAlert(message: string, title: string = '', t?: TranslateFunc
   };
 
   const handleOverlayClick = (e: Event): void => {
-    if (e.target === alertModal) handleClose();
+    if (e.target === alertModal) {handleClose();}
   };
 
   alertCloseBtn?.addEventListener('click', handleClose);
@@ -247,8 +247,8 @@ export function showExternalLinkConfirm(url: string, t?: TranslateFunction): voi
     urlDisplay.href = url;
   }
 
-  if (confirmBtn) confirmBtn.textContent = (t ? t('modal.externalLink.continue') : '') || '继续访问';
-  if (cancelBtn) cancelBtn.textContent = (t ? t('modal.cancel') : '') || '取消';
+  if (confirmBtn) {confirmBtn.textContent = (t ? t('modal.externalLink.continue') : '') || '继续访问';}
+  if (cancelBtn) {cancelBtn.textContent = (t ? t('modal.cancel') : '') || '取消';}
 
   if (confirmBtn && confirmBtn.parentNode) {
     const newConfirmBtn = confirmBtn.cloneNode(true) as HTMLElement;
@@ -314,7 +314,7 @@ export function showSupportedEmailsModal(emailProviders: EmailProviders, t: Tran
     });
   }
 
-  if (modalCloseBtn) modalCloseBtn.textContent = t('modal.close') || '关闭';
+  if (modalCloseBtn) {modalCloseBtn.textContent = t('modal.close') || '关闭';}
   modalOverlay.classList.remove('is-hidden');
 }
 
@@ -339,15 +339,15 @@ export function initializeModals(t: TranslateFunction): void {
   modalCloseBtn?.addEventListener('click', closeModal);
 
   alertModal?.addEventListener('click', (e) => {
-    if (e.target === alertModal) closeAlert();
+    if (e.target === alertModal) {closeAlert();}
   });
 
   modalOverlay?.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) closeModal();
+    if (e.target === modalOverlay) {closeModal();}
   });
 
   externalLinkModal?.addEventListener('click', (e) => {
-    if (e.target === externalLinkModal) closeExternalLinkModal();
+    if (e.target === externalLinkModal) {closeExternalLinkModal();}
   });
 
   document.addEventListener('keydown', (e) => {
@@ -372,14 +372,14 @@ export function initializeModalTranslations(t: TranslateFunction): void {
   document.querySelectorAll('.modal-close').forEach(btn => {
     if (btn.hasAttribute('data-i18n')) {
       const key = btn.getAttribute('data-i18n');
-      if (key) btn.textContent = t(key) || btn.textContent;
+      if (key) {btn.textContent = t(key) || btn.textContent;}
     }
   });
 
   document.querySelectorAll('[data-i18n]').forEach(element => {
     if (element.closest('.modal-overlay')) {
       const key = element.getAttribute('data-i18n');
-      if (key) element.textContent = t(key) || element.textContent;
+      if (key) {element.textContent = t(key) || element.textContent;}
     }
   });
 }
@@ -388,9 +388,9 @@ export function initializeModalTranslations(t: TranslateFunction): void {
 
 /**
  * 创建通用弹窗控制器
- * 
+ *
  * 用于管理复杂弹窗的打开、关闭、事件绑定和清理逻辑
- * 
+ *
  * @example
  * ```ts
  * const controller = createModalController({
@@ -399,12 +399,12 @@ export function initializeModalTranslations(t: TranslateFunction): void {
  *   cancelBtnId: 'my-cancel-btn',
  *   onCleanup: () => clearCaptcha('my-captcha')
  * });
- * 
+ *
  * controller.onConfirm(async () => {
  *   await doSomething();
  *   controller.close();
  * });
- * 
+ *
  * controller.open();
  * ```
  */
@@ -413,59 +413,59 @@ export function createModalController(config: ModalControllerConfig): ModalContr
   const confirmBtn = config.confirmBtnId ? document.getElementById(config.confirmBtnId) : null;
   const cancelBtn = config.cancelBtnId ? document.getElementById(config.cancelBtnId) : null;
   const closeOnOverlay = config.closeOnOverlay !== false;
-  
+
   let isCleanedUp = false;
   let confirmHandler: (() => void | Promise<void>) | null = null;
   let cancelHandler: (() => void) | null = null;
-  
+
   const close = (): void => {
-    if (isCleanedUp) return;
+    if (isCleanedUp) {return;}
     isCleanedUp = true;
-    
+
     modal?.classList.add('is-hidden');
-    
+
     confirmBtn?.removeEventListener('click', handleConfirm);
     cancelBtn?.removeEventListener('click', handleCancel);
     modal?.removeEventListener('click', handleOverlayClick);
-    
+
     config.onCleanup?.();
   };
-  
+
   const handleConfirm = (): void => {
-    if (isCleanedUp) return;
+    if (isCleanedUp) {return;}
     confirmHandler?.();
   };
-  
+
   const handleCancel = (): void => {
-    if (isCleanedUp) return;
+    if (isCleanedUp) {return;}
     cancelHandler?.();
     close();
   };
-  
+
   const handleOverlayClick = (e: MouseEvent): void => {
     if (e.target === modal && closeOnOverlay) {
       cancelHandler?.();
       close();
     }
   };
-  
+
   const open = (): void => {
-    if (!modal) return;
-    
+    if (!modal) {return;}
+
     isCleanedUp = false;
     modal.classList.remove('is-hidden');
-    
+
     confirmBtn?.addEventListener('click', handleConfirm);
     cancelBtn?.addEventListener('click', handleCancel);
     modal.addEventListener('click', handleOverlayClick);
   };
-  
+
   return {
     open,
     close,
-    isCleanedUp: () => isCleanedUp,
-    onConfirm: (handler) => { confirmHandler = handler; },
-    onCancel: (handler) => { cancelHandler = handler; },
+    isCleanedUp: (): boolean => isCleanedUp,
+    onConfirm: (handler): void => { confirmHandler = handler; },
+    onCancel: (handler): void => { cancelHandler = handler; },
     modal
   };
 }

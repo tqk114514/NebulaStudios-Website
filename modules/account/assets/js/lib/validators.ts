@@ -20,7 +20,7 @@ let EMAIL_PROVIDERS: EmailProviders = {};
 export async function loadEmailWhitelist(): Promise<LoadResult> {
   try {
     const response = await fetch('/account/data/email.json');
-    if (!response.ok) throw new Error('Failed to load email whitelist');
+    if (!response.ok) {throw new Error('Failed to load email whitelist');}
     EMAIL_PROVIDERS = await response.json();
     return { success: true };
   } catch (error) {
@@ -33,7 +33,7 @@ export async function loadEmailWhitelist(): Promise<LoadResult> {
  * 验证邮箱格式
  */
 export function isValidEmailFormat(email: string): boolean {
-  if (!email || typeof email !== 'string') return false;
+  if (!email || typeof email !== 'string') {return false;}
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
@@ -42,9 +42,9 @@ export function isValidEmailFormat(email: string): boolean {
  * 检查邮箱是否在白名单中
  */
 export function isEmailInWhitelist(email: string): boolean {
-  if (!email || typeof email !== 'string') return false;
+  if (!email || typeof email !== 'string') {return false;}
   const emailParts = email.toLowerCase().split('@');
-  if (emailParts.length !== 2) return false;
+  if (emailParts.length !== 2) {return false;}
   return Object.prototype.hasOwnProperty.call(EMAIL_PROVIDERS, emailParts[1]);
 }
 
@@ -84,7 +84,7 @@ export function validateEmail(email: string): ValidationResult {
  * 验证用户名长度（1-15 字符）
  */
 export function validateUsername(username: string): boolean {
-  if (!username || typeof username !== 'string') return false;
+  if (!username || typeof username !== 'string') {return false;}
   const length = username.trim().length;
   return length >= 1 && length <= 15;
 }
@@ -93,7 +93,7 @@ export function validateUsername(username: string): boolean {
  * 检查用户名是否过长
  */
 export function isUsernameTooLong(username: string): boolean {
-  if (!username || typeof username !== 'string') return false;
+  if (!username || typeof username !== 'string') {return false;}
   return username.trim().length > 15;
 }
 
@@ -101,7 +101,7 @@ export function isUsernameTooLong(username: string): boolean {
  * 显示/隐藏用户名错误提示
  */
 export function toggleUsernameError(show: boolean, usernameError: HTMLElement | null): void {
-  if (!usernameError) return;
+  if (!usernameError) {return;}
   usernameError.classList.toggle('is-hidden', !show);
 }
 
@@ -109,14 +109,14 @@ export function toggleUsernameError(show: boolean, usernameError: HTMLElement | 
  * 处理用户名输入事件
  */
 export function onUsernameInput(usernameInput: HTMLInputElement | null, usernameError: HTMLElement | null): void {
-  if (!usernameInput) return;
+  if (!usernameInput) {return;}
   const username = (usernameInput.value || '').trim();
   const usernameErrorText = document.getElementById('username-error-text');
   const complianceLink = document.getElementById('check-username-compliance') as HTMLElement | null;
 
   if (username.length === 0) {
     toggleUsernameError(false, usernameError);
-    if (complianceLink) complianceLink.style.display = 'none';
+    if (complianceLink) {complianceLink.style.display = 'none';}
     return;
   }
 
@@ -128,14 +128,14 @@ export function onUsernameInput(usernameInput: HTMLInputElement | null, username
       usernameErrorText.textContent = window.t ? window.t('register.usernameTooLong') : '用户名过长';
     }
     toggleUsernameError(true, usernameError);
-    if (complianceLink) complianceLink.style.display = 'none';
+    if (complianceLink) {complianceLink.style.display = 'none';}
   } else {
     toggleUsernameError(false, usernameError);
     if (usernameErrorText) {
       usernameErrorText.textContent = '';
       usernameErrorText.removeAttribute('data-i18n');
     }
-    if (complianceLink) complianceLink.style.display = 'none';
+    if (complianceLink) {complianceLink.style.display = 'none';}
   }
 }
 
@@ -143,14 +143,14 @@ export function onUsernameInput(usernameInput: HTMLInputElement | null, username
  * 处理用户名失去焦点事件
  */
 export function onUsernameBlur(usernameInput: HTMLInputElement | null, usernameError: HTMLElement | null): void {
-  if (!usernameInput) return;
+  if (!usernameInput) {return;}
   const username = (usernameInput.value || '').trim();
   const usernameErrorText = document.getElementById('username-error-text');
   const complianceLink = document.getElementById('check-username-compliance') as HTMLElement | null;
 
   if (username.length === 0) {
     toggleUsernameError(false, usernameError);
-    if (complianceLink) complianceLink.style.display = 'none';
+    if (complianceLink) {complianceLink.style.display = 'none';}
     return;
   }
 
@@ -162,13 +162,13 @@ export function onUsernameBlur(usernameInput: HTMLInputElement | null, usernameE
       usernameErrorText.textContent = window.t ? window.t('register.usernameTooLong') : '用户名过长';
     }
     toggleUsernameError(true, usernameError);
-    if (complianceLink) complianceLink.style.display = 'none';
+    if (complianceLink) {complianceLink.style.display = 'none';}
   } else {
     const isVerified = usernameInput.classList.contains('verified');
 
     if (isVerified) {
       toggleUsernameError(false, usernameError);
-      if (complianceLink) complianceLink.style.display = 'none';
+      if (complianceLink) {complianceLink.style.display = 'none';}
     } else {
       if (usernameErrorText) {
         usernameErrorText.textContent = '';
