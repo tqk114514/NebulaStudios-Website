@@ -23,7 +23,7 @@
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
@@ -67,7 +67,7 @@
   --accent-rgb: 102, 126, 234;
   --accent-end: #764ba2;
   --cyan: #7de6e2;
-  --cyan-dark: rgba(0, 206, 201, 0.3);
+  --cyan-dark: rgb(0 206 201 / 30%);
   --orange-light: #ff8800;
   
   /* 语义化别名 */
@@ -75,49 +75,46 @@
   --bg-card: var(--gray-950);
   --bg-input: var(--gray-900);
   --bg-input-focus: var(--gray-800);
-  --bg-overlay: rgba(var(--black-rgb), 0.7);
-  --bg-elevated: rgba(30, 30, 30, 0.95);
-  --bg-header: rgba(10, 10, 10, 0.8);
-  
+  --bg-overlay: rgb(var(--black-rgb), 0.7);
+  --bg-elevated: rgb(30 30 30 / 95%);
+  --bg-header: rgb(10 10 10 / 80%);
   --text: var(--white);
   --text-secondary: var(--gray-400);
-  --text-muted: rgba(var(--white-rgb), 0.8);
-  --text-hint: rgba(var(--white-rgb), 0.7);
-  --text-disabled: rgba(var(--white-rgb), 0.3);
-  --text-placeholder: rgba(var(--white-rgb), 0.2);
-  
+  --text-muted: rgb(var(--white-rgb), 0.8);
+  --text-hint: rgb(var(--white-rgb), 0.7);
+  --text-disabled: rgb(var(--white-rgb), 0.3);
+  --text-placeholder: rgb(var(--white-rgb), 0.2);
   --border: var(--gray-700);
-  --border-light: rgba(var(--white-rgb), 0.1);
-  --border-medium: rgba(var(--white-rgb), 0.15);
-  --border-hover: rgba(var(--white-rgb), 0.2);
-  --border-active: rgba(var(--white-rgb), 0.3);
+  --border-light: rgb(var(--white-rgb), 0.1);
+  --border-medium: rgb(var(--white-rgb), 0.15);
+  --border-hover: rgb(var(--white-rgb), 0.2);
+  --border-active: rgb(var(--white-rgb), 0.3);
   
   /* 阴影 */
-  --shadow-sm: 0 4px 6px rgba(var(--black-rgb), 0.1);
-  --shadow-md: 0 4px 12px rgba(var(--black-rgb), 0.3);
-  --shadow-lg: 0 10px 30px rgba(var(--black-rgb), 0.4);
-  --shadow-xl: 0 20px 40px rgba(var(--black-rgb), 0.4);
-  --shadow-2xl: 0 25px 50px rgba(var(--black-rgb), 0.5);
+  --shadow-sm: 0 4px 6px rgb(var(--black-rgb), 0.1);
+  --shadow-md: 0 4px 12px rgb(var(--black-rgb), 0.3);
+  --shadow-lg: 0 10px 30px rgb(var(--black-rgb), 0.4);
+  --shadow-xl: 0 20px 40px rgb(var(--black-rgb), 0.4);
+  --shadow-2xl: 0 25px 50px rgb(var(--black-rgb), 0.5);
   
   /* 光晕 */
-  --glow-primary: 0 0 20px rgba(var(--primary-rgb), 0.2);
-  --glow-primary-strong: 0 0 25px rgba(var(--primary-rgb), 0.4);
-  --glow-success: 0 0 15px rgba(var(--success-rgb), 0.25);
-  --glow-danger: 0 0 15px rgba(var(--danger-rgb), 0.25);
-  --focus-ring: 0 0 0 2px rgba(var(--primary-rgb), 0.3);
+  --glow-primary: 0 0 20px rgb(var(--primary-rgb), 0.2);
+  --glow-primary-strong: 0 0 25px rgb(var(--primary-rgb), 0.4);
+  --glow-success: 0 0 15px rgb(var(--success-rgb), 0.25);
+  --glow-danger: 0 0 15px rgb(var(--danger-rgb), 0.25);
+  --focus-ring: 0 0 0 2px rgb(var(--primary-rgb), 0.3);
   
   /* 渐变 */
   --gradient-avatar: linear-gradient(135deg, var(--accent) 0%, var(--accent-end) 100%);
-  --gradient-divider: linear-gradient(90deg, transparent, rgba(var(--white-rgb), 0.15), transparent);
+  --gradient-divider: linear-gradient(90deg, transparent, rgb(var(--white-rgb), 0.15), transparent);
   
   /* 字体 */
-  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif;
 }
 
 html {
   height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 body {
@@ -125,7 +122,7 @@ body {
   font-family: var(--font-family);
   background-color: var(--bg);
   color: var(--text);
-  -webkit-user-select: none;
+  user-select: none;
   user-select: none;
   min-height: 100%;
   overflow-x: hidden;
@@ -152,7 +149,7 @@ body::-webkit-scrollbar {
   width: 100%;
   height: 70px;
   background: var(--bg-header);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--border-light);
   display: flex;
@@ -177,7 +174,7 @@ body::-webkit-scrollbar {
 }
 
 /* 大屏幕 hover 效果：出现 ">" 并右移 */
-@media (min-width: 601px) {
+@media (width >= 601px) {
   .top-header .brand::before {
     content: ">";
     position: absolute;
@@ -204,10 +201,11 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .top-header .brand .brand-full {
     display: none;
   }
+
   .top-header .brand .brand-short {
     display: inline;
   }
@@ -236,7 +234,7 @@ body::-webkit-scrollbar {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background-color: rgba(var(--black-rgb), 0.4);
+  background-color: rgb(var(--black-rgb), 0.4);
   border: 1px solid var(--border-light);
   border-radius: 10px;
   color: var(--text-hint);
@@ -248,12 +246,12 @@ body::-webkit-scrollbar {
     border-color 0.25s ease,
     transform 0.2s ease,
     box-shadow 0.25s ease;
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
 .language-current:hover {
-  background-color: rgba(var(--black-rgb), 0.5);
+  background-color: rgb(var(--black-rgb), 0.5);
   border-color: var(--border-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
@@ -277,7 +275,7 @@ body::-webkit-scrollbar {
 
 .language-switcher.is-open .language-current {
   border-color: var(--primary);
-  background-color: rgba(var(--black-rgb), 0.6);
+  background-color: rgb(var(--black-rgb), 0.6);
 }
 
 .language-switcher.is-open .lang-arrow {
@@ -300,7 +298,7 @@ body::-webkit-scrollbar {
     opacity 0.25s ease,
     visibility 0.25s ease,
     transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
   backdrop-filter: blur(15px);
   box-shadow: var(--shadow-lg);
 }
@@ -337,14 +335,14 @@ body::-webkit-scrollbar {
 }
 
 .language-dropdown .language-option:hover {
-  background-color: rgba(var(--white-rgb), 0.08);
+  background-color: rgb(var(--white-rgb), 0.08);
   color: var(--text);
   transform: translateX(2px);
 }
 
 .language-dropdown .language-option.active {
   color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.1);
+  background-color: rgb(var(--primary-rgb), 0.1);
 }
 
 .language-dropdown .language-option .check-icon {
@@ -360,12 +358,9 @@ body::-webkit-scrollbar {
 /* --- 页面加载遮罩 --- */
 .page-loader {
   position: fixed;
-  top: 70px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(5, 5, 5, 0.85);
-  -webkit-backdrop-filter: blur(20px);
+  inset: 70px 0 0;
+  background-color: rgb(5 5 5 / 85%);
+  backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   display: flex;
   justify-content: center;

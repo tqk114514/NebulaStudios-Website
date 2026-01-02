@@ -28,17 +28,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 初始化语言切换器
     initLanguageSwitcher(() => {
       updatePageTitle();
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
 
     // 启用卡片自动调整大小
-    if (card) enableCardAutoResize(card);
+    if (card) {enableCardAutoResize(card);}
 
     // 更新页面标题
     updatePageTitle();
 
     // 初始调整卡片高度
-    if (card) delayedExecution(() => adjustCardHeight(card));
+    if (card) {delayedExecution(() => adjustCardHeight(card));}
 
     // 返回按钮
     const backBtn = document.getElementById('back-btn');

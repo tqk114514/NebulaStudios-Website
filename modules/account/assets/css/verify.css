@@ -23,12 +23,19 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: titleFadeIn 0.5s ease;
+  animation: title-fade-in 0.5s ease;
 }
 
-@keyframes titleFadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes title-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .verify-subtitle {
@@ -36,12 +43,17 @@
   font-size: 15px;
   margin-bottom: 30px;
   line-height: 1.6;
-  animation: subtitleFadeIn 0.5s ease 0.1s backwards;
+  animation: subtitle-fade-in 0.5s ease 0.1s backwards;
 }
 
-@keyframes subtitleFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes subtitle-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .code-display {
@@ -67,7 +79,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(var(--white-rgb), 0.03);
+  background: rgb(var(--white-rgb), 0.03);
   border: 1px solid var(--border-light);
   border-radius: 16px;
   font-size: 36px;
@@ -82,28 +94,30 @@
 /* 悬停效果 */
 .code-boxes:hover .code-box {
   border-color: var(--border-active);
-  background: rgba(var(--white-rgb), 0.08);
+  background: rgb(var(--white-rgb), 0.08);
 }
 
 /* 激活/填充状态 */
 .code-box.is-filled {
   border-color: var(--primary);
-  background: rgba(var(--primary-rgb), 0.1);
+  background: rgb(var(--primary-rgb), 0.1);
   color: var(--text);
-  box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.3);
-  animation: telegramPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 20px rgb(var(--primary-rgb), 0.3);
+  animation: telegram-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Telegram 风格的弹性动画 */
-@keyframes telegramPop {
+@keyframes telegram-pop {
   0% {
     transform: scale(0.5) translateY(20px);
     opacity: 0;
   }
+
   40% {
     transform: scale(1.2) translateY(-5px); /* 过冲 */
     opacity: 0.8;
   }
+
   100% {
     transform: scale(1) translateY(0);
     opacity: 1;
@@ -112,19 +126,30 @@
 
 /* 当前焦点的框 - 呼吸效果 */
 .code-box.active {
-  border-color: rgba(var(--primary-rgb), 0.6);
-  box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2);
+  border-color: rgb(var(--primary-rgb), 0.6);
+  box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
   animation: breathe 1.5s ease-in-out infinite;
 }
 
 @keyframes breathe {
-  0% { border-color: rgba(var(--primary-rgb), 0.6); box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2); }
-  50% { border-color: rgba(var(--primary-rgb), 1); box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.4); }
-  100% { border-color: rgba(var(--primary-rgb), 0.6); box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.2); }
+  0% {
+    border-color: rgb(var(--primary-rgb), 0.6);
+    box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
+  }
+
+  50% {
+    border-color: rgb(var(--primary-rgb), 1);
+    box-shadow: 0 0 25px rgb(var(--primary-rgb), 0.4);
+  }
+
+  100% {
+    border-color: rgb(var(--primary-rgb), 0.6);
+    box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
+  }
 }
 
 .code-hint {
-  color: rgba(var(--white-rgb), 0.5);
+  color: rgb(var(--white-rgb), 0.5);
   font-size: 13px;
   margin-top: 25px;
   text-align: center;
@@ -135,18 +160,25 @@
 }
 
 .expire-notice {
-  background: rgba(var(--primary-rgb), 0.1);
-  border: 1px solid rgba(var(--primary-rgb), 0.3);
+  background: rgb(var(--primary-rgb), 0.1);
+  border: 1px solid rgb(var(--primary-rgb), 0.3);
   border-radius: 12px;
   padding: 15px;
   margin-top: 20px;
   backdrop-filter: blur(5px);
-  animation: noticeSlideIn 0.4s ease;
+  animation: notice-slide-in 0.4s ease;
 }
 
-@keyframes noticeSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes notice-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .expire-text {
@@ -157,20 +189,37 @@
 }
 
 .error-container {
-  background: rgba(var(--danger-rgb), 0.1);
-  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  background: rgb(var(--danger-rgb), 0.1);
+  border: 1px solid rgb(var(--danger-rgb), 0.3);
   border-radius: 12px;
   padding: 30px;
-  animation: errorShake 0.5s ease;
+  animation: error-shake 0.5s ease;
 }
 
-@keyframes errorShake {
-  0%, 100% { transform: translateX(0); }
-  10% { transform: translateX(-8px); }
-  30% { transform: translateX(8px); }
-  50% { transform: translateX(-6px); }
-  70% { transform: translateX(6px); }
-  90% { transform: translateX(-4px); }
+@keyframes error-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+
+  10% {
+    transform: translateX(-8px);
+  }
+
+  30% {
+    transform: translateX(8px);
+  }
+
+  50% {
+    transform: translateX(-6px);
+  }
+
+  70% {
+    transform: translateX(6px);
+  }
+
+  90% {
+    transform: translateX(-4px);
+  }
 }
 
 .error-title {

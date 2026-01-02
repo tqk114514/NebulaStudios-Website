@@ -1,4 +1,5 @@
 /* assets/css/auth.css */
+
 /* 登录/注册页面共用样式 */
 
 /* Password Requirements */
@@ -23,48 +24,48 @@
 .req-item.is-valid {
   color: var(--success);
   transform: scale(1.05);
-  text-shadow: 0 0 8px rgba(var(--success-rgb), 0.4);
+  text-shadow: 0 0 8px rgb(var(--success-rgb), 0.4);
 }
 
-/* 注册表单元素动画（使用 general.css 中的 slideUpFade） */
-#register-form > .form-group { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+/* 注册表单元素动画 */
+#register-form > .form-group { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 #register-form > .form-group:nth-of-type(1) { animation-delay: 0.1s; }  /* 用户名 */
 #register-form > .form-group:nth-of-type(2) { animation-delay: 0.15s; } /* 邮箱 */
 #register-form > .form-group:nth-of-type(3) { animation-delay: 0.2s; }  /* 验证码 */
 #register-form > .form-group:nth-of-type(4) { animation-delay: 0.25s; } /* 发送验证码 */
 #register-form > .form-group:nth-of-type(5) { animation-delay: 0.3s; }  /* 密码 */
 #register-form > .form-group:nth-of-type(6) { animation-delay: 0.35s; } /* 确认密码 */
-#register-form > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s backwards; }
+#register-form > button[type="submit"] { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s backwards; }
 
 /* 登录表单元素动画 */
-#login-form > .form-group:nth-child(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
-#login-form > .form-group:nth-child(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
-#login-form > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
+#login-form > .form-group:nth-child(1) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#login-form > .form-group:nth-child(2) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#login-form > button[type="submit"] { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
 
 /* 忘记密码表单元素动画 */
-#email-step > .form-group:nth-of-type(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
-#email-step > .form-group:nth-of-type(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
-#reset-step > .form-group:nth-of-type(1) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
-#reset-step > .form-group:nth-of-type(2) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
-#reset-step > .form-group:nth-of-type(3) { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
-#reset-step > button[type="submit"] { animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards; }
+#email-step > .form-group:nth-of-type(1) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#email-step > .form-group:nth-of-type(2) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#reset-step > .form-group:nth-of-type(1) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+#reset-step > .form-group:nth-of-type(2) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s backwards; }
+#reset-step > .form-group:nth-of-type(3) { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
+#reset-step > button[type="submit"] { animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards; }
 
 /* 步骤表单切换 */
 .step-form.is-hidden { display: none; }
 
 .footer-links {
-  animation: fadeIn 0.5s ease 0.5s backwards;
+  animation: fade-in 0.5s ease 0.5s backwards;
 }
 
 
-/* OAuth 分隔线 */
+/* OAuth 分隔 */
 .oauth-divider {
   display: flex;
   align-items: center;
   margin: 24px 0;
   color: var(--text-secondary);
   font-size: 13px;
-  animation: fadeIn 0.5s ease 0.45s backwards;
+  animation: fade-in 0.5s ease 0.45s backwards;
 }
 
 .oauth-divider::before,
@@ -72,7 +73,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(var(--white-rgb), 0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--white-rgb), 0.15), transparent);
 }
 
 .oauth-divider span {
@@ -84,10 +85,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s backwards;
+  animation: slide-up-fade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s backwards;
 }
 
-/* ==================== 扫码登录弹窗（仅特定样式） ==================== */
+/* ==================== 扫码登录弹窗（仅特定样式）==================== */
 
 .qr-code-container {
   display: flex;
@@ -98,7 +99,7 @@
   background: var(--text);
   border-radius: 12px;
   width: fit-content;
-  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .qr-login-hint {
@@ -119,23 +120,35 @@
   width: 200px;
   height: 200px;
   box-sizing: border-box;
-  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes scaleIn {
-  from { transform: scale(0.8); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+@keyframes scale-in {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .qr-scanned-icon svg {
   width: 80px;
   height: 80px;
-  animation: checkPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+  animation: check-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
 }
 
-@keyframes checkPop {
-  from { transform: scale(0); }
-  to { transform: scale(1); }
+@keyframes check-pop {
+  from {
+    transform: scale(0);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .qr-scanned-icon .icon-check {
@@ -159,7 +172,7 @@
   display: none;
 }
 
-/* 二维码加载状态（复用 general.css 的 spin 动画） */
+/* 二维码加载状态 */
 .qr-loading {
   width: 200px;
   height: 200px;

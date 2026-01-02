@@ -18,7 +18,7 @@ import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clea
 
 // ==================== 全局变量 ====================
 
-const t = window.t || ((key: string) => key);
+const t = window.t || ((key: string): string => key);
 const showAlertWithTranslation = (message: string, title?: string): void => showAlert(message, title || '', t);
 
 /** 当前邮箱 */
@@ -99,11 +99,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (email && validation.errorKey === 'register.emailNotSupported') {
           emailError?.classList.remove('is-hidden');
           emailErrorText?.setAttribute('data-i18n', validation.errorKey);
-          if (emailErrorText) emailErrorText.textContent = t(validation.errorKey);
-          if (wasHidden) delayedExecution(() => adjustCardHeight(card));
+          if (emailErrorText) {emailErrorText.textContent = t(validation.errorKey);}
+          if (wasHidden) {delayedExecution(() => adjustCardHeight(card));}
         } else {
           emailError?.classList.add('is-hidden');
-          if (!wasHidden) delayedExecution(() => adjustCardHeight(card));
+          if (!wasHidden) {delayedExecution(() => adjustCardHeight(card));}
         }
       } else {
         emailSubmitBtn!.disabled = false;
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           // 显示验证组件
           if (captchaContainer) {
             captchaContainer.classList.remove('is-hidden');
-            if (card) delayedExecution(() => adjustCardHeight(card));
+            if (card) {delayedExecution(() => adjustCardHeight(card));}
           }
 
           await initCaptcha(
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             },
             () => {
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               clearCaptcha();
               if (captchaContainer) {
                 captchaContainer.classList.add('is-hidden');
-                if (card) delayedExecution(() => adjustCardHeight(card));
+                if (card) {delayedExecution(() => adjustCardHeight(card));}
               }
             }
           );
@@ -342,14 +342,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 调整卡片高度
     delayedExecution(() => adjustCardHeight(card));
-    if (card) enableCardAutoResize(card);
+    if (card) {enableCardAutoResize(card);}
 
     // 初始化语言切换器
     initLanguageSwitcher(() => {
       initializeModals(t);
       updateSendCodeButtonState();
       updatePageTitle();
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
   } catch (error) {
     console.error('[FORGOT-PASSWORD] ERROR: Page initialization failed:', (error as Error).message);

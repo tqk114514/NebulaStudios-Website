@@ -49,7 +49,7 @@ export function buildUrl(baseUrl: string, params?: Record<string, string | null>
     const url = new URL(baseUrl, window.location.origin);
     if (params && typeof params === 'object') {
       Object.keys(params).forEach(key => {
-        if (params[key] != null) url.searchParams.set(key, params[key]!);
+        if (params[key] !== null && params[key] !== undefined) {url.searchParams.set(key, params[key]!);}
       });
     }
     return url.toString();

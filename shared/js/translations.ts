@@ -61,8 +61,8 @@ let currentLanguage: string = 'zh-CN';
 function setCookie(name: string, value: string, days: number = 365): void {
   const date = new Date();
   date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-  const expires = "expires=" + date.toUTCString();
-  document.cookie = name + "=" + value + ";" + expires + ";path=/";
+  const expires = 'expires=' + date.toUTCString();
+  document.cookie = name + '=' + value + ';' + expires + ';path=/';
 }
 
 /**
@@ -71,12 +71,12 @@ function setCookie(name: string, value: string, days: number = 365): void {
  * @returns Cookie 值
  */
 function getCookie(name: string): string | null {
-  const nameEQ = name + "=";
+  const nameEQ = name + '=';
   const ca = document.cookie.split(';');
   for (let i = 0; i < ca.length; i++) {
     let c = ca[i];
-    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    while (c.charAt(0) === ' ') {c = c.substring(1, c.length);}
+    if (c.indexOf(nameEQ) === 0) {return c.substring(nameEQ.length, c.length);}
   }
   return null;
 }
@@ -90,7 +90,7 @@ function getCookie(name: string): string | null {
 (function initializeLanguage(): void {
   // 获取保存的语言或浏览器默认语言
   const savedLang = getCookie('selectedLanguage');
-  const browserLang = navigator.language || (navigator as any).userLanguage;
+  const browserLang = navigator.language || (navigator as unknown as { userLanguage: string }).userLanguage;
   let lang = savedLang;
 
   // 如果没有保存的语言，根据浏览器语言自动选择
@@ -211,7 +211,7 @@ function updatePageTranslations(): void {
   // 使用 data-i18n 属性标记需要翻译的元素
   document.querySelectorAll('[data-i18n]').forEach(element => {
     const key = element.getAttribute('data-i18n');
-    if (!key) return;
+    if (!key) {return;}
 
     const translation = t(key);
     if (translation && translation !== key) {
@@ -222,7 +222,7 @@ function updatePageTranslations(): void {
   // 使用 data-i18n-placeholder 属性标记需要翻译的占位符
   document.querySelectorAll<HTMLInputElement>('[data-i18n-placeholder]').forEach(element => {
     const key = element.getAttribute('data-i18n-placeholder');
-    if (!key) return;
+    if (!key) {return;}
 
     const translation = t(key);
     if (translation && translation !== key) {
