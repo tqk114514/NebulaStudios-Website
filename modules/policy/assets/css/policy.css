@@ -15,16 +15,17 @@
   margin: 0 auto;
   padding: 100px 40px 60px;
   box-sizing: border-box;
-  animation: policyFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: policy-fade-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes policyFadeIn {
-  from { 
-    opacity: 0; 
+@keyframes policy-fade-in {
+  from {
+    opacity: 0;
     transform: translateY(20px);
   }
-  to { 
-    opacity: 1; 
+
+  to {
+    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -49,7 +50,7 @@
 /* --- 章节 --- */
 .policy-section {
   margin-bottom: 40px;
-  animation: sectionFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+  animation: section-fade-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 .policy-section:nth-child(1) { animation-delay: 0.1s; }
@@ -59,13 +60,14 @@
 .policy-section:nth-child(5) { animation-delay: 0.3s; }
 .policy-section:nth-child(n+6) { animation-delay: 0.35s; }
 
-@keyframes sectionFadeIn {
-  from { 
-    opacity: 0; 
+@keyframes section-fade-in {
+  from {
+    opacity: 0;
     transform: translateY(15px);
   }
-  to { 
-    opacity: 1; 
+
+  to {
+    opacity: 1;
     transform: translateY(0);
   }
 }
@@ -101,10 +103,6 @@
   margin-bottom: 8px;
 }
 
-.policy-section li:last-child {
-  margin-bottom: 0;
-}
-
 /* --- 有序列表 --- */
 .policy-section ol {
   margin: 0 0 16px;
@@ -116,6 +114,10 @@
   line-height: 1.8;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+.policy-section li:last-child {
+  margin-bottom: 0;
 }
 
 /* --- 表格 --- */
@@ -134,7 +136,7 @@
 }
 
 .policy-section th {
-  background-color: rgba(var(--white-rgb), 0.05);
+  background-color: rgb(var(--white-rgb), 0.05);
   color: var(--text);
   font-weight: 600;
 }
@@ -172,20 +174,6 @@
   transition: width 0.25s ease;
 }
 
-.policy-section a:hover {
-  opacity: 0.9;
-  text-shadow: 0 0 8px rgba(var(--primary-rgb), 0.3);
-}
-
-.policy-section a:hover::after {
-  width: 100%;
-}
-
-/* --- 强调文本 --- */
-.policy-section strong {
-  color: var(--text);
-}
-
 /* --- 联系信息 --- */
 .policy-contact {
   margin-top: 40px;
@@ -193,7 +181,7 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  transition: 
+  transition:
     box-shadow 0.3s ease,
     transform 0.3s ease;
 }
@@ -213,6 +201,21 @@
   opacity: 0.8;
 }
 
+/* --- 链接样式 --- */
+.policy-section a:hover {
+  opacity: 0.9;
+  text-shadow: 0 0 8px rgb(var(--primary-rgb), 0.3);
+}
+
+.policy-section a:hover::after {
+  width: 100%;
+}
+
+/* --- 强调文本 --- */
+.policy-section strong {
+  color: var(--text);
+}
+
 /* --- 页脚 --- */
 .policy-footer {
   margin-top: 60px;
@@ -224,7 +227,7 @@
 }
 
 /* --- 响应式 --- */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .policy-container {
     padding: 90px 20px 40px;
   }

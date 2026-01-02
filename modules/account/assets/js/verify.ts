@@ -86,11 +86,11 @@ function showState(state: PageState): void {
   const successState = document.getElementById('success-state');
   const errorState = document.getElementById('error-state');
 
-  if (loadingState) loadingState.style.display = state === 'loading' ? 'block' : 'none';
-  if (successState) successState.style.display = state === 'success' ? 'block' : 'none';
-  if (errorState) errorState.style.display = state === 'error' ? 'block' : 'none';
+  if (loadingState) {loadingState.style.display = state === 'loading' ? 'block' : 'none';}
+  if (successState) {successState.style.display = state === 'success' ? 'block' : 'none';}
+  if (errorState) {errorState.style.display = state === 'error' ? 'block' : 'none';}
 
-  if (card) delayedExecution(() => adjustCardHeight(card));
+  if (card) {delayedExecution(() => adjustCardHeight(card));}
 }
 
 /**
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showError(errorMessage.dataset.errorCode);
       }
 
-      if (card) delayedExecution(() => adjustCardHeight(card));
+      if (card) {delayedExecution(() => adjustCardHeight(card));}
     });
 
     // 应用翻译
