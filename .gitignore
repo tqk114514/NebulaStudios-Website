@@ -1,0 +1,27 @@
+# 构建产物
+dist/
+*.exe
+
+# npm
+node_modules/
+package.json
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+
+# Kiro
+.kiro/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+index.js
+.htmlhintrc
+eslint.config.mjs
+.stylelintrc.json
