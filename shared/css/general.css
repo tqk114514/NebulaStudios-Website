@@ -392,3 +392,39 @@ body::-webkit-scrollbar {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Turbo Drive 页面切换动画 --- */
+body {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+body.turbo-exit {
+  opacity: 0.5;
+  transform: translateY(-10px);
+}
+
+body.turbo-enter {
+  animation: turbo-fade-in 0.3s ease forwards;
+}
+
+@keyframes turbo-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Turbo 加载进度条 */
+.turbo-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  z-index: 9999;
+  transition: width 0.3s ease;
+}
