@@ -28,7 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+
 	"net/http"
 	"strings"
 	"time"
@@ -138,18 +138,18 @@ func NewQRLoginHandler(
 ) (*QRLoginHandler, error) {
 	// 参数验证
 	if sessionService == nil {
-		log.Println("[QR-LOGIN] ERROR: sessionService is nil")
+		utils.LogPrintf("[QR-LOGIN] ERROR: sessionService is nil")
 		return nil, errors.New("sessionService is required")
 	}
 	if wsService == nil {
-		log.Println("[QR-LOGIN] ERROR: wsService is nil")
+		utils.LogPrintf("[QR-LOGIN] ERROR: wsService is nil")
 		return nil, errors.New("wsService is required")
 	}
 
 	// 检查加密密钥
 	isConfigured := encryptKey != ""
 	if !isConfigured {
-		log.Println("[QR-LOGIN] WARN: Encryption key not configured, QR login will be disabled")
+		utils.LogPrintf("[QR-LOGIN] WARN: Encryption key not configured, QR login will be disabled")
 	}
 
 	// 派生加密密钥
@@ -158,12 +158,12 @@ func NewQRLoginHandler(
 		var err error
 		derivedKey, err = utils.DeriveKeyFromString(encryptKey)
 		if err != nil {
-			log.Printf("[QR-LOGIN] ERROR: Failed to derive encryption key: %v", err)
+			utils.LogPrintf("[QR-LOGIN] ERROR: Failed to derive encryption key: %v", err)
 			return nil, fmt.Errorf("failed to derive encryption key: %w", err)
 		}
 	}
 
-	log.Printf("[QR-LOGIN] QRLoginHandler initialized: production=%v, configured=%v", isProduction, isConfigured)
+	utils.LogPrintf("[QR-LOGIN] QRLoginHandler initialized: production=%v, configured=%v", isProduction, isConfigured)
 
 	return &QRLoginHandler{
 		sessionService: sessionService,
@@ -346,7 +346,7 @@ func parseUserAgent(userAgent string) (browser, os string) {
 //   - data: 附加数据
 func (h *QRLoginHandler) notifyStatusChange(encryptedToken, status string, data map[string]string) {
 	if h.wsService == nil {
-		log.Println("[QR-LOGIN] WARN: WebSocket service not available, skipping notification")
+		utils.LogPrintf("[QR-LOGIN] WARN: WebSocket service not available, skipping notification")
 		return
 	}
 
@@ -369,7 +369,7 @@ func (h *QRLoginHandler) notifyStatusChange(encryptedToken, status string, data 
 func (h *QRLoginHandler) Generate(c *gin.Context) {
 	// 检查配置
 	if !h.isConfigured {
-		log.Println("[QR-LOGIN] ERROR: QR login not configured")
+		utils.LogPrintf("[QR-LOGIN] ERROR: QR login not configured")
 		h.respondError(c, http.StatusServiceUnavailable, "QR_NOT_CONFIGURED")
 		return
 	}
@@ -377,7 +377,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	// 生成安全 Token
 	token, err := utils.GenerateSecureToken()
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to generate secure token: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to generate secure token: %v", err)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -393,7 +393,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	// 获取数据库连接池
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[QR-LOGIN] ERROR: Database pool is nil")
+		utils.LogPrintf("[QR-LOGIN] ERROR: Database pool is nil")
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -407,7 +407,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	`, token, QRStatusPending, pcIP, pcUserAgent, now, expireTime)
 
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to save token to database: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to save token to database: %v", err)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -418,7 +418,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 		"ts": now,
 	})
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to marshal payload: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to marshal payload: %v", err)
 		// 清理已创建的 Token
 		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
@@ -427,14 +427,14 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 
 	encryptedToken, err := utils.EncryptAESGCM(payload, h.encryptKey)
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to encrypt token: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to encrypt token: %v", err)
 		// 清理已创建的 Token
 		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 		h.respondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
 
-	log.Printf("[QR-LOGIN] Token generated: ip=%s", pcIP)
+	utils.LogPrintf("[QR-LOGIN] Token generated: ip=%s", pcIP)
 
 	h.respondSuccess(c, gin.H{
 		"token":      encryptedToken,
@@ -459,7 +459,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 
 	// 解析请求（失败也返回成功）
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[QR-LOGIN] DEBUG: Invalid request body for Cancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] DEBUG: Invalid request body for Cancel: %v", err)
 		h.respondSuccess(c, nil)
 		return
 	}
@@ -473,7 +473,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 	// 解密获取原始 Token
 	originalToken, err := h.decryptToken(req.Token)
 	if err != nil {
-		log.Printf("[QR-LOGIN] DEBUG: Failed to decrypt token in Cancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] DEBUG: Failed to decrypt token in Cancel: %v", err)
 		h.respondSuccess(c, nil)
 		return
 	}
@@ -481,7 +481,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 	// 获取数据库连接池
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[QR-LOGIN] WARN: Database pool is nil in Cancel")
+		utils.LogPrintf("[QR-LOGIN] WARN: Database pool is nil in Cancel")
 		h.respondSuccess(c, nil)
 		return
 	}
@@ -491,9 +491,9 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 	// 删除 Token
 	_, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to delete token in Cancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to delete token in Cancel: %v", err)
 	} else {
-		log.Println("[QR-LOGIN] Token cancelled by PC")
+		utils.LogPrintf("[QR-LOGIN] Token cancelled by PC")
 	}
 
 	h.respondSuccess(c, nil)
@@ -517,14 +517,14 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid request body for SetSession: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid request body for SetSession: %v", err)
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
 
 	sessionToken := strings.TrimSpace(req.SessionToken)
 	if sessionToken == "" {
-		log.Println("[QR-LOGIN] WARN: Empty session token in SetSession")
+		utils.LogPrintf("[QR-LOGIN] WARN: Empty session token in SetSession")
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
@@ -532,21 +532,29 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	// 验证 Token 有效性
 	claims, err := h.sessionService.VerifyToken(sessionToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid session token in SetSession: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid session token in SetSession: %v", err)
 		h.respondError(c, http.StatusBadRequest, "INVALID_SESSION")
 		return
 	}
 
 	if claims == nil || claims.UserID <= 0 {
-		log.Println("[QR-LOGIN] WARN: Invalid claims in SetSession")
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid claims in SetSession")
 		h.respondError(c, http.StatusBadRequest, "INVALID_SESSION")
 		return
 	}
 
 	// 设置 Cookie
-	c.SetCookie("token", sessionToken, QRCookieMaxAge, "/", "", h.isProduction, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Value:    sessionToken,
+		MaxAge:   QRCookieMaxAge,
+		Path:     "/",
+		Secure:   h.isProduction,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
-	log.Printf("[QR-LOGIN] Session cookie set for PC: userID=%d", claims.UserID)
+	utils.LogPrintf("[QR-LOGIN] Session cookie set for PC: userID=%d", claims.UserID)
 	h.respondSuccess(c, nil)
 }
 
@@ -575,21 +583,21 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid request body for Scan: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid request body for Scan: %v", err)
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
 
 	encryptedToken := strings.TrimSpace(req.Token)
 	if encryptedToken == "" {
-		log.Println("[QR-LOGIN] WARN: Empty token in Scan")
+		utils.LogPrintf("[QR-LOGIN] WARN: Empty token in Scan")
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
 
 	// 安全验证：检查 Token 长度
 	if len(encryptedToken) < QRTokenMinLength || len(encryptedToken) > QRTokenMaxLength {
-		log.Printf("[QR-LOGIN] WARN: Invalid token length in Scan: %d", len(encryptedToken))
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid token length in Scan: %d", len(encryptedToken))
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN_FORMAT")
 		return
 	}
@@ -597,7 +605,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	// 解密获取原始 Token
 	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to decrypt token in Scan: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to decrypt token in Scan: %v", err)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -605,7 +613,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	// 获取数据库连接池
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[QR-LOGIN] ERROR: Database pool is nil in Scan")
+		utils.LogPrintf("[QR-LOGIN] ERROR: Database pool is nil in Scan")
 		h.respondError(c, http.StatusInternalServerError, "INVALID_TOKEN")
 		return
 	}
@@ -624,14 +632,14 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	`, originalToken).Scan(&status, &expireTime, &pcIP, &pcUserAgent)
 
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Token not found in Scan: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Token not found in Scan: %v", err)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_NOT_FOUND")
 		return
 	}
 
 	// 检查是否过期
 	if time.Now().UnixMilli() > expireTime {
-		log.Printf("[QR-LOGIN] WARN: Token expired in Scan: token=%s", originalToken[:8]+"...")
+		utils.LogPrintf("[QR-LOGIN] WARN: Token expired in Scan: token=%s", originalToken[:8]+"...")
 		// 删除过期 Token
 		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
@@ -640,7 +648,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 
 	// 检查状态
 	if status != QRStatusPending {
-		log.Printf("[QR-LOGIN] WARN: Token already used in Scan: status=%s", status)
+		utils.LogPrintf("[QR-LOGIN] WARN: Token already used in Scan: status=%s", status)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_ALREADY_USED")
 		return
 	}
@@ -656,14 +664,14 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	`, QRStatusScanned, time.Now().UnixMilli(), originalToken)
 
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to update token status in Scan: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to update token status in Scan: %v", err)
 		// 继续处理，不影响用户体验
 	}
 
 	// 通知 PC 端
 	h.notifyStatusChange(encryptedToken, "scanned", nil)
 
-	log.Printf("[QR-LOGIN] Token scanned: pcIP=%s, browser=%s, os=%s", pcIP, browser, os)
+	utils.LogPrintf("[QR-LOGIN] Token scanned: pcIP=%s, browser=%s, os=%s", pcIP, browser, os)
 
 	h.respondSuccess(c, gin.H{
 		"pcInfo": gin.H{
@@ -700,14 +708,14 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid request body for MobileConfirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid request body for MobileConfirm: %v", err)
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
 
 	encryptedToken := strings.TrimSpace(req.Token)
 	if encryptedToken == "" {
-		log.Println("[QR-LOGIN] WARN: Empty token in MobileConfirm")
+		utils.LogPrintf("[QR-LOGIN] WARN: Empty token in MobileConfirm")
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
@@ -715,7 +723,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	// 获取用户会话
 	sessionToken, err := c.Cookie("token")
 	if err != nil || sessionToken == "" {
-		log.Println("[QR-LOGIN] WARN: No session cookie in MobileConfirm")
+		utils.LogPrintf("[QR-LOGIN] WARN: No session cookie in MobileConfirm")
 		h.respondError(c, http.StatusUnauthorized, "NOT_LOGGED_IN")
 		return
 	}
@@ -723,13 +731,13 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	// 验证会话
 	claims, err := h.sessionService.VerifyToken(sessionToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid session in MobileConfirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid session in MobileConfirm: %v", err)
 		h.respondError(c, http.StatusUnauthorized, "INVALID_SESSION")
 		return
 	}
 
 	if claims == nil || claims.UserID <= 0 {
-		log.Println("[QR-LOGIN] WARN: Invalid claims in MobileConfirm")
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid claims in MobileConfirm")
 		h.respondError(c, http.StatusUnauthorized, "INVALID_SESSION")
 		return
 	}
@@ -739,7 +747,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	// 解密获取原始 Token
 	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to decrypt token in MobileConfirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to decrypt token in MobileConfirm: %v", err)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -747,7 +755,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	// 获取数据库连接池
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[QR-LOGIN] ERROR: Database pool is nil in MobileConfirm")
+		utils.LogPrintf("[QR-LOGIN] ERROR: Database pool is nil in MobileConfirm")
 		h.respondError(c, http.StatusInternalServerError, "INVALID_TOKEN")
 		return
 	}
@@ -765,14 +773,14 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	`, originalToken).Scan(&status, &expireTime)
 
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Token not found in MobileConfirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Token not found in MobileConfirm: %v", err)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_NOT_FOUND")
 		return
 	}
 
 	// 检查是否过期
 	if time.Now().UnixMilli() > expireTime {
-		log.Printf("[QR-LOGIN] WARN: Token expired in MobileConfirm")
+		utils.LogPrintf("[QR-LOGIN] WARN: Token expired in MobileConfirm")
 		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
@@ -780,7 +788,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 
 	// 检查状态（必须是已扫描状态）
 	if status != QRStatusScanned {
-		log.Printf("[QR-LOGIN] WARN: Invalid token status in MobileConfirm: status=%s", status)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid token status in MobileConfirm: status=%s", status)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_ALREADY_USED")
 		return
 	}
@@ -793,14 +801,14 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	`, QRStatusConfirmed, userID, time.Now().UnixMilli(), originalToken)
 
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to update token status in MobileConfirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to update token status in MobileConfirm: %v", err)
 		// 继续处理
 	}
 
 	// 为 PC 端创建会话
 	pcSessionToken, err := h.sessionService.GenerateToken(userID)
 	if err != nil {
-		log.Printf("[QR-LOGIN] ERROR: Failed to generate PC session token: userID=%d, error=%v", userID, err)
+		utils.LogPrintf("[QR-LOGIN] ERROR: Failed to generate PC session token: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusInternalServerError, "SESSION_CREATE_FAILED")
 		return
 	}
@@ -812,10 +820,10 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 
 	// 删除已使用的 Token
 	if _, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken); err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to delete token after confirm: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to delete token after confirm: %v", err)
 	}
 
-	log.Printf("[QR-LOGIN] Mobile confirmed login: userID=%d", userID)
+	utils.LogPrintf("[QR-LOGIN] Mobile confirmed login: userID=%d", userID)
 	h.respondSuccess(c, nil)
 }
 
@@ -837,14 +845,14 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[QR-LOGIN] WARN: Invalid request body for MobileCancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Invalid request body for MobileCancel: %v", err)
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
 
 	encryptedToken := strings.TrimSpace(req.Token)
 	if encryptedToken == "" {
-		log.Println("[QR-LOGIN] WARN: Empty token in MobileCancel")
+		utils.LogPrintf("[QR-LOGIN] WARN: Empty token in MobileCancel")
 		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return
 	}
@@ -852,7 +860,7 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	// 解密获取原始 Token
 	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to decrypt token in MobileCancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to decrypt token in MobileCancel: %v", err)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -860,7 +868,7 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	// 获取数据库连接池
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[QR-LOGIN] WARN: Database pool is nil in MobileCancel")
+		utils.LogPrintf("[QR-LOGIN] WARN: Database pool is nil in MobileCancel")
 		// 仍然通知 PC 端
 		h.notifyStatusChange(encryptedToken, "cancelled", nil)
 		h.respondSuccess(c, nil)
@@ -872,12 +880,12 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	// 删除 Token
 	_, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
 	if err != nil {
-		log.Printf("[QR-LOGIN] WARN: Failed to delete token in MobileCancel: %v", err)
+		utils.LogPrintf("[QR-LOGIN] WARN: Failed to delete token in MobileCancel: %v", err)
 	}
 
 	// 通知 PC 端
 	h.notifyStatusChange(encryptedToken, "cancelled", nil)
 
-	log.Println("[QR-LOGIN] Mobile cancelled login")
+	utils.LogPrintf("[QR-LOGIN] Mobile cancelled login")
 	h.respondSuccess(c, nil)
 }

@@ -20,6 +20,7 @@
 package handlers
 
 import (
+	"auth-system/internal/utils"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -28,7 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+
 	"net/http"
 	"net/url"
 	"os"
@@ -172,15 +173,15 @@ func NewOAuthHandler(
 ) (*OAuthHandler, error) {
 	// 参数验证
 	if userRepo == nil {
-		log.Println("[OAUTH] ERROR: userRepo is nil")
+		utils.LogPrintf("[OAUTH] ERROR: userRepo is nil")
 		return nil, errors.New("userRepo is required")
 	}
 	if sessionService == nil {
-		log.Println("[OAUTH] ERROR: sessionService is nil")
+		utils.LogPrintf("[OAUTH] ERROR: sessionService is nil")
 		return nil, errors.New("sessionService is required")
 	}
 	if userCache == nil {
-		log.Println("[OAUTH] ERROR: userCache is nil")
+		utils.LogPrintf("[OAUTH] ERROR: userCache is nil")
 		return nil, errors.New("userCache is required")
 	}
 
@@ -188,7 +189,7 @@ func NewOAuthHandler(
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = OAuthDefaultBaseURL
-		log.Printf("[OAUTH] WARN: BASE_URL not set, using default: %s", baseURL)
+		utils.LogPrintf("[OAUTH] WARN: BASE_URL not set, using default: %s", baseURL)
 	}
 
 	// 获取 Microsoft OAuth 配置
@@ -197,13 +198,13 @@ func NewOAuthHandler(
 
 	// 检查 OAuth 配置
 	if clientID == "" || clientSecret == "" {
-		log.Println("[OAUTH] WARN: Microsoft OAuth not configured (MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET missing)")
+		utils.LogPrintf("[OAUTH] WARN: Microsoft OAuth not configured (MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET missing)")
 	}
 
 	// redirectURI 基于 BASE_URL 自动生成
 	redirectURI := baseURL + "/api/auth/microsoft/callback"
 
-	log.Printf("[OAUTH] OAuthHandler initialized: production=%v, baseURL=%s, configured=%v",
+	utils.LogPrintf("[OAUTH] OAuthHandler initialized: production=%v, baseURL=%s, configured=%v",
 		isProduction, baseURL, clientID != "" && clientSecret != "")
 
 	return &OAuthHandler{
@@ -227,7 +228,7 @@ func (h *OAuthHandler) StartCleanup() {
 		ticker := time.NewTicker(CleanupInterval)
 		defer ticker.Stop()
 
-		log.Println("[OAUTH] Cleanup task started")
+		utils.LogPrintf("[OAUTH] Cleanup task started")
 
 		for range ticker.C {
 			h.cleanupExpiredData()
@@ -263,7 +264,7 @@ func (h *OAuthHandler) cleanupExpiredData() {
 
 	// 仅在有清理时记录日志
 	if stateCount > 0 || linkCount > 0 {
-		log.Printf("[OAUTH] Cleanup completed: states=%d, links=%d", stateCount, linkCount)
+		utils.LogPrintf("[OAUTH] Cleanup completed: states=%d, links=%d", stateCount, linkCount)
 	}
 }
 
@@ -278,7 +279,7 @@ func (h *OAuthHandler) cleanupExpiredData() {
 func generateState() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to generate state: %v", err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to generate state: %v", err)
 		return "", fmt.Errorf("failed to generate state: %w", err)
 	}
 	return hex.EncodeToString(b), nil
@@ -293,7 +294,7 @@ func generateState() (string, error) {
 func generateLinkToken() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to generate link token: %v", err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to generate link token: %v", err)
 		return "", fmt.Errorf("failed to generate link token: %w", err)
 	}
 	return hex.EncodeToString(b), nil
@@ -306,10 +307,18 @@ func generateLinkToken() (string, error) {
 //   - token: JWT Token
 func (h *OAuthHandler) setAuthCookie(c *gin.Context, token string) {
 	if token == "" {
-		log.Println("[OAUTH] WARN: Attempted to set empty token cookie")
+		utils.LogPrintf("[OAUTH] WARN: Attempted to set empty token cookie")
 		return
 	}
-	c.SetCookie("token", token, OAuthCookieMaxAge, "/", "", h.isProduction, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		MaxAge:   OAuthCookieMaxAge,
+		Path:     "/",
+		Secure:   h.isProduction,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // isConfigured 检查 OAuth 是否已配置
@@ -382,7 +391,7 @@ func (h *OAuthHandler) respondSuccess(c *gin.Context, data gin.H) {
 func (h *OAuthHandler) MicrosoftAuth(c *gin.Context) {
 	// 检查 OAuth 配置
 	if !h.isConfigured() {
-		log.Println("[OAUTH] ERROR: Microsoft OAuth not configured")
+		utils.LogPrintf("[OAUTH] ERROR: Microsoft OAuth not configured")
 		h.respondError(c, http.StatusInternalServerError, "OAUTH_NOT_CONFIGURED")
 		return
 	}
@@ -390,14 +399,14 @@ func (h *OAuthHandler) MicrosoftAuth(c *gin.Context) {
 	// 获取操作类型
 	action := c.DefaultQuery("action", OAuthActionLogin)
 	if action != OAuthActionLogin && action != OAuthActionLink {
-		log.Printf("[OAUTH] WARN: Invalid action: %s, defaulting to login", action)
+		utils.LogPrintf("[OAUTH] WARN: Invalid action: %s, defaulting to login", action)
 		action = OAuthActionLogin
 	}
 
 	// 生成 state
 	state, err := generateState()
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to generate state: %v", err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to generate state: %v", err)
 		h.redirectWithError(c, "/account/login", "oauth_error")
 		return
 	}
@@ -412,26 +421,26 @@ func (h *OAuthHandler) MicrosoftAuth(c *gin.Context) {
 	if action == OAuthActionLink {
 		token, err := c.Cookie("token")
 		if err != nil || token == "" {
-			log.Println("[OAUTH] WARN: Link action but no token cookie")
+			utils.LogPrintf("[OAUTH] WARN: Link action but no token cookie")
 			h.redirectWithError(c, "/account/dashboard", "session_expired")
 			return
 		}
 
 		claims, err := h.sessionService.VerifyToken(token)
 		if err != nil {
-			log.Printf("[OAUTH] WARN: Link action but invalid session: %v", err)
+			utils.LogPrintf("[OAUTH] WARN: Link action but invalid session: %v", err)
 			h.redirectWithError(c, "/account/dashboard", "session_expired")
 			return
 		}
 
 		if claims == nil || claims.UserID <= 0 {
-			log.Println("[OAUTH] WARN: Link action but invalid claims")
+			utils.LogPrintf("[OAUTH] WARN: Link action but invalid claims")
 			h.redirectWithError(c, "/account/dashboard", "session_expired")
 			return
 		}
 
 		stateData.UserID = claims.UserID
-		log.Printf("[OAUTH] Link action initiated: userID=%d", claims.UserID)
+		utils.LogPrintf("[OAUTH] Link action initiated: userID=%d", claims.UserID)
 	}
 
 	// 存储 state
@@ -450,7 +459,7 @@ func (h *OAuthHandler) MicrosoftAuth(c *gin.Context) {
 	params.Set("state", state)
 
 	redirectURL := authURL + "?" + params.Encode()
-	log.Printf("[OAUTH] Redirecting to Microsoft auth: action=%s", action)
+	utils.LogPrintf("[OAUTH] Redirecting to Microsoft auth: action=%s", action)
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -472,20 +481,20 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 
 	// 用户拒绝授权
 	if errorParam != "" {
-		log.Printf("[OAUTH] WARN: Microsoft auth denied: error=%s, desc=%s", errorParam, errorDesc)
+		utils.LogPrintf("[OAUTH] WARN: Microsoft auth denied: error=%s, desc=%s", errorParam, errorDesc)
 		h.redirectWithError(c, "/account/login", "oauth_denied")
 		return
 	}
 
 	// 参数缺失
 	if code == "" {
-		log.Println("[OAUTH] WARN: Missing code parameter in callback")
+		utils.LogPrintf("[OAUTH] WARN: Missing code parameter in callback")
 		h.redirectWithError(c, "/account/login", "oauth_invalid")
 		return
 	}
 
 	if state == "" {
-		log.Println("[OAUTH] WARN: Missing state parameter in callback")
+		utils.LogPrintf("[OAUTH] WARN: Missing state parameter in callback")
 		h.redirectWithError(c, "/account/login", "oauth_invalid")
 		return
 	}
@@ -496,14 +505,14 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 	stateMu.RUnlock()
 
 	if !exists {
-		log.Println("[OAUTH] WARN: Invalid state - not found in storage")
+		utils.LogPrintf("[OAUTH] WARN: Invalid state - not found in storage")
 		h.redirectWithError(c, "/account/login", "oauth_invalid")
 		return
 	}
 
 	// 检查 state 数据有效性
 	if stateData == nil {
-		log.Println("[OAUTH] ERROR: State data is nil")
+		utils.LogPrintf("[OAUTH] ERROR: State data is nil")
 		stateMu.Lock()
 		delete(oauthStates, state)
 		stateMu.Unlock()
@@ -513,7 +522,7 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 
 	// 检查 state 是否过期
 	if time.Now().UnixMilli()-stateData.Timestamp > StateExpiryMS {
-		log.Println("[OAUTH] WARN: State expired")
+		utils.LogPrintf("[OAUTH] WARN: State expired")
 		stateMu.Lock()
 		delete(oauthStates, state)
 		stateMu.Unlock()
@@ -532,7 +541,7 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 
 	// 绑定操作验证
 	if action == OAuthActionLink && currentUserID <= 0 {
-		log.Println("[OAUTH] WARN: Link action but no valid userID in state")
+		utils.LogPrintf("[OAUTH] WARN: Link action but no valid userID in state")
 		h.redirectWithError(c, "/account/dashboard", "session_expired")
 		return
 	}
@@ -540,7 +549,7 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 	// 获取 Access Token
 	tokenData, err := h.exchangeCodeForToken(code)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to exchange code for token: %v", err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to exchange code for token: %v", err)
 		h.redirectWithError(c, "/account/login", "oauth_failed")
 		return
 	}
@@ -548,9 +557,9 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 	// 验证 token 数据
 	accessToken, ok := tokenData["access_token"].(string)
 	if !ok || accessToken == "" {
-		log.Println("[OAUTH] ERROR: No access_token in token response")
+		utils.LogPrintf("[OAUTH] ERROR: No access_token in token response")
 		if errMsg, ok := tokenData["error"].(string); ok {
-			log.Printf("[OAUTH] ERROR: Token error: %s", errMsg)
+			utils.LogPrintf("[OAUTH] ERROR: Token error: %s", errMsg)
 		}
 		h.redirectWithError(c, "/account/login", "oauth_failed")
 		return
@@ -559,7 +568,7 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 	// 获取微软用户信息
 	msUser, err := h.getMicrosoftUserInfo(accessToken)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to get Microsoft user info: %v", err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to get Microsoft user info: %v", err)
 		h.redirectWithError(c, "/account/login", "oauth_failed")
 		return
 	}
@@ -567,7 +576,7 @@ func (h *OAuthHandler) MicrosoftCallback(c *gin.Context) {
 	// 解析用户信息
 	microsoftID, ok := msUser["id"].(string)
 	if !ok || microsoftID == "" {
-		log.Println("[OAUTH] ERROR: No id in Microsoft user info")
+		utils.LogPrintf("[OAUTH] ERROR: No id in Microsoft user info")
 		h.redirectWithError(c, "/account/login", "oauth_failed")
 		return
 	}
@@ -601,11 +610,11 @@ func (h *OAuthHandler) handleLinkAction(c *gin.Context, ctx context.Context, cur
 	// 检查微软账户是否已被其他用户绑定
 	existingUser, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
-		log.Printf("[OAUTH] DEBUG: FindByMicrosoftID error: %v", err)
+		utils.LogPrintf("[OAUTH] DEBUG: FindByMicrosoftID error: %v", err)
 	}
 
 	if existingUser != nil && existingUser.ID != currentUserID {
-		log.Printf("[OAUTH] WARN: Microsoft account already linked to another user: msID=%s, existingUserID=%d, currentUserID=%d",
+		utils.LogPrintf("[OAUTH] WARN: Microsoft account already linked to another user: msID=%s, existingUserID=%d, currentUserID=%d",
 			microsoftID, existingUser.ID, currentUserID)
 		h.redirectWithError(c, "/account/dashboard", "microsoft_already_linked")
 		return
@@ -618,7 +627,7 @@ func (h *OAuthHandler) handleLinkAction(c *gin.Context, ctx context.Context, cur
 		"microsoft_avatar_url": microsoftAvatarURL,
 	})
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to update user with Microsoft info: userID=%d, error=%v", currentUserID, err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to update user with Microsoft info: userID=%d, error=%v", currentUserID, err)
 		h.redirectWithError(c, "/account/dashboard", "link_failed")
 		return
 	}
@@ -626,7 +635,7 @@ func (h *OAuthHandler) handleLinkAction(c *gin.Context, ctx context.Context, cur
 	// 使缓存失效
 	h.userCache.Invalidate(currentUserID)
 
-	log.Printf("[OAUTH] Microsoft account linked: userID=%d, msID=%s", currentUserID, microsoftID)
+	utils.LogPrintf("[OAUTH] Microsoft account linked: userID=%d, msID=%s", currentUserID, microsoftID)
 	h.redirectWithSuccess(c, "/account/dashboard", "microsoft_linked")
 }
 
@@ -635,7 +644,7 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 	// 查找已绑定的用户
 	user, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
-		log.Printf("[OAUTH] DEBUG: FindByMicrosoftID error: %v", err)
+		utils.LogPrintf("[OAUTH] DEBUG: FindByMicrosoftID error: %v", err)
 	}
 
 	// 更新已有用户的微软信息
@@ -645,7 +654,7 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 			"microsoft_avatar_url": microsoftAvatarURL,
 		})
 		if err != nil {
-			log.Printf("[OAUTH] WARN: Failed to update Microsoft info: userID=%d, error=%v", user.ID, err)
+			utils.LogPrintf("[OAUTH] WARN: Failed to update Microsoft info: userID=%d, error=%v", user.ID, err)
 		}
 		h.userCache.Invalidate(user.ID)
 	}
@@ -654,14 +663,14 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 	if user == nil && email != "" {
 		existingUser, err := h.userRepo.FindByEmail(ctx, email)
 		if err != nil {
-			log.Printf("[OAUTH] DEBUG: FindByEmail error: %v", err)
+			utils.LogPrintf("[OAUTH] DEBUG: FindByEmail error: %v", err)
 		}
 
 		if existingUser != nil && !existingUser.MicrosoftID.Valid {
 			// 邮箱已存在但未绑定微软账户，需要确认绑定
 			linkToken, err := generateLinkToken()
 			if err != nil {
-				log.Printf("[OAUTH] ERROR: Failed to generate link token: %v", err)
+				utils.LogPrintf("[OAUTH] ERROR: Failed to generate link token: %v", err)
 				h.redirectWithError(c, "/account/login", "oauth_error")
 				return
 			}
@@ -677,7 +686,7 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 			}
 			linkMu.Unlock()
 
-			log.Printf("[OAUTH] Found existing user with same email, redirecting to confirm: email=%s, userID=%d", email, existingUser.ID)
+			utils.LogPrintf("[OAUTH] Found existing user with same email, redirecting to confirm: email=%s, userID=%d", email, existingUser.ID)
 			c.Redirect(http.StatusFound, h.baseURL+"/account/link?token="+linkToken)
 			return
 		}
@@ -685,7 +694,7 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 
 	// 未找到关联账号
 	if user == nil {
-		log.Printf("[OAUTH] No linked account found for Microsoft ID: %s", microsoftID)
+		utils.LogPrintf("[OAUTH] No linked account found for Microsoft ID: %s", microsoftID)
 		h.redirectWithError(c, "/account/login", "no_linked_account")
 		return
 	}
@@ -693,13 +702,13 @@ func (h *OAuthHandler) handleLoginAction(c *gin.Context, ctx context.Context, mi
 	// 生成 JWT 并登录
 	token, err := h.sessionService.GenerateToken(user.ID)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Token generation failed: userID=%d, error=%v", user.ID, err)
+		utils.LogPrintf("[OAUTH] ERROR: Token generation failed: userID=%d, error=%v", user.ID, err)
 		h.redirectWithError(c, "/account/login", "token_error")
 		return
 	}
 
 	h.setAuthCookie(c, token)
-	log.Printf("[OAUTH] Microsoft login successful: username=%s, userID=%d", user.Username, user.ID)
+	utils.LogPrintf("[OAUTH] Microsoft login successful: username=%s, userID=%d", user.Username, user.ID)
 	c.Redirect(http.StatusFound, h.baseURL+"/account/dashboard")
 }
 
@@ -738,14 +747,14 @@ func (h *OAuthHandler) MicrosoftUnlink(c *gin.Context) {
 	// 获取当前用户 ID
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		log.Println("[OAUTH] WARN: MicrosoftUnlink called without valid userID")
+		utils.LogPrintf("[OAUTH] WARN: MicrosoftUnlink called without valid userID")
 		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
 	// 验证 userID
 	if userID <= 0 {
-		log.Printf("[OAUTH] WARN: Invalid userID in MicrosoftUnlink: %d", userID)
+		utils.LogPrintf("[OAUTH] WARN: Invalid userID in MicrosoftUnlink: %d", userID)
 		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
@@ -755,20 +764,20 @@ func (h *OAuthHandler) MicrosoftUnlink(c *gin.Context) {
 	// 查找用户
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: FindByID failed in MicrosoftUnlink: userID=%d, error=%v", userID, err)
+		utils.LogPrintf("[OAUTH] ERROR: FindByID failed in MicrosoftUnlink: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		log.Printf("[OAUTH] WARN: User not found in MicrosoftUnlink: userID=%d", userID)
+		utils.LogPrintf("[OAUTH] WARN: User not found in MicrosoftUnlink: userID=%d", userID)
 		h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	// 检查是否已绑定
 	if !user.MicrosoftID.Valid || user.MicrosoftID.String == "" {
-		log.Printf("[OAUTH] WARN: User not linked to Microsoft: userID=%d", userID)
+		utils.LogPrintf("[OAUTH] WARN: User not linked to Microsoft: userID=%d", userID)
 		h.respondError(c, http.StatusBadRequest, "NOT_LINKED")
 		return
 	}
@@ -780,7 +789,7 @@ func (h *OAuthHandler) MicrosoftUnlink(c *gin.Context) {
 		"microsoft_avatar_url": nil,
 	})
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to unlink Microsoft account: userID=%d, error=%v", userID, err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to unlink Microsoft account: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
 		return
 	}
@@ -788,7 +797,7 @@ func (h *OAuthHandler) MicrosoftUnlink(c *gin.Context) {
 	// 使缓存失效
 	h.userCache.Invalidate(userID)
 
-	log.Printf("[OAUTH] Microsoft account unlinked: username=%s, userID=%d", user.Username, userID)
+	utils.LogPrintf("[OAUTH] Microsoft account unlinked: username=%s, userID=%d", user.Username, userID)
 	h.respondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
 }
 
@@ -809,7 +818,7 @@ func (h *OAuthHandler) MicrosoftUnlink(c *gin.Context) {
 func (h *OAuthHandler) GetPendingLink(c *gin.Context) {
 	token := strings.TrimSpace(c.Query("token"))
 	if token == "" {
-		log.Println("[OAUTH] WARN: Empty token in GetPendingLink")
+		utils.LogPrintf("[OAUTH] WARN: Empty token in GetPendingLink")
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -820,14 +829,14 @@ func (h *OAuthHandler) GetPendingLink(c *gin.Context) {
 	linkMu.RUnlock()
 
 	if !exists {
-		log.Printf("[OAUTH] WARN: Pending link not found: token=%s", token)
+		utils.LogPrintf("[OAUTH] WARN: Pending link not found: token=%s", token)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	// 检查数据有效性
 	if pendingData == nil {
-		log.Printf("[OAUTH] ERROR: Pending link data is nil: token=%s", token)
+		utils.LogPrintf("[OAUTH] ERROR: Pending link data is nil: token=%s", token)
 		linkMu.Lock()
 		delete(pendingLinks, token)
 		linkMu.Unlock()
@@ -837,7 +846,7 @@ func (h *OAuthHandler) GetPendingLink(c *gin.Context) {
 
 	// 检查是否过期
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
-		log.Printf("[OAUTH] WARN: Pending link expired: token=%s", token)
+		utils.LogPrintf("[OAUTH] WARN: Pending link expired: token=%s", token)
 		linkMu.Lock()
 		delete(pendingLinks, token)
 		linkMu.Unlock()
@@ -850,18 +859,18 @@ func (h *OAuthHandler) GetPendingLink(c *gin.Context) {
 	// 查找用户
 	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: FindByID failed in GetPendingLink: userID=%d, error=%v", pendingData.UserID, err)
+		utils.LogPrintf("[OAUTH] ERROR: FindByID failed in GetPendingLink: userID=%d, error=%v", pendingData.UserID, err)
 		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		log.Printf("[OAUTH] WARN: User not found in GetPendingLink: userID=%d", pendingData.UserID)
+		utils.LogPrintf("[OAUTH] WARN: User not found in GetPendingLink: userID=%d", pendingData.UserID)
 		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
-	log.Printf("[OAUTH] Pending link info retrieved: userID=%d, msName=%s", pendingData.UserID, pendingData.DisplayName)
+	utils.LogPrintf("[OAUTH] Pending link info retrieved: userID=%d, msName=%s", pendingData.UserID, pendingData.DisplayName)
 	h.respondSuccess(c, gin.H{
 		"data": gin.H{
 			"microsoftName":   pendingData.DisplayName,
@@ -894,14 +903,14 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[OAUTH] WARN: Invalid request body for ConfirmLink: %v", err)
+		utils.LogPrintf("[OAUTH] WARN: Invalid request body for ConfirmLink: %v", err)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	token := strings.TrimSpace(req.Token)
 	if token == "" {
-		log.Println("[OAUTH] WARN: Empty token in ConfirmLink")
+		utils.LogPrintf("[OAUTH] WARN: Empty token in ConfirmLink")
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -915,21 +924,21 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	linkMu.Unlock()
 
 	if !exists {
-		log.Printf("[OAUTH] WARN: Pending link not found in ConfirmLink: token=%s", token)
+		utils.LogPrintf("[OAUTH] WARN: Pending link not found in ConfirmLink: token=%s", token)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	// 检查数据有效性
 	if pendingData == nil {
-		log.Printf("[OAUTH] ERROR: Pending link data is nil in ConfirmLink: token=%s", token)
+		utils.LogPrintf("[OAUTH] ERROR: Pending link data is nil in ConfirmLink: token=%s", token)
 		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	// 检查是否过期
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
-		log.Printf("[OAUTH] WARN: Pending link expired in ConfirmLink: token=%s", token)
+		utils.LogPrintf("[OAUTH] WARN: Pending link expired in ConfirmLink: token=%s", token)
 		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -939,11 +948,11 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	// 检查微软账户是否已被其他用户绑定
 	existingMsUser, err := h.userRepo.FindByMicrosoftID(ctx, pendingData.MicrosoftID)
 	if err != nil {
-		log.Printf("[OAUTH] DEBUG: FindByMicrosoftID error in ConfirmLink: %v", err)
+		utils.LogPrintf("[OAUTH] DEBUG: FindByMicrosoftID error in ConfirmLink: %v", err)
 	}
 
 	if existingMsUser != nil && existingMsUser.ID != pendingData.UserID {
-		log.Printf("[OAUTH] WARN: Microsoft account already linked in ConfirmLink: msID=%s, existingUserID=%d, targetUserID=%d",
+		utils.LogPrintf("[OAUTH] WARN: Microsoft account already linked in ConfirmLink: msID=%s, existingUserID=%d, targetUserID=%d",
 			pendingData.MicrosoftID, existingMsUser.ID, pendingData.UserID)
 		h.respondError(c, http.StatusBadRequest, "MICROSOFT_ALREADY_LINKED")
 		return
@@ -952,13 +961,13 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	// 查找用户
 	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: FindByID failed in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
+		utils.LogPrintf("[OAUTH] ERROR: FindByID failed in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
 		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		log.Printf("[OAUTH] WARN: User not found in ConfirmLink: userID=%d", pendingData.UserID)
+		utils.LogPrintf("[OAUTH] WARN: User not found in ConfirmLink: userID=%d", pendingData.UserID)
 		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
@@ -970,7 +979,7 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 		"microsoft_avatar_url": pendingData.MicrosoftAvatarURL,
 	})
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Failed to link Microsoft account in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
+		utils.LogPrintf("[OAUTH] ERROR: Failed to link Microsoft account in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
 		h.respondError(c, http.StatusInternalServerError, "LINK_FAILED")
 		return
 	}
@@ -981,7 +990,7 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	// 生成 JWT
 	jwtToken, err := h.sessionService.GenerateToken(user.ID)
 	if err != nil {
-		log.Printf("[OAUTH] ERROR: Token generation failed in ConfirmLink: userID=%d, error=%v", user.ID, err)
+		utils.LogPrintf("[OAUTH] ERROR: Token generation failed in ConfirmLink: userID=%d, error=%v", user.ID, err)
 		h.respondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
 		return
 	}
@@ -989,7 +998,7 @@ func (h *OAuthHandler) ConfirmLink(c *gin.Context) {
 	// 设置认证 Cookie
 	h.setAuthCookie(c, jwtToken)
 
-	log.Printf("[OAUTH] Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID)
+	utils.LogPrintf("[OAUTH] Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID)
 	h.respondSuccess(c, nil)
 }
 
@@ -1034,7 +1043,7 @@ func (h *OAuthHandler) exchangeCodeForToken(code string) (map[string]interface{}
 
 	// 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[OAUTH] ERROR: Token exchange failed with status %d: %s", resp.StatusCode, string(body))
+		utils.LogPrintf("[OAUTH] ERROR: Token exchange failed with status %d: %s", resp.StatusCode, string(body))
 		return nil, fmt.Errorf("%w: status %d", ErrOAuthTokenExchange, resp.StatusCode)
 	}
 
@@ -1047,7 +1056,7 @@ func (h *OAuthHandler) exchangeCodeForToken(code string) (map[string]interface{}
 	// 检查错误响应
 	if errCode, ok := result["error"].(string); ok {
 		errDesc, _ := result["error_description"].(string)
-		log.Printf("[OAUTH] ERROR: Token exchange error: %s - %s", errCode, errDesc)
+		utils.LogPrintf("[OAUTH] ERROR: Token exchange error: %s - %s", errCode, errDesc)
 		return nil, fmt.Errorf("%w: %s", ErrOAuthTokenExchange, errCode)
 	}
 
@@ -1090,7 +1099,7 @@ func (h *OAuthHandler) getMicrosoftUserInfo(accessToken string) (map[string]inte
 
 	// 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[OAUTH] ERROR: Get user info failed with status %d: %s", resp.StatusCode, string(body))
+		utils.LogPrintf("[OAUTH] ERROR: Get user info failed with status %d: %s", resp.StatusCode, string(body))
 		return nil, fmt.Errorf("%w: status %d", ErrOAuthUserInfo, resp.StatusCode)
 	}
 
@@ -1103,7 +1112,7 @@ func (h *OAuthHandler) getMicrosoftUserInfo(accessToken string) (map[string]inte
 	// 检查错误响应
 	if errCode, ok := result["error"].(map[string]interface{}); ok {
 		if code, ok := errCode["code"].(string); ok {
-			log.Printf("[OAUTH] ERROR: Get user info error: %s", code)
+			utils.LogPrintf("[OAUTH] ERROR: Get user info error: %s", code)
 			return nil, fmt.Errorf("%w: %s", ErrOAuthUserInfo, code)
 		}
 	}
@@ -1121,14 +1130,14 @@ func (h *OAuthHandler) getMicrosoftUserInfo(accessToken string) (map[string]inte
 //   - string: 头像数据 URL（data:image/...;base64,...）或空字符串
 func (h *OAuthHandler) getMicrosoftAvatar(accessToken string) string {
 	if accessToken == "" {
-		log.Println("[OAUTH] WARN: Empty access token for avatar request")
+		utils.LogPrintf("[OAUTH] WARN: Empty access token for avatar request")
 		return ""
 	}
 
 	// 创建请求
 	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me/photo/$value", nil)
 	if err != nil {
-		log.Printf("[OAUTH] WARN: Failed to create avatar request: %v", err)
+		utils.LogPrintf("[OAUTH] WARN: Failed to create avatar request: %v", err)
 		return ""
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -1137,7 +1146,7 @@ func (h *OAuthHandler) getMicrosoftAvatar(accessToken string) string {
 	client := &http.Client{Timeout: HTTPClientTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[OAUTH] WARN: Avatar request failed: %v", err)
+		utils.LogPrintf("[OAUTH] WARN: Avatar request failed: %v", err)
 		return ""
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -1145,7 +1154,7 @@ func (h *OAuthHandler) getMicrosoftAvatar(accessToken string) string {
 	// 检查状态码（404 表示没有头像，不是错误）
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode != http.StatusNotFound {
-			log.Printf("[OAUTH] WARN: Avatar request returned status %d", resp.StatusCode)
+			utils.LogPrintf("[OAUTH] WARN: Avatar request returned status %d", resp.StatusCode)
 		}
 		return ""
 	}
@@ -1153,13 +1162,13 @@ func (h *OAuthHandler) getMicrosoftAvatar(accessToken string) string {
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[OAUTH] WARN: Failed to read avatar response: %v", err)
+		utils.LogPrintf("[OAUTH] WARN: Failed to read avatar response: %v", err)
 		return ""
 	}
 
 	// 检查响应大小（防止过大的图片）
 	if len(body) > 5*1024*1024 { // 5MB 限制
-		log.Println("[OAUTH] WARN: Avatar too large, skipping")
+		utils.LogPrintf("[OAUTH] WARN: Avatar too large, skipping")
 		return ""
 	}
 
