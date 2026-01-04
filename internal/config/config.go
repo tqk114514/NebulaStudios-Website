@@ -126,12 +126,18 @@ func Load() (*Config, error) {
 
 // loadConfig 内部配置加载函数
 func loadConfig() error {
-	// 加载 .env 文件
-	if err := godotenv.Load(); err != nil {
-		// .env 文件不存在不是致命错误，生产环境通常使用系统环境变量
-		utils.LogPrintf("[CONFIG] WARN: .env file not found: %v (this is OK in production)", err)
-	} else {
-		utils.LogPrintf("[CONFIG] Loaded .env file")
+	// 加载 .env 文件（优先从 /var/www/.env 加载，其次当前目录）
+	envPaths := []string{"/var/www/.env", ".env"}
+	envLoaded := false
+	for _, path := range envPaths {
+		if err := godotenv.Load(path); err == nil {
+			utils.LogPrintf("[CONFIG] Loaded .env from %s", path)
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		utils.LogPrintf("[CONFIG] WARN: .env file not found (this is OK if using system env vars)")
 	}
 
 	// 创建配置实例
