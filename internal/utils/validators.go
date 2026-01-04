@@ -19,7 +19,6 @@ package utils
 
 import (
 	"encoding/json"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -157,14 +156,14 @@ func loadEmailWhitelistInternal() {
 	// 读取文件
 	data, err := os.ReadFile("dist/data/email.json")
 	if err != nil {
-		log.Printf("[VALIDATOR] WARN: Failed to load email whitelist: %v", err)
+		LogPrintf("[VALIDATOR] WARN: Failed to load email whitelist: %v", err)
 		emailWhitelist = []string{}
 		return
 	}
 
 	// 验证文件不为空
 	if len(data) == 0 {
-		log.Printf("[VALIDATOR] WARN: Email whitelist file is empty")
+		LogPrintf("[VALIDATOR] WARN: Email whitelist file is empty")
 		emailWhitelist = []string{}
 		return
 	}
@@ -172,7 +171,7 @@ func loadEmailWhitelistInternal() {
 	// 解析 JSON
 	var domains map[string]string
 	if err := json.Unmarshal(data, &domains); err != nil {
-		log.Printf("[VALIDATOR] WARN: Failed to parse email whitelist: %v", err)
+		LogPrintf("[VALIDATOR] WARN: Failed to parse email whitelist: %v", err)
 		emailWhitelist = []string{}
 		return
 	}
@@ -186,14 +185,14 @@ func loadEmailWhitelistInternal() {
 		}
 	}
 
-	log.Printf("[VALIDATOR] Email whitelist loaded: %d domains", len(emailWhitelist))
+	LogPrintf("[VALIDATOR] Email whitelist loaded: %d domains", len(emailWhitelist))
 }
 
 // ReloadEmailWhitelist 重新加载邮箱白名单
 // 用于运行时更新白名单
 func ReloadEmailWhitelist() {
 	loadEmailWhitelistInternal()
-	log.Printf("[VALIDATOR] Email whitelist reloaded")
+	LogPrintf("[VALIDATOR] Email whitelist reloaded")
 }
 
 // ====================  邮箱验证 ====================
@@ -212,7 +211,7 @@ func ReloadEmailWhitelist() {
 func ValidateEmail(email string) ValidationResult {
 	// 空值检查
 	if email == "" {
-		log.Printf("[VALIDATOR] Email validation failed: empty email")
+		LogPrintf("[VALIDATOR] Email validation failed: empty email")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
@@ -221,20 +220,20 @@ func ValidateEmail(email string) ValidationResult {
 
 	// 长度检查（防止过长的输入）
 	if len(trimmed) > 254 { // RFC 5321 限制
-		log.Printf("[VALIDATOR] Email validation failed: too long (%d chars)", len(trimmed))
+		LogPrintf("[VALIDATOR] Email validation failed: too long (%d chars)", len(trimmed))
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
 	// 格式验证
 	if !emailRegex.MatchString(trimmed) {
-		log.Printf("[VALIDATOR] Email validation failed: invalid format")
+		LogPrintf("[VALIDATOR] Email validation failed: invalid format")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
 	// 提取域名
 	parts := strings.Split(trimmed, "@")
 	if len(parts) != 2 {
-		log.Printf("[VALIDATOR] Email validation failed: invalid structure")
+		LogPrintf("[VALIDATOR] Email validation failed: invalid structure")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
@@ -243,13 +242,13 @@ func ValidateEmail(email string) ValidationResult {
 
 	// 验证本地部分不为空
 	if localPart == "" {
-		log.Printf("[VALIDATOR] Email validation failed: empty local part")
+		LogPrintf("[VALIDATOR] Email validation failed: empty local part")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
 	// 验证域名不为空且包含点
 	if domain == "" || !strings.Contains(domain, ".") {
-		log.Printf("[VALIDATOR] Email validation failed: invalid domain")
+		LogPrintf("[VALIDATOR] Email validation failed: invalid domain")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
@@ -264,7 +263,7 @@ func ValidateEmail(email string) ValidationResult {
 			}
 		}
 		if !found {
-			log.Printf("[VALIDATOR] Email validation failed: domain not in whitelist: %s", domain)
+			LogPrintf("[VALIDATOR] Email validation failed: domain not in whitelist: %s", domain)
 			return ValidationResult{Valid: false, ErrorCode: ErrEmailNotSupported}
 		}
 	}
@@ -285,7 +284,7 @@ func ValidateEmail(email string) ValidationResult {
 func ValidateUsername(username string) ValidationResult {
 	// 空值检查
 	if username == "" {
-		log.Printf("[VALIDATOR] Username validation failed: empty username")
+		LogPrintf("[VALIDATOR] Username validation failed: empty username")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidUsername}
 	}
 
@@ -294,7 +293,7 @@ func ValidateUsername(username string) ValidationResult {
 
 	// 验证去空格后不为空
 	if trimmed == "" {
-		log.Printf("[VALIDATOR] Username validation failed: only whitespace")
+		LogPrintf("[VALIDATOR] Username validation failed: only whitespace")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidUsername}
 	}
 
@@ -303,13 +302,13 @@ func ValidateUsername(username string) ValidationResult {
 
 	// 最小长度检查
 	if runeCount < usernameMinLength {
-		log.Printf("[VALIDATOR] Username validation failed: too short (%d chars)", runeCount)
+		LogPrintf("[VALIDATOR] Username validation failed: too short (%d chars)", runeCount)
 		return ValidationResult{Valid: false, ErrorCode: ErrUsernameTooShort}
 	}
 
 	// 最大长度检查
 	if runeCount > usernameMaxLength {
-		log.Printf("[VALIDATOR] Username validation failed: too long (%d chars)", runeCount)
+		LogPrintf("[VALIDATOR] Username validation failed: too long (%d chars)", runeCount)
 		return ValidationResult{Valid: false, ErrorCode: ErrUsernameTooLong}
 	}
 
@@ -333,36 +332,36 @@ func ValidateUsername(username string) ValidationResult {
 func ValidatePassword(password string) ValidationResult {
 	// 空值检查
 	if password == "" {
-		log.Printf("[VALIDATOR] Password validation failed: empty password")
+		LogPrintf("[VALIDATOR] Password validation failed: empty password")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidPassword}
 	}
 
 	// 长度检查（使用字节长度，因为密码通常是 ASCII）
 	if len(password) < passwordMinLength {
-		log.Printf("[VALIDATOR] Password validation failed: too short (%d chars)", len(password))
+		LogPrintf("[VALIDATOR] Password validation failed: too short (%d chars)", len(password))
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordTooShort}
 	}
 
 	if len(password) > passwordMaxLength {
-		log.Printf("[VALIDATOR] Password validation failed: too long (%d chars)", len(password))
+		LogPrintf("[VALIDATOR] Password validation failed: too long (%d chars)", len(password))
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordTooLong}
 	}
 
 	// 必须包含数字
 	if !digitRegex.MatchString(password) {
-		log.Printf("[VALIDATOR] Password validation failed: no digit")
+		LogPrintf("[VALIDATOR] Password validation failed: no digit")
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordNoNumber}
 	}
 
 	// 必须包含特殊字符
 	if !specialRegex.MatchString(password) {
-		log.Printf("[VALIDATOR] Password validation failed: no special character")
+		LogPrintf("[VALIDATOR] Password validation failed: no special character")
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordNoSpecial}
 	}
 
 	// 必须包含大小写字母
 	if !upperRegex.MatchString(password) || !lowerRegex.MatchString(password) {
-		log.Printf("[VALIDATOR] Password validation failed: missing upper or lower case")
+		LogPrintf("[VALIDATOR] Password validation failed: missing upper or lower case")
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordNoCase}
 	}
 
@@ -389,14 +388,14 @@ func ValidatePassword(password string) ValidationResult {
 func ValidateAvatarURL(avatarURL string) ValidationResult {
 	// 空值检查
 	if avatarURL == "" {
-		log.Printf("[VALIDATOR] Avatar URL validation failed: empty URL")
+		LogPrintf("[VALIDATOR] Avatar URL validation failed: empty URL")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
 	// 去空格
 	trimmed := strings.TrimSpace(avatarURL)
 	if trimmed == "" {
-		log.Printf("[VALIDATOR] Avatar URL validation failed: only whitespace")
+		LogPrintf("[VALIDATOR] Avatar URL validation failed: only whitespace")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
@@ -413,13 +412,13 @@ func ValidateAvatarURL(avatarURL string) ValidationResult {
 func validateDataURL(dataURL string) ValidationResult {
 	// 大小限制（约 500KB）
 	if len(dataURL) > dataURLMaxLength {
-		log.Printf("[VALIDATOR] Data URL validation failed: too long (%d bytes)", len(dataURL))
+		LogPrintf("[VALIDATOR] Data URL validation failed: too long (%d bytes)", len(dataURL))
 		return ValidationResult{Valid: false, ErrorCode: ErrURLTooLong}
 	}
 
 	// 格式验证（只允许安全的图片格式）
 	if !dataURLRegex.MatchString(dataURL) {
-		log.Printf("[VALIDATOR] Data URL validation failed: invalid format")
+		LogPrintf("[VALIDATOR] Data URL validation failed: invalid format")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
@@ -430,34 +429,34 @@ func validateDataURL(dataURL string) ValidationResult {
 func validateHTTPURL(httpURL string) ValidationResult {
 	// 长度限制
 	if len(httpURL) > urlMaxLength {
-		log.Printf("[VALIDATOR] HTTP URL validation failed: too long (%d chars)", len(httpURL))
+		LogPrintf("[VALIDATOR] HTTP URL validation failed: too long (%d chars)", len(httpURL))
 		return ValidationResult{Valid: false, ErrorCode: ErrURLTooLong}
 	}
 
 	// URL 格式验证
 	parsed, err := url.Parse(httpURL)
 	if err != nil {
-		log.Printf("[VALIDATOR] HTTP URL validation failed: parse error: %v", err)
+		LogPrintf("[VALIDATOR] HTTP URL validation failed: parse error: %v", err)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
 	// 协议检查（只允许 http 和 https）
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
-		log.Printf("[VALIDATOR] HTTP URL validation failed: invalid protocol: %s", scheme)
+		LogPrintf("[VALIDATOR] HTTP URL validation failed: invalid protocol: %s", scheme)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURLProtocol}
 	}
 
 	// 主机名检查
 	hostname := strings.ToLower(parsed.Hostname())
 	if hostname == "" {
-		log.Printf("[VALIDATOR] HTTP URL validation failed: empty hostname")
+		LogPrintf("[VALIDATOR] HTTP URL validation failed: empty hostname")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
 	// 禁止内网地址（防止 SSRF 攻击）
 	if isBlockedHost(hostname) {
-		log.Printf("[VALIDATOR] WARN: Blocked internal URL: %s", hostname)
+		LogPrintf("[VALIDATOR] WARN: Blocked internal URL: %s", hostname)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
@@ -469,7 +468,7 @@ func validateHTTPURL(httpURL string) ValidationResult {
 	// 普通 URL 必须以图片后缀结尾
 	pathname := strings.ToLower(parsed.Path)
 	if !hasImageExtension(pathname) {
-		log.Printf("[VALIDATOR] WARN: URL does not end with image extension: %s", pathname)
+		LogPrintf("[VALIDATOR] WARN: URL does not end with image extension: %s", pathname)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidImageURL}
 	}
 
@@ -492,23 +491,23 @@ func isBlockedHost(hostname string) bool {
 
 	// 检查是否为私有地址
 	if ip.IsLoopback() {
-		log.Printf("[VALIDATOR] Blocked loopback address: %s", hostname)
+		LogPrintf("[VALIDATOR] Blocked loopback address: %s", hostname)
 		return true
 	}
 
 	if ip.IsPrivate() {
-		log.Printf("[VALIDATOR] Blocked private address: %s", hostname)
+		LogPrintf("[VALIDATOR] Blocked private address: %s", hostname)
 		return true
 	}
 
 	if ip.IsUnspecified() {
-		log.Printf("[VALIDATOR] Blocked unspecified address: %s", hostname)
+		LogPrintf("[VALIDATOR] Blocked unspecified address: %s", hostname)
 		return true
 	}
 
 	// 检查链路本地地址
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		log.Printf("[VALIDATOR] Blocked link-local address: %s", hostname)
+		LogPrintf("[VALIDATOR] Blocked link-local address: %s", hostname)
 		return true
 	}
 
@@ -548,7 +547,7 @@ func hasImageExtension(pathname string) bool {
 func ValidateCode(code string) ValidationResult {
 	// 空值检查
 	if code == "" {
-		log.Printf("[VALIDATOR] Code validation failed: empty code")
+		LogPrintf("[VALIDATOR] Code validation failed: empty code")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidCode}
 	}
 
@@ -557,13 +556,13 @@ func ValidateCode(code string) ValidationResult {
 
 	// 长度检查
 	if len(trimmed) != verificationCodeLength {
-		log.Printf("[VALIDATOR] Code validation failed: invalid length (%d)", len(trimmed))
+		LogPrintf("[VALIDATOR] Code validation failed: invalid length (%d)", len(trimmed))
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidCode}
 	}
 
 	// 格式验证
 	if !codeRegex.MatchString(trimmed) {
-		log.Printf("[VALIDATOR] Code validation failed: invalid format")
+		LogPrintf("[VALIDATOR] Code validation failed: invalid format")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidCode}
 	}
 

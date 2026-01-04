@@ -14,8 +14,8 @@
 package middleware
 
 import (
-	"errors"
-	"log"
+	"auth-system/internal/utils"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -62,7 +62,7 @@ const (
 func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
-		log.Println("[AUTH] FATAL: SessionService is nil, returning error middleware")
+		utils.LogPrintf("[AUTH] FATAL: SessionService is nil, returning error middleware")
 		return errorMiddleware(ErrAuthNilSessionService)
 	}
 
@@ -70,7 +70,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		// 提取 Token
 		token := extractToken(c)
 		if token == "" {
-			log.Printf("[AUTH] WARN: Token not found: path=%s, ip=%s", c.Request.URL.Path, c.ClientIP())
+			utils.LogPrintf("[AUTH] WARN: Token not found: path=%s, ip=%s", c.Request.URL.Path, c.ClientIP())
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success":   false,
 				"errorCode": ErrAuthTokenNotFound.Error(),
@@ -82,7 +82,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		// 验证 Token
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			log.Printf("[AUTH] WARN: Token verification failed: path=%s, ip=%s, error=%v",
+			utils.LogPrintf("[AUTH] WARN: Token verification failed: path=%s, ip=%s, error=%v",
 				c.Request.URL.Path, c.ClientIP(), err)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success":   false,
@@ -94,7 +94,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 
 		// 验证 claims 有效性
 		if claims == nil {
-			log.Printf("[AUTH] ERROR: Claims is nil after successful verification: path=%s", c.Request.URL.Path)
+			utils.LogPrintf("[AUTH] ERROR: Claims is nil after successful verification: path=%s", c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success":   false,
 				"errorCode": "INVALID_CLAIMS",
@@ -105,7 +105,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 
 		// 验证用户 ID 有效性
 		if claims.UserID <= 0 {
-			log.Printf("[AUTH] WARN: Invalid user ID in claims: userID=%d, path=%s",
+			utils.LogPrintf("[AUTH] WARN: Invalid user ID in claims: userID=%d, path=%s",
 				claims.UserID, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success":   false,
@@ -133,7 +133,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 func OptionalAuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
-		log.Println("[AUTH] WARN: SessionService is nil for optional auth, skipping auth")
+		utils.LogPrintf("[AUTH] WARN: SessionService is nil for optional auth, skipping auth")
 		return func(c *gin.Context) {
 			c.Next()
 		}
@@ -152,7 +152,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
 			// 可选认证，验证失败只记录日志，不阻止请求
-			log.Printf("[AUTH] DEBUG: Optional auth token invalid: path=%s, error=%v",
+			utils.LogPrintf("[AUTH] DEBUG: Optional auth token invalid: path=%s, error=%v",
 				c.Request.URL.Path, err)
 			c.Next()
 			return
@@ -160,7 +160,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 
 		// 验证 claims 有效性
 		if claims == nil || claims.UserID <= 0 {
-			log.Printf("[AUTH] DEBUG: Optional auth invalid claims: path=%s", c.Request.URL.Path)
+			utils.LogPrintf("[AUTH] DEBUG: Optional auth invalid claims: path=%s", c.Request.URL.Path)
 			c.Next()
 			return
 		}
@@ -181,7 +181,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 func GetUserID(c *gin.Context) (int64, bool) {
 	// 检查 Context 是否为空
 	if c == nil {
-		log.Println("[AUTH] ERROR: GetUserID called with nil context")
+		utils.LogPrintf("[AUTH] ERROR: GetUserID called with nil context")
 		return 0, false
 	}
 
@@ -194,13 +194,13 @@ func GetUserID(c *gin.Context) (int64, bool) {
 	// 类型断言
 	id, ok := userID.(int64)
 	if !ok {
-		log.Printf("[AUTH] ERROR: UserID type assertion failed: got %T, want int64", userID)
+		utils.LogPrintf("[AUTH] ERROR: UserID type assertion failed: got %T, want int64", userID)
 		return 0, false
 	}
 
 	// 验证 ID 有效性
 	if id <= 0 {
-		log.Printf("[AUTH] WARN: Invalid user ID in context: %d", id)
+		utils.LogPrintf("[AUTH] WARN: Invalid user ID in context: %d", id)
 		return 0, false
 	}
 
@@ -263,7 +263,7 @@ func extractToken(c *gin.Context) string {
 //   - gin.HandlerFunc: 返回 500 错误的中间件
 func errorMiddleware(err error) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("[AUTH] ERROR: Middleware initialization error: %v", err)
+		utils.LogPrintf("[AUTH] ERROR: Middleware initialization error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
 			"errorCode": "INTERNAL_ERROR",

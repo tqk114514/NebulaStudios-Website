@@ -17,10 +17,10 @@
 package models
 
 import (
+	"auth-system/internal/utils"
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -92,18 +92,18 @@ func InitDB(cfg *config.Config) error {
 
 	// 参数验证
 	if cfg == nil {
-		log.Println("[DATABASE] ERROR: Config is nil")
+		utils.LogPrintf("[DATABASE] ERROR: Config is nil")
 		return ErrDBNilConfig
 	}
 
 	if cfg.DatabaseURL == "" {
-		log.Println("[DATABASE] ERROR: Database URL is empty")
+		utils.LogPrintf("[DATABASE] ERROR: Database URL is empty")
 		return ErrDBEmptyURL
 	}
 
 	// 如果已经初始化，先关闭旧连接
 	if pool != nil {
-		log.Println("[DATABASE] Closing existing connection pool")
+		utils.LogPrintf("[DATABASE] Closing existing connection pool")
 		pool.Close()
 		pool = nil
 		initialized = false
@@ -114,7 +114,7 @@ func InitDB(cfg *config.Config) error {
 	// 解析连接配置
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to parse database URL: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to parse database URL: %v", err)
 		return fmt.Errorf("parse database URL: %w", err)
 	}
 
@@ -124,7 +124,7 @@ func InitDB(cfg *config.Config) error {
 	// 创建连接池
 	newPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to create connection pool: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create connection pool: %v", err)
 		return fmt.Errorf("%w: %v", ErrDBConnectionFailed, err)
 	}
 
@@ -134,7 +134,7 @@ func InitDB(cfg *config.Config) error {
 
 	if err := newPool.Ping(pingCtx); err != nil {
 		newPool.Close()
-		log.Printf("[DATABASE] ERROR: Failed to ping database: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to ping database: %v", err)
 		return fmt.Errorf("%w: %v", ErrDBPingFailed, err)
 	}
 
@@ -142,12 +142,12 @@ func InitDB(cfg *config.Config) error {
 	pool = newPool
 	initialized = true
 
-	log.Printf("[DATABASE] PostgreSQL connected successfully (maxConns=%d, minConns=%d)",
+	utils.LogPrintf("[DATABASE] PostgreSQL connected successfully (maxConns=%d, minConns=%d)",
 		poolConfig.MaxConns, poolConfig.MinConns)
 
 	// 初始化表
 	if err := initTables(ctx); err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to initialize tables: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to initialize tables: %v", err)
 		return fmt.Errorf("%w: %v", ErrDBTableInitFailed, err)
 	}
 
@@ -182,7 +182,7 @@ func CloseDB() {
 		pool.Close()
 		pool = nil
 		initialized = false
-		log.Println("[DATABASE] PostgreSQL connection pool closed")
+		utils.LogPrintf("[DATABASE] PostgreSQL connection pool closed")
 	}
 }
 
@@ -202,7 +202,7 @@ func HealthCheck() error {
 	defer cancel()
 
 	if err := p.Ping(ctx); err != nil {
-		log.Printf("[DATABASE] WARN: Health check failed: %v", err)
+		utils.LogPrintf("[DATABASE] WARN: Health check failed: %v", err)
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
@@ -235,7 +235,7 @@ func configurePool(poolConfig *pgxpool.Config, cfg *config.Config) {
 		poolConfig.MaxConns = int32(cfg.DBMaxConns)
 	} else {
 		poolConfig.MaxConns = 10 // 默认值
-		log.Println("[DATABASE] WARN: DBMaxConns not set, using default 10")
+		utils.LogPrintf("[DATABASE] WARN: DBMaxConns not set, using default 10")
 	}
 
 	// 设置最小连接数
@@ -281,10 +281,10 @@ func initTables(ctx context.Context) error {
 	// 创建索引
 	if err := createIndexes(ctx); err != nil {
 		// 索引创建失败不是致命错误，只记录警告
-		log.Printf("[DATABASE] WARN: Some indexes may not have been created: %v", err)
+		utils.LogPrintf("[DATABASE] WARN: Some indexes may not have been created: %v", err)
 	}
 
-	log.Println("[DATABASE] Tables initialized successfully")
+	utils.LogPrintf("[DATABASE] Tables initialized successfully")
 	return nil
 }
 
@@ -305,10 +305,10 @@ func createUsersTable(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to create users table: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create users table: %v", err)
 		return err
 	}
-	log.Println("[DATABASE] Users table ready")
+	utils.LogPrintf("[DATABASE] Users table ready")
 	return nil
 }
 
@@ -326,10 +326,10 @@ func createTokensTable(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to create tokens table: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create tokens table: %v", err)
 		return err
 	}
-	log.Println("[DATABASE] Tokens table ready")
+	utils.LogPrintf("[DATABASE] Tokens table ready")
 	return nil
 }
 
@@ -348,10 +348,10 @@ func createCodesTable(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to create codes table: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create codes table: %v", err)
 		return err
 	}
-	log.Println("[DATABASE] Codes table ready")
+	utils.LogPrintf("[DATABASE] Codes table ready")
 	return nil
 }
 
@@ -371,10 +371,10 @@ func createQRLoginTokensTable(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		log.Printf("[DATABASE] ERROR: Failed to create qr_login_tokens table: %v", err)
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create qr_login_tokens table: %v", err)
 		return err
 	}
-	log.Println("[DATABASE] QR login tokens table ready")
+	utils.LogPrintf("[DATABASE] QR login tokens table ready")
 	return nil
 }
 
@@ -399,14 +399,14 @@ func createIndexes(ctx context.Context) error {
 
 	for _, idx := range indexes {
 		if _, err := pool.Exec(ctx, idx.sql); err != nil {
-			log.Printf("[DATABASE] WARN: Failed to create index %s: %v", idx.name, err)
+			utils.LogPrintf("[DATABASE] WARN: Failed to create index %s: %v", idx.name, err)
 			lastErr = err
 		} else {
 			successCount++
 		}
 	}
 
-	log.Printf("[DATABASE] Indexes created: %d/%d", successCount, len(indexes))
+	utils.LogPrintf("[DATABASE] Indexes created: %d/%d", successCount, len(indexes))
 
 	return lastErr
 }
