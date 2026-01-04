@@ -23,8 +23,7 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
+	"fmt"
 	"strings"
 	"time"
 
@@ -112,7 +111,7 @@ type TokenService struct{}
 // 返回：
 //   - *TokenService: Token 服务实例
 func NewTokenService() *TokenService {
-	log.Println("[TOKEN] Token service initialized")
+	utils.LogPrintf("[TOKEN] Token service initialized")
 	return &TokenService{}
 }
 
@@ -137,7 +136,7 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 	// 检查数据库连接
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[TOKEN] ERROR: Database pool is nil")
+		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
 		return "", 0, ErrTokenDBNotReady
 	}
 
@@ -151,7 +150,7 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 	// 生成安全 Token
 	token, err := utils.GenerateSecureToken()
 	if err != nil {
-		log.Printf("[TOKEN] ERROR: Failed to generate secure token: %v", err)
+		utils.LogPrintf("[TOKEN] ERROR: Failed to generate secure token: %v", err)
 		return "", 0, fmt.Errorf("%w: %v", ErrTokenCreateFailed, err)
 	}
 
@@ -166,12 +165,12 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 	`, token, normalizedEmail, normalizedType, now, expireTime)
 
 	if err != nil {
-		log.Printf("[TOKEN] ERROR: Failed to insert token: email=%s, type=%s, error=%v",
+		utils.LogPrintf("[TOKEN] ERROR: Failed to insert token: email=%s, type=%s, error=%v",
 			normalizedEmail, normalizedType, err)
 		return "", 0, fmt.Errorf("%w: %v", ErrTokenCreateFailed, err)
 	}
 
-	log.Printf("[TOKEN] Token created: email=%s, type=%s, expiry=%v",
+	utils.LogPrintf("[TOKEN] Token created: email=%s, type=%s, expiry=%v",
 		normalizedEmail, normalizedType, tokenExpiry)
 	return token, expireTime, nil
 }
@@ -193,7 +192,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 	// 检查数据库连接
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[TOKEN] ERROR: Database pool is nil")
+		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
 		return nil, ErrTokenDBNotReady
 	}
 
@@ -210,7 +209,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 	`, trimmedToken).Scan(&email, &tokenType, &code, &expireTime, &used)
 
 	if err != nil {
-		log.Printf("[TOKEN] DEBUG: Token not found or query error: %v", err)
+		utils.LogPrintf("[TOKEN] DEBUG: Token not found or query error: %v", err)
 		return nil, ErrInvalidToken
 	}
 
@@ -220,7 +219,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 	if now > expireTime {
 		// 删除过期 Token
 		if _, err := pool.Exec(ctx, "DELETE FROM tokens WHERE token = $1", trimmedToken); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to delete expired token: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired token: %v", err)
 		}
 		return nil, ErrTokenExpired
 	}
@@ -236,14 +235,14 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 		var err error
 		codeStr, err = utils.GenerateCode()
 		if err != nil {
-			log.Printf("[TOKEN] ERROR: Failed to generate verification code: %v", err)
+			utils.LogPrintf("[TOKEN] ERROR: Failed to generate verification code: %v", err)
 			return nil, fmt.Errorf("failed to generate code: %w", err)
 		}
 		codeExpireTime := now + int64(tokenExpiry.Milliseconds())
 
 		// 更新 Token 的验证码
 		if _, err := pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token = $2", codeStr, trimmedToken); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to update token code: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to update token code: %v", err)
 		}
 
 		// 创建验证码记录
@@ -251,7 +250,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 			INSERT INTO codes (code, email, type, created_at, expire_time, attempts, verified)
 			VALUES ($1, $2, $3, $4, $5, 0, 0)
 		`, codeStr, email, tokenType, now, codeExpireTime); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to create code record: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to create code record: %v", err)
 		}
 	} else {
 		codeStr = *code
@@ -259,10 +258,10 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 
 	// 标记 Token 已使用
 	if _, err := pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token = $1", trimmedToken); err != nil {
-		log.Printf("[TOKEN] WARN: Failed to mark token as used: %v", err)
+		utils.LogPrintf("[TOKEN] WARN: Failed to mark token as used: %v", err)
 	}
 
-	log.Printf("[TOKEN] Token validated: email=%s, type=%s", email, tokenType)
+	utils.LogPrintf("[TOKEN] Token validated: email=%s, type=%s", email, tokenType)
 
 	return &TokenResult{
 		Code:  codeStr,
@@ -293,7 +292,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 	// 检查数据库连接
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[TOKEN] ERROR: Database pool is nil")
+		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
 		return nil, ErrTokenDBNotReady
 	}
 
@@ -310,19 +309,19 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 	`, trimmedCode).Scan(&codeEmail, &codeType, &expireTime, &attempts, &verified)
 
 	if err != nil {
-		log.Printf("[TOKEN] DEBUG: Code not found or query error: %v", err)
+		utils.LogPrintf("[TOKEN] DEBUG: Code not found or query error: %v", err)
 		return nil, ErrInvalidCode
 	}
 
 	// 检查邮箱
 	if codeEmail != normalizedEmail {
-		log.Printf("[TOKEN] WARN: Email mismatch: expected=%s, got=%s", codeEmail, normalizedEmail)
+		utils.LogPrintf("[TOKEN] WARN: Email mismatch: expected=%s, got=%s", codeEmail, normalizedEmail)
 		return nil, ErrEmailMismatch
 	}
 
 	// 检查类型
 	if expectedType != "" && codeType != expectedType {
-		log.Printf("[TOKEN] WARN: Type mismatch: expected=%s, got=%s", expectedType, codeType)
+		utils.LogPrintf("[TOKEN] WARN: Type mismatch: expected=%s, got=%s", expectedType, codeType)
 		return nil, ErrTypeMismatch
 	}
 
@@ -332,7 +331,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 	if now > expireTime {
 		// 删除过期验证码
 		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to delete expired code: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired code: %v", err)
 		}
 		return nil, ErrCodeExpired
 	}
@@ -347,9 +346,9 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 	if newAttempts > maxCodeAttempts {
 		// 删除超过尝试次数的验证码
 		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to delete code after max attempts: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to delete code after max attempts: %v", err)
 		}
-		log.Printf("[TOKEN] WARN: Too many attempts for code: email=%s", normalizedEmail)
+		utils.LogPrintf("[TOKEN] WARN: Too many attempts for code: email=%s", normalizedEmail)
 		return nil, ErrTooManyAttempts
 	}
 
@@ -357,10 +356,10 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 	if _, err := pool.Exec(ctx, `
 		UPDATE codes SET attempts = $1, verified = 1, verified_at = $2 WHERE code = $3
 	`, newAttempts, now, trimmedCode); err != nil {
-		log.Printf("[TOKEN] WARN: Failed to update code verification status: %v", err)
+		utils.LogPrintf("[TOKEN] WARN: Failed to update code verification status: %v", err)
 	}
 
-	log.Printf("[TOKEN] Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, codeType, newAttempts)
+	utils.LogPrintf("[TOKEN] Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, codeType, newAttempts)
 
 	return &CodeResult{Type: codeType}, nil
 }
@@ -415,7 +414,7 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, code, email string) (
 	if now > expireTime {
 		// 删除过期验证码
 		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			log.Printf("[TOKEN] WARN: Failed to delete expired code: %v", err)
+			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired code: %v", err)
 		}
 		return false, ErrCodeExpired
 	}
@@ -476,10 +475,10 @@ func (s *TokenService) UseCode(ctx context.Context, code, email string) error {
 
 	// 删除验证码
 	if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-		log.Printf("[TOKEN] WARN: Failed to delete used code: %v", err)
+		utils.LogPrintf("[TOKEN] WARN: Failed to delete used code: %v", err)
 	}
 
-	log.Printf("[TOKEN] Code used and removed: email=%s", normalizedEmail)
+	utils.LogPrintf("[TOKEN] Code used and removed: email=%s", normalizedEmail)
 	return nil
 }
 
@@ -513,11 +512,11 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 	}
 
 	if err != nil {
-		log.Printf("[TOKEN] WARN: Failed to invalidate codes: email=%s, error=%v", normalizedEmail, err)
+		utils.LogPrintf("[TOKEN] WARN: Failed to invalidate codes: email=%s, error=%v", normalizedEmail, err)
 		return fmt.Errorf("failed to invalidate codes: %w", err)
 	}
 
-	log.Printf("[TOKEN] Codes invalidated: email=%s", normalizedEmail)
+	utils.LogPrintf("[TOKEN] Codes invalidated: email=%s", normalizedEmail)
 	return nil
 }
 
@@ -575,7 +574,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 	// 检查数据库连接
 	pool := models.GetPool()
 	if pool == nil {
-		log.Println("[TOKEN] WARN: Cannot cleanup - database pool is nil")
+		utils.LogPrintf("[TOKEN] WARN: Cannot cleanup - database pool is nil")
 		return
 	}
 
@@ -584,13 +583,13 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 	// 清理过期 Token
 	tokenResult, err := pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
 	if err != nil {
-		log.Printf("[TOKEN] WARN: Failed to cleanup expired tokens: %v", err)
+		utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired tokens: %v", err)
 	}
 
 	// 清理过期验证码
 	codeResult, codeErr := pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
 	if codeErr != nil {
-		log.Printf("[TOKEN] WARN: Failed to cleanup expired codes: %v", codeErr)
+		utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired codes: %v", codeErr)
 	}
 
 	// 记录清理结果
@@ -603,7 +602,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 	}
 
 	if tokenCount > 0 || codeCount > 0 {
-		log.Printf("[TOKEN] Cleanup completed: %d tokens, %d codes removed", tokenCount, codeCount)
+		utils.LogPrintf("[TOKEN] Cleanup completed: %d tokens, %d codes removed", tokenCount, codeCount)
 	}
 }
 

@@ -19,7 +19,7 @@
 package middleware
 
 import (
-	"log"
+	"auth-system/internal/utils"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -161,13 +161,13 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 func StaticCacheHeaders(maxAge string) gin.HandlerFunc {
 	// 参数验证
 	if maxAge == "" {
-		log.Printf("[SECURITY] WARN: Empty maxAge, using default %s", defaultStaticMaxAge)
+		utils.LogPrintf("[SECURITY] WARN: Empty maxAge, using default %s", defaultStaticMaxAge)
 		maxAge = defaultStaticMaxAge
 	}
 
 	// 验证 maxAge 是否为有效数字
 	if !isValidMaxAge(maxAge) {
-		log.Printf("[SECURITY] WARN: Invalid maxAge '%s', using default %s", maxAge, defaultStaticMaxAge)
+		utils.LogPrintf("[SECURITY] WARN: Invalid maxAge '%s', using default %s", maxAge, defaultStaticMaxAge)
 		maxAge = defaultStaticMaxAge
 	}
 
@@ -299,11 +299,11 @@ func isValidMaxAge(maxAge string) bool {
 //   - value: 头值
 func AddSecurityHeader(c *gin.Context, key, value string) {
 	if c == nil {
-		log.Println("[SECURITY] ERROR: Context is nil")
+		utils.LogPrintf("[SECURITY] ERROR: Context is nil")
 		return
 	}
 	if key == "" || value == "" {
-		log.Printf("[SECURITY] WARN: Empty header key or value: key=%s, value=%s", key, value)
+		utils.LogPrintf("[SECURITY] WARN: Empty header key or value: key=%s, value=%s", key, value)
 		return
 	}
 	c.Header(key, value)

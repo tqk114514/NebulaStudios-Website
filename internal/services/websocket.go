@@ -22,10 +22,10 @@
 package services
 
 import (
+	"auth-system/internal/utils"
 	"encoding/json"
 	"errors"
-	"hash/fnv"
-	"log"
+	"hash/fnv"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -97,7 +97,7 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
-		log.Printf("[WS] ERROR: Upgrade error: status=%d, reason=%v", status, reason)
+		utils.LogPrintf("[WS] ERROR: Upgrade error: status=%d, reason=%v", status, reason)
 	},
 }
 
@@ -157,7 +157,7 @@ func NewWebSocketService() *WebSocketService {
 	ws.wg.Add(1)
 	go ws.cleanup()
 
-	log.Printf("[WS] WebSocket service initialized: shards=%d, maxConnections=%d", wsShardCount, maxConnections)
+	utils.LogPrintf("[WS] WebSocket service initialized: shards=%d, maxConnections=%d", wsShardCount, maxConnections)
 
 	return ws
 }
@@ -170,7 +170,7 @@ func NewWebSocketService() *WebSocketService {
 func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	// 检查服务是否已关闭
 	if ws.IsShutdown() {
-		log.Println("[WS] WARN: Service is shutdown, rejecting connection")
+		utils.LogPrintf("[WS] WARN: Service is shutdown, rejecting connection")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
 		return
 	}
@@ -178,14 +178,14 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	// 获取 Token
 	token := c.Query("token")
 	if token == "" {
-		log.Println("[WS] WARN: Missing token in WebSocket request")
+		utils.LogPrintf("[WS] WARN: Missing token in WebSocket request")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
 		return
 	}
 
 	// 检查连接数限制
 	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
-		log.Printf("[WS] WARN: Max connections reached (%d), rejecting new client", maxConnections)
+		utils.LogPrintf("[WS] WARN: Max connections reached (%d), rejecting new client", maxConnections)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "too many connections"})
 		return
 	}
@@ -193,7 +193,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	// 升级到 WebSocket
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[WS] ERROR: WebSocket upgrade failed: %v", err)
+		utils.LogPrintf("[WS] ERROR: WebSocket upgrade failed: %v", err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 
 	// 注册客户端
 	if !ws.register(client) {
-		log.Printf("[WS] WARN: Failed to register client: token=%s", token)
+		utils.LogPrintf("[WS] WARN: Failed to register client: token=%s", token)
 		_ = conn.Close()
 		return
 	}
@@ -230,7 +230,7 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 
 	// 参数验证
 	if token == "" {
-		log.Println("[WS] WARN: Empty token in NotifyStatusChange")
+		utils.LogPrintf("[WS] WARN: Empty token in NotifyStatusChange")
 		return
 	}
 
@@ -260,13 +260,13 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	// 序列化消息
 	jsonData, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("[WS] ERROR: Failed to marshal message: %v", err)
+		utils.LogPrintf("[WS] ERROR: Failed to marshal message: %v", err)
 		return
 	}
 
 	// 发送消息
 	if err := ws.sendToClient(client, jsonData); err != nil {
-		log.Printf("[WS] WARN: Failed to send message: token=%s, error=%v", token, err)
+		utils.LogPrintf("[WS] WARN: Failed to send message: token=%s, error=%v", token, err)
 	}
 }
 
@@ -305,7 +305,7 @@ func (ws *WebSocketService) Shutdown() {
 	// 等待清理协程结束
 	ws.wg.Wait()
 
-	log.Println("[WS] WebSocket service shutdown complete")
+	utils.LogPrintf("[WS] WebSocket service shutdown complete")
 }
 
 // GetStats 获取服务统计信息
@@ -359,7 +359,7 @@ func (ws *WebSocketService) getShard(token string) *wsClientShard {
 func (ws *WebSocketService) register(client *WSClient) bool {
 	// 检查连接数限制
 	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
-		log.Printf("[WS] WARN: Max connections reached, rejecting new client")
+		utils.LogPrintf("[WS] WARN: Max connections reached, rejecting new client")
 		return false
 	}
 
@@ -373,13 +373,13 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 		// 关闭旧连接
 		ws.closeClient(existingClient)
 		atomic.AddInt32(&ws.connCount, -1)
-		log.Printf("[WS] Replaced existing client: token=%s", client.token)
+		utils.LogPrintf("[WS] Replaced existing client: token=%s", client.token)
 	}
 
 	shard.clients[client.token] = client
 	atomic.AddInt32(&ws.connCount, 1)
 
-	log.Printf("[WS] Client registered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount))
+	utils.LogPrintf("[WS] Client registered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount))
 	return true
 }
 
@@ -396,7 +396,7 @@ func (ws *WebSocketService) unregister(client *WSClient) {
 		delete(shard.clients, client.token)
 		ws.closeClient(client)
 		atomic.AddInt32(&ws.connCount, -1)
-		log.Printf("[WS] Client unregistered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount))
+		utils.LogPrintf("[WS] Client unregistered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount))
 	}
 }
 
@@ -460,31 +460,31 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 		select {
 		case message, ok := <-client.send:
 			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				log.Printf("[WS] WARN: Failed to set write deadline: %v", err)
+				utils.LogPrintf("[WS] WARN: Failed to set write deadline: %v", err)
 				return
 			}
 
 			if !ok {
 				// 通道已关闭
 				if err := client.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
-					log.Printf("[WS] DEBUG: Failed to write close message: %v", err)
+					utils.LogPrintf("[WS] DEBUG: Failed to write close message: %v", err)
 				}
 				return
 			}
 
 			if err := client.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Printf("[WS] DEBUG: Failed to write message: %v", err)
+				utils.LogPrintf("[WS] DEBUG: Failed to write message: %v", err)
 				return
 			}
 
 		case <-ticker.C:
 			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				log.Printf("[WS] WARN: Failed to set write deadline for ping: %v", err)
+				utils.LogPrintf("[WS] WARN: Failed to set write deadline for ping: %v", err)
 				return
 			}
 
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("[WS] DEBUG: Failed to write ping: %v", err)
+				utils.LogPrintf("[WS] DEBUG: Failed to write ping: %v", err)
 				return
 			}
 		}
@@ -505,14 +505,14 @@ func (ws *WebSocketService) readPump(client *WSClient) {
 
 	// 设置读取超时
 	if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		log.Printf("[WS] WARN: Failed to set read deadline: %v", err)
+		utils.LogPrintf("[WS] WARN: Failed to set read deadline: %v", err)
 		return
 	}
 
 	// 设置 Pong 处理器
 	client.conn.SetPongHandler(func(string) error {
 		if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			log.Printf("[WS] WARN: Failed to set read deadline in pong handler: %v", err)
+			utils.LogPrintf("[WS] WARN: Failed to set read deadline in pong handler: %v", err)
 			return err
 		}
 		return nil
@@ -523,7 +523,7 @@ func (ws *WebSocketService) readPump(client *WSClient) {
 		_, _, err := client.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure) {
-				log.Printf("[WS] DEBUG: Unexpected close error: %v", err)
+				utils.LogPrintf("[WS] DEBUG: Unexpected close error: %v", err)
 			}
 			break
 		}
@@ -540,7 +540,7 @@ func (ws *WebSocketService) cleanup() {
 	for {
 		select {
 		case <-ws.shutdown:
-			log.Println("[WS] Cleanup goroutine stopped")
+			utils.LogPrintf("[WS] Cleanup goroutine stopped")
 			return
 		case <-ticker.C:
 			ws.cleanupExpired()
@@ -577,7 +577,7 @@ func (ws *WebSocketService) cleanupExpired() {
 	}
 
 	if expired > 0 {
-		log.Printf("[WS] Cleaned up %d expired connections, remaining: %d", expired, atomic.LoadInt32(&ws.connCount))
+		utils.LogPrintf("[WS] Cleaned up %d expired connections, remaining: %d", expired, atomic.LoadInt32(&ws.connCount))
 	}
 }
 
@@ -591,7 +591,7 @@ func (ws *WebSocketService) closeAllConnections() {
 			// 发送关闭消息
 			if err := client.conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutdown")); err != nil {
-				log.Printf("[WS] DEBUG: Failed to write close message: %v", err)
+				utils.LogPrintf("[WS] DEBUG: Failed to write close message: %v", err)
 			}
 			ws.closeClient(client)
 		}
@@ -600,5 +600,5 @@ func (ws *WebSocketService) closeAllConnections() {
 	}
 
 	atomic.StoreInt32(&ws.connCount, 0)
-	log.Println("[WS] All connections closed")
+	utils.LogPrintf("[WS] All connections closed")
 }

@@ -15,11 +15,11 @@
 package models
 
 import (
+	"auth-system/internal/utils"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
@@ -394,7 +394,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		return r.handleWriteError(err, "Create", user.Email)
 	}
 
-	log.Printf("[USER] User created: id=%d, email=%s", user.ID, user.Email)
+	utils.LogPrintf("[USER] User created: id=%d, email=%s", user.ID, user.Email)
 	return nil
 }
 
@@ -413,7 +413,7 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 	}
 
 	if len(updates) == 0 {
-		log.Printf("[USER] WARN: Update called with empty updates: id=%d", id)
+		utils.LogPrintf("[USER] WARN: Update called with empty updates: id=%d", id)
 		return nil
 	}
 
@@ -442,7 +442,7 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 		return ErrUserNotFound
 	}
 
-	log.Printf("[USER] User updated: id=%d, fields=%d", id, len(updates))
+	utils.LogPrintf("[USER] User updated: id=%d, fields=%d", id, len(updates))
 	return nil
 }
 
@@ -466,7 +466,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 
 	result, err := pool.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 	if err != nil {
-		log.Printf("[USER] ERROR: Failed to delete user: id=%d, error=%v", id, err)
+		utils.LogPrintf("[USER] ERROR: Failed to delete user: id=%d, error=%v", id, err)
 		return fmt.Errorf("delete user failed: %w", err)
 	}
 
@@ -474,7 +474,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 		return ErrUserNotFound
 	}
 
-	log.Printf("[USER] User deleted: id=%d", id)
+	utils.LogPrintf("[USER] User deleted: id=%d", id)
 	return nil
 }
 
@@ -483,7 +483,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 // checkDB 检查数据库连接是否就绪
 func (r *UserRepository) checkDB() error {
 	if pool == nil {
-		log.Println("[USER] ERROR: Database pool is nil")
+		utils.LogPrintf("[USER] ERROR: Database pool is nil")
 		return ErrUserRepoDBNotReady
 	}
 	return nil
@@ -507,7 +507,7 @@ func (r *UserRepository) handleQueryError(err error, operation string, identifie
 		return ErrUserNotFound
 	}
 
-	log.Printf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
+	utils.LogPrintf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
 	return fmt.Errorf("%s failed: %w", operation, err)
 }
 
@@ -533,7 +533,7 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 		return ErrMicrosoftIDExists
 	}
 
-	log.Printf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
+	utils.LogPrintf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
 	return fmt.Errorf("%s failed: %w", operation, err)
 }
 
@@ -554,7 +554,7 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 	for key, value := range updates {
 		// 验证字段是否在白名单中（防止 SQL 注入）
 		if !allowedUpdateFields[key] {
-			log.Printf("[USER] WARN: Attempted to update disallowed field: %s", key)
+			utils.LogPrintf("[USER] WARN: Attempted to update disallowed field: %s", key)
 			continue
 		}
 
