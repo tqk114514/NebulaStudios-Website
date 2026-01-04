@@ -22,9 +22,9 @@
 package middleware
 
 import (
+	"auth-system/internal/utils"
 	"errors"
-	"hash/fnv"
-	"log"
+	"hash/fnv"
 	"net/http"
 	"sync"
 	"time"
@@ -138,11 +138,11 @@ type ShardedEmailRateLimiter struct {
 func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	// 参数验证
 	if r <= 0 {
-		log.Printf("[RATELIMIT] WARN: Invalid rate %v, using default", r)
+		utils.LogPrintf("[RATELIMIT] WARN: Invalid rate %v, using default", r)
 		r = rate.Every(defaultLoginRate)
 	}
 	if burst <= 0 {
-		log.Printf("[RATELIMIT] WARN: Invalid burst %d, using default", burst)
+		utils.LogPrintf("[RATELIMIT] WARN: Invalid burst %d, using default", burst)
 		burst = defaultLoginBurst
 	}
 
@@ -156,7 +156,7 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	for i := 0; i < shardCount; i++ {
 		cache, err := lru.New[string, *rateLimiterEntry](maxEntriesPerShard)
 		if err != nil {
-			log.Printf("[RATELIMIT] ERROR: Failed to create LRU cache for shard %d: %v", i, err)
+			utils.LogPrintf("[RATELIMIT] ERROR: Failed to create LRU cache for shard %d: %v", i, err)
 			// 使用空缓存作为后备（会导致限流失效，但不会崩溃）
 			cache, _ = lru.New[string, *rateLimiterEntry](1)
 		}
@@ -168,7 +168,7 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	// 启动清理协程
 	go srl.cleanup()
 
-	log.Printf("[RATELIMIT] Sharded rate limiter created: rate=%v, burst=%d, shards=%d",
+	utils.LogPrintf("[RATELIMIT] Sharded rate limiter created: rate=%v, burst=%d, shards=%d",
 		r, burst, shardCount)
 
 	return srl
@@ -183,7 +183,7 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter {
 	// 参数验证
 	if interval <= 0 {
-		log.Printf("[RATELIMIT] WARN: Invalid email interval %v, using default", interval)
+		utils.LogPrintf("[RATELIMIT] WARN: Invalid email interval %v, using default", interval)
 		interval = defaultEmailInterval
 	}
 
@@ -196,7 +196,7 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 	for i := 0; i < shardCount; i++ {
 		cache, err := lru.New[string, time.Time](maxEntriesPerShard)
 		if err != nil {
-			log.Printf("[RATELIMIT] ERROR: Failed to create email LRU cache for shard %d: %v", i, err)
+			utils.LogPrintf("[RATELIMIT] ERROR: Failed to create email LRU cache for shard %d: %v", i, err)
 			// 使用空缓存作为后备
 			cache, _ = lru.New[string, time.Time](1)
 		}
@@ -208,7 +208,7 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 	// 启动清理协程
 	go serl.cleanup()
 
-	log.Printf("[RATELIMIT] Sharded email rate limiter created: interval=%v, shards=%d",
+	utils.LogPrintf("[RATELIMIT] Sharded email rate limiter created: interval=%v, shards=%d",
 		interval, shardCount)
 
 	return serl
@@ -246,14 +246,14 @@ func (srl *ShardedRateLimiter) Allow(key string) bool {
 	srl.mu.RLock()
 	if srl.stopped {
 		srl.mu.RUnlock()
-		log.Println("[RATELIMIT] WARN: Rate limiter is stopped, allowing request")
+		utils.LogPrintf("[RATELIMIT] WARN: Rate limiter is stopped, allowing request")
 		return true
 	}
 	srl.mu.RUnlock()
 
 	// 空 key 默认允许（但记录警告）
 	if key == "" {
-		log.Println("[RATELIMIT] WARN: Empty key, allowing request")
+		utils.LogPrintf("[RATELIMIT] WARN: Empty key, allowing request")
 		return true
 	}
 
@@ -265,7 +265,7 @@ func (srl *ShardedRateLimiter) Allow(key string) bool {
 
 	// 检查缓存是否有效
 	if shard.cache == nil {
-		log.Println("[RATELIMIT] ERROR: Cache is nil, allowing request")
+		utils.LogPrintf("[RATELIMIT] ERROR: Cache is nil, allowing request")
 		return true
 	}
 
@@ -284,7 +284,7 @@ func (srl *ShardedRateLimiter) Allow(key string) bool {
 
 	// 检查限流器是否有效
 	if entry.limiter == nil {
-		log.Printf("[RATELIMIT] ERROR: Limiter is nil for key %s, creating new one", key)
+		utils.LogPrintf("[RATELIMIT] ERROR: Limiter is nil for key %s, creating new one", key)
 		entry.limiter = rate.NewLimiter(srl.rate, srl.burst)
 	}
 
@@ -300,7 +300,7 @@ func (srl *ShardedRateLimiter) cleanup() {
 	for {
 		select {
 		case <-srl.stopCh:
-			log.Println("[RATELIMIT] Rate limiter cleanup stopped")
+			utils.LogPrintf("[RATELIMIT] Rate limiter cleanup stopped")
 			return
 		case <-ticker.C:
 			srl.doCleanup()
@@ -336,7 +336,7 @@ func (srl *ShardedRateLimiter) doCleanup() {
 	}
 
 	if totalCleaned > 0 {
-		log.Printf("[RATELIMIT] Cleaned %d expired entries", totalCleaned)
+		utils.LogPrintf("[RATELIMIT] Cleaned %d expired entries", totalCleaned)
 	}
 }
 
@@ -348,7 +348,7 @@ func (srl *ShardedRateLimiter) Stop() {
 	if !srl.stopped {
 		srl.stopped = true
 		close(srl.stopCh)
-		log.Println("[RATELIMIT] Rate limiter stopped")
+		utils.LogPrintf("[RATELIMIT] Rate limiter stopped")
 	}
 }
 
@@ -397,14 +397,14 @@ func (serl *ShardedEmailRateLimiter) Allow(email string) bool {
 	serl.mu.RLock()
 	if serl.stopped {
 		serl.mu.RUnlock()
-		log.Println("[RATELIMIT] WARN: Email rate limiter is stopped, allowing request")
+		utils.LogPrintf("[RATELIMIT] WARN: Email rate limiter is stopped, allowing request")
 		return true
 	}
 	serl.mu.RUnlock()
 
 	// 空邮箱默认不允许
 	if email == "" {
-		log.Println("[RATELIMIT] WARN: Empty email, denying request")
+		utils.LogPrintf("[RATELIMIT] WARN: Empty email, denying request")
 		return false
 	}
 
@@ -416,7 +416,7 @@ func (serl *ShardedEmailRateLimiter) Allow(email string) bool {
 
 	// 检查缓存是否有效
 	if shard.cache == nil {
-		log.Println("[RATELIMIT] ERROR: Email cache is nil, allowing request")
+		utils.LogPrintf("[RATELIMIT] ERROR: Email cache is nil, allowing request")
 		return true
 	}
 
@@ -470,7 +470,7 @@ func (serl *ShardedEmailRateLimiter) cleanup() {
 	for {
 		select {
 		case <-serl.stopCh:
-			log.Println("[RATELIMIT] Email rate limiter cleanup stopped")
+			utils.LogPrintf("[RATELIMIT] Email rate limiter cleanup stopped")
 			return
 		case <-ticker.C:
 			serl.doCleanup()
@@ -507,7 +507,7 @@ func (serl *ShardedEmailRateLimiter) doCleanup() {
 	}
 
 	if totalCleaned > 0 {
-		log.Printf("[RATELIMIT] Cleaned %d expired email entries", totalCleaned)
+		utils.LogPrintf("[RATELIMIT] Cleaned %d expired email entries", totalCleaned)
 	}
 }
 
@@ -519,7 +519,7 @@ func (serl *ShardedEmailRateLimiter) Stop() {
 	if !serl.stopped {
 		serl.stopped = true
 		close(serl.stopCh)
-		log.Println("[RATELIMIT] Email rate limiter stopped")
+		utils.LogPrintf("[RATELIMIT] Email rate limiter stopped")
 	}
 }
 
@@ -566,7 +566,7 @@ var (
 func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 	// 参数验证
 	if limiter == nil {
-		log.Println("[RATELIMIT] ERROR: Limiter is nil, returning pass-through middleware")
+		utils.LogPrintf("[RATELIMIT] ERROR: Limiter is nil, returning pass-through middleware")
 		return func(c *gin.Context) {
 			c.Next()
 		}
@@ -577,7 +577,7 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 
 		// 检查是否允许请求
 		if !limiter.Allow(ip) {
-			log.Printf("[RATELIMIT] Rate limit exceeded: ip=%s, path=%s", ip, c.Request.URL.Path)
+			utils.LogPrintf("[RATELIMIT] Rate limit exceeded: ip=%s, path=%s", ip, c.Request.URL.Path)
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success":   false,
 				"errorCode": "RATE_LIMIT",

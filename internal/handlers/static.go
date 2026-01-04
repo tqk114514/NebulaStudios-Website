@@ -23,8 +23,8 @@
 package handlers
 
 import (
-	"errors"
-	"log"
+	"auth-system/internal/utils"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -98,23 +98,23 @@ type StaticHandler struct {
 func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService *services.WebSocketService, captchaService *services.CaptchaService) (*StaticHandler, error) {
 	// 参数验证
 	if cfg == nil {
-		log.Println("[STATIC] ERROR: cfg is nil")
+		utils.LogPrintf("[STATIC] ERROR: cfg is nil")
 		return nil, errors.New("cfg is required")
 	}
 	if userCache == nil {
-		log.Println("[STATIC] ERROR: userCache is nil")
+		utils.LogPrintf("[STATIC] ERROR: userCache is nil")
 		return nil, errors.New("userCache is required")
 	}
 	if wsService == nil {
-		log.Println("[STATIC] ERROR: wsService is nil")
+		utils.LogPrintf("[STATIC] ERROR: wsService is nil")
 		return nil, errors.New("wsService is required")
 	}
 	if captchaService == nil {
-		log.Println("[STATIC] ERROR: captchaService is nil")
+		utils.LogPrintf("[STATIC] ERROR: captchaService is nil")
 		return nil, errors.New("captchaService is required")
 	}
 
-	log.Println("[STATIC] StaticHandler initialized")
+	utils.LogPrintf("[STATIC] StaticHandler initialized")
 
 	return &StaticHandler{
 		cfg:            cfg,
@@ -133,7 +133,7 @@ func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService 
 //   - providers: 可用验证器列表 [{type, siteKey}, ...]
 func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	if h.captchaService == nil {
-		log.Println("[STATIC] ERROR: CaptchaService is nil in GetCaptchaConfig")
+		utils.LogPrintf("[STATIC] ERROR: CaptchaService is nil in GetCaptchaConfig")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
 			"errorCode": "CONFIG_NOT_LOADED",
@@ -143,7 +143,7 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 
 	providers := h.captchaService.GetConfig()
 	if len(providers) == 0 {
-		log.Println("[STATIC] WARN: No captcha providers configured")
+		utils.LogPrintf("[STATIC] WARN: No captcha providers configured")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -180,12 +180,12 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 		// 检查数据库健康状态
 		if poolStats.TotalConns() == 0 {
 			status = "degraded"
-			log.Println("[STATIC] WARN: Database has no connections")
+			utils.LogPrintf("[STATIC] WARN: Database has no connections")
 		}
 	} else {
 		status = "degraded"
 		dbStats = gin.H{"error": "pool not available"}
-		log.Println("[STATIC] WARN: Database pool is nil in health check")
+		utils.LogPrintf("[STATIC] WARN: Database pool is nil in health check")
 	}
 
 	// 缓存统计
@@ -200,7 +200,7 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 		}
 	} else {
 		cacheStats = gin.H{"error": "cache not available"}
-		log.Println("[STATIC] WARN: User cache is nil in health check")
+		utils.LogPrintf("[STATIC] WARN: User cache is nil in health check")
 	}
 
 	// WebSocket 统计
@@ -211,7 +211,7 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 		}
 	} else {
 		wsStats = gin.H{"error": "websocket not available"}
-		log.Println("[STATIC] WARN: WebSocket service is nil in health check")
+		utils.LogPrintf("[STATIC] WARN: WebSocket service is nil in health check")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -236,7 +236,7 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 
 	// 检查文件是否存在
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		log.Printf("[STATIC] ERROR: Brotli file not found: %s", brPath)
+		utils.LogPrintf("[STATIC] ERROR: Brotli file not found: %s", brPath)
 		serve404Fallback(c)
 		return
 	}
@@ -340,7 +340,7 @@ func NotFoundHandler(c *gin.Context) {
 	// 记录 404 请求（仅记录非静态资源请求）
 	path := c.Request.URL.Path
 	if !isStaticAsset(path) {
-		log.Printf("[STATIC] 404: %s %s", c.Request.Method, path)
+		utils.LogPrintf("[STATIC] 404: %s %s", c.Request.Method, path)
 	}
 
 	// 设置安全头
