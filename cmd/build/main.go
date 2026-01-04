@@ -315,31 +315,45 @@ func buildJSModule(entries []string, outdir, moduleName string) error {
 func buildTranslations() error {
 	log.Println("[BUILD] Building translations...")
 
+	// i18n 子目录列表
+	i18nModules := []string{"general", "account"}
+
 	// 读取所有语言文件
 	allTranslations := make(map[string]map[string]string)
 	var totalBytes int64
 
 	for _, lang := range supportedLanguages {
-		filePath := filepath.Join(sharedDir, "i18n", lang+".json")
+		langData := make(map[string]string)
 
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Printf("[BUILD] WARN: Language file not found: %s", filePath)
-				continue
+		// 从每个子目录读取并合并
+		for _, module := range i18nModules {
+			filePath := filepath.Join(sharedDir, "i18n", module, lang+".json")
+
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Printf("[BUILD] WARN: Language file not found: %s", filePath)
+					continue
+				}
+				return fmt.Errorf("failed to read %s: %w", filePath, err)
 			}
-			return fmt.Errorf("failed to read %s: %w", filePath, err)
-		}
 
-		totalBytes += int64(len(data))
+			totalBytes += int64(len(data))
 
-		var langData map[string]string
-		if err := json.Unmarshal(data, &langData); err != nil {
-			return fmt.Errorf("failed to parse %s: %w", filePath, err)
+			var moduleData map[string]string
+			if err := json.Unmarshal(data, &moduleData); err != nil {
+				return fmt.Errorf("failed to parse %s: %w", filePath, err)
+			}
+
+			// 合并到语言数据
+			for k, v := range moduleData {
+				langData[k] = v
+			}
 		}
 
 		if len(langData) == 0 {
-			log.Printf("[BUILD] WARN: Empty language file: %s", filePath)
+			log.Printf("[BUILD] WARN: No translation data for language: %s", lang)
+			continue
 		}
 
 		allTranslations[lang] = langData
@@ -481,11 +495,11 @@ func buildAccountData() error {
 	return nil
 }
 
-// buildPolicyData 构建 Policy 数据文件
+// buildPolicyData 构建 Policy 数据文件（仅简体中文）
 func buildPolicyData() error {
 	log.Println("[BUILD] Building policy data...")
 
-	src := filepath.Join(modulesDir, "policy/data/i18n-policy.json")
+	src := filepath.Join(sharedDir, "i18n/policy/zh-CN.json")
 	dst := filepath.Join(distDir, "policy/data/i18n-policy.json")
 
 	if _, err := os.Stat(src); os.IsNotExist(err) {
@@ -498,7 +512,7 @@ func buildPolicyData() error {
 	}
 
 	atomic.AddInt64(&stats.FilesProcessed, 1)
-	log.Println("[BUILD] Policy data built")
+	log.Println("[BUILD] Policy data built (zh-CN only)")
 	return nil
 }
 

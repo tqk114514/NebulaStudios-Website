@@ -114,8 +114,6 @@ export async function loadCaptchaConfig(): Promise<boolean> {
     captchaType = selected.type;
     siteKey = selected.siteKey;
 
-    console.log(`[CAPTCHA] Selected provider: ${captchaType} (${providers.length} available)`);
-
     await loadSDK(captchaType);
 
     return true;
@@ -152,7 +150,6 @@ function loadSDK(type: CaptchaType): Promise<void> {
     script.async = true;
     script.defer = true;
     script.onload = (): void => {
-      console.log(`[CAPTCHA] SDK loaded: ${type}`);
       resolve();
     };
     script.onerror = (): void => {
