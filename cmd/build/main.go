@@ -230,12 +230,6 @@ func buildJS() error {
 		return fmt.Errorf("policy entries validation failed: %w", err)
 	}
 
-	// 构建 Shared 模块（Turbo 初始化等）
-	sharedJSEntries := []string{"shared/js/turbo-init.ts"}
-	if err := buildJSModule(sharedJSEntries, "dist/shared/js", "shared"); err != nil {
-		return err
-	}
-
 	// 构建 Account 模块
 	if err := buildJSModule(accountPageEntries, "dist/account/assets/js", "account"); err != nil {
 		return err
@@ -721,10 +715,6 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent string) error {
 	if headerContent != "" {
 		content = strings.ReplaceAll(content, "{{HEADER}}", headerContent)
 	}
-
-	// 注入 Turbo Drive 脚本（在 </head> 前插入）
-	turboScript := `<script type="module" src="https://unpkg.com/@hotwired/turbo@8.0.12/dist/turbo.es2017-esm.js"></script><script type="module" src="/shared/js/turbo-init.js"></script>`
-	content = strings.Replace(content, "</head>", turboScript+"</head>", 1)
 
 	minified := minifyHTML(content)
 	filename := filepath.Base(src)
