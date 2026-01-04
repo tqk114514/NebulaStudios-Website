@@ -80,13 +80,11 @@
   --bg-header: rgb(10 10 10 / 80%);
   --text: var(--white);
   --text-secondary: var(--gray-400);
-  --text-muted: rgb(var(--white-rgb), 0.8);
-  --text-hint: rgb(var(--white-rgb), 0.7);
+  --text-muted: rgb(var(--white-rgb), 0.75);
   --text-disabled: rgb(var(--white-rgb), 0.3);
   --text-placeholder: rgb(var(--white-rgb), 0.2);
   --border: var(--gray-700);
-  --border-light: rgb(var(--white-rgb), 0.1);
-  --border-medium: rgb(var(--white-rgb), 0.15);
+  --border-light: rgb(var(--white-rgb), 0.12);
   --border-hover: rgb(var(--white-rgb), 0.2);
   --border-active: rgb(var(--white-rgb), 0.3);
   
@@ -237,7 +235,7 @@ body::-webkit-scrollbar {
   background-color: rgb(var(--black-rgb), 0.4);
   border: 1px solid var(--border-light);
   border-radius: 10px;
-  color: var(--text-hint);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -318,7 +316,7 @@ body::-webkit-scrollbar {
   margin-bottom: 3px;
   border: none;
   background: transparent;
-  color: var(--text-hint);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
