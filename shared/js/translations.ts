@@ -135,10 +135,13 @@ function getCookie(name: string): string | null {
 
 // ==================== 翻译加载 ====================
 
+/** i18n 模块列表 */
+const i18nModules = ['general', 'account'];
+
 /**
  * 加载翻译数据
  * 生产环境：直接返回内嵌数据
- * 开发环境：异步加载 JSON 文件
+ * 开发环境：异步加载 JSON 文件并合并
  * @param lang - 语言代码
  * @returns 翻译数据
  */
@@ -148,22 +151,33 @@ async function loadTranslation(lang: string): Promise<TranslationData> {
     return translations[lang];
   }
 
-  // 开发环境：异步加载
-  try {
-    const response = await fetch(`/shared/i18n/${lang}.json`);
-    if (!response.ok) {
-      throw new Error(`Failed to load translation for ${lang}`);
+  // 开发环境：从多个子目录异步加载并合并
+  const merged: TranslationData = {};
+
+  for (const module of i18nModules) {
+    try {
+      const response = await fetch(`/shared/i18n/${module}/${lang}.json`);
+      if (!response.ok) {
+        console.warn(`[I18N] WARN: Failed to load ${module}/${lang}.json`);
+        continue;
+      }
+      const data: TranslationData = await response.json();
+      Object.assign(merged, data);
+    } catch (error) {
+      console.warn(`[I18N] WARN: Failed to load ${module}/${lang}.json:`, (error as Error).message);
     }
-    const data: TranslationData = await response.json();
-    translations[lang] = data;
-    return data;
-  } catch (error) {
-    console.error('[I18N] ERROR: Failed to load translation:', (error as Error).message);
+  }
+
+  if (Object.keys(merged).length === 0) {
+    console.error('[I18N] ERROR: No translation data loaded for:', lang);
     if (lang !== 'zh-CN') {
       return await loadTranslation('zh-CN');
     }
     return {};
   }
+
+  translations[lang] = merged;
+  return merged;
 }
 
 // ==================== 翻译函数 ====================

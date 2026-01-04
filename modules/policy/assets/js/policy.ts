@@ -8,7 +8,7 @@
  * - 动态加载 policy 内容
  */
 
-import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.js';
+import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.js';
 
 // ==================== 类型定义 ====================
 
@@ -35,20 +35,18 @@ interface PolicyContent {
 }
 
 interface PolicyData {
-  [lang: string]: {
-    privacy?: PolicyContent;
-    terms?: PolicyContent;
-    cookies?: PolicyContent;
-  };
+  privacy?: PolicyContent;
+  terms?: PolicyContent;
+  cookies?: PolicyContent;
 }
 
-// Policy 数据缓存
+// Policy 数据缓存（仅简体中文）
 let policyData: PolicyData | null = null;
 
 // ==================== 数据加载 ====================
 
 /**
- * 加载 policy 翻译数据
+ * 加载 policy 数据（仅简体中文）
  */
 async function loadPolicyData(): Promise<PolicyData | null> {
   if (policyData) {return policyData;}
@@ -65,15 +63,11 @@ async function loadPolicyData(): Promise<PolicyData | null> {
 }
 
 /**
- * 获取当前语言的 policy 数据
+ * 获取 policy 数据（仅简体中文）
  */
 function getPolicyContent(type: 'privacy' | 'terms' | 'cookies'): PolicyContent | null {
   if (!policyData) {return null;}
-
-  const lang = getCurrentLanguage();
-  // 优先使用当前语言，fallback 到中文
-  const langData = policyData[lang] || policyData['zh-CN'];
-  return langData?.[type] || null;
+  return policyData[type] || null;
 }
 
 // ==================== 内容渲染 ====================

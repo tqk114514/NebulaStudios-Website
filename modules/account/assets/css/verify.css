@@ -39,7 +39,7 @@
 }
 
 .verify-subtitle {
-  color: var(--text-hint);
+  color: var(--text-muted);
   font-size: 15px;
   margin-bottom: 30px;
   line-height: 1.6;

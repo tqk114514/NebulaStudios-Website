@@ -339,7 +339,7 @@ input.violation {
   padding: 12px 20px;
   background-color: rgb(var(--white-rgb), 0.05);
   color: var(--text);
-  border: 1px solid var(--border-medium);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
