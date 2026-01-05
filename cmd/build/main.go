@@ -247,7 +247,7 @@ func buildJS() error {
 
 // loadPolicyDataJSON 读取并压缩 Policy 数据
 func loadPolicyDataJSON() (string, error) {
-	src := filepath.Join(sharedDir, "i18n/policy/zh-CN.json")
+	src := filepath.Join(sharedDir, "i18n/policy/policy.json")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return "", err
@@ -383,7 +383,7 @@ func buildTranslations() error {
 	log.Println("[BUILD] Building translations...")
 
 	// i18n 子目录列表
-	i18nModules := []string{"general", "account"}
+	i18nModules := []string{"general", "account", "policy"}
 
 	// 读取所有语言文件
 	allTranslations := make(map[string]map[string]string)
