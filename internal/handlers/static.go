@@ -24,7 +24,8 @@ package handlers
 
 import (
 	"auth-system/internal/utils"
-	"errors"
+	"errors"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -310,22 +311,11 @@ func ServeLinkConfirmPage(c *gin.Context) {
 
 // ====================  Policy 模块页面路由 ====================
 
-// ServePrivacyPage 服务隐私政策页面
-// GET /policy/privacy
-func ServePrivacyPage(c *gin.Context) {
-	serveHTML(c, DistPolicyPages, "privacy.html")
-}
-
-// ServeTermsPage 服务服务条款页面
-// GET /policy/terms
-func ServeTermsPage(c *gin.Context) {
-	serveHTML(c, DistPolicyPages, "terms.html")
-}
-
-// ServeCookiesPage 服务 Cookie 政策页面
-// GET /policy/cookies
-func ServeCookiesPage(c *gin.Context) {
-	serveHTML(c, DistPolicyPages, "cookies.html")
+// ServePolicyPage 服务政策中心 SPA 页面
+// GET /policy
+// 支持 hash 路由：/policy#privacy, /policy#terms, /policy#cookies
+func ServePolicyPage(c *gin.Context) {
+	serveHTML(c, DistPolicyPages, "policy.html")
 }
 
 // ====================  404 处理 ====================
