@@ -23,6 +23,29 @@
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-light);
   z-index: 90;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Header 隐藏时，policy-nav 跟随上移 */
+body.header-hidden .policy-nav {
+  transform: translateY(-70px);
+}
+
+/* Header 隐藏动画 */
+body.header-hidden .top-header {
+  transform: translateY(-100%);
+}
+
+/* --- 阅读进度条 --- */
+.reading-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light, var(--primary)));
+  transition: width 0.1s ease-out;
+  box-shadow: 0 0 8px rgb(var(--primary-rgb), 0.4);
 }
 
 .policy-nav-item {
@@ -221,14 +244,6 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  transition:
-    box-shadow 0.3s ease,
-    transform 0.3s ease;
-}
-
-.policy-contact:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
 }
 
 .policy-contact a {
