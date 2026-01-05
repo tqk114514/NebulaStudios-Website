@@ -8,7 +8,7 @@
  * - 支持扩展新政策类型
  */
 
-import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.js';
+import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 
 // ==================== 类型定义 ====================
 
@@ -41,18 +41,24 @@ interface PolicyData {
 // 支持的政策类型（可扩展）
 type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
+// ==================== 构建时注入的数据 ====================
+
+declare const __POLICY_DATA__: PolicyData | undefined;
+
 // ==================== 状态管理 ====================
 
-let policyData: PolicyData | null = null;
+let policyData: PolicyData | null = typeof __POLICY_DATA__ !== 'undefined' ? __POLICY_DATA__ : null;
 let currentPolicy: PolicyType = 'privacy';
 
 // ==================== 数据加载 ====================
 
 async function loadPolicyData(): Promise<PolicyData | null> {
+  // 生产环境：使用构建时注入的数据
   if (policyData) return policyData;
 
+  // 开发环境：动态加载
   try {
-    const response = await fetch('/policy/data/i18n-policy.json');
+    const response = await fetch('/shared/i18n/policy/zh-CN.json');
     if (!response.ok) throw new Error('Failed to load policy data');
     policyData = await response.json();
     return policyData;
@@ -142,7 +148,7 @@ function renderPolicy(type: PolicyType): void {
 
   // 添加淡入动画
   container.classList.remove('fade-in');
-  void container.offsetWidth; // 触发 reflow
+  void (container as HTMLElement).offsetWidth; // 触发 reflow
   container.classList.add('fade-in');
   container.innerHTML = html;
 }

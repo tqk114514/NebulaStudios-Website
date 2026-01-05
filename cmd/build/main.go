@@ -147,27 +147,22 @@ func run() error {
 		return fmt.Errorf("account data build failed: %w", err)
 	}
 
-	// 5. 构建 Policy 数据文件
-	if err := buildPolicyData(); err != nil {
-		return fmt.Errorf("policy data build failed: %w", err)
-	}
-
-	// 6. 构建 JavaScript
+	// 5. 构建 JavaScript（包含 Policy 数据内嵌）
 	if err := buildJS(); err != nil {
 		return fmt.Errorf("JS build failed: %w", err)
 	}
 
-	// 7. 构建 CSS
+	// 6. 构建 CSS
 	if err := buildCSS(); err != nil {
 		return fmt.Errorf("CSS build failed: %w", err)
 	}
 
-	// 8. 构建 HTML
+	// 7. 构建 HTML
 	if err := buildHTML(); err != nil {
 		return fmt.Errorf("HTML build failed: %w", err)
 	}
 
-	// 9. 生产模式下生成 Brotli 预压缩文件
+	// 8. 生产模式下生成 Brotli 预压缩文件
 	if !*isDev {
 		if err := brotliCompressDir(distDir); err != nil {
 			log.Printf("[BUILD] WARN: Brotli compression had errors: %v", err)
@@ -201,7 +196,6 @@ func setupDistDir() error {
 		"dist/policy/assets/js",
 		"dist/policy/assets/css",
 		"dist/policy/pages",
-		"dist/policy/data",
 		"dist/data",
 	}
 
@@ -231,17 +225,46 @@ func buildJS() error {
 	}
 
 	// 构建 Account 模块
-	if err := buildJSModule(accountPageEntries, "dist/account/assets/js", "account"); err != nil {
+	if err := buildJSModule(accountPageEntries, "dist/account/assets/js", "account", ""); err != nil {
 		return err
 	}
 
-	// 构建 Policy 模块
-	if err := buildJSModule(policyPageEntries, "dist/policy/assets/js", "policy"); err != nil {
+	// 读取 Policy 数据用于注入
+	policyDataJSON, err := loadPolicyDataJSON()
+	if err != nil {
+		log.Printf("[BUILD] WARN: Failed to load policy data: %v", err)
+		policyDataJSON = "{}"
+	}
+
+	// 构建 Policy 模块（注入数据）
+	if err := buildJSModule(policyPageEntries, "dist/policy/assets/js", "policy", policyDataJSON); err != nil {
 		return err
 	}
 
 	log.Println("[BUILD] JavaScript build completed")
 	return nil
+}
+
+// loadPolicyDataJSON 读取并压缩 Policy 数据
+func loadPolicyDataJSON() (string, error) {
+	src := filepath.Join(sharedDir, "i18n/policy/zh-CN.json")
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+
+	// 验证并压缩 JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(data, &jsonData); err != nil {
+		return "", err
+	}
+
+	minified, err := json.Marshal(jsonData)
+	if err != nil {
+		return "", err
+	}
+
+	return string(minified), nil
 }
 
 // validateEntryPoints 验证入口文件是否存在
@@ -255,7 +278,8 @@ func validateEntryPoints(entries []string) error {
 }
 
 // buildJSModule 构建单个 JS 模块
-func buildJSModule(entries []string, outdir, moduleName string) error {
+// injectData 为空时不注入数据，非空时作为 __POLICY_DATA__ 注入
+func buildJSModule(entries []string, outdir, moduleName, injectData string) error {
 	if len(entries) == 0 {
 		log.Printf("[BUILD] WARN: No JS entries for %s module", moduleName)
 		return nil
@@ -266,8 +290,38 @@ func buildJSModule(entries []string, outdir, moduleName string) error {
 		sourcemap = api.SourceMapLinked
 	}
 
+	// 如果需要注入数据，创建临时文件
+	actualEntries := entries
+	var tmpFiles []string
+	if injectData != "" {
+		for _, entry := range entries {
+			// 读取原文件
+			data, err := os.ReadFile(entry)
+			if err != nil {
+				return fmt.Errorf("failed to read %s: %w", entry, err)
+			}
+
+			// 在文件开头注入数据
+			injectedCode := fmt.Sprintf("const __POLICY_DATA__ = %s;\n\n", injectData)
+			output := injectedCode + string(data)
+
+			// 写入临时文件
+			tmpFile := filepath.Join(distDir, moduleName, "assets/js", filepath.Base(entry)+".tmp.ts")
+			if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
+				return fmt.Errorf("failed to write temp file: %w", err)
+			}
+			tmpFiles = append(tmpFiles, tmpFile)
+		}
+		actualEntries = tmpFiles
+		defer func() {
+			for _, f := range tmpFiles {
+				os.Remove(f)
+			}
+		}()
+	}
+
 	opts := api.BuildOptions{
-		EntryPoints: entries,
+		EntryPoints: actualEntries,
 		Bundle:      true,
 		Outdir:      outdir,
 		Sourcemap:   sourcemap,
@@ -297,6 +351,19 @@ func buildJSModule(entries []string, outdir, moduleName string) error {
 		}
 		atomic.AddInt64(&stats.Errors, int64(len(result.Errors)))
 		return fmt.Errorf("%s JS build failed with %d errors", moduleName, len(result.Errors))
+	}
+
+	// 如果使用了临时文件，需要重命名输出文件
+	if injectData != "" {
+		for _, entry := range entries {
+			baseName := strings.TrimSuffix(filepath.Base(entry), ".ts")
+			oldName := filepath.Join(outdir, baseName+".ts.tmp.js")
+			newName := filepath.Join(outdir, baseName+".js")
+			if err := os.Rename(oldName, newName); err != nil {
+				// 可能已经是正确的名字了
+				log.Printf("[BUILD] WARN: Failed to rename %s: %v", oldName, err)
+			}
+		}
 	}
 
 	// 处理警告
@@ -492,27 +559,6 @@ func buildAccountData() error {
 
 	atomic.AddInt64(&stats.FilesProcessed, 1)
 	log.Println("[BUILD] Account data built")
-	return nil
-}
-
-// buildPolicyData 构建 Policy 数据文件（仅简体中文）
-func buildPolicyData() error {
-	log.Println("[BUILD] Building policy data...")
-
-	src := filepath.Join(sharedDir, "i18n/policy/zh-CN.json")
-	dst := filepath.Join(distDir, "policy/data/i18n-policy.json")
-
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		log.Printf("[BUILD] WARN: Policy data file not found: %s", src)
-		return nil
-	}
-
-	if err := minifyJSONFile(src, dst); err != nil {
-		return fmt.Errorf("failed to build policy data: %w", err)
-	}
-
-	atomic.AddInt64(&stats.FilesProcessed, 1)
-	log.Println("[BUILD] Policy data built (zh-CN only)")
 	return nil
 }
 
