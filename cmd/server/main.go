@@ -532,6 +532,9 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// 扫码登录 API
 	setupQRLoginAPI(r, hdlrs)
 
+	// AI 聊天 API
+	setupAIAPI(r)
+
 	utils.LogPrintf("[ROUTER] API routes configured")
 }
 
@@ -599,6 +602,14 @@ func setupQRLoginAPI(r *gin.Engine, hdlrs *Handlers) {
 		qrAPI.POST("/mobile-confirm", hdlrs.qrLoginHandler.MobileConfirm)
 		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
 		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
+	}
+}
+
+// setupAIAPI 配置 AI 聊天 API
+func setupAIAPI(r *gin.Engine) {
+	aiAPI := r.Group("/api/ai")
+	{
+		aiAPI.POST("/chat", handlers.HandleAIChat)
 	}
 }
 
