@@ -77,6 +77,7 @@ var (
 	}
 
 	// Policy 模块页面入口文件
+	// 注意：ai-chat.ts 被 policy.ts import，不需要单独作为入口
 	policyPageEntries = []string{
 		"modules/policy/assets/js/policy.ts",
 	}
@@ -290,7 +291,7 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		sourcemap = api.SourceMapLinked
 	}
 
-	// 如果需要注入数据，创建临时文件
+	// 如果需要注入数据，创建临时文件（保持在原目录，以便 import 能正确解析）
 	actualEntries := entries
 	var tmpFiles []string
 	if injectData != "" {
@@ -305,8 +306,8 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 			injectedCode := fmt.Sprintf("const __POLICY_DATA__ = %s;\n\n", injectData)
 			output := injectedCode + string(data)
 
-			// 写入临时文件
-			tmpFile := filepath.Join(distDir, moduleName, "assets/js", filepath.Base(entry)+".tmp.ts")
+			// 写入临时文件到原目录（保持相对 import 路径可用）
+			tmpFile := strings.TrimSuffix(entry, ".ts") + ".tmp.ts"
 			if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
 				return fmt.Errorf("failed to write temp file: %w", err)
 			}
@@ -357,7 +358,7 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 	if injectData != "" {
 		for _, entry := range entries {
 			baseName := strings.TrimSuffix(filepath.Base(entry), ".ts")
-			oldName := filepath.Join(outdir, baseName+".ts.tmp.js")
+			oldName := filepath.Join(outdir, baseName+".tmp.js")
 			newName := filepath.Join(outdir, baseName+".js")
 			if err := os.Rename(oldName, newName); err != nil {
 				// 可能已经是正确的名字了
