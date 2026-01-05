@@ -169,6 +169,61 @@ function handleRouteChange(): void {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ==================== 滚动隐藏 Header ====================
+
+function initScrollBehavior(): void {
+  let lastScrollY = 0;
+  let ticking = false;
+  const threshold = 50; // 滚动阈值，避免过于敏感
+  const progressBar = document.querySelector('.reading-progress') as HTMLElement | null;
+
+  const updateProgress = (): void => {
+    if (!progressBar) return;
+    
+    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = scrollHeight > 0 ? (window.scrollY / scrollHeight) * 100 : 0;
+    progressBar.style.width = `${Math.min(100, progress)}%`;
+  };
+
+  const handleScroll = (): void => {
+    const currentScrollY = window.scrollY;
+    
+    // 更新进度条
+    updateProgress();
+    
+    // 在顶部时始终显示 header
+    if (currentScrollY < threshold) {
+      document.body.classList.remove('header-hidden');
+      lastScrollY = currentScrollY;
+      return;
+    }
+
+    // 向下滚动：隐藏 header
+    if (currentScrollY > lastScrollY) {
+      document.body.classList.add('header-hidden');
+    }
+    // 向上滚动：显示 header
+    else if (currentScrollY < lastScrollY) {
+      document.body.classList.remove('header-hidden');
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        handleScroll();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }, { passive: true });
+
+  // 初始化进度
+  updateProgress();
+}
+
 // ==================== 初始化 ====================
 
 async function init(): Promise<void> {
@@ -190,6 +245,9 @@ async function init(): Promise<void> {
         if (policy) navigateTo(policy);
       });
     });
+
+    // 初始化滚动隐藏 header 行为
+    initScrollBehavior();
 
     hidePageLoader();
     updatePageTitle();
