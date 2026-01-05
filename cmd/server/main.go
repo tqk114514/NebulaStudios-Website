@@ -455,13 +455,8 @@ func setupPageRoutes(r *gin.Engine) {
 		accountPages.GET("/link", handlers.ServeLinkConfirmPage)
 	}
 
-	// Policy 模块页面
-	policyPages := r.Group("/policy")
-	{
-		policyPages.GET("/privacy", handlers.ServePrivacyPage)
-		policyPages.GET("/terms", handlers.ServeTermsPage)
-		policyPages.GET("/cookies", handlers.ServeCookiesPage)
-	}
+	// Policy 模块页面（SPA）
+	r.GET("/policy", handlers.ServePolicyPage)
 
 	// 兼容旧路由（301 永久重定向）
 	setupLegacyRedirects(r)
@@ -479,6 +474,20 @@ func setupLegacyRedirects(r *gin.Engine) {
 	}
 
 	for old, new := range redirects {
+		oldPath := old
+		newPath := new
+		r.GET(oldPath, func(c *gin.Context) {
+			c.Redirect(http.StatusMovedPermanently, newPath)
+		})
+	}
+
+	// Policy 旧路由重定向到 SPA
+	policyRedirects := map[string]string{
+		"/policy/privacy": "/policy#privacy",
+		"/policy/terms":   "/policy#terms",
+		"/policy/cookies": "/policy#cookies",
+	}
+	for old, new := range policyRedirects {
 		oldPath := old
 		newPath := new
 		r.GET(oldPath, func(c *gin.Context) {

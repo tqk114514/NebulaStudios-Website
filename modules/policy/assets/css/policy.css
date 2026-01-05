@@ -1,21 +1,61 @@
 /**
  * modules/policy/assets/css/policy.css
- * Policy 模块样式
+ * Policy SPA 模块样式
  * 
  * 包含：
+ * - 政策导航栏
  * - 文档容器
- * - 标题、段落
- * - 列表样式
+ * - 标题、段落、列表
+ * - 路由切换动画
  */
+
+/* --- 政策导航栏 --- */
+.policy-nav {
+  position: fixed;
+  top: 70px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bg-header);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-light);
+  z-index: 90;
+}
+
+.policy-nav-item {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.policy-nav-item:hover {
+  color: var(--text);
+  background: rgb(var(--white-rgb), 0.08);
+}
+
+.policy-nav-item.active {
+  color: var(--primary);
+  background: rgb(var(--primary-rgb), 0.1);
+  font-weight: 500;
+}
 
 /* --- 文档容器 --- */
 .policy-container {
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 100px 40px 60px;
+  padding: 140px 40px 60px; /* 增加顶部间距给导航栏留空间 */
   box-sizing: border-box;
-  animation: policy-fade-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.policy-container.fade-in {
+  animation: policy-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes policy-fade-in {
@@ -228,8 +268,19 @@
 
 /* --- 响应式 --- */
 @media (width <= 600px) {
+  .policy-nav {
+    top: 70px;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .policy-nav-item {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
   .policy-container {
-    padding: 90px 20px 40px;
+    padding: 130px 20px 40px;
   }
   
   .policy-title {
@@ -239,4 +290,36 @@
   .policy-section h2 {
     font-size: 18px;
   }
+}
+
+/* --- 404 状态 --- */
+.policy-not-found {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.policy-not-found h1 {
+  font-size: 28px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.policy-not-found p {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.policy-back-link {
+  display: inline-block;
+  padding: 10px 20px;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.policy-back-link:hover {
+  background: var(--primary);
+  color: var(--bg);
 }
