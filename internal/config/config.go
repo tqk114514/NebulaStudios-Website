@@ -83,6 +83,11 @@ type Config struct {
 
 	// QR 登录加密密钥
 	QREncryptionKey string // QR 登录数据加密密钥
+
+	// AI 配置
+	AIAPIKey  string // AI API 密钥
+	AIBaseURL string // AI API 地址
+	AIModel   string // AI 模型名称
 }
 
 // ====================  全局配置实例 ====================
@@ -190,6 +195,11 @@ func loadConfig() error {
 
 	// 加载 QR 登录加密密钥（兼容旧版 QR_ENCRYPT_KEY 变量名）
 	newCfg.QREncryptionKey = getEnvWithFallback("QR_ENCRYPTION_KEY", "QR_ENCRYPT_KEY", "")
+
+	// 加载 AI 配置
+	newCfg.AIAPIKey = getEnv("AI_API_KEY", "")
+	newCfg.AIBaseURL = getEnv("AI_BASE_URL", "")
+	newCfg.AIModel = getEnv("AI_MODEL", "glm-4-flash")
 
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {
