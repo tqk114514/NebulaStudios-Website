@@ -19,7 +19,8 @@
 package middleware
 
 import (
-	"auth-system/internal/utils"
+	"auth-system/internal/utils"
+
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -87,9 +88,7 @@ var htmlPages = map[string]bool{
 	"/account/forgot":    true,
 	"/account/dashboard": true,
 	"/account/link":      true,
-	"/policy/privacy":    true,
-	"/policy/terms":      true,
-	"/policy/cookies":    true,
+	"/policy":            true,
 }
 
 // ====================  公开函数 ====================
@@ -247,11 +246,13 @@ func isHTMLPage(path string) bool {
 		return true
 	}
 
-	// 检查是否为 account 或 policy 模块的页面路由
+	// 检查是否为 account 模块的页面路由
 	if strings.HasPrefix(path, "/account/") && !strings.Contains(path, "/assets/") && !strings.Contains(path, "/data/") {
 		return true
 	}
-	if strings.HasPrefix(path, "/policy/") && !strings.Contains(path, "/assets/") && !strings.Contains(path, "/data/") {
+	
+	// Policy SPA 页面
+	if path == "/policy" {
 		return true
 	}
 
