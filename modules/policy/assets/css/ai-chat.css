@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  z-index: 1000;
+  z-index: 998;
 }
 
 .ai-chat-bubble:hover {
@@ -61,7 +61,7 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  z-index: 1001;
+  z-index: 998;
   overflow: hidden;
   
   /* 动画初始状态 */
@@ -135,6 +135,14 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  
+  /* 隐藏滚动条但保留滚动功能 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.ai-chat-messages::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
 }
 
 .ai-chat-message {
@@ -274,5 +282,61 @@
   .ai-chat-bubble {
     bottom: 16px;
     right: 16px;
+  }
+}
+
+
+/* ==================== 倒计时提示 ==================== */
+
+.ai-chat-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  font-size: 13px;
+  animation: countdown-fade-in 0.2s ease;
+}
+
+@keyframes countdown-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-chat-countdown-text {
+  color: var(--text-primary);
+}
+
+.ai-chat-countdown-cancel {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-chat-countdown-cancel:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ==================== 章节高亮闪烁 ==================== */
+
+.ai-highlight {
+  animation: ai-highlight-flash 0.5s ease-in-out 5;
+}
+
+@keyframes ai-highlight-flash {
+  0%, 100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--primary);
   }
 }

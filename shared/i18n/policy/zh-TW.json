@@ -6,5 +6,8 @@
   "ai.thinking": "正在思考...",
   "ai.error": "抱歉，出現了一些問題，請稍後重試。",
   "ai.welcome": "您好！我是政策助手，可以幫您解答關於隱私政策、服務條款等問題。",
-  "ai.close": "關閉"
+  "ai.close": "關閉",
+  "ai.countdown.goto": "即將跳轉",
+  "ai.countdown.mail": "即將打開郵箱",
+  "ai.countdown.cancel": "取消"
 }

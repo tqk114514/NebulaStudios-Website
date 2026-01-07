@@ -99,17 +99,22 @@ func run() error {
 		return fmt.Errorf("handlers init failed: %w", err)
 	}
 
-	// 6. 启动后台任务
+	// 6. 初始化 AI 模块
+	if err := handlers.InitAI(); err != nil {
+		utils.LogPrintf("[AI] WARN: AI module init failed, AI chat will be unavailable: %v", err)
+	}
+
+	// 7. 启动后台任务
 	startBackgroundTasks(hdlrs, svcs)
 
-	// 7. 创建并配置路由
+	// 8. 创建并配置路由
 	router := setupRouter(cfg, hdlrs, svcs)
 
-	// 8. 启动服务器
+	// 9. 启动服务器
 	srv := createServer(cfg.Port, router)
 	startServer(srv)
 
-	// 9. 等待关闭信号并优雅关闭
+	// 10. 等待关闭信号并优雅关闭
 	gracefulShutdown(srv, svcs.wsService)
 
 	return nil
