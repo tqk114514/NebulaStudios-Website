@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"auth-system/internal/config"
@@ -32,26 +33,37 @@ import (
 const (
 	// aiRequestTimeout AI API 请求超时时间
 	aiRequestTimeout = 30 * time.Second
+
+	// aiPromptFile 系统提示词文件路径
+	aiPromptFile = "data/ai-prompt.txt"
 )
 
 // ====================  系统提示词 ====================
 
-// systemPrompt AI 助手的系统提示词
-// 定义 AI 的角色、职责和行为规范
-const systemPrompt = `你是 Nebula Studios 的政策助手，专门帮助用户理解我们的隐私政策、服务条款和 Cookie 政策。
+// systemPrompt 缓存的系统提示词
+var systemPrompt string
 
-你的职责：
-1. 用简洁友好的语言解答用户关于政策的问题
-2. 引导用户找到相关的政策章节
-3. 如果问题超出政策范围，礼貌地说明并建议联系客服
+// loadSystemPrompt 从文件加载系统提示词
+// 启动时调用一次，后续使用缓存
+func loadSystemPrompt() error {
+	data, err := os.ReadFile(aiPromptFile)
+	if err != nil {
+		return err
+	}
+	systemPrompt = string(data)
+	return nil
+}
 
-注意事项：
-- 回答要简洁明了，避免过于冗长
-- 不要编造政策中没有的内容
-- 如果不确定，建议用户查看原文或联系我们
-- 保持友好专业的语气
-
-联系邮箱：nebulastudios@163.com`
+// InitAI 初始化 AI 模块
+// 在服务启动时调用
+func InitAI() error {
+	if err := loadSystemPrompt(); err != nil {
+		utils.LogPrintf("[AI] Failed to load system prompt: %v", err)
+		return err
+	}
+	utils.LogPrintf("[AI] System prompt loaded from %s", aiPromptFile)
+	return nil
+}
 
 // ====================  请求/响应结构 ====================
 
@@ -148,7 +160,14 @@ func HandleAIChat(c *gin.Context) {
 		return
 	}
 
-	// 4. 构建 API 请求（注入系统提示词）
+	// 4. 检查系统提示词是否已加载
+	if systemPrompt == "" {
+		utils.LogPrintf("[AI] System prompt not loaded")
+		c.JSON(http.StatusServiceUnavailable, aiChatResponse{Error: "AI 服务未就绪"})
+		return
+	}
+
+	// 5. 构建 API 请求（注入系统提示词）
 	messages := []aiMessage{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, req.Messages...)
 
@@ -164,7 +183,7 @@ func HandleAIChat(c *gin.Context) {
 		return
 	}
 
-	// 5. 调用 AI API
+	// 6. 调用 AI API
 	client := &http.Client{Timeout: aiRequestTimeout}
 	httpReq, err := http.NewRequest("POST", cfg.AIBaseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -184,7 +203,7 @@ func HandleAIChat(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	// 6. 读取响应
+	// 7. 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		utils.LogPrintf("[AI] Failed to read response: %v", err)
@@ -192,7 +211,7 @@ func HandleAIChat(c *gin.Context) {
 		return
 	}
 
-	// 7. 解析响应
+	// 8. 解析响应
 	var apiResp aiAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		utils.LogPrintf("[AI] Failed to parse response: %v", err)
@@ -200,21 +219,21 @@ func HandleAIChat(c *gin.Context) {
 		return
 	}
 
-	// 8. 检查 API 错误
+	// 9. 检查 API 错误
 	if apiResp.Error != nil {
 		utils.LogPrintf("[AI] API returned error: %s", apiResp.Error.Message)
 		c.JSON(http.StatusServiceUnavailable, aiChatResponse{Error: "AI 服务错误"})
 		return
 	}
 
-	// 9. 检查响应内容
+	// 10. 检查响应内容
 	if len(apiResp.Choices) == 0 {
 		utils.LogPrintf("[AI] API returned no choices")
 		c.JSON(http.StatusInternalServerError, aiChatResponse{Error: "AI 未返回有效响应"})
 		return
 	}
 
-	// 10. 返回成功响应
+	// 11. 返回成功响应
 	utils.LogPrintf("[AI] Chat completed successfully")
 	c.JSON(http.StatusOK, aiChatResponse{Content: apiResp.Choices[0].Message.Content})
 }

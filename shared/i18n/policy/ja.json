@@ -6,5 +6,8 @@
   "ai.thinking": "考え中...",
   "ai.error": "申し訳ありません。問題が発生しました。後でもう一度お試しください。",
   "ai.welcome": "こんにちは！ポリシーアシスタントです。プライバシーポリシーや利用規約についてお答えします。",
-  "ai.close": "閉じる"
+  "ai.close": "閉じる",
+  "ai.countdown.goto": "リダイレクト中",
+  "ai.countdown.mail": "メールを開いています",
+  "ai.countdown.cancel": "キャンセル"
 }
