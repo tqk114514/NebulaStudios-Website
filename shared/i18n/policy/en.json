@@ -6,5 +6,8 @@
   "ai.thinking": "Thinking...",
   "ai.error": "Sorry, something went wrong. Please try again later.",
   "ai.welcome": "Hello! I'm the policy assistant. I can help you with questions about privacy policy, terms of service, and more.",
-  "ai.close": "Close"
+  "ai.close": "Close",
+  "ai.countdown.goto": "Redirecting",
+  "ai.countdown.mail": "Opening email client",
+  "ai.countdown.cancel": "Cancel"
 }
