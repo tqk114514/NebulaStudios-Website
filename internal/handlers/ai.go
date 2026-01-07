@@ -35,7 +35,7 @@ const (
 	aiRequestTimeout = 30 * time.Second
 
 	// aiPromptFile 系统提示词文件路径
-	aiPromptFile = "data/ai-prompt.txt"
+	aiPromptFile = "dist/data/ai-prompt.txt"
 )
 
 // ====================  系统提示词 ====================
