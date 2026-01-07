@@ -171,6 +171,56 @@
   border-bottom-left-radius: 4px;
 }
 
+/* Markdown 渲染样式 */
+.ai-chat-message.assistant strong {
+  font-weight: 600;
+}
+
+.ai-chat-message.assistant em {
+  font-style: italic;
+}
+
+.ai-chat-message.assistant code {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+}
+
+.ai-chat-message.assistant pre {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.ai-chat-message.assistant pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.ai-chat-message.assistant ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.ai-chat-message.assistant li {
+  margin: 4px 0;
+}
+
+.ai-chat-message.assistant a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.ai-chat-message.assistant a:hover {
+  opacity: 0.8;
+}
+
 .ai-chat-message.thinking {
   align-self: flex-start;
   background: var(--bg-secondary);
