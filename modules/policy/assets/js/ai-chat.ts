@@ -40,6 +40,54 @@ const TOOL_PATTERNS = {
   mail: /<mail:([^>]+)>/g,
 };
 
+// ==================== Markdown 解析 ====================
+
+/**
+ * 简易 Markdown 解析器
+ * 支持：粗体、斜体、行内代码、代码块、链接、列表、换行
+ */
+function parseMarkdown(text: string): string {
+  // 转义 HTML 特殊字符（防止 XSS）
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 代码块 ```code```
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+  // 行内代码 `code`
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // 粗体 **text** 或 __text__
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+  // 斜体 *text* 或 _text_（注意不要匹配已处理的粗体）
+  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+
+  // 链接 [text](url) - 仅允许 http/https
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // 无序列表（简单处理，每行以 - 或 * 开头）
+  html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+  // 包裹连续的 li
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+  // 有序列表（每行以数字. 开头）
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+
+  // 换行处理
+  html = html.replace(/\n/g, '<br>');
+
+  // 清理多余的 <br>（在 ul/pre 标签内）
+  html = html.replace(/<br>(<\/?(ul|li|pre|code)>)/g, '$1');
+  html = html.replace(/(<(ul|pre)>)<br>/g, '$1');
+
+  return html;
+}
+
 // ==================== 状态 ====================
 
 let isOpen = false;
@@ -393,7 +441,13 @@ function addMessage(role: 'user' | 'assistant', content: string, isThinking = fa
   } else {
     // 解析工具并显示干净内容
     const { cleanContent, tools } = parseTools(content);
-    msgEl.textContent = cleanContent;
+    
+    // 解析 Markdown 并渲染（仅 assistant 消息）
+    if (role === 'assistant') {
+      msgEl.innerHTML = parseMarkdown(cleanContent);
+    } else {
+      msgEl.textContent = cleanContent;
+    }
     
     // 异步执行工具
     if (tools.length > 0) {
