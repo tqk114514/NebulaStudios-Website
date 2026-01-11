@@ -57,14 +57,20 @@ const (
 	// DistPolicyPages Policy 模块页面路径
 	DistPolicyPages = "dist/policy/pages"
 
+	// DistAdminPages Admin 模块页面路径
+	DistAdminPages = "dist/admin/pages"
+
 	// ContentTypeHTML HTML 内容类型
 	ContentTypeHTML = "text/html; charset=utf-8"
 
 	// ContentEncodingBrotli Brotli 编码
 	ContentEncodingBrotli = "br"
 
-	// CacheControlNoCache 不缓存
+	// CacheControlNoCache 不缓存（每次验证）
 	CacheControlNoCache = "no-cache"
+
+	// CacheControlNoStore 完全不缓存（敏感页面用）
+	CacheControlNoStore = "no-store, no-cache, must-revalidate, max-age=0"
 )
 
 // ====================  包级变量 ====================
@@ -245,7 +251,10 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 	// 设置响应头并服务文件
 	c.Header("Content-Encoding", ContentEncodingBrotli)
 	c.Header("Content-Type", ContentTypeHTML)
-	c.Header("Cache-Control", CacheControlNoCache)
+	// 只在未设置 Cache-Control 时设置默认值
+	if c.Writer.Header().Get("Cache-Control") == "" {
+		c.Header("Cache-Control", CacheControlNoCache)
+	}
 	c.File(brPath)
 }
 
@@ -318,6 +327,18 @@ func ServePolicyPage(c *gin.Context) {
 	serveHTML(c, DistPolicyPages, "policy.html")
 }
 
+// ====================  Admin 模块页面路由 ====================
+
+// ServeAdminPage 服务管理后台 SPA 页面
+// GET /admin
+// 注意：此函数需要配合 AdminPageMiddleware 使用
+// 缓存策略：完全禁止缓存，确保权限变更后立即生效
+func ServeAdminPage(c *gin.Context) {
+	c.Header("Cache-Control", CacheControlNoStore)
+	c.Header("Pragma", "no-cache")
+	serveHTML(c, DistAdminPages, "index.html")
+}
+
 // ====================  404 处理 ====================
 
 // NotFoundHandler 404 处理
@@ -333,8 +354,10 @@ func NotFoundHandler(c *gin.Context) {
 		utils.LogPrintf("[STATIC] 404: %s %s", c.Request.Method, path)
 	}
 
-	// 设置安全头
+	// 设置安全头和缓存控制（完全禁止缓存，确保权限变更后立即生效）
 	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
+	c.Header("Cache-Control", CacheControlNoStore)
+	c.Header("Pragma", "no-cache")
 	c.Status(http.StatusNotFound)
 
 	// 服务 404 页面

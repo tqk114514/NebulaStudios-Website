@@ -33,8 +33,10 @@ import (
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
 	"auth-system/internal/handlers"
+	"auth-system/internal/handlers/admin"
 	"auth-system/internal/handlers/oauth"
 	"auth-system/internal/middleware"
+	adminmw "auth-system/internal/middleware/admin"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 
@@ -257,6 +259,7 @@ type Handlers struct {
 	microsoftHandler *oauth.MicrosoftHandler
 	qrLoginHandler   *handlers.QRLoginHandler
 	staticHandler    *handlers.StaticHandler
+	adminHandler     *admin.AdminHandler
 }
 
 // initHandlers 初始化所有 Handlers
@@ -333,6 +336,13 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	}
 	utils.LogPrintf("[HANDLERS] StaticHandler initialized")
 
+	// Admin Handler
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create admin handler: %w", err)
+	}
+	utils.LogPrintf("[HANDLERS] AdminHandler initialized")
+
 	utils.LogPrintf("[HANDLERS] All handlers initialized successfully")
 	return hdlrs, nil
 }
@@ -397,7 +407,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engin
 	setupStaticFiles(r, cfg)
 
 	// 配置页面路由
-	setupPageRoutes(r)
+	setupPageRoutes(r, svcs)
 
 	// 配置 API 路由
 	setupAPIRoutes(r, hdlrs, svcs)
@@ -439,7 +449,7 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
 }
 
 // setupPageRoutes 配置页面路由
-func setupPageRoutes(r *gin.Engine) {
+func setupPageRoutes(r *gin.Engine, svcs *Services) {
 	// 根路径重定向
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/account/login")
@@ -461,6 +471,18 @@ func setupPageRoutes(r *gin.Engine) {
 
 	// Policy 模块页面（SPA）
 	r.GET("/policy", handlers.ServePolicyPage)
+
+	// Admin 模块页面（SPA）- 使用页面专用中间件
+	// 安全说明：AdminPageMiddleware 会：
+	// - 未登录 → 重定向到 /account/login
+	// - 已登录但非管理员 → 重定向到 /account/dashboard
+	// - 已登录且是管理员 → 放行
+	// 注意：不使用 AuthMiddleware，因为它返回 JSON 错误而非重定向
+	adminPage := r.Group("/admin")
+	adminPage.Use(adminmw.AdminPageMiddleware(svcs.userRepo, svcs.sessionService))
+	{
+		adminPage.GET("", handlers.ServeAdminPage)
+	}
 
 	// 兼容旧路由（301 永久重定向）
 	setupLegacyRedirects(r)
@@ -539,6 +561,9 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// AI 聊天 API
 	setupAIAPI(r)
 
+	// 管理后台 API
+	setupAdminAPI(r, hdlrs, svcs)
+
 	utils.LogPrintf("[ROUTER] API routes configured")
 }
 
@@ -615,6 +640,40 @@ func setupAIAPI(r *gin.Engine) {
 	{
 		aiAPI.POST("/chat", handlers.HandleAIChat)
 	}
+}
+
+// setupAdminAPI 配置管理后台 API
+// 安全说明：
+// - 所有接口需要先通过 AuthMiddleware 认证
+// - 普通管理接口需要 AdminMiddleware（role >= 1）
+// - 敏感操作需要 SuperAdminMiddleware（role >= 2）
+func setupAdminAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+	adminAPI := r.Group("/admin/api")
+
+	// 第一层：认证中间件（必须登录）
+	adminAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
+
+	// 第二层：管理员权限中间件（必须是管理员）
+	adminAPI.Use(adminmw.AdminMiddleware(svcs.userRepo))
+
+	{
+		// 统计（管理员可访问）
+		adminAPI.GET("/stats", hdlrs.adminHandler.GetStats)
+
+		// 用户列表和详情（管理员可访问）
+		adminAPI.GET("/users", hdlrs.adminHandler.GetUsers)
+		adminAPI.GET("/users/:id", hdlrs.adminHandler.GetUser)
+
+		// 敏感操作（仅超级管理员）
+		superAdminAPI := adminAPI.Group("")
+		superAdminAPI.Use(adminmw.SuperAdminMiddleware(svcs.userRepo))
+		{
+			superAdminAPI.PUT("/users/:id/role", hdlrs.adminHandler.SetUserRole)
+			superAdminAPI.DELETE("/users/:id", hdlrs.adminHandler.DeleteUser)
+		}
+	}
+
+	utils.LogPrintf("[ROUTER] Admin API routes configured")
 }
 
 // setupWebSocketRoutes 配置 WebSocket 路由
