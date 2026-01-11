@@ -24,7 +24,8 @@ package middleware
 import (
 	"auth-system/internal/utils"
 	"errors"
-	"hash/fnv"
+	"hash/maphash"
+
 	"net/http"
 	"sync"
 	"time"
@@ -55,13 +56,8 @@ const (
 
 	// maxEntriesPerShard 每个分片最大条目数
 	// 总共最多 16 * 1000 = 16000 条目
+	// LRU 自动淘汰最久未使用的条目
 	maxEntriesPerShard = 1000
-
-	// cleanupInterval 清理间隔
-	cleanupInterval = 10 * time.Minute
-
-	// entryExpiry 条目过期时间
-	entryExpiry = 20 * time.Minute
 
 	// defaultLoginRate 默认登录限流速率（每 12 秒 1 次）
 	defaultLoginRate = 12 * time.Second
@@ -101,13 +97,11 @@ type rateLimiterShard struct {
 
 // ShardedRateLimiter 分片限流器
 // 使用分片减少锁竞争，使用 LRU 防止内存无限增长
+// LRU 自动淘汰最久未使用的条目，无需手动清理
 type ShardedRateLimiter struct {
-	shards  [shardCount]*rateLimiterShard
-	rate    rate.Limit
-	burst   int
-	stopCh  chan struct{}
-	stopped bool
-	mu      sync.RWMutex
+	shards [shardCount]*rateLimiterShard
+	rate   rate.Limit
+	burst  int
 }
 
 // emailLimiterShard 邮件限流器分片（使用 LRU）
@@ -118,12 +112,10 @@ type emailLimiterShard struct {
 
 // ShardedEmailRateLimiter 分片邮件限流器
 // 基于邮箱地址的限流，防止邮件滥发
+// LRU 自动淘汰最久未使用的条目，无需手动清理
 type ShardedEmailRateLimiter struct {
 	shards   [shardCount]*emailLimiterShard
 	interval time.Duration
-	stopCh   chan struct{}
-	stopped  bool
-	mu       sync.RWMutex
 }
 
 // ====================  构造函数 ====================
@@ -147,9 +139,8 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	}
 
 	srl := &ShardedRateLimiter{
-		rate:   r,
-		burst:  burst,
-		stopCh: make(chan struct{}),
+		rate:  r,
+		burst: burst,
 	}
 
 	// 初始化所有分片
@@ -164,9 +155,6 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 			cache: cache,
 		}
 	}
-
-	// 启动清理协程
-	go srl.cleanup()
 
 	utils.LogPrintf("[RATELIMIT] Sharded rate limiter created: rate=%v, burst=%d, shards=%d",
 		r, burst, shardCount)
@@ -189,7 +177,6 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 
 	serl := &ShardedEmailRateLimiter{
 		interval: interval,
-		stopCh:   make(chan struct{}),
 	}
 
 	// 初始化所有分片
@@ -205,9 +192,6 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 		}
 	}
 
-	// 启动清理协程
-	go serl.cleanup()
-
 	utils.LogPrintf("[RATELIMIT] Sharded email rate limiter created: interval=%v, shards=%d",
 		interval, shardCount)
 
@@ -216,8 +200,11 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 
 // ====================  ShardedRateLimiter 方法 ====================
 
+// hashSeed maphash 种子（进程级别唯一）
+var hashSeed = maphash.MakeSeed()
+
 // getShard 获取 key 对应的分片
-// 使用 FNV-1a 哈希算法分配分片
+// 使用 maphash 哈希算法分配分片（比 FNV-1a 更快）
 //
 // 参数：
 //   - key: 限流键（通常是 IP 地址）
@@ -226,13 +213,10 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 //   - *rateLimiterShard: 对应的分片
 func (srl *ShardedRateLimiter) getShard(key string) *rateLimiterShard {
 	if key == "" {
-		// 空 key 使用第一个分片
 		return srl.shards[0]
 	}
-
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(key)) // Write 不会返回错误
-	return srl.shards[h.Sum32()%shardCount]
+	h := maphash.String(hashSeed, key)
+	return srl.shards[h%shardCount]
 }
 
 // Allow 检查是否允许请求
@@ -242,15 +226,6 @@ func (srl *ShardedRateLimiter) getShard(key string) *rateLimiterShard {
 // 返回：
 //   - bool: true 表示允许，false 表示被限流
 func (srl *ShardedRateLimiter) Allow(key string) bool {
-	// 检查是否已停止
-	srl.mu.RLock()
-	if srl.stopped {
-		srl.mu.RUnlock()
-		utils.LogPrintf("[RATELIMIT] WARN: Rate limiter is stopped, allowing request")
-		return true
-	}
-	srl.mu.RUnlock()
-
 	// 空 key 默认允许（但记录警告）
 	if key == "" {
 		utils.LogPrintf("[RATELIMIT] WARN: Empty key, allowing request")
@@ -291,67 +266,6 @@ func (srl *ShardedRateLimiter) Allow(key string) bool {
 	return entry.limiter.Allow()
 }
 
-// cleanup 增量清理过期条目
-// 定期运行，清理超过 entryExpiry 未访问的条目
-func (srl *ShardedRateLimiter) cleanup() {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-srl.stopCh:
-			utils.LogPrintf("[RATELIMIT] Rate limiter cleanup stopped")
-			return
-		case <-ticker.C:
-			srl.doCleanup()
-		}
-	}
-}
-
-// doCleanup 执行清理操作
-func (srl *ShardedRateLimiter) doCleanup() {
-	now := time.Now()
-	totalCleaned := 0
-
-	for i := 0; i < shardCount; i++ {
-		shard := srl.shards[i]
-		if shard == nil || shard.cache == nil {
-			continue
-		}
-
-		shard.mu.Lock()
-
-		// 获取所有 key 并检查过期
-		keys := shard.cache.Keys()
-		for _, key := range keys {
-			if entry, ok := shard.cache.Peek(key); ok {
-				if entry != nil && now.Sub(entry.lastSeen) > entryExpiry {
-					shard.cache.Remove(key)
-					totalCleaned++
-				}
-			}
-		}
-
-		shard.mu.Unlock()
-	}
-
-	if totalCleaned > 0 {
-		utils.LogPrintf("[RATELIMIT] Cleaned %d expired entries", totalCleaned)
-	}
-}
-
-// Stop 停止限流器的清理协程
-func (srl *ShardedRateLimiter) Stop() {
-	srl.mu.Lock()
-	defer srl.mu.Unlock()
-
-	if !srl.stopped {
-		srl.stopped = true
-		close(srl.stopCh)
-		utils.LogPrintf("[RATELIMIT] Rate limiter stopped")
-	}
-}
-
 // Stats 获取限流器统计信息
 // 返回：
 //   - int: 当前总条目数
@@ -371,6 +285,8 @@ func (srl *ShardedRateLimiter) Stats() int {
 // ====================  ShardedEmailRateLimiter 方法 ====================
 
 // getShard 获取 email 对应的分片
+// 使用 maphash 哈希算法分配分片
+//
 // 参数：
 //   - email: 邮箱地址
 //
@@ -380,10 +296,8 @@ func (serl *ShardedEmailRateLimiter) getShard(email string) *emailLimiterShard {
 	if email == "" {
 		return serl.shards[0]
 	}
-
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(email))
-	return serl.shards[h.Sum32()%shardCount]
+	h := maphash.String(hashSeed, email)
+	return serl.shards[h%shardCount]
 }
 
 // Allow 检查是否允许发送邮件
@@ -393,15 +307,6 @@ func (serl *ShardedEmailRateLimiter) getShard(email string) *emailLimiterShard {
 // 返回：
 //   - bool: true 表示允许，false 表示被限流
 func (serl *ShardedEmailRateLimiter) Allow(email string) bool {
-	// 检查是否已停止
-	serl.mu.RLock()
-	if serl.stopped {
-		serl.mu.RUnlock()
-		utils.LogPrintf("[RATELIMIT] WARN: Email rate limiter is stopped, allowing request")
-		return true
-	}
-	serl.mu.RUnlock()
-
 	// 空邮箱默认不允许
 	if email == "" {
 		utils.LogPrintf("[RATELIMIT] WARN: Empty email, denying request")
@@ -460,67 +365,6 @@ func (serl *ShardedEmailRateLimiter) GetWaitTime(email string) int {
 	}
 
 	return int((serl.interval - elapsed).Seconds())
-}
-
-// cleanup 增量清理过期条目
-func (serl *ShardedEmailRateLimiter) cleanup() {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-serl.stopCh:
-			utils.LogPrintf("[RATELIMIT] Email rate limiter cleanup stopped")
-			return
-		case <-ticker.C:
-			serl.doCleanup()
-		}
-	}
-}
-
-// doCleanup 执行清理操作
-func (serl *ShardedEmailRateLimiter) doCleanup() {
-	now := time.Now()
-	expiry := serl.interval * 2
-	totalCleaned := 0
-
-	for i := 0; i < shardCount; i++ {
-		shard := serl.shards[i]
-		if shard == nil || shard.cache == nil {
-			continue
-		}
-
-		shard.mu.Lock()
-
-		// 获取所有 key 并检查过期
-		keys := shard.cache.Keys()
-		for _, key := range keys {
-			if lastTime, ok := shard.cache.Peek(key); ok {
-				if now.Sub(lastTime) > expiry {
-					shard.cache.Remove(key)
-					totalCleaned++
-				}
-			}
-		}
-
-		shard.mu.Unlock()
-	}
-
-	if totalCleaned > 0 {
-		utils.LogPrintf("[RATELIMIT] Cleaned %d expired email entries", totalCleaned)
-	}
-}
-
-// Stop 停止邮件限流器的清理协程
-func (serl *ShardedEmailRateLimiter) Stop() {
-	serl.mu.Lock()
-	defer serl.mu.Unlock()
-
-	if !serl.stopped {
-		serl.stopped = true
-		close(serl.stopCh)
-		utils.LogPrintf("[RATELIMIT] Email rate limiter stopped")
-	}
 }
 
 // Stats 获取邮件限流器统计信息

@@ -33,6 +33,7 @@ import (
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
 	"auth-system/internal/handlers"
+	"auth-system/internal/handlers/oauth"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
@@ -251,11 +252,11 @@ func initServices(cfg *config.Config) (*Services, error) {
 
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
-	authHandler    *handlers.AuthHandler
-	userHandler    *handlers.UserHandler
-	oauthHandler   *handlers.OAuthHandler
-	qrLoginHandler *handlers.QRLoginHandler
-	staticHandler  *handlers.StaticHandler
+	authHandler      *handlers.AuthHandler
+	userHandler      *handlers.UserHandler
+	microsoftHandler *oauth.MicrosoftHandler
+	qrLoginHandler   *handlers.QRLoginHandler
+	staticHandler    *handlers.StaticHandler
 }
 
 // initHandlers 初始化所有 Handlers
@@ -302,16 +303,16 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogPrintf("[HANDLERS] UserHandler initialized")
 
 	// OAuth Handler
-	hdlrs.oauthHandler, err = handlers.NewOAuthHandler(
+	hdlrs.microsoftHandler, err = oauth.NewMicrosoftHandler(
 		svcs.userRepo,
 		svcs.sessionService,
 		svcs.userCache,
 		cfg.IsProduction,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create oauth handler: %w", err)
+		return nil, fmt.Errorf("failed to create microsoft oauth handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] OAuthHandler initialized")
+	utils.LogPrintf("[HANDLERS] MicrosoftHandler initialized")
 
 	// QR Login Handler
 	hdlrs.qrLoginHandler, err = handlers.NewQRLoginHandler(
@@ -343,10 +344,8 @@ func startBackgroundTasks(hdlrs *Handlers, svcs *Services) {
 	utils.LogPrintf("[TASKS] Starting background tasks...")
 
 	// 启动 OAuth 清理任务
-	if hdlrs.oauthHandler != nil {
-		hdlrs.oauthHandler.StartCleanup()
-		utils.LogPrintf("[TASKS] OAuth cleanup task started")
-	}
+	oauth.StartCleanup()
+	utils.LogPrintf("[TASKS] OAuth cleanup task started")
 
 	// 启动 Token 清理任务
 	go runTokenCleanup(svcs.tokenService)
@@ -579,11 +578,11 @@ func setupAuthAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 		authAPI.POST("/delete-account", middleware.AuthMiddleware(svcs.sessionService), hdlrs.userHandler.DeleteAccount)
 
 		// Microsoft OAuth
-		authAPI.GET("/microsoft", hdlrs.oauthHandler.MicrosoftAuth)
-		authAPI.GET("/microsoft/callback", hdlrs.oauthHandler.MicrosoftCallback)
-		authAPI.POST("/microsoft/unlink", middleware.AuthMiddleware(svcs.sessionService), hdlrs.oauthHandler.MicrosoftUnlink)
-		authAPI.GET("/microsoft/pending-link", hdlrs.oauthHandler.GetPendingLink)
-		authAPI.POST("/microsoft/confirm-link", hdlrs.oauthHandler.ConfirmLink)
+		authAPI.GET("/microsoft", hdlrs.microsoftHandler.Auth)
+		authAPI.GET("/microsoft/callback", hdlrs.microsoftHandler.Callback)
+		authAPI.POST("/microsoft/unlink", middleware.AuthMiddleware(svcs.sessionService), hdlrs.microsoftHandler.Unlink)
+		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
+		authAPI.POST("/microsoft/confirm-link", hdlrs.microsoftHandler.ConfirmLink)
 	}
 }
 

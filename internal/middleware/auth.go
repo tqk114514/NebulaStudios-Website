@@ -15,9 +15,9 @@ package middleware
 
 import (
 	"auth-system/internal/utils"
-	"errors"
+	"errors"
+
 	"net/http"
-	"strings"
 
 	"auth-system/internal/services"
 
@@ -39,10 +39,14 @@ var (
 
 const (
 	// ContextKeyUserID Context 中存储用户 ID 的键
-	ContextKeyUserID = "userId"
+	// 使用应用前缀防止与第三方中间件冲突
+	ContextKeyUserID = "auth-system:userId"
 
 	// authHeaderPrefix Authorization Header 前缀
 	authHeaderPrefix = "Bearer "
+
+	// authHeaderPrefixLen Authorization Header 前缀长度
+	authHeaderPrefixLen = 7
 
 	// tokenCookieName Token Cookie 名称
 	tokenCookieName = "token"
@@ -70,48 +74,32 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		// 提取 Token
 		token := extractToken(c)
 		if token == "" {
-			utils.LogPrintf("[AUTH] WARN: Token not found: path=%s, ip=%s", c.Request.URL.Path, c.ClientIP())
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success":   false,
-				"errorCode": ErrAuthTokenNotFound.Error(),
-			})
-			c.Abort()
+			// Token 未找到是预期内的业务情况，使用 DEBUG 级别避免日志洪水
+			utils.LogPrintf("[AUTH] DEBUG: Token not found: ip=%s", c.ClientIP())
+			respondUnauthorized(c, ErrAuthTokenNotFound.Error())
 			return
 		}
 
 		// 验证 Token
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			utils.LogPrintf("[AUTH] WARN: Token verification failed: path=%s, ip=%s, error=%v",
-				c.Request.URL.Path, c.ClientIP(), err)
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success":   false,
-				"errorCode": err.Error(),
-			})
-			c.Abort()
+			// Token 验证失败是预期内的业务情况，使用 DEBUG 级别
+			utils.LogPrintf("[AUTH] DEBUG: Token verification failed: ip=%s, error=%v", c.ClientIP(), err)
+			respondUnauthorized(c, err.Error())
 			return
 		}
 
 		// 验证 claims 有效性
 		if claims == nil {
-			utils.LogPrintf("[AUTH] ERROR: Claims is nil after successful verification: path=%s", c.Request.URL.Path)
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success":   false,
-				"errorCode": "INVALID_CLAIMS",
-			})
-			c.Abort()
+			utils.LogPrintf("[AUTH] ERROR: Claims is nil after successful verification")
+			respondUnauthorized(c, "INVALID_CLAIMS")
 			return
 		}
 
 		// 验证用户 ID 有效性
 		if claims.UserID <= 0 {
-			utils.LogPrintf("[AUTH] WARN: Invalid user ID in claims: userID=%d, path=%s",
-				claims.UserID, c.Request.URL.Path)
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success":   false,
-				"errorCode": "INVALID_USER_ID",
-			})
-			c.Abort()
+			utils.LogPrintf("[AUTH] WARN: Invalid user ID in claims: userID=%d", claims.UserID)
+			respondUnauthorized(c, "INVALID_USER_ID")
 			return
 		}
 
@@ -234,23 +222,32 @@ func extractToken(c *gin.Context) string {
 	}
 
 	// 优先从 Authorization Header 获取
+	// 使用切片操作避免字符串分配
 	authHeader := c.GetHeader("Authorization")
-	if authHeader != "" && strings.HasPrefix(authHeader, authHeaderPrefix) {
-		token := strings.TrimPrefix(authHeader, authHeaderPrefix)
-		token = strings.TrimSpace(token)
-		if token != "" {
-			return token
-		}
+	if len(authHeader) > authHeaderPrefixLen && authHeader[:authHeaderPrefixLen] == authHeaderPrefix {
+		return authHeader[authHeaderPrefixLen:]
 	}
 
 	// 其次从 Cookie 获取
 	token, err := c.Cookie(tokenCookieName)
 	if err != nil {
-		// Cookie 不存在，返回空字符串
 		return ""
 	}
 
-	return strings.TrimSpace(token)
+	return token
+}
+
+// respondUnauthorized 返回 401 未授权响应
+//
+// 参数：
+//   - c: Gin Context
+//   - errorCode: 错误代码
+func respondUnauthorized(c *gin.Context, errorCode string) {
+	c.JSON(http.StatusUnauthorized, gin.H{
+		"success":   false,
+		"errorCode": errorCode,
+	})
+	c.Abort()
 }
 
 // errorMiddleware 返回错误的中间件

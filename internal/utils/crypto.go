@@ -72,7 +72,7 @@ const codeChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
 const (
 	argon2Time    = 1         // 迭代次数
 	argon2Memory  = 64 * 1024 // 64 MB
-	argon2Threads = 4         // 并行度
+	argon2Threads = 2         // 并行度
 	argon2KeyLen  = 32        // 输出长度
 	argon2SaltLen = 16        // Salt 长度
 )

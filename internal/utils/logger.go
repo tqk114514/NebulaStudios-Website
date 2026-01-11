@@ -41,7 +41,17 @@ var (
 	loggerOnce sync.Once
 
 	// 邮箱正则（用于检测日志中的邮箱）
+	// 匹配格式：user@example.com
 	logEmailRegex = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
+
+	// IPv4 正则（用于检测日志中的 IP 地址）
+	// 匹配格式：192.168.1.100
+	logIPv4Regex = regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b`)
+
+	// Token 正则（用于检测日志中的 JWT 或长字符串 Token）
+	// 匹配格式：eyJhbGciOiJIUzI1NiIs... 或其他 32+ 字符的 base64 字符串
+	// 通过 key=value 模式匹配，避免误伤普通文本
+	logTokenRegex = regexp.MustCompile(`(?i)(token|bearer|authorization)[=:\s]+([a-zA-Z0-9_\-\.]{32,})`)
 )
 
 // ====================  初始化 ====================
@@ -117,8 +127,18 @@ func SyncLogger() {
 // ====================  私有函数 ====================
 
 // maskSensitiveData 脱敏敏感数据
+// 按顺序处理：邮箱 -> IP -> Token
 func maskSensitiveData(message string) string {
-	return logEmailRegex.ReplaceAllStringFunc(message, maskEmail)
+	// 1. 脱敏邮箱
+	message = logEmailRegex.ReplaceAllStringFunc(message, maskEmail)
+
+	// 2. 脱敏 IPv4 地址
+	message = logIPv4Regex.ReplaceAllStringFunc(message, maskIPv4)
+
+	// 3. 脱敏 Token（使用分组替换）
+	message = logTokenRegex.ReplaceAllStringFunc(message, maskToken)
+
+	return message
 }
 
 // maskEmail 对邮箱地址进行脱敏处理
@@ -155,4 +175,54 @@ func maskEmail(email string) string {
 	}
 
 	return maskedLocal + "@***"
+}
+
+// maskIPv4 对 IPv4 地址进行脱敏处理
+// 将 192.168.1.100 转换为 192.168.***.***
+// 保留前两段用于定位网段，隐藏后两段保护具体主机
+func maskIPv4(ip string) string {
+	if ip == "" {
+		return ""
+	}
+
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return "***.***.***"
+	}
+
+	// 保留前两段，隐藏后两段
+	return parts[0] + "." + parts[1] + ".***.***"
+}
+
+// maskToken 对 Token 进行脱敏处理
+// 将 token=eyJhbGciOiJIUzI1NiIs... 转换为 token=eyJh***[MASKED]
+// 保留前 4 个字符用于识别 Token 类型，隐藏其余部分
+func maskToken(match string) string {
+	if match == "" {
+		return ""
+	}
+
+	// 找到分隔符位置（= 或 : 或空格）
+	separatorIdx := -1
+	for i, c := range match {
+		if c == '=' || c == ':' || c == ' ' {
+			separatorIdx = i
+			break
+		}
+	}
+
+	if separatorIdx == -1 {
+		return match
+	}
+
+	// 提取 key 和 value
+	key := match[:separatorIdx+1]
+	value := strings.TrimSpace(match[separatorIdx+1:])
+
+	if len(value) <= 8 {
+		return key + "***[MASKED]"
+	}
+
+	// 保留前 4 个字符
+	return key + value[:4] + "***[MASKED]"
 }
