@@ -2,7 +2,7 @@
  * 国际化翻译模块
  *
  * 功能：
- * - 多语言支持（8种语言）
+ * - 多语言支持（5种语言：简繁英日韩）
  * - 所有翻译内嵌（构建时合并）
  * - 页面元素自动翻译（data-i18n 属性）
  * - 语言偏好持久化（Cookie）
@@ -31,20 +31,17 @@ declare const __ALL_TRANSLATIONS__: TranslationsMap | undefined;
 /** 翻译数据（构建时注入 __ALL_TRANSLATIONS__，开发时动态加载） */
 const translations: TranslationsMap = typeof __ALL_TRANSLATIONS__ !== 'undefined' ? __ALL_TRANSLATIONS__ : {};
 
-/** 支持的语言列表 */
+/** 支持的语言列表（简繁英日韩） */
 const supportedLanguages: LanguageInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
   { code: 'zh-TW', label: '繁體中文' },
   { code: 'en', label: 'English' },
   { code: 'ja', label: '日本語' },
-  { code: 'ko', label: '한국어' },
-  { code: 'es', label: 'Espanol' },
-  { code: 'fr', label: 'Francais' },
-  { code: 'de', label: 'Deutsch' }
+  { code: 'ko', label: '한국어' }
 ];
 
 /** 有效语言代码列表 */
-const validLanguages = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'es', 'fr', 'de'] as const;
+const validLanguages = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'] as const;
 type ValidLanguage = typeof validLanguages[number];
 
 /** 当前语言 */
@@ -101,16 +98,11 @@ function getCookie(name: string): string | null {
       lang = 'ja';
     } else if (browserLang.startsWith('ko')) {
       lang = 'ko';
-    } else if (browserLang.startsWith('es')) {
-      lang = 'es';
-    } else if (browserLang.startsWith('fr')) {
-      lang = 'fr';
-    } else if (browserLang.startsWith('de')) {
-      lang = 'de';
     } else if (browserLang.startsWith('en')) {
       lang = 'en';
     } else {
-      lang = 'zh-CN';
+      // 其他语言默认使用英语
+      lang = 'en';
     }
   }
 

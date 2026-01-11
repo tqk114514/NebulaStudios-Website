@@ -55,17 +55,25 @@ const (
 
 	// maxUpdateFields 最大更新字段数
 	maxUpdateFields = 10
+
+	// RoleUser 普通用户（无后台权限）
+	RoleUser = 0
+	// RoleAdmin 普通管理员（日常管理权限）
+	RoleAdmin = 1
+	// RoleSuperAdmin 超级管理员（全部权限）
+	RoleSuperAdmin = 2
 )
 
 // allowedUpdateFields 允许更新的字段白名单
 var allowedUpdateFields = map[string]bool{
-	"username":            true,
-	"email":               true,
-	"password":            true,
-	"avatar_url":          true,
-	"microsoft_id":        true,
-	"microsoft_name":      true,
+	"username":             true,
+	"email":                true,
+	"password":             true,
+	"avatar_url":           true,
+	"microsoft_id":         true,
+	"microsoft_name":       true,
 	"microsoft_avatar_url": true,
+	"role":                 true,
 }
 
 // ====================  数据结构 ====================
@@ -77,6 +85,7 @@ type User struct {
 	Email              string         `json:"email"`
 	Password           string         `json:"-"` // 不序列化到 JSON
 	AvatarURL          string         `json:"avatar_url"`
+	Role               int            `json:"role"` // 0: user, 1: admin, 2: super_admin
 	MicrosoftID        sql.NullString `json:"microsoft_id,omitempty"`
 	MicrosoftName      sql.NullString `json:"microsoft_name,omitempty"`
 	MicrosoftAvatarURL sql.NullString `json:"microsoft_avatar_url,omitempty"`
@@ -86,13 +95,15 @@ type User struct {
 
 // UserPublic 公开的用户信息（不含敏感数据）
 type UserPublic struct {
-	ID                 int64   `json:"id"`
-	Username           string  `json:"username"`
-	Email              string  `json:"email"`
-	AvatarURL          string  `json:"avatar_url"`
-	MicrosoftID        *string `json:"microsoft_id,omitempty"`
-	MicrosoftName      *string `json:"microsoft_name,omitempty"`
-	MicrosoftAvatarURL *string `json:"microsoft_avatar_url,omitempty"`
+	ID                 int64     `json:"id"`
+	Username           string    `json:"username"`
+	Email              string    `json:"email"`
+	AvatarURL          string    `json:"avatar_url"`
+	Role               int       `json:"role"`
+	MicrosoftID        *string   `json:"microsoft_id,omitempty"`
+	MicrosoftName      *string   `json:"microsoft_name,omitempty"`
+	MicrosoftAvatarURL *string   `json:"microsoft_avatar_url,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 // UserRepository 用户仓库
@@ -113,6 +124,8 @@ func (u *User) ToPublic() *UserPublic {
 		Username:  u.Username,
 		Email:     u.Email,
 		AvatarURL: u.AvatarURL,
+		Role:      u.Role,
+		CreatedAt: u.CreatedAt,
 	}
 
 	if u.MicrosoftID.Valid {
@@ -126,6 +139,20 @@ func (u *User) ToPublic() *UserPublic {
 	}
 
 	return pub
+}
+
+// IsAdmin 检查是否为管理员（包括超级管理员）
+// 返回：
+//   - bool: 是否为管理员
+func (u *User) IsAdmin() bool {
+	return u != nil && u.Role >= RoleAdmin
+}
+
+// IsSuperAdmin 检查是否为超级管理员
+// 返回：
+//   - bool: 是否为超级管理员
+func (u *User) IsSuperAdmin() bool {
+	return u != nil && u.Role >= RoleSuperAdmin
 }
 
 // Validate 验证用户数据
@@ -179,12 +206,12 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, 
+		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url,
 		       created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL,
+		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -219,13 +246,13 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url,
+		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url,
 		       created_at, updated_at
 		FROM users WHERE email = $1 OR username = $1
 		LIMIT 1
 	`, identifier).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL,
+		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -258,12 +285,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url,
+		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url,
 		       created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL,
+		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -296,12 +323,12 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url,
+		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url,
 		       created_at, updated_at
 		FROM users WHERE username = $1
 	`, username).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL,
+		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -334,12 +361,12 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url,
+		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url,
 		       created_at, updated_at
 		FROM users WHERE microsoft_id = $1
 	`, msID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL,
+		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -381,12 +408,17 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		user.AvatarURL = DefaultAvatar
 	}
 
+	// 设置默认角色（普通用户）
+	if user.Role == 0 {
+		user.Role = RoleUser
+	}
+
 	// 执行插入
 	err := pool.QueryRow(ctx, `
-		INSERT INTO users (username, email, password, avatar_url, microsoft_id)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (username, email, password, avatar_url, microsoft_id, role)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
-	`, user.Username, user.Email, user.Password, user.AvatarURL, user.MicrosoftID).Scan(
+	`, user.Username, user.Email, user.Password, user.AvatarURL, user.MicrosoftID, user.Role).Scan(
 		&user.ID, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -576,4 +608,160 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 	args = append(args, id)
 
 	return query, args, nil
+}
+
+// ====================  管理后台方法 ====================
+
+// UserStats 用户统计数据
+type UserStats struct {
+	TotalUsers      int64 `json:"totalUsers"`
+	TodayNewUsers   int64 `json:"todayNewUsers"`
+	AdminCount      int64 `json:"adminCount"`
+	MicrosoftLinked int64 `json:"microsoftLinked"`
+}
+
+// FindAll 查询用户列表（分页、搜索）
+// 参数：
+//   - ctx: 上下文
+//   - page: 页码（从 1 开始）
+//   - pageSize: 每页数量
+//   - search: 搜索关键词（匹配用户名或邮箱）
+//
+// 返回：
+//   - []*User: 用户列表
+//   - int64: 总数
+//   - error: 错误信息
+func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error) {
+	// 检查数据库连接
+	if err := r.checkDB(); err != nil {
+		return nil, 0, err
+	}
+
+	// 计算偏移量
+	offset := (page - 1) * pageSize
+
+	var total int64
+	var rows interface{ Close() }
+	var err error
+
+	if search == "" {
+		// 无搜索条件
+		err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total)
+		if err != nil {
+			utils.LogPrintf("[USER] ERROR: Failed to count users: error=%v", err)
+			return nil, 0, fmt.Errorf("count users failed: %w", err)
+		}
+
+		rows, err = pool.Query(ctx, `
+			SELECT id, username, email, password, avatar_url, role,
+			       microsoft_id, microsoft_name, microsoft_avatar_url,
+			       created_at, updated_at
+			FROM users
+			ORDER BY id DESC
+			LIMIT $1 OFFSET $2
+		`, pageSize, offset)
+	} else {
+		// 有搜索条件
+		searchPattern := "%" + search + "%"
+		err = pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM users 
+			WHERE username ILIKE $1 OR email ILIKE $1
+		`, searchPattern).Scan(&total)
+		if err != nil {
+			utils.LogPrintf("[USER] ERROR: Failed to count users with search: error=%v", err)
+			return nil, 0, fmt.Errorf("count users failed: %w", err)
+		}
+
+		rows, err = pool.Query(ctx, `
+			SELECT id, username, email, password, avatar_url, role,
+			       microsoft_id, microsoft_name, microsoft_avatar_url,
+			       created_at, updated_at
+			FROM users
+			WHERE username ILIKE $1 OR email ILIKE $1
+			ORDER BY id DESC
+			LIMIT $2 OFFSET $3
+		`, searchPattern, pageSize, offset)
+	}
+
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to query users: error=%v", err)
+		return nil, 0, fmt.Errorf("query users failed: %w", err)
+	}
+	defer rows.Close()
+
+	// 扫描结果
+	users := make([]*User, 0)
+	pgxRows := rows.(interface {
+		Next() bool
+		Scan(dest ...interface{}) error
+	})
+
+	for pgxRows.Next() {
+		user := &User{}
+		err := pgxRows.Scan(
+			&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+			&user.CreatedAt, &user.UpdatedAt,
+		)
+		if err != nil {
+			utils.LogPrintf("[USER] ERROR: Failed to scan user: error=%v", err)
+			continue
+		}
+		users = append(users, user)
+	}
+
+	return users, total, nil
+}
+
+// GetStats 获取用户统计数据
+// 参数：
+//   - ctx: 上下文
+//
+// 返回：
+//   - *UserStats: 统计数据
+//   - error: 错误信息
+func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
+	// 检查数据库连接
+	if err := r.checkDB(); err != nil {
+		return nil, err
+	}
+
+	stats := &UserStats{}
+
+	// 总用户数
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to count total users: error=%v", err)
+		return nil, fmt.Errorf("count total users failed: %w", err)
+	}
+
+	// 今日新增用户
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users 
+		WHERE created_at >= CURRENT_DATE
+	`).Scan(&stats.TodayNewUsers)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to count today users: error=%v", err)
+		return nil, fmt.Errorf("count today users failed: %w", err)
+	}
+
+	// 管理员数量
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users WHERE role >= $1
+	`, RoleAdmin).Scan(&stats.AdminCount)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to count admins: error=%v", err)
+		return nil, fmt.Errorf("count admins failed: %w", err)
+	}
+
+	// 微软账户绑定数
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users WHERE microsoft_id IS NOT NULL
+	`).Scan(&stats.MicrosoftLinked)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to count microsoft linked: error=%v", err)
+		return nil, fmt.Errorf("count microsoft linked failed: %w", err)
+	}
+
+	return stats, nil
 }

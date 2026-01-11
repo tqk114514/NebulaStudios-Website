@@ -16,7 +16,8 @@ package middleware
 
 import (
 	"auth-system/internal/utils"
-	"errors"
+	"errors"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,7 @@ var contentTypeMap = map[string]string{
 //   - /account/data/* - Account 模块数据
 //   - /policy/assets/* - Policy 模块资源
 //   - /policy/data/* - Policy 模块数据
+//   - /admin/assets/* - Admin 模块资源
 func PreCompressedStatic(basePath string) gin.HandlerFunc {
 	// 参数验证
 	if basePath == "" {
@@ -280,6 +282,11 @@ func resolveBrotliPath(basePath, reqPath string) (string, error) {
 		// 处理 /policy/data/ 路径（i18n-policy.json）
 		relPath := strings.TrimPrefix(reqPath, "/policy/data")
 		brPath = filepath.Join(basePath, "policy/data", relPath+brotliExtension)
+
+	case strings.HasPrefix(reqPath, "/admin/assets/"):
+		// 处理 /admin/assets/ 路径（js, css）
+		relPath := strings.TrimPrefix(reqPath, "/admin/assets")
+		brPath = filepath.Join(basePath, "admin/assets", relPath+brotliExtension)
 
 	default:
 		return "", errors.New("unsupported path prefix")
