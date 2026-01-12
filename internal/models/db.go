@@ -283,6 +283,11 @@ func initTables(ctx context.Context) error {
 		return fmt.Errorf("create admin_logs table: %w", err)
 	}
 
+	// 创建 user_logs 表
+	if err := createUserLogsTable(ctx); err != nil {
+		return fmt.Errorf("create user_logs table: %w", err)
+	}
+
 	// 创建索引
 	if err := createIndexes(ctx); err != nil {
 		// 索引创建失败不是致命错误，只记录警告
@@ -305,8 +310,8 @@ func createUsersTable(ctx context.Context) error {
 			microsoft_id VARCHAR(255) UNIQUE,
 			microsoft_name VARCHAR(255),
 			microsoft_avatar_url TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -392,7 +397,7 @@ func createAdminLogsTable(ctx context.Context) error {
 			action VARCHAR(50) NOT NULL,
 			target_id BIGINT,
 			details JSONB,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			created_at TIMESTAMPTZ DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -400,6 +405,25 @@ func createAdminLogsTable(ctx context.Context) error {
 		return err
 	}
 	utils.LogPrintf("[DATABASE] Admin logs table ready")
+	return nil
+}
+
+// createUserLogsTable 创建 user_logs 表
+func createUserLogsTable(ctx context.Context) error {
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS user_logs (
+			id SERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			action VARCHAR(50) NOT NULL,
+			details JSONB,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create user_logs table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] User logs table ready")
 	return nil
 }
 
@@ -419,6 +443,8 @@ func createIndexes(ctx context.Context) error {
 		{"idx_qr_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_qr_tokens_expire ON qr_login_tokens(expire_time)"},
 		{"idx_admin_logs_admin_id", "CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id)"},
 		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
+		{"idx_user_logs_user_id", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_id ON user_logs(user_id)"},
+		{"idx_user_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at DESC)"},
 	}
 
 	var lastErr error

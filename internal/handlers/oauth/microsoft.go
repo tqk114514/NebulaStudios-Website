@@ -53,15 +53,16 @@ const (
 // MicrosoftHandler Microsoft OAuth Handler
 // 处理 Microsoft OAuth 相关的 HTTP 请求
 type MicrosoftHandler struct {
-	userRepo       *models.UserRepository   // 用户数据仓库
-	sessionService *services.SessionService // Session 服务
-	userCache      *cache.UserCache         // 用户缓存
-	r2Service      *services.R2Service      // R2 存储服务
-	clientID       string                   // Microsoft 应用 ID
-	clientSecret   string                   // Microsoft 应用密钥
-	redirectURI    string                   // OAuth 回调地址
-	baseURL        string                   // 基础 URL
-	isProduction   bool                     // 是否为生产环境
+	userRepo       *models.UserRepository    // 用户数据仓库
+	userLogRepo    *models.UserLogRepository // 用户日志仓库
+	sessionService *services.SessionService  // Session 服务
+	userCache      *cache.UserCache          // 用户缓存
+	r2Service      *services.R2Service       // R2 存储服务
+	clientID       string                    // Microsoft 应用 ID
+	clientSecret   string                    // Microsoft 应用密钥
+	redirectURI    string                    // OAuth 回调地址
+	baseURL        string                    // 基础 URL
+	isProduction   bool                      // 是否为生产环境
 }
 
 // ====================  构造函数 ====================
@@ -70,6 +71,7 @@ type MicrosoftHandler struct {
 //
 // 参数：
 //   - userRepo: 用户数据仓库（必需）
+//   - userLogRepo: 用户日志仓库（可选）
 //   - sessionService: Session 服务（必需）
 //   - userCache: 用户缓存（必需）
 //   - r2Service: R2 存储服务（可选）
@@ -80,6 +82,7 @@ type MicrosoftHandler struct {
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewMicrosoftHandler(
 	userRepo *models.UserRepository,
+	userLogRepo *models.UserLogRepository,
 	sessionService *services.SessionService,
 	userCache *cache.UserCache,
 	r2Service *services.R2Service,
@@ -123,6 +126,7 @@ func NewMicrosoftHandler(
 
 	return &MicrosoftHandler{
 		userRepo:       userRepo,
+		userLogRepo:    userLogRepo,
 		sessionService: sessionService,
 		userCache:      userCache,
 		r2Service:      r2Service,
@@ -385,6 +389,13 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 		return
 	}
 
+	// 记录绑定日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogLinkMicrosoft(ctx, currentUserID, microsoftID, displayName); err != nil {
+			utils.LogPrintf("[OAUTH-MS] WARN: Failed to log link microsoft: userID=%d, error=%v", currentUserID, err)
+		}
+	}
+
 	// 使缓存失效
 	h.userCache.Invalidate(currentUserID)
 
@@ -551,6 +562,13 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 		return
 	}
 
+	// 保存解绑前的信息（用于日志）
+	oldMicrosoftID := user.MicrosoftID.String
+	oldMicrosoftName := ""
+	if user.MicrosoftName.Valid {
+		oldMicrosoftName = user.MicrosoftName.String
+	}
+
 	// 执行解绑
 	err = h.userRepo.Update(ctx, userID, map[string]interface{}{
 		"microsoft_id":         nil,
@@ -561,6 +579,13 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to unlink Microsoft account: userID=%d, error=%v", userID, err)
 		RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
 		return
+	}
+
+	// 记录解绑日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogUnlinkMicrosoft(ctx, userID, oldMicrosoftID, oldMicrosoftName); err != nil {
+			utils.LogPrintf("[OAUTH-MS] WARN: Failed to log unlink microsoft: userID=%d, error=%v", userID, err)
+		}
 	}
 
 	// 使缓存失效
@@ -744,6 +769,13 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to link Microsoft account in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
 		RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
 		return
+	}
+
+	// 记录绑定日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogLinkMicrosoft(ctx, pendingData.UserID, pendingData.ProviderID, pendingData.DisplayName); err != nil {
+			utils.LogPrintf("[OAUTH-MS] WARN: Failed to log link microsoft in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
+		}
 	}
 
 	// 使缓存失效
