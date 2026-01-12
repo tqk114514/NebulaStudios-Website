@@ -66,31 +66,33 @@ const (
 
 // allowedUpdateFields 允许更新的字段白名单
 var allowedUpdateFields = map[string]bool{
-	"username":             true,
-	"email":                true,
-	"password":             true,
-	"avatar_url":           true,
-	"microsoft_id":         true,
-	"microsoft_name":       true,
-	"microsoft_avatar_url": true,
-	"role":                 true,
+	"username":              true,
+	"email":                 true,
+	"password":              true,
+	"avatar_url":            true,
+	"microsoft_id":          true,
+	"microsoft_name":        true,
+	"microsoft_avatar_url":  true,
+	"microsoft_avatar_hash": true,
+	"role":                  true,
 }
 
 // ====================  数据结构 ====================
 
 // User 用户模型
 type User struct {
-	ID                 int64          `json:"id"`
-	Username           string         `json:"username"`
-	Email              string         `json:"email"`
-	Password           string         `json:"-"` // 不序列化到 JSON
-	AvatarURL          string         `json:"avatar_url"`
-	Role               int            `json:"role"` // 0: user, 1: admin, 2: super_admin
-	MicrosoftID        sql.NullString `json:"microsoft_id,omitempty"`
-	MicrosoftName      sql.NullString `json:"microsoft_name,omitempty"`
-	MicrosoftAvatarURL sql.NullString `json:"microsoft_avatar_url,omitempty"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
+	ID                  int64          `json:"id"`
+	Username            string         `json:"username"`
+	Email               string         `json:"email"`
+	Password            string         `json:"-"` // 不序列化到 JSON
+	AvatarURL           string         `json:"avatar_url"`
+	Role                int            `json:"role"` // 0: user, 1: admin, 2: super_admin
+	MicrosoftID         sql.NullString `json:"microsoft_id,omitempty"`
+	MicrosoftName       sql.NullString `json:"microsoft_name,omitempty"`
+	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url,omitempty"`
+	MicrosoftAvatarHash sql.NullString `json:"-"` // 头像哈希，用于判断是否需要更新
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
 }
 
 // UserPublic 公开的用户信息（不含敏感数据）
@@ -119,11 +121,17 @@ func (u *User) ToPublic() *UserPublic {
 		return nil
 	}
 
+	// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
+	avatarURL := u.AvatarURL
+	if avatarURL == "microsoft" && u.MicrosoftAvatarURL.Valid {
+		avatarURL = u.MicrosoftAvatarURL.String
+	}
+
 	pub := &UserPublic{
 		ID:        u.ID,
 		Username:  u.Username,
 		Email:     u.Email,
-		AvatarURL: u.AvatarURL,
+		AvatarURL: avatarURL,
 		Role:      u.Role,
 		CreatedAt: u.CreatedAt,
 	}
@@ -207,12 +215,12 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -247,13 +255,13 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 	user := &User{}
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       created_at, updated_at
 		FROM users WHERE email = $1 OR username = $1
 		LIMIT 1
 	`, identifier).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -286,12 +294,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -324,12 +332,12 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	user := &User{}
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       created_at, updated_at
 		FROM users WHERE username = $1
 	`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -362,12 +370,12 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 	user := &User{}
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       created_at, updated_at
 		FROM users WHERE microsoft_id = $1
 	`, msID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -654,7 +662,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 
 		rows, err = pool.Query(ctx, `
 			SELECT id, username, email, password, avatar_url, role,
-			       microsoft_id, microsoft_name, microsoft_avatar_url,
+			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       created_at, updated_at
 			FROM users
 			ORDER BY id DESC
@@ -674,7 +682,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 
 		rows, err = pool.Query(ctx, `
 			SELECT id, username, email, password, avatar_url, role,
-			       microsoft_id, microsoft_name, microsoft_avatar_url,
+			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       created_at, updated_at
 			FROM users
 			WHERE username ILIKE $1 OR email ILIKE $1
@@ -700,7 +708,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		user := &User{}
 		err := pgxRows.Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL,
+			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
