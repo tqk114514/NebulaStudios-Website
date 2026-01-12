@@ -38,6 +38,26 @@ export interface UserListResponse {
   totalPages: number;
 }
 
+/** 操作日志 */
+export interface AdminLog {
+  id: number;
+  admin_id: number;
+  admin_username: string;
+  action: string;
+  target_id?: number;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
+/** 日志列表响应 */
+export interface LogListResponse {
+  logs: AdminLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 /** API 成功响应 */
 export interface ApiSuccessResponse<T> {
   success: true;
@@ -71,6 +91,11 @@ export const ROLE_CLASSES: Record<number, string> = {
   0: 'user',
   1: 'admin',
   2: 'super-admin'
+};
+
+export const ACTION_NAMES: Record<string, string> = {
+  'set_role': '修改角色',
+  'delete_user': '删除用户'
 };
 
 // ==================== DOM 元素 ====================
