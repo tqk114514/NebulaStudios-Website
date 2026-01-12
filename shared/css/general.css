@@ -390,3 +390,48 @@ body::-webkit-scrollbar {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* --- 文本链接（内嵌在文本中的跳转链接） --- */
+.text-link {
+  color: var(--primary);
+  text-decoration: none;
+  position: relative;
+  transition: 
+    opacity 0.2s ease,
+    text-shadow 0.2s ease;
+}
+
+.text-link::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--primary);
+  transition: width 0.25s ease;
+}
+
+.text-link:hover {
+  opacity: 0.9;
+  text-shadow: 0 0 8px rgb(var(--primary-rgb), 0.3);
+}
+
+.text-link:hover::after {
+  width: 100%;
+}
+
+
+/* --- 政策链接 --- */
+.policy-links {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.policy-links span {
+  margin: 0 8px;
+  color: var(--text-disabled);
+}
