@@ -19,6 +19,7 @@ export interface UserPublic {
   role: number;
   microsoft_id?: string;
   microsoft_name?: string;
+  microsoft_avatar_url?: string;
   created_at?: string;
 }
 
