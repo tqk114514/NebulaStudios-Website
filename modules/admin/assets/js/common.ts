@@ -123,9 +123,13 @@ export async function fetchApi<T>(url: string, options?: RequestInit): Promise<A
       }
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       window.location.href = '/account/login';
       return { success: false, errorCode: 'UNAUTHORIZED' };
+    }
+
+    if (response.status === 403) {
+      return { success: false, errorCode: 'FORBIDDEN' };
     }
 
     const data = await response.json();

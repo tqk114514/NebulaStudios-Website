@@ -74,10 +74,8 @@ async function init(): Promise<void> {
 
   setCurrentUserRole(user.role);
 
-  // 超级管理员显示日志导航
-  if (user.role >= 2) {
-    navLogs.classList.remove('is-hidden');
-  }
+  // 显示日志导航（所有管理员可见）
+  navLogs.classList.remove('is-hidden');
 
   // 显示头像
   currentAvatarEl.innerHTML = '';
