@@ -31,7 +31,10 @@
 }
 
 .sidebar-header {
-  padding: 20px;
+  height: var(--topbar-height);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
   border-bottom: 1px solid var(--border);
 }
 
@@ -276,5 +279,12 @@
   .data-table th,
   .data-table td {
     padding: 10px 12px;
+  }
+
+  /* 取消移动端按钮点击高亮 */
+  button,
+  .nav-item,
+  .btn {
+    -webkit-tap-highlight-color: transparent;
   }
 }
