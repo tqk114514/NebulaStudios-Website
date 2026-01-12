@@ -93,6 +93,8 @@ async function init(): Promise<void> {
       if (page) {
         window.location.hash = page;
         navigateTo(page);
+        // 移动端点击导航后关闭侧边栏
+        sidebar.classList.remove('is-open');
       }
     });
   });
@@ -100,6 +102,11 @@ async function init(): Promise<void> {
   // 绑定侧边栏切换
   sidebarToggle.addEventListener('click', () => {
     sidebar.classList.toggle('is-open');
+  });
+
+  // 点击主内容区关闭侧边栏（移动端）
+  document.querySelector('.main-content')?.addEventListener('click', () => {
+    sidebar.classList.remove('is-open');
   });
 
   // 初始化用户管理页面
