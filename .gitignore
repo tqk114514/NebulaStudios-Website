@@ -25,6 +25,9 @@ Thumbs.db
 # 日志
 *.log
 
+# Rust 编译产物
+img-processor/target/
+
 index.js
 .htmlhintrc
 eslint.config.mjs
