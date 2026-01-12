@@ -18,6 +18,7 @@ import {
 } from './common';
 import { loadStats } from './stats';
 import { loadUsers, setCurrentUserRole, initUsersPage } from './users';
+import { loadLogs } from './logs';
 
 // ==================== DOM 元素 ====================
 
@@ -28,6 +29,7 @@ const navItems = document.querySelectorAll('.nav-item[data-page]') as NodeListOf
 const pageTitle = document.getElementById('page-title') as HTMLElement;
 const currentAvatarEl = document.getElementById('current-avatar') as HTMLElement;
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
+const navLogs = document.getElementById('nav-logs') as HTMLAnchorElement;
 
 // ==================== 页面路由 ====================
 
@@ -45,7 +47,8 @@ function navigateTo(page: string): void {
   // 更新标题
   const titles: Record<string, string> = {
     dashboard: '仪表盘',
-    users: '用户管理'
+    users: '用户管理',
+    logs: '操作日志'
   };
   pageTitle.textContent = titles[page] || page;
 
@@ -54,6 +57,8 @@ function navigateTo(page: string): void {
     loadStats();
   } else if (page === 'users') {
     loadUsers();
+  } else if (page === 'logs') {
+    loadLogs();
   }
 }
 
@@ -68,6 +73,11 @@ async function init(): Promise<void> {
   }
 
   setCurrentUserRole(user.role);
+
+  // 超级管理员显示日志导航
+  if (user.role >= 2) {
+    navLogs.classList.remove('is-hidden');
+  }
 
   // 显示头像
   currentAvatarEl.innerHTML = '';

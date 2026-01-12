@@ -352,7 +352,8 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogPrintf("[HANDLERS] StaticHandler initialized")
 
 	// Admin Handler
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache)
+	adminLogRepo := models.NewAdminLogRepository()
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}
@@ -690,6 +691,7 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		{
 			superAdminAPI.PUT("/users/:id/role", hdlrs.adminHandler.SetUserRole)
 			superAdminAPI.DELETE("/users/:id", hdlrs.adminHandler.DeleteUser)
+			superAdminAPI.GET("/logs", hdlrs.adminHandler.GetLogs)
 		}
 	}
 

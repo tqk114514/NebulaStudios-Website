@@ -30,6 +30,12 @@
         </svg>
         <span>用户管理</span>
       </a>
+      <a href="#logs" class="nav-item is-hidden" data-page="logs" id="nav-logs">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+        </svg>
+        <span>操作日志</span>
+      </a>
     </nav>
     <div class="sidebar-footer">
       <a href="/account/dashboard" class="nav-item">
@@ -113,6 +119,29 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- 操作日志页面 -->
+      <section id="page-logs" class="page">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>管理员</th>
+                <th>操作</th>
+                <th>详情</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body">
+              <tr>
+                <td colspan="5" class="loading-cell">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="logs-pagination"></div>
       </section>
 
       <!-- 用户管理页面 -->
