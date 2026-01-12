@@ -54,12 +54,13 @@ var (
 
 // UserHandler 用户管理 Handler
 type UserHandler struct {
-	userRepo         *models.UserRepository
+	userRepo       *models.UserRepository
 	tokenService   *services.TokenService
 	emailService   *services.EmailService
 	captchaService *services.CaptchaService
 	userCache      *cache.UserCache
-	baseURL          string
+	r2Service      *services.R2Service
+	baseURL        string
 }
 
 // updateUsernameRequest 更新用户名请求
@@ -96,6 +97,7 @@ type deleteAccountRequest struct {
 //   - emailService: 邮件服务
 //   - captchaService: 验证码服务
 //   - userCache: 用户缓存
+//   - r2Service: R2 存储服务（可选）
 //   - baseURL: 基础 URL
 //
 // 返回：
@@ -107,6 +109,7 @@ func NewUserHandler(
 	emailService *services.EmailService,
 	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
+	r2Service *services.R2Service,
 	baseURL string,
 ) (*UserHandler, error) {
 	// 参数验证
@@ -132,12 +135,13 @@ func NewUserHandler(
 	utils.LogPrintf("[USER] Handler initialized successfully")
 
 	return &UserHandler{
-		userRepo:         userRepo,
+		userRepo:       userRepo,
 		tokenService:   tokenService,
 		emailService:   emailService,
 		captchaService: captchaService,
 		userCache:      userCache,
-		baseURL:          baseURL,
+		r2Service:      r2Service,
+		baseURL:        baseURL,
 	}, nil
 }
 
@@ -317,15 +321,15 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 		language = "zh-CN"
 	}
 
-	// 发送邮件
-	if err := h.emailService.SendVerificationEmail(user.Email, "delete_account", language, verifyURL); err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to send delete code email: userID=%d, email=%s, error=%v",
-			userID, user.Email, err)
-		h.respondError(c, http.StatusInternalServerError, "SEND_FAILED")
-		return
-	}
+	// 异步发送邮件（不阻塞用户请求）
+	go func(email, emailType, lang, url string, uid int64) {
+		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
+			utils.LogPrintf("[USER] ERROR: Async delete code email failed: userID=%d, email=%s, error=%v", uid, email, err)
+		}
+	}(user.Email, "delete_account", language, verifyURL, userID)
 
-	utils.LogPrintf("[USER] Delete code sent: userID=%d, email=%s", userID, user.Email)
+	utils.LogPrintf("[USER] Delete code sent (async): userID=%d, email=%s", userID, user.Email)
+	h.respondSuccess(c, nil)
 	h.respondSuccess(c, nil)
 }
 
@@ -398,6 +402,13 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 		utils.LogPrintf("[USER] ERROR: Failed to delete user: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusInternalServerError, "DELETE_FAILED")
 		return
+	}
+
+	// 清理 R2 头像（非关键操作，失败不影响主流程）
+	if h.r2Service != nil && h.r2Service.IsConfigured() {
+		if err := h.r2Service.DeleteAvatar(ctx, userID); err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to delete R2 avatar: userID=%d, error=%v", userID, err)
+		}
 	}
 
 	// 使缓存失效
