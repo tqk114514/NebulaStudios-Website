@@ -26,7 +26,7 @@ const sidebar = document.getElementById('sidebar') as HTMLElement;
 const sidebarToggle = document.getElementById('sidebar-toggle') as HTMLButtonElement;
 const navItems = document.querySelectorAll('.nav-item[data-page]') as NodeListOf<HTMLAnchorElement>;
 const pageTitle = document.getElementById('page-title') as HTMLElement;
-const currentUserEl = document.getElementById('current-user') as HTMLElement;
+const currentAvatarEl = document.getElementById('current-avatar') as HTMLElement;
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
 
 // ==================== 页面路由 ====================
@@ -68,7 +68,15 @@ async function init(): Promise<void> {
   }
 
   setCurrentUserRole(user.role);
-  currentUserEl.textContent = user.username;
+
+  // 显示头像
+  currentAvatarEl.innerHTML = '';
+  // 如果是 "microsoft"，用实际的微软头像 URL
+  const avatarUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
+  const img = document.createElement('img');
+  img.src = avatarUrl || 'https://cdn01.nebulastudios.top/images/default-avatar.svg';
+  img.alt = user.username;
+  currentAvatarEl.appendChild(img);
 
   // 隐藏加载器
   pageLoader.classList.add('is-hidden');
