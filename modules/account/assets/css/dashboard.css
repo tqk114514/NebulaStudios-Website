@@ -550,3 +550,175 @@ html:has(.dashboard-main.is-overflow) {
   font-size: 12px;
   margin: 0;
 }
+
+
+/* ==================== 操作日志弹窗样式 ==================== */
+
+.modal-container-wide {
+  max-width: 600px;
+}
+
+.user-logs-modal-content {
+  max-height: 80vh;
+}
+
+.user-logs-modal-content .modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.user-logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  animation: fade-in 0.3s ease;
+}
+
+.user-log-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb), 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.user-log-icon svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+
+.user-log-icon.danger {
+  background: rgb(var(--danger-rgb), 0.1);
+}
+
+.user-log-icon.danger svg {
+  color: var(--danger);
+}
+
+.user-log-icon.success {
+  background: rgb(var(--success-rgb), 0.1);
+}
+
+.user-log-icon.success svg {
+  color: var(--success);
+}
+
+.user-log-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-log-action {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.user-log-details {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-log-time {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: auto;
+  position: relative;
+  min-width: 80px;
+  text-align: right;
+}
+
+.user-log-time-relative,
+.user-log-time-absolute {
+  transition: opacity 0.2s ease;
+}
+
+.user-log-time-absolute {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.user-log-time:hover .user-log-time-relative {
+  opacity: 0;
+}
+
+.user-log-time:hover .user-log-time-absolute {
+  opacity: 1;
+}
+
+.user-logs-loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.user-logs-loading.is-hidden {
+  display: none;
+}
+
+.user-logs-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.user-logs-empty.is-hidden {
+  display: none;
+}
+
+.user-logs-load-more {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.user-logs-load-more.is-hidden {
+  display: none;
+}
+
+@media (width <= 600px) {
+  .modal-container-wide {
+    max-width: 100%;
+    margin: 16px;
+  }
+  
+  .user-log-item {
+    padding: 12px;
+  }
+  
+  .user-log-icon {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .user-log-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+}
