@@ -1,4 +1,8 @@
 {
+  "nav.privacy": "隐私政策",
+  "nav.terms": "服务条款",
+  "nav.cookies": "Cookie 政策",
+
   "ai.title": "AI 助手",
   "ai.placeholder": "输入您的问题...",
   "ai.send": "发送",

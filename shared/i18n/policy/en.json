@@ -1,4 +1,8 @@
 {
+  "nav.privacy": "Privacy Policy",
+  "nav.terms": "Terms of Service",
+  "nav.cookies": "Cookie Policy",
+
   "ai.title": "AI Assistant",
   "ai.placeholder": "Type your question...",
   "ai.send": "Send",
