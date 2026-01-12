@@ -1,4 +1,8 @@
 {
+  "nav.privacy": "プライバシーポリシー",
+  "nav.terms": "利用規約",
+  "nav.cookies": "Cookieポリシー",
+
   "ai.title": "AIアシスタント",
   "ai.placeholder": "質問を入力してください...",
   "ai.send": "送信",
