@@ -213,6 +213,13 @@
   "dashboard.logAction.link_microsoft": "Microsoftアカウント連携",
   "dashboard.logAction.unlink_microsoft": "Microsoftアカウント連携解除",
   "dashboard.logAction.delete_account": "アカウント削除",
+  "dashboard.dataExport": "データエクスポート",
+  "dashboard.dataExportHint": "すべてのアカウントデータをダウンロード",
+  "dashboard.dataExportConfirm": "アカウントデータをエクスポートしますか？すべてのユーザー情報と操作履歴が含まれます。",
+  "dashboard.dataExportRequesting": "ダウンロードリンクを生成中...",
+  "dashboard.dataExportSuccess": "データのエクスポートが完了しました",
+  "dashboard.dataExportFailed": "データのエクスポートに失敗しました。後でもう一度お試しください",
+  "dashboard.dataExportRateLimit": "24時間に1回のみエクスポートできます。後でもう一度お試しください",
 
   "linkConfirm.title": "アカウント連携確認",
   "linkConfirm.subtitle": "Microsoftアカウントのメールが既存のアカウントと一致しています",

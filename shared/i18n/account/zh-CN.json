@@ -213,6 +213,13 @@
   "dashboard.logAction.link_microsoft": "绑定微软账户",
   "dashboard.logAction.unlink_microsoft": "解绑微软账户",
   "dashboard.logAction.delete_account": "删除账户",
+  "dashboard.dataExport": "数据导出",
+  "dashboard.dataExportHint": "下载您的所有账户数据",
+  "dashboard.dataExportConfirm": "确定要导出您的账户数据吗？导出将包含您的所有用户信息和操作日志。",
+  "dashboard.dataExportRequesting": "正在生成下载链接...",
+  "dashboard.dataExportSuccess": "数据导出成功",
+  "dashboard.dataExportFailed": "数据导出失败，请稍后重试",
+  "dashboard.dataExportRateLimit": "24小时内只能导出一次，请稍后再试",
 
   "linkConfirm.title": "确认绑定账户",
   "linkConfirm.subtitle": "检测到您的微软账户邮箱与已有账户相同",

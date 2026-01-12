@@ -550,6 +550,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       userLogsItem.addEventListener('click', showUserLogsModal);
     }
 
+    // 数据导出
+    const dataExportItem = document.getElementById('data-export-item');
+    if (dataExportItem) {
+      dataExportItem.addEventListener('click', handleDataExport);
+    }
+
   } catch (error) {
     console.error('[DASHBOARD] ERROR: Page initialization failed:', (error as Error).message);
     hidePageLoader();
@@ -1883,4 +1889,49 @@ function showUserLogsModal(): void {
   // 显示弹窗并加载第一页
   controller.open();
   loadLogs(1);
+}
+
+// ==================== 数据导出 ====================
+
+/**
+ * 处理数据导出请求
+ * 先请求生成一次性 token，然后使用 token 下载数据
+ */
+async function handleDataExport(): Promise<void> {
+  // 确认导出
+  const confirmed = await showConfirm(t('dashboard.dataExportConfirm'), t('dashboard.dataExport'));
+  if (!confirmed) {return;}
+
+  try {
+    // 请求生成下载 token
+    const response = await fetch('/api/user/export/request', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const result = await response.json();
+
+    if (result.success && result.token) {
+      // 使用 token 触发下载
+      const downloadUrl = `/api/user/export/download?token=${encodeURIComponent(result.token)}`;
+      
+      // 创建隐藏的 a 标签触发下载
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'user-data.txt';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showAlert(t('dashboard.dataExportSuccess'));
+    } else {
+      // 处理错误
+      if (result.errorCode === 'RATE_LIMIT') {
+        showAlert(t('dashboard.dataExportRateLimit'));
+      } else {
+        showAlert(t('dashboard.dataExportFailed'));
+      }
+    }
+  } catch {
+    showAlert(t('error.networkError'));
+  }
 }
