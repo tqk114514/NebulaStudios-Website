@@ -213,6 +213,13 @@
   "dashboard.logAction.link_microsoft": "Microsoft Account Linked",
   "dashboard.logAction.unlink_microsoft": "Microsoft Account Unlinked",
   "dashboard.logAction.delete_account": "Account Deleted",
+  "dashboard.dataExport": "Export Data",
+  "dashboard.dataExportHint": "Download all your account data",
+  "dashboard.dataExportConfirm": "Are you sure you want to export your account data? This will include all your user information and activity logs.",
+  "dashboard.dataExportRequesting": "Generating download link...",
+  "dashboard.dataExportSuccess": "Data exported successfully",
+  "dashboard.dataExportFailed": "Failed to export data, please try again",
+  "dashboard.dataExportRateLimit": "You can only export once every 24 hours, please try again later",
 
   "linkConfirm.title": "Confirm Account Link",
   "linkConfirm.subtitle": "Your Microsoft account email matches an existing account",

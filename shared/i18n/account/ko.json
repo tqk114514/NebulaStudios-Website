@@ -213,6 +213,13 @@
   "dashboard.logAction.link_microsoft": "Microsoft 계정 연결",
   "dashboard.logAction.unlink_microsoft": "Microsoft 계정 연결 해제",
   "dashboard.logAction.delete_account": "계정 삭제",
+  "dashboard.dataExport": "데이터 내보내기",
+  "dashboard.dataExportHint": "모든 계정 데이터 다운로드",
+  "dashboard.dataExportConfirm": "계정 데이터를 내보내시겠습니까? 모든 사용자 정보와 활동 기록이 포함됩니다.",
+  "dashboard.dataExportRequesting": "다운로드 링크 생성 중...",
+  "dashboard.dataExportSuccess": "데이터 내보내기 완료",
+  "dashboard.dataExportFailed": "데이터 내보내기 실패. 나중에 다시 시도하세요",
+  "dashboard.dataExportRateLimit": "24시간에 한 번만 내보낼 수 있습니다. 나중에 다시 시도하세요",
 
   "linkConfirm.title": "계정 연결 확인",
   "linkConfirm.subtitle": "Microsoft 계정 이메일이 기존 계정과 일치합니다",
