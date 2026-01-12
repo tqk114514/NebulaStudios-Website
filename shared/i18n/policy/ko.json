@@ -1,4 +1,8 @@
 {
+  "nav.privacy": "개인정보 처리방침",
+  "nav.terms": "이용약관",
+  "nav.cookies": "쿠키 정책",
+
   "ai.title": "AI 어시스턴트",
   "ai.placeholder": "질문을 입력하세요...",
   "ai.send": "전송",
