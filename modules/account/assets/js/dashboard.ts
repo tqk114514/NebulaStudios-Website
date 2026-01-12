@@ -544,6 +544,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       deleteAccountItem.addEventListener('click', showDeleteAccountModal);
     }
 
+    // 操作日志
+    const userLogsItem = document.getElementById('user-logs-item');
+    if (userLogsItem) {
+      userLogsItem.addEventListener('click', showUserLogsModal);
+    }
+
   } catch (error) {
     console.error('[DASHBOARD] ERROR: Page initialization failed:', (error as Error).message);
     hidePageLoader();
@@ -1601,4 +1607,280 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
 
   // 显示弹窗
   controller.open();
+}
+
+
+// ==================== 操作日志弹窗 ====================
+
+/** 日志项类型 */
+interface UserLogItem {
+  id: number;
+  action: string;
+  details?: {
+    old_username?: string;
+    new_username?: string;
+    old_avatar_url?: string;
+    new_avatar_url?: string;
+    microsoft_id?: string;
+    microsoft_name?: string;
+  };
+  created_at: string;
+}
+
+/** 日志响应类型 */
+interface UserLogsResponse {
+  success: boolean;
+  logs?: UserLogItem[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * 获取操作对应的图标 SVG
+ */
+function getLogActionIcon(action: string): { svg: string; type: 'normal' | 'danger' | 'success' } {
+  const icons: Record<string, { svg: string; type: 'normal' | 'danger' | 'success' }> = {
+    register: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+      type: 'success'
+    },
+    change_password: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>',
+      type: 'normal'
+    },
+    change_username: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+      type: 'normal'
+    },
+    change_avatar: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
+      type: 'normal'
+    },
+    link_microsoft: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>',
+      type: 'success'
+    },
+    unlink_microsoft: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>',
+      type: 'danger'
+    },
+    delete_account: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+      type: 'danger'
+    }
+  };
+  return icons[action] || {
+    svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>',
+    type: 'normal'
+  };
+}
+
+/**
+ * 格式化日志详情
+ */
+function formatLogDetails(action: string, details?: UserLogItem['details']): string {
+  if (!details) {return '';}
+
+  switch (action) {
+    case 'change_username':
+      if (details.old_username && details.new_username) {
+        return `${details.old_username} → ${details.new_username}`;
+      }
+      break;
+    case 'link_microsoft':
+    case 'unlink_microsoft':
+      if (details.microsoft_name) {
+        return details.microsoft_name;
+      }
+      break;
+  }
+  return '';
+}
+
+/**
+ * 格式化时间
+ */
+function formatLogTime(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  
+  // 1分钟内
+  if (diff < 60 * 1000) {
+    return t('dashboard.timeJustNow');
+  }
+  // 1小时内
+  if (diff < 60 * 60 * 1000) {
+    const minutes = Math.floor(diff / (60 * 1000));
+    return t('dashboard.timeMinutesAgo').replace('{n}', String(minutes));
+  }
+  // 24小时内
+  if (diff < 24 * 60 * 60 * 1000) {
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    return t('dashboard.timeHoursAgo').replace('{n}', String(hours));
+  }
+  // 7天内
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    return t('dashboard.timeDaysAgo').replace('{n}', String(days));
+  }
+  // 超过7天显示完整日期
+  const lang = document.documentElement.lang || 'zh-CN';
+  return date.toLocaleDateString(lang, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * 格式化绝对时间
+ */
+function formatAbsoluteTime(isoString: string): string {
+  const date = new Date(isoString);
+  const lang = document.documentElement.lang || 'zh-CN';
+  return date.toLocaleDateString(lang, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * 创建日志项 HTML 元素
+ */
+function createLogItemElement(log: UserLogItem): HTMLElement {
+  const item = document.createElement('div');
+  item.className = 'user-log-item';
+  
+  const iconInfo = getLogActionIcon(log.action);
+  const actionText = t(`dashboard.logAction.${log.action}`) || log.action;
+  const details = formatLogDetails(log.action, log.details);
+  const relativeTime = formatLogTime(log.created_at);
+  const absoluteTime = formatAbsoluteTime(log.created_at);
+  
+  item.innerHTML = `
+    <div class="user-log-icon ${iconInfo.type}">${iconInfo.svg}</div>
+    <div class="user-log-content">
+      <span class="user-log-action">${actionText}</span>
+      ${details ? `<span class="user-log-details">${details}</span>` : ''}
+    </div>
+    <span class="user-log-time">
+      <span class="user-log-time-relative">${relativeTime}</span>
+      <span class="user-log-time-absolute">${absoluteTime}</span>
+    </span>
+  `;
+  
+  return item;
+}
+
+/**
+ * 显示操作日志弹窗
+ */
+function showUserLogsModal(): void {
+  const listEl = document.getElementById('user-logs-list');
+  const loadingEl = document.getElementById('user-logs-loading');
+  const emptyEl = document.getElementById('user-logs-empty');
+  const loadMoreBtn = document.getElementById('user-logs-load-more') as HTMLButtonElement | null;
+
+  if (!listEl || !loadingEl || !emptyEl || !loadMoreBtn) {return;}
+
+  let currentPage = 1;
+  const pageSize = 5;
+  let totalLogs = 0;
+  let isLoading = false;
+
+  // 创建弹窗控制器
+  const controller = createModalController({
+    modalId: 'user-logs-modal',
+    cancelBtnId: 'user-logs-close-btn',
+    onCleanup: () => {
+      loadMoreBtn.removeEventListener('click', handleLoadMore);
+    }
+  });
+
+  if (!controller.modal) {return;}
+
+  // 重置状态
+  listEl.innerHTML = '';
+  loadingEl.classList.remove('is-hidden');
+  emptyEl.classList.add('is-hidden');
+  loadMoreBtn.classList.add('is-hidden');
+
+  /**
+   * 加载日志
+   */
+  async function loadLogs(page: number): Promise<void> {
+    if (isLoading) {return;}
+    isLoading = true;
+
+    if (page === 1) {
+      loadingEl!.classList.remove('is-hidden');
+    }
+    loadMoreBtn!.disabled = true;
+
+    try {
+      const response = await fetch(`/api/user/logs?page=${page}&pageSize=${pageSize}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+      const result: UserLogsResponse = await response.json();
+
+      if (controller.isCleanedUp()) {return;}
+
+      if (result.success && result.logs) {
+        totalLogs = result.total || 0;
+
+        if (page === 1 && result.logs.length === 0) {
+          emptyEl!.classList.remove('is-hidden');
+        } else {
+          emptyEl!.classList.add('is-hidden');
+          result.logs.forEach(log => {
+            const itemEl = createLogItemElement(log);
+            listEl!.appendChild(itemEl);
+          });
+        }
+
+        // 检查是否还有更多
+        const loadedCount = listEl!.children.length;
+        if (loadedCount < totalLogs) {
+          loadMoreBtn!.classList.remove('is-hidden');
+        } else {
+          loadMoreBtn!.classList.add('is-hidden');
+        }
+      } else {
+        if (page === 1) {
+          emptyEl!.classList.remove('is-hidden');
+        }
+      }
+    } catch (error) {
+      console.error('[USER_LOGS] ERROR:', error);
+      if (page === 1) {
+        emptyEl!.classList.remove('is-hidden');
+      }
+    } finally {
+      isLoading = false;
+      loadingEl!.classList.add('is-hidden');
+      loadMoreBtn!.disabled = false;
+    }
+  }
+
+  /**
+   * 加载更多
+   */
+  const handleLoadMore = (): void => {
+    currentPage++;
+    loadLogs(currentPage);
+  };
+
+  loadMoreBtn.addEventListener('click', handleLoadMore);
+
+  // 显示弹窗并加载第一页
+  controller.open();
+  loadLogs(1);
 }
