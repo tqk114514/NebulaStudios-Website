@@ -343,17 +343,17 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	verifyURL := h.baseURL + "/account/verify?token=" + token
 	language := h.getLanguage(req.Language)
 
-	// 发送邮件
-	if err := h.emailService.SendVerificationEmail(validatedEmail, "register", language, verifyURL); err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Failed to send verification email: email=%s, error=%v", validatedEmail, err)
-		h.respondError(c, http.StatusInternalServerError, "SEND_FAILED")
-		return
-	}
-
 	// 计算过期时间
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
-	utils.LogPrintf("[AUTH] Verification code sent: email=%s", validatedEmail)
+	// 异步发送邮件（不阻塞用户请求）
+	go func(email, emailType, lang, url string) {
+		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
+			utils.LogPrintf("[AUTH] ERROR: Async email send failed: email=%s, error=%v", email, err)
+		}
+	}(validatedEmail, "register", language, verifyURL)
+
+	utils.LogPrintf("[AUTH] Verification code sent (async): email=%s", validatedEmail)
 	h.respondSuccess(c, gin.H{
 		"message":    "Code sent",
 		"expireTime": expireTime,
@@ -1010,17 +1010,17 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	verifyURL := h.baseURL + "/account/verify?token=" + token
 	language := h.getLanguage(req.Language)
 
-	// 发送邮件
-	if err := h.emailService.SendVerificationEmail(normalizedEmail, "reset_password", language, verifyURL); err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Failed to send reset email: email=%s, error=%v", normalizedEmail, err)
-		h.respondError(c, http.StatusInternalServerError, "SEND_FAILED")
-		return
-	}
-
 	// 计算过期时间
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
-	utils.LogPrintf("[AUTH] Reset password code sent: email=%s", normalizedEmail)
+	// 异步发送邮件（不阻塞用户请求）
+	go func(email, emailType, lang, url string) {
+		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
+			utils.LogPrintf("[AUTH] ERROR: Async reset email send failed: email=%s, error=%v", email, err)
+		}
+	}(normalizedEmail, "reset_password", language, verifyURL)
+
+	utils.LogPrintf("[AUTH] Reset password code sent (async): email=%s", normalizedEmail)
 	h.respondSuccess(c, gin.H{"expireTime": expireTime})
 }
 

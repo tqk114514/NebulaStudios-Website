@@ -117,9 +117,11 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
 
   // 显示当前头像预览
   currentPreview.innerHTML = '';
-  if (user.avatar_url) {
+  // 如果是 "microsoft"，用实际的微软头像 URL
+  const currentAvatarUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
+  if (currentAvatarUrl) {
     const img = document.createElement('img');
-    img.src = user.avatar_url;
+    img.src = currentAvatarUrl;
     img.alt = user.username;
     currentPreview.appendChild(img);
   } else if (user.username) {
@@ -196,16 +198,32 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   const handleMicrosoftClick = (): void => {
     const msAvatarUrl = user.microsoft_avatar_url;
     if (!msAvatarUrl) {return;}
-    if (msAvatarUrl.startsWith('data:')) {
-      urlInput!.value = '[Microsoft Avatar]';
-      urlInput!.readOnly = true;
-      urlInput!.classList.add('readonly-placeholder');
-    } else {
-      urlInput!.value = msAvatarUrl;
-      urlInput!.readOnly = false;
-      urlInput!.classList.remove('readonly-placeholder');
-    }
-    loadNewAvatar(msAvatarUrl);
+    
+    // 显示占位符，实际发送 "microsoft" 给后端
+    urlInput!.value = '[Microsoft Avatar]';
+    urlInput!.readOnly = true;
+    urlInput!.classList.add('readonly-placeholder');
+    
+    // 预览使用实际 URL
+    newPreview!.innerHTML = '';
+    newPreview!.classList.remove('is-loaded');
+    errorEl!.classList.add('is-hidden');
+    urlInput!.classList.remove('is-error');
+    
+    const img = document.createElement('img');
+    img.onload = (): void => {
+      newPreview!.innerHTML = '';
+      newPreview!.appendChild(img);
+      newPreview!.classList.add('is-loaded');
+      confirmBtn!.disabled = false;
+      validatedUrl = 'microsoft'; // 发送 "microsoft" 而不是完整 URL
+    };
+    img.onerror = (): void => {
+      errorEl!.textContent = t('dashboard.avatarLoadFailed');
+      errorEl!.classList.remove('is-hidden');
+      urlInput!.classList.add('is-error');
+    };
+    img.src = msAvatarUrl;
   };
 
   // 确认更换头像
@@ -457,7 +475,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         showAvatarModal(user, (newAvatarUrl) => {
           // 更新用户数据和页面显示
           user.avatar_url = newAvatarUrl;
-          updateAvatarDisplay(avatarEl, newAvatarUrl, user.username);
+          // 如果是 "microsoft"，用实际的微软头像 URL 显示
+          const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url : newAvatarUrl;
+          updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
         });
       });
     }

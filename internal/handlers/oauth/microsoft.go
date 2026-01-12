@@ -20,7 +20,9 @@ package oauth
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,6 +56,7 @@ type MicrosoftHandler struct {
 	userRepo       *models.UserRepository   // 用户数据仓库
 	sessionService *services.SessionService // Session 服务
 	userCache      *cache.UserCache         // 用户缓存
+	r2Service      *services.R2Service      // R2 存储服务
 	clientID       string                   // Microsoft 应用 ID
 	clientSecret   string                   // Microsoft 应用密钥
 	redirectURI    string                   // OAuth 回调地址
@@ -69,6 +72,7 @@ type MicrosoftHandler struct {
 //   - userRepo: 用户数据仓库（必需）
 //   - sessionService: Session 服务（必需）
 //   - userCache: 用户缓存（必需）
+//   - r2Service: R2 存储服务（可选）
 //   - isProduction: 是否为生产环境
 //
 // 返回：
@@ -78,6 +82,7 @@ func NewMicrosoftHandler(
 	userRepo *models.UserRepository,
 	sessionService *services.SessionService,
 	userCache *cache.UserCache,
+	r2Service *services.R2Service,
 	isProduction bool,
 ) (*MicrosoftHandler, error) {
 	// 参数验证
@@ -120,6 +125,7 @@ func NewMicrosoftHandler(
 		userRepo:       userRepo,
 		sessionService: sessionService,
 		userCache:      userCache,
+		r2Service:      r2Service,
 		clientID:       clientID,
 		clientSecret:   clientSecret,
 		redirectURI:    redirectURI,
@@ -337,24 +343,24 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		displayName = dn
 	}
 
-	// 获取微软头像
-	microsoftAvatarURL := h.getAvatar(accessToken)
+	// 获取微软头像数据
+	avatarData, avatarContentType := h.getAvatarData(accessToken)
 
 	ctx := context.Background()
 
 	// 处理绑定操作
 	if action == ActionLink && currentUserID > 0 {
-		h.handleLinkAction(c, ctx, currentUserID, microsoftID, displayName, microsoftAvatarURL)
+		h.handleLinkAction(c, ctx, currentUserID, microsoftID, displayName, avatarData, avatarContentType)
 		return
 	}
 
 	// 处理登录操作
-	h.handleLoginAction(c, ctx, microsoftID, email, displayName, microsoftAvatarURL)
+	h.handleLoginAction(c, ctx, microsoftID, email, displayName, avatarData, avatarContentType)
 }
 
 
 // handleLinkAction 处理绑定操作
-func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserID int64, microsoftID, displayName, microsoftAvatarURL string) {
+func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserID int64, microsoftID, displayName string, avatarData []byte, avatarContentType string) {
 	// 检查微软账户是否已被其他用户绑定
 	existingUser, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
@@ -368,11 +374,10 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 		return
 	}
 
-	// 执行绑定
+	// 先执行绑定（不含头像）
 	err = h.userRepo.Update(ctx, currentUserID, map[string]interface{}{
-		"microsoft_id":         microsoftID,
-		"microsoft_name":       displayName,
-		"microsoft_avatar_url": microsoftAvatarURL,
+		"microsoft_id":   microsoftID,
+		"microsoft_name": displayName,
 	})
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to update user with Microsoft info: userID=%d, error=%v", currentUserID, err)
@@ -383,12 +388,15 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 	// 使缓存失效
 	h.userCache.Invalidate(currentUserID)
 
+	// 异步处理头像
+	go h.processAvatarAsync(currentUserID, "", avatarData, avatarContentType)
+
 	utils.LogPrintf("[OAUTH-MS] Microsoft account linked: userID=%d, msID=%s", currentUserID, microsoftID)
 	RedirectWithSuccess(c, h.baseURL, "/account/dashboard", "microsoft_linked")
 }
 
 // handleLoginAction 处理登录操作
-func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName, microsoftAvatarURL string) {
+func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName string, avatarData []byte, avatarContentType string) {
 	// 查找已绑定的用户
 	user, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
@@ -397,14 +405,23 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 
 	// 更新已有用户的微软信息
 	if user != nil {
+		// 获取旧哈希用于异步比对
+		oldAvatarHash := ""
+		if user.MicrosoftAvatarHash.Valid {
+			oldAvatarHash = user.MicrosoftAvatarHash.String
+		}
+
+		// 只更新名称（同步）
 		err = h.userRepo.Update(ctx, user.ID, map[string]interface{}{
-			"microsoft_name":       displayName,
-			"microsoft_avatar_url": microsoftAvatarURL,
+			"microsoft_name": displayName,
 		})
 		if err != nil {
-			utils.LogPrintf("[OAUTH-MS] WARN: Failed to update Microsoft info: userID=%d, error=%v", user.ID, err)
+			utils.LogPrintf("[OAUTH-MS] WARN: Failed to update Microsoft name: userID=%d, error=%v", user.ID, err)
 		}
 		h.userCache.Invalidate(user.ID)
+
+		// 异步处理头像
+		go h.processAvatarAsync(user.ID, oldAvatarHash, avatarData, avatarContentType)
 	}
 
 	// 尝试通过邮箱查找已有用户
@@ -423,11 +440,17 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 				return
 			}
 
+			// 待确认绑定时，先存 base64（确认后再上传到 R2）
+			var providerAvatarURL string
+			if len(avatarData) > 0 {
+				providerAvatarURL = "data:" + avatarContentType + ";base64," + base64.StdEncoding.EncodeToString(avatarData)
+			}
+
 			SavePendingLink(linkToken, &PendingLink{
 				UserID:            existingUser.ID,
 				ProviderID:        microsoftID,
 				DisplayName:       displayName,
-				ProviderAvatarURL: microsoftAvatarURL,
+				ProviderAvatarURL: providerAvatarURL,
 				Email:             email,
 				Timestamp:         time.Now().UnixMilli(),
 			})
@@ -705,11 +728,17 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 		return
 	}
 
-	// 执行绑定
+	// 解析头像数据（用于异步处理）
+	var avatarData []byte
+	var avatarContentType string
+	if strings.HasPrefix(pendingData.ProviderAvatarURL, "data:") {
+		avatarData, avatarContentType = h.parseDataURL(pendingData.ProviderAvatarURL)
+	}
+
+	// 执行绑定（不含头像，头像异步处理）
 	err = h.userRepo.Update(ctx, pendingData.UserID, map[string]interface{}{
-		"microsoft_id":         pendingData.ProviderID,
-		"microsoft_name":       pendingData.DisplayName,
-		"microsoft_avatar_url": pendingData.ProviderAvatarURL,
+		"microsoft_id":   pendingData.ProviderID,
+		"microsoft_name": pendingData.DisplayName,
 	})
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to link Microsoft account in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
@@ -719,6 +748,9 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	// 使缓存失效
 	h.userCache.Invalidate(pendingData.UserID)
+
+	// 异步处理头像
+	go h.processAvatarAsync(pendingData.UserID, "", avatarData, avatarContentType)
 
 	// 生成 JWT
 	jwtToken, err := h.sessionService.GenerateToken(user.ID)
@@ -733,6 +765,39 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	utils.LogPrintf("[OAUTH-MS] Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID)
 	RespondSuccess(c, nil)
+}
+
+// parseDataURL 解析 data URL，返回二进制数据和 content-type
+func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
+	// 格式: data:image/jpeg;base64,/9j/4AAQ...
+	if !strings.HasPrefix(dataURL, "data:") {
+		return nil, ""
+	}
+
+	// 找到 base64 数据开始位置
+	commaIdx := strings.Index(dataURL, ",")
+	if commaIdx == -1 {
+		return nil, ""
+	}
+
+	// 解析 content-type
+	header := dataURL[5:commaIdx] // 去掉 "data:"
+	contentType := "image/jpeg"
+	if semicolonIdx := strings.Index(header, ";"); semicolonIdx != -1 {
+		contentType = header[:semicolonIdx]
+	} else {
+		contentType = header
+	}
+
+	// 解码 base64
+	base64Data := dataURL[commaIdx+1:]
+	imageData, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		utils.LogPrintf("[OAUTH-MS] WARN: Failed to decode base64 avatar: %v", err)
+		return nil, ""
+	}
+
+	return imageData, contentType
 }
 
 
@@ -861,18 +926,19 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]interface
 //   - accessToken: Access Token
 //
 // 返回：
-//   - string: 头像数据 URL（data:image/...;base64,...）或空字符串
-func (h *MicrosoftHandler) getAvatar(accessToken string) string {
+//   - []byte: 头像二进制数据
+//   - string: Content-Type
+func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
 	if accessToken == "" {
 		utils.LogPrintf("[OAUTH-MS] WARN: Empty access token for avatar request")
-		return ""
+		return nil, ""
 	}
 
 	// 创建请求
 	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me/photo/$value", nil)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: Failed to create avatar request: %v", err)
-		return ""
+		return nil, ""
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
@@ -881,7 +947,7 @@ func (h *MicrosoftHandler) getAvatar(accessToken string) string {
 	resp, err := client.Do(req)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: Avatar request failed: %v", err)
-		return ""
+		return nil, ""
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -890,28 +956,114 @@ func (h *MicrosoftHandler) getAvatar(accessToken string) string {
 		if resp.StatusCode != http.StatusNotFound {
 			utils.LogPrintf("[OAUTH-MS] WARN: Avatar request returned status %d", resp.StatusCode)
 		}
-		return ""
+		return nil, ""
 	}
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: Failed to read avatar response: %v", err)
-		return ""
+		return nil, ""
 	}
 
 	// 检查响应大小（防止过大的图片）
 	if len(body) > 5*1024*1024 { // 5MB 限制
 		utils.LogPrintf("[OAUTH-MS] WARN: Avatar too large, skipping")
-		return ""
+		return nil, ""
 	}
 
-	// 获取 Content-Type
+	// 获取并验证 Content-Type
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "image/jpeg"
 	}
 
-	// 返回 base64 编码的数据 URL
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(body)
+	// 验证是图片类型
+	if !strings.HasPrefix(contentType, "image/") {
+		utils.LogPrintf("[OAUTH-MS] WARN: Invalid avatar content type: %s", contentType)
+		return nil, ""
+	}
+
+	return body, contentType
+}
+
+// uploadAvatarToR2 上传头像到 R2 并返回 URL
+// 如果 R2 未配置，返回 base64 data URL
+func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userID int64, imageData []byte, contentType string) string {
+	if len(imageData) == 0 {
+		return ""
+	}
+
+	// 如果 R2 已配置，上传到 R2
+	if h.r2Service != nil && h.r2Service.IsConfigured() {
+		avatarURL, err := h.r2Service.UploadAvatar(ctx, userID, imageData)
+		if err != nil {
+			utils.LogPrintf("[OAUTH-MS] WARN: Failed to upload avatar to R2: %v, falling back to base64", err)
+		} else {
+			return avatarURL
+		}
+	}
+
+	// 降级：返回 base64 data URL
+	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(imageData)
+}
+
+// calculateAvatarHash 计算头像数据的 SHA256 哈希
+func (h *MicrosoftHandler) calculateAvatarHash(imageData []byte) string {
+	if len(imageData) == 0 {
+		return ""
+	}
+	hash := sha256.Sum256(imageData)
+	return hex.EncodeToString(hash[:])
+}
+
+// processAvatarAsync 异步处理头像上传
+// 在后台 goroutine 中执行，不阻塞登录流程
+func (h *MicrosoftHandler) processAvatarAsync(userID int64, oldAvatarHash string, avatarData []byte, contentType string) {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.LogPrintf("[OAUTH-MS] ERROR: Avatar processing panic: userID=%d, error=%v", userID, r)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 计算新哈希
+	newAvatarHash := h.calculateAvatarHash(avatarData)
+
+	// 比对哈希，决定是否需要上传
+	if newAvatarHash != "" && newAvatarHash != oldAvatarHash {
+		// 头像变化，上传到 R2
+		microsoftAvatarURL := h.uploadAvatarToR2(ctx, userID, avatarData, contentType)
+
+		err := h.userRepo.Update(ctx, userID, map[string]interface{}{
+			"microsoft_avatar_url":  microsoftAvatarURL,
+			"microsoft_avatar_hash": newAvatarHash,
+		})
+		if err != nil {
+			utils.LogPrintf("[OAUTH-MS] ERROR: Failed to update avatar in async: userID=%d, error=%v", userID, err)
+			return
+		}
+
+		h.userCache.Invalidate(userID)
+		utils.LogPrintf("[OAUTH-MS] Avatar updated async: userID=%d", userID)
+
+	} else if newAvatarHash == "" && oldAvatarHash != "" {
+		// 用户删除了头像
+		err := h.userRepo.Update(ctx, userID, map[string]interface{}{
+			"microsoft_avatar_url":  nil,
+			"microsoft_avatar_hash": nil,
+		})
+		if err != nil {
+			utils.LogPrintf("[OAUTH-MS] ERROR: Failed to clear avatar in async: userID=%d, error=%v", userID, err)
+			return
+		}
+
+		h.userCache.Invalidate(userID)
+		utils.LogPrintf("[OAUTH-MS] Avatar cleared async: userID=%d", userID)
+
+	} else {
+		utils.LogPrintf("[OAUTH-MS] Avatar unchanged, skipping: userID=%d", userID)
+	}
 }

@@ -118,7 +118,7 @@ func run() error {
 	startServer(srv)
 
 	// 10. 等待关闭信号并优雅关闭
-	gracefulShutdown(srv, svcs.wsService)
+	gracefulShutdown(srv, svcs)
 
 	return nil
 }
@@ -180,6 +180,8 @@ type Services struct {
 	wsService      *services.WebSocketService
 	emailService   *services.EmailService
 	userCache      *cache.UserCache
+	r2Service      *services.R2Service
+	imgProcessor   *services.ImgProcessor
 }
 
 // initServices 初始化所有服务
@@ -246,6 +248,17 @@ func initServices(cfg *config.Config) (*Services, error) {
 		}
 	}
 
+	// R2 存储服务（非关键服务，失败不阻止启动）
+	svcs.r2Service, err = services.NewR2Service()
+	if err != nil {
+		utils.LogPrintf("[SERVICES] WARN: R2 service initialization failed: %v", err)
+		utils.LogPrintf("[SERVICES] WARN: Avatar upload to R2 will be unavailable")
+	} else if svcs.r2Service != nil {
+		utils.LogPrintf("[SERVICES] R2Service initialized")
+		// 获取 R2Service 内部的 ImgProcessor 引用（用于优雅关闭）
+		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
+	}
+
 	utils.LogPrintf("[SERVICES] All services initialized successfully")
 	return svcs, nil
 }
@@ -298,6 +311,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.emailService,
 		svcs.captchaService,
 		svcs.userCache,
+		svcs.r2Service,
 		baseURL,
 	)
 	if err != nil {
@@ -310,6 +324,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.userRepo,
 		svcs.sessionService,
 		svcs.userCache,
+		svcs.r2Service,
 		cfg.IsProduction,
 	)
 	if err != nil {
@@ -777,8 +792,8 @@ func shouldSkipLog(path string) bool {
 // ====================  优雅关闭 ====================
 
 // gracefulShutdown 优雅关闭服务器
-// 按顺序关闭：WebSocket -> HTTP -> 数据库
-func gracefulShutdown(srv *http.Server, wsService *services.WebSocketService) {
+// 按顺序关闭：WebSocket -> HTTP -> ImgProcessor -> 数据库
+func gracefulShutdown(srv *http.Server, svcs *Services) {
 	// 创建信号通道
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -792,9 +807,9 @@ func gracefulShutdown(srv *http.Server, wsService *services.WebSocketService) {
 	defer cancel()
 
 	// 1. 关闭 WebSocket 服务（停止接受新连接，关闭现有连接）
-	if wsService != nil {
+	if svcs.wsService != nil {
 		utils.LogPrintf("[SERVER] Closing WebSocket connections...")
-		wsService.Shutdown()
+		svcs.wsService.Shutdown()
 		utils.LogPrintf("[SERVER] WebSocket connections closed")
 	}
 
@@ -806,12 +821,18 @@ func gracefulShutdown(srv *http.Server, wsService *services.WebSocketService) {
 		utils.LogPrintf("[SERVER] HTTP server stopped")
 	}
 
-	// 3. 关闭数据库连接
+	// 3. 关闭图片处理器
+	if svcs.imgProcessor != nil {
+		utils.LogPrintf("[SERVER] Shutting down image processor...")
+		svcs.imgProcessor.Shutdown()
+	}
+
+	// 4. 关闭数据库连接
 	utils.LogPrintf("[SERVER] Closing database connections...")
 	models.CloseDB()
 	utils.LogPrintf("[SERVER] Database connections closed")
 
-	// 4. 同步日志缓冲区
+	// 5. 同步日志缓冲区
 	utils.SyncLogger()
 
 	utils.LogPrintf("[SERVER] Graceful shutdown completed")
