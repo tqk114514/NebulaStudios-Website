@@ -185,7 +185,12 @@ function t(key: string): string {
     console.warn('[I18N] WARN: Translation data not loaded for:', currentLanguage);
     return key;
   }
-  return langData[key] || key;
+  let text = langData[key] || key;
+  // 版权声明年份动态替换
+  if (key === 'footer.copyright') {
+    text = text.replace(/20\d{2}/, String(new Date().getFullYear()));
+  }
+  return text;
 }
 
 /**
