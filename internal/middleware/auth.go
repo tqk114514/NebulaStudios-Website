@@ -66,7 +66,7 @@ const (
 func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
-		utils.LogPrintf("[AUTH] FATAL: SessionService is nil, returning error middleware")
+		utils.LogPrintf("[AUTH-MW] FATAL: SessionService is nil, returning error middleware")
 		return errorMiddleware(ErrAuthNilSessionService)
 	}
 
@@ -75,7 +75,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		token := extractToken(c)
 		if token == "" {
 			// Token 未找到是预期内的业务情况，使用 DEBUG 级别避免日志洪水
-			utils.LogPrintf("[AUTH] DEBUG: Token not found: ip=%s", c.ClientIP())
+			utils.LogPrintf("[AUTH-MW] DEBUG: Token not found: ip=%s", c.ClientIP())
 			respondUnauthorized(c, ErrAuthTokenNotFound.Error())
 			return
 		}
@@ -84,21 +84,21 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
 			// Token 验证失败是预期内的业务情况，使用 DEBUG 级别
-			utils.LogPrintf("[AUTH] DEBUG: Token verification failed: ip=%s, error=%v", c.ClientIP(), err)
+			utils.LogPrintf("[AUTH-MW] DEBUG: Token verification failed: ip=%s, error=%v", c.ClientIP(), err)
 			respondUnauthorized(c, err.Error())
 			return
 		}
 
 		// 验证 claims 有效性
 		if claims == nil {
-			utils.LogPrintf("[AUTH] ERROR: Claims is nil after successful verification")
+			utils.LogPrintf("[AUTH-MW] ERROR: Claims is nil after successful verification")
 			respondUnauthorized(c, "INVALID_CLAIMS")
 			return
 		}
 
 		// 验证用户 ID 有效性
 		if claims.UserID <= 0 {
-			utils.LogPrintf("[AUTH] WARN: Invalid user ID in claims: userID=%d", claims.UserID)
+			utils.LogPrintf("[AUTH-MW] WARN: Invalid user ID in claims: userID=%d", claims.UserID)
 			respondUnauthorized(c, "INVALID_USER_ID")
 			return
 		}
@@ -121,7 +121,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 func OptionalAuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
-		utils.LogPrintf("[AUTH] WARN: SessionService is nil for optional auth, skipping auth")
+		utils.LogPrintf("[AUTH-MW] WARN: SessionService is nil for optional auth, skipping auth")
 		return func(c *gin.Context) {
 			c.Next()
 		}
@@ -140,7 +140,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
 			// 可选认证，验证失败只记录日志，不阻止请求
-			utils.LogPrintf("[AUTH] DEBUG: Optional auth token invalid: path=%s, error=%v",
+			utils.LogPrintf("[AUTH-MW] DEBUG: Optional auth token invalid: path=%s, error=%v",
 				c.Request.URL.Path, err)
 			c.Next()
 			return
@@ -148,7 +148,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 
 		// 验证 claims 有效性
 		if claims == nil || claims.UserID <= 0 {
-			utils.LogPrintf("[AUTH] DEBUG: Optional auth invalid claims: path=%s", c.Request.URL.Path)
+			utils.LogPrintf("[AUTH-MW] DEBUG: Optional auth invalid claims: path=%s", c.Request.URL.Path)
 			c.Next()
 			return
 		}
@@ -169,7 +169,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 func GetUserID(c *gin.Context) (int64, bool) {
 	// 检查 Context 是否为空
 	if c == nil {
-		utils.LogPrintf("[AUTH] ERROR: GetUserID called with nil context")
+		utils.LogPrintf("[AUTH-MW] ERROR: GetUserID called with nil context")
 		return 0, false
 	}
 
@@ -182,13 +182,13 @@ func GetUserID(c *gin.Context) (int64, bool) {
 	// 类型断言
 	id, ok := userID.(int64)
 	if !ok {
-		utils.LogPrintf("[AUTH] ERROR: UserID type assertion failed: got %T, want int64", userID)
+		utils.LogPrintf("[AUTH-MW] ERROR: UserID type assertion failed: got %T, want int64", userID)
 		return 0, false
 	}
 
 	// 验证 ID 有效性
 	if id <= 0 {
-		utils.LogPrintf("[AUTH] WARN: Invalid user ID in context: %d", id)
+		utils.LogPrintf("[AUTH-MW] WARN: Invalid user ID in context: %d", id)
 		return 0, false
 	}
 
@@ -260,7 +260,7 @@ func respondUnauthorized(c *gin.Context, errorCode string) {
 //   - gin.HandlerFunc: 返回 500 错误的中间件
 func errorMiddleware(err error) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		utils.LogPrintf("[AUTH] ERROR: Middleware initialization error: %v", err)
+		utils.LogPrintf("[AUTH-MW] ERROR: Middleware initialization error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
 			"errorCode": "INTERNAL_ERROR",

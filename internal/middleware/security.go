@@ -1,12 +1,13 @@
 /**
  * internal/middleware/security.go
- * 安全头中间件
+ * 安全中间件
  *
  * 功能：
  * - 设置安全响应头（防止常见 Web 攻击）
  * - CSP 策略（防止 XSS 和点击劫持）
  * - 缓存控制（防止敏感数据泄露）
  * - 静态资源缓存优化
+ * - 请求体大小限制（防止大文件攻击）
  *
  * 安全头说明：
  * - X-Content-Type-Options: 防止 MIME 类型嗅探攻击
@@ -20,6 +21,7 @@ package middleware
 
 import (
 	"auth-system/internal/utils"
+	"net/http"
 
 	"strings"
 
@@ -55,6 +57,18 @@ const (
 
 	// defaultStaticMaxAge 默认静态资源缓存时间（秒）
 	defaultStaticMaxAge = "86400"
+
+	// defaultMaxBodySize 默认请求体大小限制（1MB）
+	defaultMaxBodySize = 1 << 20
+
+	// maxBodySizeAPI API 请求体大小限制（64KB，足够 JSON 请求）
+	maxBodySizeAPI = 64 << 10
+
+	// maxBodySizeUpload 上传请求体大小限制（5MB）
+	maxBodySizeUpload = 5 << 20
+
+	// maxBodySizeAI AI 聊天请求体大小限制（128KB）
+	maxBodySizeAI = 128 << 10
 )
 
 // ====================  数据结构 ====================
@@ -308,4 +322,67 @@ func AddSecurityHeader(c *gin.Context, key, value string) {
 		return
 	}
 	c.Header(key, value)
+}
+
+// ====================  请求体大小限制 ====================
+
+// BodySizeLimit 请求体大小限制中间件
+// 防止大文件攻击耗尽服务器内存
+//
+// 参数：
+//   - maxSize: 最大请求体大小（字节）
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func BodySizeLimit(maxSize int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 只检查有请求体的方法
+		if c.Request.Method == http.MethodPost ||
+			c.Request.Method == http.MethodPut ||
+			c.Request.Method == http.MethodPatch {
+
+			// 检查 Content-Length
+			if c.Request.ContentLength > maxSize {
+				utils.LogPrintf("[SECURITY] WARN: Request body too large: path=%s, size=%d, limit=%d",
+					c.Request.URL.Path, c.Request.ContentLength, maxSize)
+				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
+					"success":   false,
+					"errorCode": "REQUEST_TOO_LARGE",
+				})
+				return
+			}
+
+			// 限制实际读取大小（防止 Content-Length 欺骗）
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSize)
+		}
+
+		c.Next()
+	}
+}
+
+// APIBodySizeLimit API 请求体大小限制（64KB）
+// 适用于普通 JSON API 请求
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func APIBodySizeLimit() gin.HandlerFunc {
+	return BodySizeLimit(maxBodySizeAPI)
+}
+
+// UploadBodySizeLimit 上传请求体大小限制（5MB）
+// 适用于文件上传接口
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func UploadBodySizeLimit() gin.HandlerFunc {
+	return BodySizeLimit(maxBodySizeUpload)
+}
+
+// AIBodySizeLimit AI 聊天请求体大小限制（128KB）
+// 适用于 AI 聊天接口，需要更大的限制以支持长对话
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func AIBodySizeLimit() gin.HandlerFunc {
+	return BodySizeLimit(maxBodySizeAI)
 }

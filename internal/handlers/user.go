@@ -19,9 +19,9 @@
 package handlers
 
 import (
-	"context"
 	"errors"
-	"fmt"
+	"fmt"
+
 	"net/http"
 
 	"auth-system/internal/cache"
@@ -150,7 +150,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		utils.LogPrintf("[USER] WARN: Unauthorized access to UpdateUsername")
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "errorCode": "UNAUTHORIZED"})
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
@@ -158,14 +158,14 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	var req updateUsernameRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogPrintf("[USER] WARN: Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "INVALID_REQUEST"})
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
 	// 验证码验证
 	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
 		utils.LogPrintf("[USER] WARN: Captcha verification failed for username change: userID=%d", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "CAPTCHA_FAILED"})
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
@@ -173,30 +173,32 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	usernameResult := utils.ValidateUsername(req.Username)
 	if !usernameResult.Valid {
 		utils.LogPrintf("[USER] WARN: Username validation failed: userID=%d, errorCode=%s", userID, usernameResult.ErrorCode)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": usernameResult.ErrorCode})
+		h.respondError(c, http.StatusBadRequest, usernameResult.ErrorCode)
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	newUsername := usernameResult.Value
 
 	// 检查用户名是否已被使用
 	existingUser, err := h.userRepo.FindByUsername(ctx, newUsername)
-	if err != nil {
-		// 查询出错但不是"未找到"，记录日志但继续（可能是用户名不存在）
-		utils.LogPrintf("[USER] DEBUG: FindByUsername query: username=%s, err=%v", newUsername, err)
+	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
+		// 数据库错误，非"用户不存在"
+		utils.LogPrintf("[USER] ERROR: FindByUsername failed: username=%s, error=%v", newUsername, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
 	}
 	if existingUser != nil && existingUser.ID != userID {
 		utils.LogPrintf("[USER] WARN: Username already exists: username=%s, existingUserID=%d, requestUserID=%d",
 			newUsername, existingUser.ID, userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "USERNAME_ALREADY_EXISTS"})
+		h.respondError(c, http.StatusBadRequest, "USERNAME_ALREADY_EXISTS")
 		return
 	}
 
 	// 更新数据库
 	if err := h.userRepo.Update(ctx, userID, map[string]interface{}{"username": newUsername}); err != nil {
 		utils.LogPrintf("[USER] ERROR: Failed to update username: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "UPDATE_FAILED"})
+		h.respondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
 		return
 	}
 
@@ -204,7 +206,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	h.invalidateUserCache(userID)
 
 	utils.LogPrintf("[USER] Username updated: userID=%d, newUsername=%s", userID, newUsername)
-	c.JSON(http.StatusOK, gin.H{"success": true, "username": newUsername})
+	h.respondSuccess(c, gin.H{"username": newUsername})
 }
 
 // UpdateAvatar 更新头像
@@ -214,7 +216,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		utils.LogPrintf("[USER] WARN: Unauthorized access to UpdateAvatar")
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "errorCode": "UNAUTHORIZED"})
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
@@ -222,7 +224,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	var req updateAvatarRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogPrintf("[USER] WARN: Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "INVALID_REQUEST"})
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
@@ -230,16 +232,16 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	urlResult := utils.ValidateAvatarURL(req.AvatarURL)
 	if !urlResult.Valid {
 		utils.LogPrintf("[USER] WARN: Avatar URL validation failed: userID=%d, errorCode=%s", userID, urlResult.ErrorCode)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": urlResult.ErrorCode})
+		h.respondError(c, http.StatusBadRequest, urlResult.ErrorCode)
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 更新数据库
 	if err := h.userRepo.Update(ctx, userID, map[string]interface{}{"avatar_url": urlResult.Value}); err != nil {
 		utils.LogPrintf("[USER] ERROR: Failed to update avatar: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "UPDATE_FAILED"})
+		h.respondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
 		return
 	}
 
@@ -247,7 +249,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	h.invalidateUserCache(userID)
 
 	utils.LogPrintf("[USER] Avatar updated: userID=%d", userID)
-	c.JSON(http.StatusOK, gin.H{"success": true, "avatar_url": urlResult.Value})
+	h.respondSuccess(c, gin.H{"avatar_url": urlResult.Value})
 }
 
 // SendDeleteCode 发送删除账户验证码
@@ -257,7 +259,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		utils.LogPrintf("[USER] WARN: Unauthorized access to SendDeleteCode")
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "errorCode": "UNAUTHORIZED"})
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
@@ -265,31 +267,36 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	var req sendDeleteCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogPrintf("[USER] WARN: Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "INVALID_REQUEST"})
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 获取用户信息
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: User not found: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "errorCode": "USER_NOT_FOUND"})
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[USER] WARN: User not found: userID=%d", userID)
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		} else {
+			utils.LogPrintf("[USER] ERROR: FindByID failed: userID=%d, error=%v", userID, err)
+			h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		}
 		return
 	}
 
 	// 验证码验证
 	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
 		utils.LogPrintf("[USER] WARN: Captcha verification failed for delete code: userID=%d", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "CAPTCHA_FAILED"})
+		h.respondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
 		return
 	}
 
 	// 邮件发送频率限制
 	if !middleware.EmailLimiter.Allow(user.Email) {
 		utils.LogPrintf("[USER] WARN: Email rate limit exceeded for delete: email=%s", user.Email)
-		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "errorCode": "RATE_LIMIT"})
+		h.respondError(c, http.StatusTooManyRequests, "RATE_LIMIT")
 		return
 	}
 
@@ -297,7 +304,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	token, _, err := h.tokenService.CreateToken(ctx, user.Email, services.TokenTypeDeleteAccount)
 	if err != nil {
 		utils.LogPrintf("[USER] ERROR: Token creation failed: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "TOKEN_CREATE_FAILED"})
+		h.respondError(c, http.StatusInternalServerError, "TOKEN_CREATE_FAILED")
 		return
 	}
 
@@ -314,12 +321,12 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	if err := h.emailService.SendVerificationEmail(user.Email, "delete_account", language, verifyURL); err != nil {
 		utils.LogPrintf("[USER] ERROR: Failed to send delete code email: userID=%d, email=%s, error=%v",
 			userID, user.Email, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "SEND_FAILED"})
+		h.respondError(c, http.StatusInternalServerError, "SEND_FAILED")
 		return
 	}
 
 	utils.LogPrintf("[USER] Delete code sent: userID=%d, email=%s", userID, user.Email)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	h.respondSuccess(c, nil)
 }
 
 // DeleteAccount 删除用户账户
@@ -329,7 +336,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		utils.LogPrintf("[USER] WARN: Unauthorized access to DeleteAccount")
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "errorCode": "UNAUTHORIZED"})
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
@@ -337,26 +344,31 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	var req deleteAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogPrintf("[USER] WARN: Invalid request body: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "INVALID_REQUEST"})
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
 	// 验证必填参数
 	if req.Code == "" || req.Password == "" {
 		utils.LogPrintf("[USER] WARN: Missing parameters for delete account: userID=%d", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "MISSING_PARAMETERS"})
+		h.respondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
 		return
 	}
 
 	// 注：Turnstile 验证已在发送验证码时完成，此处不再重复验证
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 获取用户信息
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: User not found for delete: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "errorCode": "USER_NOT_FOUND"})
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[USER] WARN: User not found for delete: userID=%d", userID)
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		} else {
+			utils.LogPrintf("[USER] ERROR: FindByID failed for delete: userID=%d, error=%v", userID, err)
+			h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		}
 		return
 	}
 
@@ -364,12 +376,12 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	match, err := utils.VerifyPassword(req.Password, user.Password)
 	if err != nil {
 		utils.LogPrintf("[USER] ERROR: Password verification error: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "INTERNAL_ERROR"})
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 	if !match {
 		utils.LogPrintf("[USER] WARN: Delete account - wrong password: userID=%d, email=%s", userID, user.Email)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": "WRONG_PASSWORD"})
+		h.respondError(c, http.StatusBadRequest, "WRONG_PASSWORD")
 		return
 	}
 
@@ -377,14 +389,14 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	_, err = h.tokenService.VerifyCode(ctx, req.Code, user.Email, services.TokenTypeDeleteAccount)
 	if err != nil {
 		utils.LogPrintf("[USER] WARN: Delete account - code verification failed: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "errorCode": err.Error()})
+		h.respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// 删除用户
 	if err := h.userRepo.Delete(ctx, userID); err != nil {
 		utils.LogPrintf("[USER] ERROR: Failed to delete user: userID=%d, error=%v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "errorCode": "DELETE_FAILED"})
+		h.respondError(c, http.StatusInternalServerError, "DELETE_FAILED")
 		return
 	}
 
@@ -401,10 +413,36 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	c.SetCookie("token", "", -1, "/", "", false, true)
 
 	utils.LogPrintf("[USER] Account deleted: userID=%d, email=%s", userID, user.Email)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	h.respondSuccess(c, nil)
 }
 
 // ====================  私有方法 ====================
+
+// respondError 返回错误响应
+//
+// 参数：
+//   - c: Gin 上下文
+//   - status: HTTP 状态码
+//   - errorCode: 错误代码
+func (h *UserHandler) respondError(c *gin.Context, status int, errorCode string) {
+	c.JSON(status, gin.H{
+		"success":   false,
+		"errorCode": errorCode,
+	})
+}
+
+// respondSuccess 返回成功响应
+//
+// 参数：
+//   - c: Gin 上下文
+//   - data: 响应数据
+func (h *UserHandler) respondSuccess(c *gin.Context, data gin.H) {
+	response := gin.H{"success": true}
+	for k, v := range data {
+		response[k] = v
+	}
+	c.JSON(http.StatusOK, response)
+}
 
 // verifyCaptcha 验证人机验证 Token
 // 参数：

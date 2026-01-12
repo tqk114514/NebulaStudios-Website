@@ -106,7 +106,7 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 		return nil, ErrAdminNilUserCache
 	}
 
-	utils.LogPrintf("[ADMIN-HANDLER] Admin handler initialized")
+	utils.LogPrintf("[ADMIN] Admin handler initialized")
 
 	return &AdminHandler{
 		userRepo:  userRepo,
@@ -141,7 +141,7 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 	// 查询用户列表
 	users, total, err := h.userRepo.FindAll(ctx, page, pageSize, search)
 	if err != nil {
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to get users: error=%v", err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get users: error=%v", err)
 		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
@@ -189,7 +189,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
@@ -215,7 +215,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	// 不能修改自己的角色
 	if targetUserID == operatorID {
-		utils.LogPrintf("[ADMIN-HANDLER] WARN: Attempted to modify own role: userID=%d", operatorID)
+		utils.LogPrintf("[ADMIN] WARN: Attempted to modify own role: userID=%d", operatorID)
 		h.respondError(c, http.StatusBadRequest, "CANNOT_MODIFY_SELF")
 		return
 	}
@@ -244,14 +244,14 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
 		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
 
 	// 不能修改超级管理员的角色
 	if targetUser.IsSuperAdmin() {
-		utils.LogPrintf("[ADMIN-HANDLER] WARN: Attempted to modify super admin role: operatorID=%d, targetID=%d",
+		utils.LogPrintf("[ADMIN] WARN: Attempted to modify super admin role: operatorID=%d, targetID=%d",
 			operatorID, targetUserID)
 		h.respondError(c, http.StatusForbidden, "CANNOT_MODIFY_SUPER_ADMIN")
 		return
@@ -262,7 +262,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		"role": req.Role,
 	})
 	if err != nil {
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to update role: userID=%d, error=%v", targetUserID, err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to update role: userID=%d, error=%v", targetUserID, err)
 		h.respondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
 		return
 	}
@@ -271,7 +271,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	h.userCache.Invalidate(targetUserID)
 
 	// 记录审计日志
-	utils.LogPrintf("[ADMIN-HANDLER] Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
+	utils.LogPrintf("[ADMIN] Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
 		operatorID, operatorRole, targetUserID, targetUser.Role, req.Role)
 
 	h.respondSuccess(c, gin.H{"message": "Role updated"})
@@ -295,7 +295,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	// 不能删除自己
 	if targetUserID == operatorID {
-		utils.LogPrintf("[ADMIN-HANDLER] WARN: Attempted to delete self: userID=%d", operatorID)
+		utils.LogPrintf("[ADMIN] WARN: Attempted to delete self: userID=%d", operatorID)
 		h.respondError(c, http.StatusBadRequest, "CANNOT_DELETE_SELF")
 		return
 	}
@@ -310,14 +310,14 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
 		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
 
 	// 不能删除超级管理员
 	if targetUser.IsSuperAdmin() {
-		utils.LogPrintf("[ADMIN-HANDLER] WARN: Attempted to delete super admin: operatorID=%d, targetID=%d",
+		utils.LogPrintf("[ADMIN] WARN: Attempted to delete super admin: operatorID=%d, targetID=%d",
 			operatorID, targetUserID)
 		h.respondError(c, http.StatusForbidden, "CANNOT_DELETE_SUPER_ADMIN")
 		return
@@ -325,7 +325,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	// 不能删除其他管理员（只有超管能删普通用户）
 	if targetUser.IsAdmin() {
-		utils.LogPrintf("[ADMIN-HANDLER] WARN: Attempted to delete admin: operatorID=%d, targetID=%d",
+		utils.LogPrintf("[ADMIN] WARN: Attempted to delete admin: operatorID=%d, targetID=%d",
 			operatorID, targetUserID)
 		h.respondError(c, http.StatusForbidden, "CANNOT_DELETE_ADMIN")
 		return
@@ -334,7 +334,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	// 执行删除
 	err = h.userRepo.Delete(ctx, targetUserID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to delete user: userID=%d, error=%v", targetUserID, err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to delete user: userID=%d, error=%v", targetUserID, err)
 		h.respondError(c, http.StatusInternalServerError, "DELETE_FAILED")
 		return
 	}
@@ -343,7 +343,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	h.userCache.Invalidate(targetUserID)
 
 	// 记录审计日志
-	utils.LogPrintf("[ADMIN-HANDLER] User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
+	utils.LogPrintf("[ADMIN] User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
 		operatorID, targetUserID, targetUser.Username)
 
 	h.respondSuccess(c, gin.H{"message": "User deleted"})
@@ -361,7 +361,7 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.userRepo.GetStats(ctx)
 	if err != nil {
-		utils.LogPrintf("[ADMIN-HANDLER] ERROR: Failed to get stats: error=%v", err)
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get stats: error=%v", err)
 		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}

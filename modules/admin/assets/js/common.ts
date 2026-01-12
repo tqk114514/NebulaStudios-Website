@@ -37,11 +37,20 @@ export interface UserListResponse {
   totalPages: number;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  errorCode?: string;
+/** API 成功响应 */
+export interface ApiSuccessResponse<T> {
+  success: true;
+  data: T;
 }
+
+/** API 失败响应 */
+export interface ApiErrorResponse {
+  success: false;
+  errorCode: string;
+}
+
+/** API 响应联合类型 */
+export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 // 用户数据缓存（带时间戳）
 export interface CachedUser {
