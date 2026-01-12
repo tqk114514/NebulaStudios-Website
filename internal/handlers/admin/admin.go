@@ -45,6 +45,8 @@ var (
 	ErrAdminNilUserRepo = errors.New("user repository is nil")
 	// ErrAdminNilUserCache 用户缓存为空
 	ErrAdminNilUserCache = errors.New("user cache is nil")
+	// ErrAdminNilLogRepo 日志仓库为空
+	ErrAdminNilLogRepo = errors.New("admin log repository is nil")
 )
 
 // ====================  常量定义 ====================
@@ -64,6 +66,7 @@ const (
 type AdminHandler struct {
 	userRepo  *models.UserRepository
 	userCache *cache.UserCache
+	logRepo   *models.AdminLogRepository
 }
 
 // userListResponse 用户列表响应
@@ -94,16 +97,20 @@ type setRoleRequest struct {
 // 参数：
 //   - userRepo: 用户数据仓库
 //   - userCache: 用户缓存
+//   - logRepo: 管理员日志仓库
 //
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache) (*AdminHandler, error) {
+func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
 	if userCache == nil {
 		return nil, ErrAdminNilUserCache
+	}
+	if logRepo == nil {
+		return nil, ErrAdminNilLogRepo
 	}
 
 	utils.LogPrintf("[ADMIN] Admin handler initialized")
@@ -111,6 +118,7 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 	return &AdminHandler{
 		userRepo:  userRepo,
 		userCache: userCache,
+		logRepo:   logRepo,
 	}, nil
 }
 
@@ -270,7 +278,12 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	// 使缓存失效
 	h.userCache.Invalidate(targetUserID)
 
-	// 记录审计日志
+	// 记录审计日志到数据库
+	if err := h.logRepo.LogSetRole(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Role, req.Role); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log set_role: error=%v", err)
+	}
+
+	// 记录审计日志到控制台
 	utils.LogPrintf("[ADMIN] Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
 		operatorID, operatorRole, targetUserID, targetUser.Role, req.Role)
 
@@ -342,7 +355,12 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	// 使缓存失效
 	h.userCache.Invalidate(targetUserID)
 
-	// 记录审计日志
+	// 记录审计日志到数据库
+	if err := h.logRepo.LogDeleteUser(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Email); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log delete_user: error=%v", err)
+	}
+
+	// 记录审计日志到控制台
 	utils.LogPrintf("[ADMIN] User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
 		operatorID, targetUserID, targetUser.Username)
 
@@ -367,6 +385,60 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	}
 
 	h.respondSuccess(c, stats)
+}
+
+// ====================  操作日志 ====================
+
+// logListResponse 日志列表响应
+type logListResponse struct {
+	Logs       []*models.AdminLogPublic `json:"logs"`
+	Total      int64                    `json:"total"`
+	Page       int                      `json:"page"`
+	PageSize   int                      `json:"pageSize"`
+	TotalPages int                      `json:"totalPages"`
+}
+
+// GetLogs 获取操作日志列表
+// GET /admin/api/logs?page=1&pageSize=20
+//
+// 权限：超级管理员
+func (h *AdminHandler) GetLogs(c *gin.Context) {
+	// 解析分页参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize)))
+
+	// 参数校验
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > maxPageSize {
+		pageSize = defaultPageSize
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	// 查询日志列表
+	logs, total, err := h.logRepo.FindAll(ctx, page, pageSize)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get logs: error=%v", err)
+		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		return
+	}
+
+	// 计算总页数
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	h.respondSuccess(c, logListResponse{
+		Logs:       logs,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	})
 }
 
 // ====================  辅助方法 ====================

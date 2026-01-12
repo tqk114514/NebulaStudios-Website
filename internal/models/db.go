@@ -278,6 +278,11 @@ func initTables(ctx context.Context) error {
 		return fmt.Errorf("create qr_login_tokens table: %w", err)
 	}
 
+	// 创建 admin_logs 表
+	if err := createAdminLogsTable(ctx); err != nil {
+		return fmt.Errorf("create admin_logs table: %w", err)
+	}
+
 	// 创建索引
 	if err := createIndexes(ctx); err != nil {
 		// 索引创建失败不是致命错误，只记录警告
@@ -378,6 +383,26 @@ func createQRLoginTokensTable(ctx context.Context) error {
 	return nil
 }
 
+// createAdminLogsTable 创建 admin_logs 表
+func createAdminLogsTable(ctx context.Context) error {
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS admin_logs (
+			id SERIAL PRIMARY KEY,
+			admin_id BIGINT NOT NULL,
+			action VARCHAR(50) NOT NULL,
+			target_id BIGINT,
+			details JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create admin_logs table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] Admin logs table ready")
+	return nil
+}
+
 // createIndexes 创建数据库索引
 func createIndexes(ctx context.Context) error {
 	indexes := []struct {
@@ -392,6 +417,8 @@ func createIndexes(ctx context.Context) error {
 		{"idx_codes_email_type", "CREATE INDEX IF NOT EXISTS idx_codes_email_type ON codes(email, type)"},
 		{"idx_codes_expire", "CREATE INDEX IF NOT EXISTS idx_codes_expire ON codes(expire_time)"},
 		{"idx_qr_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_qr_tokens_expire ON qr_login_tokens(expire_time)"},
+		{"idx_admin_logs_admin_id", "CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id)"},
+		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
 	}
 
 	var lastErr error
