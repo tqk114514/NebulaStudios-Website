@@ -28,10 +28,13 @@ const logsPagination = document.getElementById('logs-pagination') as HTMLElement
 
 // ==================== API ====================
 
-async function getLogs(page: number): Promise<LogListResponse | null> {
+async function getLogs(page: number): Promise<LogListResponse | null | 'forbidden'> {
   const params = new URLSearchParams({ page: String(page), pageSize: '20' });
   const result = await fetchApi<LogListResponse>(`/admin/api/logs?${params}`);
-  return result.success ? result.data! : null;
+  if (!result.success) {
+    return result.errorCode === 'FORBIDDEN' ? 'forbidden' : null;
+  }
+  return result.data!;
 }
 
 // ==================== 日志列表 ====================
@@ -85,6 +88,13 @@ export async function loadLogs(): Promise<void> {
   logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
 
   const data = await getLogs(currentPage);
+
+  if (data === 'forbidden') {
+    logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">无权限查看</td></tr>';
+    logsPagination.innerHTML = '';
+    return;
+  }
+
   if (!data) {
     logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
     return;
