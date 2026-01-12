@@ -36,6 +36,25 @@ let currentSearch = '';
 let currentUserRole = 0;
 let usersCache: Map<number, CachedUser> = new Map();
 
+/** 缓存最大条目数 */
+const CACHE_MAX_SIZE = 100;
+
+/**
+ * 添加用户到缓存（带大小限制）
+ * @param userId - 用户 ID
+ * @param cached - 缓存数据
+ */
+function setCacheUser(userId: number, cached: CachedUser): void {
+  // 如果缓存已满，删除最旧的条目
+  if (usersCache.size >= CACHE_MAX_SIZE && !usersCache.has(userId)) {
+    const oldestKey = usersCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      usersCache.delete(oldestKey);
+    }
+  }
+  usersCache.set(userId, cached);
+}
+
 // ==================== DOM 元素 ====================
 
 const userSearch = document.getElementById('user-search') as HTMLInputElement;
@@ -75,6 +94,11 @@ async function deleteUser(id: number): Promise<boolean> {
 
 // ==================== 用户列表 ====================
 
+/**
+ * 渲染用户表格行 HTML
+ * @param user - 用户数据
+ * @returns 表格行 HTML 字符串
+ */
 function renderUserRow(user: UserPublic): string {
   return `
     <tr data-user-id="${user.id}">
@@ -90,6 +114,10 @@ function renderUserRow(user: UserPublic): string {
   `;
 }
 
+/**
+ * 绑定用户行的事件监听器
+ * @param row - 表格行元素
+ */
 function bindUserRowEvents(row: HTMLTableRowElement): void {
   const btn = row.querySelector('.action-btn.view');
   btn?.addEventListener('click', () => {
@@ -98,6 +126,10 @@ function bindUserRowEvents(row: HTMLTableRowElement): void {
   });
 }
 
+/**
+ * 更新指定用户的表格行（重新获取数据并刷新显示）
+ * @param userId - 用户 ID
+ */
 async function updateUserRow(userId: number): Promise<void> {
   const oldRow = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
   if (!oldRow) return;
@@ -110,7 +142,7 @@ async function updateUserRow(userId: number): Promise<void> {
     return;
   }
 
-  usersCache.set(userId, { user, cachedAt: Date.now() });
+  setCacheUser(userId, { user, cachedAt: Date.now() });
 
   const temp = document.createElement('tbody');
   temp.innerHTML = renderUserRow(user);
@@ -120,6 +152,10 @@ async function updateUserRow(userId: number): Promise<void> {
   bindUserRowEvents(newRow);
 }
 
+/**
+ * 从表格中移除用户行（带动画效果）
+ * @param userId - 用户 ID
+ */
 function removeUserRow(userId: number): void {
   const row = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
   if (!row) return;
@@ -157,7 +193,7 @@ export async function loadUsers(): Promise<void> {
   }
 
   const now = Date.now();
-  data.users.forEach(user => usersCache.set(user.id, { user, cachedAt: now }));
+  data.users.forEach(user => setCacheUser(user.id, { user, cachedAt: now }));
 
   usersTableBody.innerHTML = data.users.map(user => renderUserRow(user)).join('');
 
@@ -168,6 +204,11 @@ export async function loadUsers(): Promise<void> {
   renderPagination(data.page, data.totalPages);
 }
 
+/**
+ * 渲染分页控件
+ * @param current - 当前页码
+ * @param total - 总页数
+ */
 function renderPagination(current: number, total: number): void {
   if (total <= 1) {
     pagination.innerHTML = '';
@@ -240,6 +281,12 @@ const userDetailSkeleton = `
   </div>
 `;
 
+/**
+ * 渲染用户详情弹窗内容
+ * @param user - 用户数据
+ * @param cachedAt - 缓存时间戳（可选）
+ * @param isRefreshing - 是否正在刷新数据（可选）
+ */
 function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshing?: boolean): void {
   userModalBody.innerHTML = `
     <div class="user-detail">
@@ -276,6 +323,10 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
   `;
 }
 
+/**
+ * 绑定用户详情弹窗的操作按钮事件
+ * @param user - 用户数据
+ */
 function bindUserDetailButtons(user: UserPublic): void {
   let footerHtml = '<button class="btn btn-secondary" id="close-user-modal">关闭</button>';
 
@@ -335,6 +386,10 @@ function bindUserDetailButtons(user: UserPublic): void {
   });
 }
 
+/**
+ * 显示用户详情弹窗（优先使用缓存，后台刷新数据）
+ * @param userId - 用户 ID
+ */
 async function showUserDetail(userId: number): Promise<void> {
   const cached = usersCache.get(userId);
   
@@ -350,7 +405,7 @@ async function showUserDetail(userId: number): Promise<void> {
       }
       
       const newCachedAt = Date.now();
-      usersCache.set(userId, { user: freshUser, cachedAt: newCachedAt });
+      setCacheUser(userId, { user: freshUser, cachedAt: newCachedAt });
       
       if (!userModal.classList.contains('is-hidden')) {
         renderUserDetailContent(freshUser, newCachedAt, false);
@@ -375,7 +430,7 @@ async function showUserDetail(userId: number): Promise<void> {
   }
 
   const cachedAt = Date.now();
-  usersCache.set(userId, { user, cachedAt });
+  setCacheUser(userId, { user, cachedAt });
   renderUserDetailContent(user, cachedAt, false);
   bindUserDetailButtons(user);
 }

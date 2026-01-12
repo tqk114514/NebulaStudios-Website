@@ -4,13 +4,22 @@
 
 // ==================== API 响应 ====================
 
-/** API 响应基础结构 */
-export interface ApiResponse<T = unknown> {
-  success: boolean;
+/** API 成功响应 */
+export interface ApiSuccessResponse<T = unknown> {
+  success: true;
+  data: T;
   message?: string;
-  errorCode?: string;
-  data?: T;
 }
+
+/** API 失败响应 */
+export interface ApiErrorResponse {
+  success: false;
+  errorCode: string;
+  message?: string;
+}
+
+/** API 响应联合类型 */
+export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 /** 验证结果 */
 export interface ValidationResult {
