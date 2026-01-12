@@ -260,10 +260,10 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// 验证 state
-	stateData, exists := GetState(state)
+	// 验证 state（原子操作，防止重复提交）
+	stateData, exists := GetAndDeleteState(state)
 	if !exists {
-		utils.LogPrintf("[OAUTH-MS] WARN: Invalid state - not found in storage")
+		utils.LogPrintf("[OAUTH-MS] WARN: Invalid state - not found in storage (may be duplicate request)")
 		RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
 		return
 	}
@@ -271,7 +271,6 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	// 检查 state 数据有效性
 	if stateData == nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: State data is nil")
-		DeleteState(state)
 		RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
 		return
 	}
@@ -279,7 +278,6 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	// 检查 state 是否过期
 	if time.Now().UnixMilli()-stateData.Timestamp > StateExpiryMS {
 		utils.LogPrintf("[OAUTH-MS] WARN: State expired")
-		DeleteState(state)
 		RedirectWithError(c, h.baseURL, "/account/login", "oauth_expired")
 		return
 	}
@@ -287,9 +285,6 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	// 获取操作类型和用户 ID
 	action := stateData.Action
 	currentUserID := stateData.UserID
-
-	// 删除已使用的 state
-	DeleteState(state)
 
 	// 绑定操作验证
 	if action == ActionLink && currentUserID <= 0 {

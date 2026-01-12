@@ -23,7 +23,8 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
+	"fmt"
+
 	"strings"
 	"time"
 
@@ -565,6 +566,47 @@ func (s *TokenService) GetCodeExpiry(ctx context.Context, code, email string) (i
 	}
 
 	return expireTime, nil
+}
+
+// GetCodeExpiryByEmail 根据邮箱获取最新验证码的过期时间
+// 参数：
+//   - ctx: 上下文
+//   - email: 邮箱地址
+//
+// 返回：
+//   - expired: 是否已过期或不存在
+//   - expireTime: 过期时间（毫秒时间戳），仅当 expired=false 时有效
+//   - error: 错误信息
+func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (bool, int64, error) {
+	// 参数验证
+	if email == "" {
+		return true, 0, ErrEmptyEmail
+	}
+
+	// 检查数据库连接
+	pool := models.GetPool()
+	if pool == nil {
+		return true, 0, ErrTokenDBNotReady
+	}
+
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+
+	// 查询该邮箱最新的未过期验证码
+	var expireTime int64
+	now := time.Now().UnixMilli()
+
+	err := pool.QueryRow(ctx, `
+		SELECT expire_time FROM codes 
+		WHERE email = $1 AND expire_time > $2 
+		ORDER BY expire_time DESC LIMIT 1
+	`, normalizedEmail, now).Scan(&expireTime)
+
+	if err != nil {
+		// 没有找到有效验证码，视为已过期
+		return true, 0, nil
+	}
+
+	return false, expireTime, nil
 }
 
 // CleanupExpired 清理过期数据
