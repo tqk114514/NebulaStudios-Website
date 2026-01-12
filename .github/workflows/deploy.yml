@@ -3,6 +3,10 @@ name: 部署
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - '*.md'
+      - '.gitignore'
 
 jobs:
   deploy:
@@ -33,6 +37,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: 下载依赖
         run: go mod download
