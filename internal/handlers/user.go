@@ -19,8 +19,13 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"net/http"
 
@@ -88,6 +93,18 @@ type deleteAccountRequest struct {
 	Code     string `json:"code"`
 	Password string `json:"password"`
 }
+
+// dataExportToken 数据导出 Token（内存存储，一次性使用）
+type dataExportToken struct {
+	UserID    int64
+	ExpiresAt time.Time
+}
+
+// dataExportTokens 数据导出 Token 存储（内存）
+var (
+	dataExportTokens   = make(map[string]*dataExportToken)
+	dataExportTokensMu sync.RWMutex
+)
 
 // ====================  构造函数 ====================
 
@@ -568,4 +585,190 @@ func (h *UserHandler) GetLogs(c *gin.Context) {
 		"pageSize":   pageSize,
 		"totalPages": totalPages,
 	})
+}
+
+
+// ====================  数据导出 ====================
+
+// generateExportToken 生成数据导出 Token
+func generateExportToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// RequestDataExport 请求数据导出（生成一次性下载 Token）
+// POST /api/user/export/request
+func (h *UserHandler) RequestDataExport(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		return
+	}
+
+	// 检查限流（24 小时内只允许 1 次）
+	if !middleware.DataExportLimiter.Allow(userID) {
+		waitTime := middleware.DataExportLimiter.GetWaitTime(userID)
+		utils.LogPrintf("[USER] Data export rate limit exceeded: userID=%d, waitTime=%ds", userID, waitTime)
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"success":   false,
+			"errorCode": "RATE_LIMIT",
+			"waitTime":  waitTime,
+		})
+		return
+	}
+
+	// 生成一次性 Token
+	token, err := generateExportToken()
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to generate export token: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "TOKEN_GENERATE_FAILED")
+		return
+	}
+
+	// 存储 Token（5 分钟有效）
+	dataExportTokensMu.Lock()
+	dataExportTokens[token] = &dataExportToken{
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	dataExportTokensMu.Unlock()
+
+	utils.LogPrintf("[USER] Data export token generated: userID=%d", userID)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"token":   token,
+	})
+}
+
+// getDataExportFooter 获取数据导出文件的本地化页脚
+func getDataExportFooter(lang string, utcTime string) string {
+	switch lang {
+	case "zh-CN":
+		return fmt.Sprintf("\n\n数据截止 %s", utcTime)
+	case "zh-TW":
+		return fmt.Sprintf("\n\n資料截止 %s", utcTime)
+	case "ja":
+		return fmt.Sprintf("\n\nデータ取得日時 %s", utcTime)
+	case "ko":
+		return fmt.Sprintf("\n\n데이터 기준 %s", utcTime)
+	default: // en
+		return fmt.Sprintf("\n\nData as of %s", utcTime)
+	}
+}
+
+// DownloadUserData 下载用户数据
+// GET /api/user/export/download?token=xxx
+func (h *UserHandler) DownloadUserData(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		h.respondError(c, http.StatusBadRequest, "MISSING_TOKEN")
+		return
+	}
+
+	// 验证并消费 Token（一次性使用）
+	dataExportTokensMu.Lock()
+	tokenData, exists := dataExportTokens[token]
+	if exists {
+		delete(dataExportTokens, token) // 立即删除，确保一次性使用
+	}
+	dataExportTokensMu.Unlock()
+
+	if !exists {
+		utils.LogPrintf("[USER] WARN: Invalid export token")
+		h.respondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		return
+	}
+
+	if time.Now().After(tokenData.ExpiresAt) {
+		utils.LogPrintf("[USER] WARN: Export token expired: userID=%d", tokenData.UserID)
+		h.respondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		return
+	}
+
+	userID := tokenData.UserID
+	ctx := c.Request.Context()
+
+	// 获取用户信息
+	user, err := h.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: FindByID failed for export: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
+	}
+
+	// 获取所有操作日志（不分页）
+	var logs []*models.UserLog
+	if h.userLogRepo != nil {
+		logs, _, err = h.userLogRepo.FindByUserID(ctx, userID, 1, 10000) // 最多 10000 条
+		if err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to get logs for export: userID=%d, error=%v", userID, err)
+			logs = []*models.UserLog{}
+		}
+	}
+
+	// 构建导出数据
+	exportData := gin.H{
+		"export_info": gin.H{
+			"exported_at": time.Now().UTC().Format(time.RFC3339),
+			"user_id":     userID,
+		},
+		"user_info": gin.H{
+			"username":           user.Username,
+			"email":              user.Email,
+			"password_hash":      user.Password,
+			"avatar_url":         user.AvatarURL,
+			"microsoft_id":       user.MicrosoftID,
+			"microsoft_name":     user.MicrosoftName,
+			"microsoft_avatar":   user.MicrosoftAvatarURL,
+			"created_at":         user.CreatedAt,
+			"updated_at":         user.UpdatedAt,
+		},
+		"operation_logs": logs,
+	}
+
+	// 序列化为 JSON
+	jsonData, err := json.MarshalIndent(exportData, "", "  ")
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to marshal export data: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "EXPORT_FAILED")
+		return
+	}
+
+	// 获取语言设置（从 cookie）
+	lang, _ := c.Cookie("selectedLanguage")
+	if lang == "" {
+		lang = "en"
+	}
+
+	// UTC 时间
+	now := time.Now().UTC()
+	utcTimeStr := now.Format("2006-01-02 15:04:05") + " UTC"
+
+	// 添加本地化页脚
+	footer := getDataExportFooter(lang, utcTimeStr)
+	finalData := append(jsonData, []byte(footer)...)
+
+	// 设置响应头，触发下载
+	filename := fmt.Sprintf("nebula_account_data_%d_%s.txt", userID, time.Now().Format("20060102_150405"))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", finalData)
+
+	utils.LogPrintf("[USER] Data exported: userID=%d, size=%d bytes", userID, len(finalData))
+}
+
+// CleanupExpiredExportTokens 清理过期的导出 Token（应定期调用）
+func CleanupExpiredExportTokens() {
+	dataExportTokensMu.Lock()
+	defer dataExportTokensMu.Unlock()
+
+	now := time.Now()
+	for token, data := range dataExportTokens {
+		if now.After(data.ExpiresAt) {
+			delete(dataExportTokens, token)
+		}
+	}
 }
