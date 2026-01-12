@@ -21,6 +21,11 @@
 
   "footer.copyright": "© 2025 Nebula Studios 모든 권리 보유",
 
+  "policy.agreeByRegister": "가입하면 다음에 동의하는 것으로 간주됩니다:",
+  "policy.privacyPolicy": "개인정보 처리방침",
+  "policy.termsOfService": "서비스 약관",
+  "policy.and": "및",
+
   "error.loadEmailWhitelistFailed": "이메일 화이트리스트를 로드하지 못했습니다. 페이지를 새로고침하세요",
   "error.networkError": "네트워크 오류. 나중에 다시 시도하세요",
   "error.sessionExpired": "세션이 만료되었습니다. 다시 로그인하세요",

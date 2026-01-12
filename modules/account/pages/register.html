@@ -61,6 +61,12 @@
           <input type="password" id="register-password-confirm" name="passwordConfirm" placeholder="" data-i18n-placeholder="register.confirmPasswordPlaceholder" aria-label="Confirm Password" autocomplete="new-password" required>
         </div>
         <button type="submit" class="button-primary" data-i18n="register.submitButton" aria-label="Register"></button>
+        <p class="policy-agree">
+          <span data-i18n="policy.agreeByRegister"></span>
+          <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
+          <span data-i18n="policy.and"></span>
+          <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
+        </p>
       </form>
       <div class="footer-links">
         <a href="/account/login" data-i18n="register.backToLogin" aria-label="Back to login"></a>
@@ -69,7 +75,7 @@
     <div class="page-footer" data-i18n="footer.copyright"></div>
   </div>
 
-  <!-- 支持的邮箱弹�?-->
+  <!-- 支持的邮箱弹窗 -->
   <div id="modal-overlay" class="modal-overlay is-hidden">
     <div class="modal-container">
       <div class="modal-content">
