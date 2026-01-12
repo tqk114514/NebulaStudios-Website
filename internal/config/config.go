@@ -88,6 +88,13 @@ type Config struct {
 	AIAPIKey  string // AI API 密钥
 	AIBaseURL string // AI API 地址
 	AIModel   string // AI 模型名称
+
+	// R2 配置
+	R2URL       string // R2 公开访问 URL
+	R2AccessKey string // R2 Access Key
+	R2SecretKey string // R2 Secret Key
+	R2Endpoint  string // R2 Endpoint
+	R2Bucket    string // R2 Bucket 名称
 }
 
 // ====================  全局配置实例 ====================
@@ -200,6 +207,13 @@ func loadConfig() error {
 	newCfg.AIAPIKey = getEnv("AI_API_KEY", "")
 	newCfg.AIBaseURL = getEnv("AI_BASE_URL", "")
 	newCfg.AIModel = getEnv("AI_MODEL", "glm-4-flash")
+
+	// 加载 R2 配置
+	newCfg.R2URL = getEnv("R2_URL", "")
+	newCfg.R2AccessKey = getEnv("R2_ACCESS_KEY", "")
+	newCfg.R2SecretKey = getEnv("R2_SECRET_KEY", "")
+	newCfg.R2Endpoint = getEnv("R2_ENDPOINT", "")
+	newCfg.R2Bucket = getEnv("R2_BUCKET", "")
 
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {

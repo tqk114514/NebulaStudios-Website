@@ -379,6 +379,7 @@ func ValidatePassword(password string) ValidationResult {
 // - 禁止内网地址（防止 SSRF）
 // - 限制 URL 长度
 // - 限制允许的图片格式
+// - 支持 "microsoft" 特殊值（使用微软头像）
 //
 // 参数：
 //   - avatarURL: 要验证的头像 URL
@@ -397,6 +398,11 @@ func ValidateAvatarURL(avatarURL string) ValidationResult {
 	if trimmed == "" {
 		LogPrintf("[VALIDATOR] Avatar URL validation failed: only whitespace")
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
+	}
+
+	// 支持 "microsoft" 特殊值（使用微软头像）
+	if trimmed == "microsoft" {
+		return ValidationResult{Valid: true, Value: "microsoft"}
 	}
 
 	// 处理 data URL（base64 图片）
