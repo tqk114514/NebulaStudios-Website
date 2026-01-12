@@ -21,6 +21,11 @@
 
   "footer.copyright": "© 2025 Nebula Studios 版权所有",
 
+  "policy.agreeByRegister": "注册即表示您同意我们的",
+  "policy.privacyPolicy": "隐私政策",
+  "policy.termsOfService": "服务条款",
+  "policy.and": "和",
+
   "error.loadEmailWhitelistFailed": "加载邮箱白名单失败，请刷新页面重试",
   "error.networkError": "网络错误，请稍后重试",
   "error.sessionExpired": "登录已过期，请重新登录",

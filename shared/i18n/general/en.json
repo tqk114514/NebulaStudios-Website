@@ -21,6 +21,11 @@
 
   "footer.copyright": "© 2025 Nebula Studios All Rights Reserved",
 
+  "policy.agreeByRegister": "By registering, you agree to our",
+  "policy.privacyPolicy": "Privacy Policy",
+  "policy.termsOfService": "Terms of Service",
+  "policy.and": "and",
+
   "error.loadEmailWhitelistFailed": "Failed to load email whitelist, please refresh the page",
   "error.networkError": "Network error, please try again later",
   "error.sessionExpired": "Session expired, please sign in again",
