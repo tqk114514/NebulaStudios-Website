@@ -174,6 +174,7 @@ func initDatabase(cfg *config.Config) error {
 // Services 服务容器，持有所有服务实例
 type Services struct {
 	userRepo       *models.UserRepository
+	userLogRepo    *models.UserLogRepository
 	tokenService   *services.TokenService
 	sessionService *services.SessionService
 	captchaService *services.CaptchaService
@@ -196,6 +197,10 @@ func initServices(cfg *config.Config) (*Services, error) {
 		return nil, errors.New("failed to create user repository")
 	}
 	utils.LogPrintf("[SERVICES] UserRepository initialized")
+
+	// 用户日志仓库
+	svcs.userLogRepo = models.NewUserLogRepository()
+	utils.LogPrintf("[SERVICES] UserLogRepository initialized")
 
 	// Token 服务
 	svcs.tokenService = services.NewTokenService()
@@ -288,6 +293,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	// Auth Handler
 	hdlrs.authHandler, err = handlers.NewAuthHandler(
 		svcs.userRepo,
+		svcs.userLogRepo,
 		svcs.tokenService,
 		svcs.sessionService,
 		svcs.emailService,
@@ -307,6 +313,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	}
 	hdlrs.userHandler, err = handlers.NewUserHandler(
 		svcs.userRepo,
+		svcs.userLogRepo,
 		svcs.tokenService,
 		svcs.emailService,
 		svcs.captchaService,
@@ -322,6 +329,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	// OAuth Handler
 	hdlrs.microsoftHandler, err = oauth.NewMicrosoftHandler(
 		svcs.userRepo,
+		svcs.userLogRepo,
 		svcs.sessionService,
 		svcs.userCache,
 		svcs.r2Service,
@@ -377,6 +385,10 @@ func startBackgroundTasks(hdlrs *Handlers, svcs *Services) {
 	go runTokenCleanup(svcs.tokenService)
 	utils.LogPrintf("[TASKS] Token cleanup task started: interval=%v", tokenCleanupInterval)
 
+	// 启动用户日志清理任务（每天清理6个月前的日志）
+	go runUserLogCleanup(svcs.userLogRepo)
+	utils.LogPrintf("[TASKS] User log cleanup task started: interval=24h, retention=6 months")
+
 	utils.LogPrintf("[TASKS] All background tasks started")
 }
 
@@ -403,6 +415,58 @@ func runTokenCleanup(tokenService *services.TokenService) {
 			defer cancel()
 
 			tokenService.CleanupExpired(ctx)
+		}()
+	}
+}
+
+// runUserLogCleanup 运行用户日志清理定时任务
+// 每24小时清理一次超过6个月的日志
+func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
+	if userLogRepo == nil {
+		utils.LogPrintf("[TASKS] WARN: User log repository is nil, cleanup task disabled")
+		return
+	}
+
+	// 启动时先执行一次清理
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TASKS] ERROR: User log cleanup panic recovered: %v", r)
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		count, err := userLogRepo.DeleteExpiredLogs(ctx)
+		if err != nil {
+			utils.LogPrintf("[TASKS] ERROR: Initial user log cleanup failed: %v", err)
+		} else if count > 0 {
+			utils.LogPrintf("[TASKS] Initial user log cleanup completed: deleted=%d", count)
+		}
+	}()
+
+	// 每24小时执行一次
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					utils.LogPrintf("[TASKS] ERROR: User log cleanup panic recovered: %v", r)
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			count, err := userLogRepo.DeleteExpiredLogs(ctx)
+			if err != nil {
+				utils.LogPrintf("[TASKS] ERROR: User log cleanup failed: %v", err)
+			} else if count > 0 {
+				utils.LogPrintf("[TASKS] User log cleanup completed: deleted=%d", count)
+			}
 		}()
 	}
 }
@@ -638,6 +702,7 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	{
 		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
+		userAPI.GET("/logs", hdlrs.userHandler.GetLogs)
 	}
 }
 

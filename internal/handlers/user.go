@@ -55,6 +55,7 @@ var (
 // UserHandler 用户管理 Handler
 type UserHandler struct {
 	userRepo       *models.UserRepository
+	userLogRepo    *models.UserLogRepository
 	tokenService   *services.TokenService
 	emailService   *services.EmailService
 	captchaService *services.CaptchaService
@@ -93,6 +94,7 @@ type deleteAccountRequest struct {
 // NewUserHandler 创建用户管理 Handler
 // 参数：
 //   - userRepo: 用户数据仓库
+//   - userLogRepo: 用户日志仓库
 //   - tokenService: Token 服务
 //   - emailService: 邮件服务
 //   - captchaService: 验证码服务
@@ -105,6 +107,7 @@ type deleteAccountRequest struct {
 //   - error: 错误信息
 func NewUserHandler(
 	userRepo *models.UserRepository,
+	userLogRepo *models.UserLogRepository,
 	tokenService *services.TokenService,
 	emailService *services.EmailService,
 	captchaService *services.CaptchaService,
@@ -136,6 +139,7 @@ func NewUserHandler(
 
 	return &UserHandler{
 		userRepo:       userRepo,
+		userLogRepo:    userLogRepo,
 		tokenService:   tokenService,
 		emailService:   emailService,
 		captchaService: captchaService,
@@ -184,6 +188,15 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	ctx := c.Request.Context()
 	newUsername := usernameResult.Value
 
+	// 获取当前用户名（用于日志记录）
+	currentUser, err := h.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: FindByID failed: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
+	}
+	oldUsername := currentUser.Username
+
 	// 检查用户名是否已被使用
 	existingUser, err := h.userRepo.FindByUsername(ctx, newUsername)
 	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
@@ -208,6 +221,13 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 
 	// 使缓存失效
 	h.invalidateUserCache(userID)
+
+	// 记录操作日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogChangeUsername(ctx, userID, oldUsername, newUsername); err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to log username change: userID=%d, error=%v", userID, err)
+		}
+	}
 
 	utils.LogPrintf("[USER] Username updated: userID=%d, newUsername=%s", userID, newUsername)
 	h.respondSuccess(c, gin.H{"username": newUsername})
@@ -242,6 +262,15 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	// 获取当前头像（用于日志记录）
+	currentUser, err := h.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: FindByID failed: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
+	}
+	oldAvatarURL := currentUser.AvatarURL
+
 	// 更新数据库
 	if err := h.userRepo.Update(ctx, userID, map[string]interface{}{"avatar_url": urlResult.Value}); err != nil {
 		utils.LogPrintf("[USER] ERROR: Failed to update avatar: userID=%d, error=%v", userID, err)
@@ -251,6 +280,13 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 
 	// 使缓存失效
 	h.invalidateUserCache(userID)
+
+	// 记录操作日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogChangeAvatar(ctx, userID, oldAvatarURL, urlResult.Value); err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to log avatar change: userID=%d, error=%v", userID, err)
+		}
+	}
 
 	utils.LogPrintf("[USER] Avatar updated: userID=%d", userID)
 	h.respondSuccess(c, gin.H{"avatar_url": urlResult.Value})
@@ -330,7 +366,6 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 
 	utils.LogPrintf("[USER] Delete code sent (async): userID=%d, email=%s", userID, user.Email)
 	h.respondSuccess(c, nil)
-	h.respondSuccess(c, nil)
 }
 
 // DeleteAccount 删除用户账户
@@ -402,6 +437,13 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 		utils.LogPrintf("[USER] ERROR: Failed to delete user: userID=%d, error=%v", userID, err)
 		h.respondError(c, http.StatusInternalServerError, "DELETE_FAILED")
 		return
+	}
+
+	// 记录删除操作日志（删除后记录，日志保留6个月用于安全审计）
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogDeleteAccount(ctx, userID); err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to log delete account: userID=%d, error=%v", userID, err)
+		}
 	}
 
 	// 清理 R2 头像（非关键操作，失败不影响主流程）
@@ -478,4 +520,52 @@ func (h *UserHandler) invalidateUserCache(userID int64) {
 		h.userCache.Invalidate(userID)
 		utils.LogPrintf("[USER] Cache invalidated: userID=%d", userID)
 	}
+}
+
+// GetLogs 获取用户操作日志
+// GET /api/user/logs?page=1&pageSize=20
+func (h *UserHandler) GetLogs(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		return
+	}
+
+	if h.userLogRepo == nil {
+		h.respondError(c, http.StatusInternalServerError, "SERVICE_UNAVAILABLE")
+		return
+	}
+
+	// 解析分页参数
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if _, err := fmt.Sscanf(p, "%d", &page); err != nil || page < 1 {
+			page = 1
+		}
+	}
+	if ps := c.Query("pageSize"); ps != "" {
+		if _, err := fmt.Sscanf(ps, "%d", &pageSize); err != nil || pageSize < 1 || pageSize > 100 {
+			pageSize = 20
+		}
+	}
+
+	ctx := c.Request.Context()
+	logs, total, err := h.userLogRepo.FindByUserID(ctx, userID, page, pageSize)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to get logs: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
+	}
+
+	totalPages := (int(total) + pageSize - 1) / pageSize
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"logs":       logs,
+		"total":      total,
+		"page":       page,
+		"pageSize":   pageSize,
+		"totalPages": totalPages,
+	})
 }

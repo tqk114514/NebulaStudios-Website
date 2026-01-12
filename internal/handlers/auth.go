@@ -73,6 +73,7 @@ const (
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
 	userRepo         *models.UserRepository     // 用户数据仓库
+	userLogRepo      *models.UserLogRepository  // 用户日志仓库
 	tokenService     *services.TokenService     // Token 服务
 	sessionService  *services.SessionService  // Session 服务
 	emailService    *services.EmailService    // 邮件服务
@@ -88,6 +89,7 @@ type AuthHandler struct {
 //
 // 参数：
 //   - userRepo: 用户数据仓库（必需）
+//   - userLogRepo: 用户日志仓库（可选）
 //   - tokenService: Token 服务（必需）
 //   - sessionService: Session 服务（必需）
 //   - emailService: 邮件服务（必需）
@@ -100,6 +102,7 @@ type AuthHandler struct {
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewAuthHandler(
 	userRepo *models.UserRepository,
+	userLogRepo *models.UserLogRepository,
 	tokenService *services.TokenService,
 	sessionService *services.SessionService,
 	emailService *services.EmailService,
@@ -144,6 +147,7 @@ func NewAuthHandler(
 
 	return &AuthHandler{
 		userRepo:         userRepo,
+		userLogRepo:      userLogRepo,
 		tokenService:     tokenService,
 		sessionService:  sessionService,
 		emailService:    emailService,
@@ -662,6 +666,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		utils.LogPrintf("[AUTH] ERROR: User creation failed: username=%s, email=%s, error=%v", usernameResult.Value, emailResult.Value, err)
 		h.respondError(c, http.StatusInternalServerError, "REGISTER_FAILED")
 		return
+	}
+
+	// 记录注册日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogRegister(ctx, user.ID); err != nil {
+			utils.LogPrintf("[AUTH] WARN: Failed to log register: userID=%d, error=%v", user.ID, err)
+		}
 	}
 
 	// 清除验证码（忽略错误，不影响注册成功）
@@ -1261,6 +1272,13 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	// 使缓存失效（密码已更改）
 	h.userCache.Invalidate(userID)
+
+	// 记录操作日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogChangePassword(ctx, userID); err != nil {
+			utils.LogPrintf("[AUTH] WARN: Failed to log password change: userID=%d, error=%v", userID, err)
+		}
+	}
 
 	utils.LogPrintf("[AUTH] Password changed successfully: userID=%d, email=%s", userID, user.Email)
 	h.respondSuccess(c, nil)
