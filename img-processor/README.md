@@ -2,7 +2,17 @@
 
 高性能图片处理服务，将图片转换为 WebP 格式。
 
-## 编译
+## 架构
+
+此服务**嵌入到 Go 主程序中**，无需单独部署：
+
+1. GitHub Actions 编译 Rust 二进制
+2. Go 通过 `//go:embed` 嵌入二进制
+3. Go 启动时自动释放到 `/tmp/img-processor` 并启动
+4. 通过 Unix Socket (`/tmp/img-processor.sock`) 通信
+5. Go 关闭时自动清理
+
+## 本地开发
 
 ```bash
 cd img-processor
@@ -10,39 +20,6 @@ cargo build --release
 ```
 
 编译后的二进制文件在 `target/release/img-processor`
-
-## 运行
-
-```bash
-./target/release/img-processor
-```
-
-服务会监听 `/tmp/img-processor.sock`
-
-## 部署 (systemd)
-
-创建 `/etc/systemd/system/img-processor.service`:
-
-```ini
-[Unit]
-Description=Image Processor Service
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/path/to/img-processor
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动:
-```bash
-sudo systemctl enable img-processor
-sudo systemctl start img-processor
-```
 
 ## 协议
 
