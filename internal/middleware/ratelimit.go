@@ -383,6 +383,121 @@ func (serl *ShardedEmailRateLimiter) Stats() int {
 	return total
 }
 
+// ====================  数据导出限流器 ====================
+
+// dataExportLimiterShard 数据导出限流器分片（使用 LRU）
+// 基于用户 ID 的限流，24 小时内只允许 1 次
+type dataExportLimiterShard struct {
+	cache *lru.Cache[int64, time.Time]
+	mu    sync.Mutex
+}
+
+// ShardedDataExportLimiter 分片数据导出限流器
+// 基于用户 ID 的限流，防止频繁导出
+type ShardedDataExportLimiter struct {
+	shards   [shardCount]*dataExportLimiterShard
+	interval time.Duration
+}
+
+// NewShardedDataExportLimiter 创建分片数据导出限流器
+// 参数：
+//   - interval: 同一用户两次导出的最小间隔
+//
+// 返回：
+//   - *ShardedDataExportLimiter: 数据导出限流器实例
+func NewShardedDataExportLimiter(interval time.Duration) *ShardedDataExportLimiter {
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+
+	sdel := &ShardedDataExportLimiter{
+		interval: interval,
+	}
+
+	for i := 0; i < shardCount; i++ {
+		cache, err := lru.New[int64, time.Time](maxEntriesPerShard)
+		if err != nil {
+			cache, _ = lru.New[int64, time.Time](1)
+		}
+		sdel.shards[i] = &dataExportLimiterShard{
+			cache: cache,
+		}
+	}
+
+	utils.LogPrintf("[RATELIMIT] Sharded data export limiter created: interval=%v, shards=%d",
+		interval, shardCount)
+
+	return sdel
+}
+
+// getShard 获取 userID 对应的分片
+func (sdel *ShardedDataExportLimiter) getShard(userID int64) *dataExportLimiterShard {
+	return sdel.shards[uint64(userID)%shardCount]
+}
+
+// Allow 检查是否允许数据导出
+// 参数：
+//   - userID: 用户 ID
+//
+// 返回：
+//   - bool: true 表示允许，false 表示被限流
+func (sdel *ShardedDataExportLimiter) Allow(userID int64) bool {
+	if userID <= 0 {
+		return false
+	}
+
+	shard := sdel.getShard(userID)
+	now := time.Now()
+
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	if shard.cache == nil {
+		return true
+	}
+
+	lastTime, exists := shard.cache.Get(userID)
+	if exists && now.Sub(lastTime) < sdel.interval {
+		return false
+	}
+
+	shard.cache.Add(userID, now)
+	return true
+}
+
+// GetWaitTime 获取需要等待的时间（秒）
+// 参数：
+//   - userID: 用户 ID
+//
+// 返回：
+//   - int: 需要等待的秒数，0 表示可以立即导出
+func (sdel *ShardedDataExportLimiter) GetWaitTime(userID int64) int {
+	if userID <= 0 {
+		return 0
+	}
+
+	shard := sdel.getShard(userID)
+
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	if shard.cache == nil {
+		return 0
+	}
+
+	lastTime, exists := shard.cache.Get(userID)
+	if !exists {
+		return 0
+	}
+
+	elapsed := time.Since(lastTime)
+	if elapsed >= sdel.interval {
+		return 0
+	}
+
+	return int((sdel.interval - elapsed).Seconds())
+}
+
 // ====================  预定义限流器 ====================
 
 var (
@@ -397,6 +512,9 @@ var (
 
 	// EmailLimiter 邮件发送限流：60 秒/邮箱
 	EmailLimiter = NewShardedEmailRateLimiter(defaultEmailInterval)
+
+	// DataExportLimiter 数据导出限流：24 小时/用户
+	DataExportLimiter = NewShardedDataExportLimiter(24 * time.Hour)
 )
 
 // ====================  中间件 ====================
