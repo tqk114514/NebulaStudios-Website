@@ -129,10 +129,18 @@
   font-weight: 500;
 }
 
-.topbar-user {
+.topbar-avatar {
   margin-left: auto;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.topbar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* --- 页面容器 --- */
