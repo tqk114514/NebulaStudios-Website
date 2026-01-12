@@ -64,7 +64,7 @@ const (
 func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil {
-		utils.LogPrintf("[ADMIN] FATAL: UserRepository is nil")
+		utils.LogPrintf("[ADMIN-MW] FATAL: UserRepository is nil")
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -78,7 +78,7 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		// 获取用户 ID（由 AuthMiddleware 设置）
 		userID, ok := middleware.GetUserID(c)
 		if !ok {
-			utils.LogPrintf("[ADMIN] WARN: AdminMiddleware called without valid userID")
+			utils.LogPrintf("[ADMIN-MW] WARN: AdminMiddleware called without valid userID")
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -89,20 +89,20 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
-			utils.LogPrintf("[ADMIN] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
+			utils.LogPrintf("[ADMIN-MW] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogPrintf("[ADMIN] WARN: User not found: userID=%d", userID)
+			utils.LogPrintf("[ADMIN-MW] WARN: User not found: userID=%d", userID)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		// 检查管理员权限
 		if !user.IsAdmin() {
-			utils.LogPrintf("[ADMIN] WARN: Access denied - not admin: userID=%d, role=%d", userID, user.Role)
+			utils.LogPrintf("[ADMIN-MW] WARN: Access denied - not admin: userID=%d, role=%d", userID, user.Role)
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -129,7 +129,7 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil {
-		utils.LogPrintf("[ADMIN] FATAL: UserRepository is nil")
+		utils.LogPrintf("[ADMIN-MW] FATAL: UserRepository is nil")
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -143,7 +143,7 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		// 获取用户 ID（由 AuthMiddleware 设置）
 		userID, ok := middleware.GetUserID(c)
 		if !ok {
-			utils.LogPrintf("[ADMIN] WARN: SuperAdminMiddleware called without valid userID")
+			utils.LogPrintf("[ADMIN-MW] WARN: SuperAdminMiddleware called without valid userID")
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -154,20 +154,20 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
-			utils.LogPrintf("[ADMIN] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
+			utils.LogPrintf("[ADMIN-MW] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogPrintf("[ADMIN] WARN: User not found: userID=%d", userID)
+			utils.LogPrintf("[ADMIN-MW] WARN: User not found: userID=%d", userID)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		// 检查超级管理员权限
 		if !user.IsSuperAdmin() {
-			utils.LogPrintf("[ADMIN] WARN: Access denied - not super admin: userID=%d, role=%d", userID, user.Role)
+			utils.LogPrintf("[ADMIN-MW] WARN: Access denied - not super admin: userID=%d, role=%d", userID, user.Role)
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -251,7 +251,7 @@ func respondForbidden(c *gin.Context, errorCode string) {
 func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *services.SessionService) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil || sessionService == nil {
-		utils.LogPrintf("[ADMIN] FATAL: UserRepository or SessionService is nil")
+		utils.LogPrintf("[ADMIN-MW] FATAL: UserRepository or SessionService is nil")
 		return func(c *gin.Context) {
 			handlers.NotFoundHandler(c)
 		}
@@ -262,7 +262,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		token := extractToken(c)
 		if token == "" {
 			// 未登录，伪装成 404（隐藏后台入口）
-			utils.LogPrintf("[ADMIN] DEBUG: Admin page access without token, showing 404")
+			utils.LogPrintf("[ADMIN-MW] DEBUG: Admin page access without token, showing 404")
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -272,7 +272,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil || claims == nil || claims.UserID <= 0 {
 			// Token 无效，伪装成 404
-			utils.LogPrintf("[ADMIN] DEBUG: Admin page access with invalid token, showing 404")
+			utils.LogPrintf("[ADMIN-MW] DEBUG: Admin page access with invalid token, showing 404")
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -287,7 +287,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil || user == nil {
 			// 用户不存在，伪装成 404
-			utils.LogPrintf("[ADMIN] WARN: User not found for admin page: userID=%d", userID)
+			utils.LogPrintf("[ADMIN-MW] WARN: User not found for admin page: userID=%d", userID)
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -296,7 +296,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		// 检查管理员权限
 		if !user.IsAdmin() {
 			// 非管理员，伪装成 404（不暴露后台存在）
-			utils.LogPrintf("[ADMIN] WARN: Non-admin tried to access admin page: userID=%d, role=%d", userID, user.Role)
+			utils.LogPrintf("[ADMIN-MW] WARN: Non-admin tried to access admin page: userID=%d, role=%d", userID, user.Role)
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return

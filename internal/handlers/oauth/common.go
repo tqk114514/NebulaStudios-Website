@@ -111,8 +111,12 @@ type PendingLink struct {
 
 // ====================  全局存储 ====================
 
+// 注意：以下存储使用内存 map 实现，存在以下限制：
+// 1. 服务重启会丢失所有数据（正在进行的 OAuth 流程会失败）
+// 2. 多实例部署时无法共享状态（需要 sticky session 或改用 Redis）
+// 当前适用于单实例部署场景，如需多实例部署请改用 Redis 存储
 var (
-	states       = make(map[string]*State)      // OAuth state 存储
+	states       = make(map[string]*State)       // OAuth state 存储
 	pendingLinks = make(map[string]*PendingLink) // 待绑定数据存储
 	stateMu      sync.RWMutex                    // state 读写锁
 	linkMu       sync.RWMutex                    // pendingLinks 读写锁
@@ -154,6 +158,25 @@ func DeleteState(state string) {
 	stateMu.Lock()
 	delete(states, state)
 	stateMu.Unlock()
+}
+
+// GetAndDeleteState 获取并删除 OAuth state（原子操作）
+// 用于防止重复提交攻击
+//
+// 参数：
+//   - state: state 字符串
+//
+// 返回：
+//   - *State: state 数据
+//   - bool: 是否存在
+func GetAndDeleteState(state string) (*State, bool) {
+	stateMu.Lock()
+	data, exists := states[state]
+	if exists {
+		delete(states, state)
+	}
+	stateMu.Unlock()
+	return data, exists
 }
 
 // ====================  PendingLink 管理 ====================

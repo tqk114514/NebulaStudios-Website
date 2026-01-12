@@ -19,7 +19,6 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 
 	"net/http"
@@ -55,8 +54,8 @@ var (
 // ====================  常量定义 ====================
 
 const (
-	// CookieMaxAge Cookie 最大有效期（60 天）
-	CookieMaxAge = 60 * 24 * 60 * 60
+	// CookieMaxAge Cookie 最大有效期（60 天，转换为秒）
+	CookieMaxAge = int(60 * 24 * time.Hour / time.Second)
 
 	// TokenExpireMinutes Token 过期时间（分钟）
 	TokenExpireMinutes = 10
@@ -308,13 +307,15 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 检查邮箱是否已注册
 	existingUser, err := h.userRepo.FindByEmail(ctx, validatedEmail)
-	if err != nil {
-		// 数据库错误，记录但继续（可能是用户不存在）
-		utils.LogPrintf("[AUTH] DEBUG: FindByEmail error (may be expected): %v", err)
+	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
+		// 真正的数据库错误
+		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error: email=%s, error=%v", validatedEmail, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
 	}
 	if existingUser != nil {
 		utils.LogPrintf("[AUTH] WARN: Email already registered: %s", validatedEmail)
@@ -391,7 +392,7 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	result, err := h.tokenService.ValidateAndUseToken(ctx, req.Token)
 	if err != nil {
 		utils.LogPrintf("[AUTH] WARN: Token verification failed: error=%v", err)
@@ -442,9 +443,19 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实际查询数据库检查验证码状态
-	// 目前简化处理，返回未过期
-	h.respondSuccess(c, gin.H{"expired": false})
+	ctx := c.Request.Context()
+	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, req.Email)
+	if err != nil {
+		utils.LogPrintf("[AUTH] ERROR: GetCodeExpiryByEmail failed: email=%s, error=%v", req.Email, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
+
+	if expired {
+		h.respondSuccess(c, gin.H{"expired": true})
+	} else {
+		h.respondSuccess(c, gin.H{"expired": false, "expireTime": expireTime})
+	}
 }
 
 // VerifyCode 验证用户输入的验证码
@@ -482,7 +493,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	_, err := h.tokenService.VerifyCode(ctx, code, email, "")
 	if err != nil {
 		utils.LogPrintf("[AUTH] WARN: Code verification failed: email=%s, error=%v", email, err)
@@ -523,7 +534,7 @@ func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, email, nil)
 
 	utils.LogPrintf("[AUTH] Code invalidated: email=%s", email)
@@ -589,7 +600,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 验证验证码
 	code := strings.TrimSpace(req.VerificationCode)
@@ -607,7 +618,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// 检查邮箱是否已存在
-	existingByEmail, _ := h.userRepo.FindByEmail(ctx, emailResult.Value)
+	existingByEmail, err := h.userRepo.FindByEmail(ctx, emailResult.Value)
+	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
+		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error: email=%s, error=%v", emailResult.Value, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
 	if existingByEmail != nil {
 		utils.LogPrintf("[AUTH] WARN: Email already exists: %s", emailResult.Value)
 		h.respondError(c, http.StatusBadRequest, "EMAIL_ALREADY_EXISTS")
@@ -615,7 +631,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// 检查用户名是否已存在
-	existingByUsername, _ := h.userRepo.FindByUsername(ctx, usernameResult.Value)
+	existingByUsername, err := h.userRepo.FindByUsername(ctx, usernameResult.Value)
+	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
+		utils.LogPrintf("[AUTH] ERROR: FindByUsername database error: username=%s, error=%v", usernameResult.Value, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
 	if existingByUsername != nil {
 		utils.LogPrintf("[AUTH] WARN: Username already exists: %s", usernameResult.Value)
 		h.respondError(c, http.StatusBadRequest, "USERNAME_ALREADY_EXISTS")
@@ -701,17 +722,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	normalizedEmail := strings.ToLower(email)
 
 	// 查找用户（一条 SQL 同时支持邮箱或用户名登录）
 	user, err := h.userRepo.FindByEmailOrUsername(ctx, normalizedEmail)
 	if err != nil {
-		utils.LogPrintf("[AUTH] DEBUG: FindByEmailOrUsername error: %v", err)
-	}
-	if user == nil {
-		utils.LogPrintf("[AUTH] WARN: Login failed - user not found: %s", email)
-		h.respondError(c, http.StatusBadRequest, "INVALID_CREDENTIALS")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: Login failed - user not found: %s", email)
+			h.respondError(c, http.StatusBadRequest, "INVALID_CREDENTIALS")
+			return
+		}
+		// 真正的数据库错误
+		utils.LogPrintf("[AUTH] ERROR: FindByEmailOrUsername database error: identifier=%s, error=%v", email, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 
@@ -797,13 +821,18 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 使用 GetOrLoad 防止缓存击穿
 	user, err := h.userCache.GetOrLoad(ctx, claims.UserID, h.userRepo.FindByID)
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: User not found in VerifySession: userID=%d, error=%v", claims.UserID, err)
-		h.respondError(c, http.StatusUnauthorized, "USER_NOT_FOUND")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: User not found in VerifySession: userID=%d", claims.UserID)
+			h.respondError(c, http.StatusUnauthorized, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[AUTH] ERROR: GetOrLoad database error in VerifySession: userID=%d, error=%v", claims.UserID, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 
@@ -846,13 +875,18 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 使用 GetOrLoad 防止缓存击穿
 	user, err := h.userCache.GetOrLoad(ctx, userID, h.userRepo.FindByID)
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: User not found in GetMe: userID=%d, error=%v", userID, err)
-		h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: User not found in GetMe: userID=%d", userID)
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[AUTH] ERROR: GetOrLoad database error in GetMe: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 
@@ -941,16 +975,18 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 检查邮箱是否存在
-	user, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
+	_, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
 	if err != nil {
-		utils.LogPrintf("[AUTH] DEBUG: FindByEmail error in SendResetCode: %v", err)
-	}
-	if user == nil {
-		utils.LogPrintf("[AUTH] WARN: Email not found for reset: %s", normalizedEmail)
-		h.respondError(c, http.StatusBadRequest, "EMAIL_NOT_FOUND")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: Email not found for reset: %s", normalizedEmail)
+			h.respondError(c, http.StatusBadRequest, "EMAIL_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error in SendResetCode: email=%s, error=%v", normalizedEmail, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 
@@ -1031,7 +1067,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	normalizedEmail := strings.ToLower(email)
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 验证验证码
 	_, err := h.tokenService.VerifyCode(ctx, code, normalizedEmail, services.TokenTypeResetPassword)
@@ -1052,13 +1088,13 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	// 查找用户
 	user, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: FindByEmail failed in ResetPassword: email=%s, error=%v", normalizedEmail, err)
-		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
-		return
-	}
-	if user == nil {
-		utils.LogPrintf("[AUTH] WARN: User not found in ResetPassword: email=%s", normalizedEmail)
-		h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: User not found in ResetPassword: email=%s", normalizedEmail)
+			h.respondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error in ResetPassword: email=%s, error=%v", normalizedEmail, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 
@@ -1159,18 +1195,18 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 查找用户
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: FindByID failed in ChangePassword: userID=%d, error=%v", userID, err)
-		h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
-		return
-	}
-	if user == nil {
-		utils.LogPrintf("[AUTH] WARN: User not found in ChangePassword: userID=%d", userID)
-		h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		if errors.Is(err, models.ErrUserNotFound) {
+			utils.LogPrintf("[AUTH] WARN: User not found in ChangePassword: userID=%d", userID)
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[AUTH] ERROR: FindByID database error in ChangePassword: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
 

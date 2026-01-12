@@ -546,29 +546,33 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// 健康检查
 	r.GET("/health", hdlrs.staticHandler.GetHealth)
 
+	// API 请求体大小限制（64KB）
+	apiGroup := r.Group("")
+	apiGroup.Use(middleware.APIBodySizeLimit())
+
 	// 配置 API
-	setupConfigAPI(r, hdlrs)
+	setupConfigAPI(apiGroup, hdlrs)
 
 	// 认证 API
-	setupAuthAPI(r, hdlrs, svcs)
+	setupAuthAPI(apiGroup, hdlrs, svcs)
 
 	// 用户 API
-	setupUserAPI(r, hdlrs, svcs)
+	setupUserAPI(apiGroup, hdlrs, svcs)
 
 	// 扫码登录 API
-	setupQRLoginAPI(r, hdlrs)
-
-	// AI 聊天 API
-	setupAIAPI(r)
+	setupQRLoginAPI(apiGroup, hdlrs)
 
 	// 管理后台 API
-	setupAdminAPI(r, hdlrs, svcs)
+	setupAdminAPI(apiGroup, hdlrs, svcs)
+
+	// AI 聊天 API（单独设置 128KB 限制）
+	setupAIAPI(r)
 
 	utils.LogPrintf("[ROUTER] API routes configured")
 }
 
 // setupConfigAPI 配置 Config API
-func setupConfigAPI(r *gin.Engine, hdlrs *Handlers) {
+func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	configAPI := r.Group("/api/config")
 	{
 		configAPI.GET("/captcha", hdlrs.staticHandler.GetCaptchaConfig)
@@ -576,7 +580,7 @@ func setupConfigAPI(r *gin.Engine, hdlrs *Handlers) {
 }
 
 // setupAuthAPI 配置认证 API
-func setupAuthAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	authAPI := r.Group("/api/auth")
 	{
 		// 验证码相关
@@ -612,7 +616,7 @@ func setupAuthAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupUserAPI 配置用户 API
-func setupUserAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	userAPI := r.Group("/api/user")
 	userAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
 	{
@@ -622,7 +626,7 @@ func setupUserAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupQRLoginAPI 配置扫码登录 API
-func setupQRLoginAPI(r *gin.Engine, hdlrs *Handlers) {
+func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers) {
 	qrAPI := r.Group("/api/qr-login")
 	{
 		qrAPI.POST("/generate", hdlrs.qrLoginHandler.Generate)
@@ -637,6 +641,7 @@ func setupQRLoginAPI(r *gin.Engine, hdlrs *Handlers) {
 // setupAIAPI 配置 AI 聊天 API
 func setupAIAPI(r *gin.Engine) {
 	aiAPI := r.Group("/api/ai")
+	aiAPI.Use(middleware.AIBodySizeLimit()) // 128KB 限制
 	{
 		aiAPI.POST("/chat", handlers.HandleAIChat)
 	}
@@ -647,7 +652,7 @@ func setupAIAPI(r *gin.Engine) {
 // - 所有接口需要先通过 AuthMiddleware 认证
 // - 普通管理接口需要 AdminMiddleware（role >= 1）
 // - 敏感操作需要 SuperAdminMiddleware（role >= 2）
-func setupAdminAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	adminAPI := r.Group("/admin/api")
 
 	// 第一层：认证中间件（必须登录）
