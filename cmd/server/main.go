@@ -703,7 +703,11 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
 		userAPI.GET("/logs", hdlrs.userHandler.GetLogs)
+		userAPI.POST("/export/request", hdlrs.userHandler.RequestDataExport)
 	}
+
+	// 数据导出下载（不需要 session 认证，使用一次性 token）
+	r.GET("/api/user/export/download", hdlrs.userHandler.DownloadUserData)
 }
 
 // setupQRLoginAPI 配置扫码登录 API
