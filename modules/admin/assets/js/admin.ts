@@ -100,7 +100,6 @@ async function init(): Promise<void> {
       const page = item.dataset.page;
       if (page) {
         window.location.hash = page;
-        navigateTo(page);
         // 移动端点击导航后关闭侧边栏
         sidebar.classList.remove('is-open');
       }
