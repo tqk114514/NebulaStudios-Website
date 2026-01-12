@@ -121,6 +121,19 @@
           </div>
         </div>
         
+        <div class="info-item clickable" id="user-logs-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.userLogs"></span>
+            <span class="info-hint" data-i18n="dashboard.userLogsHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
         <div class="info-item clickable logout-item" id="logout-btn">
           <div class="info-icon logout-icon">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
@@ -358,6 +371,26 @@
         <div class="modal-footer modal-footer-buttons">
           <button id="qr-login-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="qr-login-confirm-btn" class="button-primary" data-i18n="dashboard.confirmLogin" aria-label="Confirm Login"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作日志弹窗 -->
+  <div id="user-logs-modal" class="modal-overlay is-hidden">
+    <div class="modal-container modal-container-wide">
+      <div class="modal-content user-logs-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.userLogs"></h2>
+        <div class="modal-body">
+          <div id="user-logs-list" class="user-logs-list"></div>
+          <div id="user-logs-loading" class="user-logs-loading is-hidden">
+            <div class="loader-spinner"></div>
+          </div>
+          <div id="user-logs-empty" class="user-logs-empty is-hidden" data-i18n="dashboard.userLogsEmpty"></div>
+          <button id="user-logs-load-more" class="button-secondary user-logs-load-more is-hidden" data-i18n="dashboard.loadMore"></button>
+        </div>
+        <div class="modal-footer">
+          <button id="user-logs-close-btn" class="button-primary modal-close" data-i18n="modal.close" aria-label="Close"></button>
         </div>
       </div>
     </div>
