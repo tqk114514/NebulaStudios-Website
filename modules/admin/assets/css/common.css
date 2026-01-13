@@ -313,6 +313,12 @@ button {
   padding: 24px;
   overflow-y: auto;
   max-height: 60vh;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.modal-body::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
 }
 
 .modal-footer {
@@ -510,4 +516,101 @@ button {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- 成功按钮 --- */
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
+
+/* --- 封禁状态标签 --- */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-badge.banned {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+/* --- 封禁详情样式 --- */
+.user-detail-banned {
+  background: rgba(239, 68, 68, 0.05);
+  margin: -12px -24px;
+  padding: 12px 24px;
+  border-radius: 0;
+}
+
+.user-detail-banned + .user-detail-row {
+  padding-top: 12px;
+}
+
+.permanent-ban {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* --- 操作类型标签（封禁/解封） --- */
+.action-badge.ban_user {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.action-badge.unban_user {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+/* --- 表单样式 --- */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.form-select,
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  transition: border-color var(--transition);
+}
+
+.form-select:focus,
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.form-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* --- 禁用按钮 --- */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

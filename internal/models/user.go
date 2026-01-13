@@ -90,22 +90,31 @@ type User struct {
 	MicrosoftID         sql.NullString `json:"microsoft_id,omitempty"`
 	MicrosoftName       sql.NullString `json:"microsoft_name,omitempty"`
 	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url,omitempty"`
-	MicrosoftAvatarHash sql.NullString `json:"-"` // 头像哈希，用于判断是否需要更新
+	MicrosoftAvatarHash sql.NullString `json:"-"`              // 头像哈希，用于判断是否需要更新
+	IsBanned            bool           `json:"is_banned"`      // 是否被封禁
+	BanReason           sql.NullString `json:"ban_reason"`     // 封禁原因
+	BannedAt            sql.NullTime   `json:"banned_at"`      // 封禁时间
+	BannedBy            sql.NullInt64  `json:"banned_by"`      // 封禁操作者 ID
+	UnbanAt             sql.NullTime   `json:"unban_at"`       // 解封时间（NULL 表示永封）
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
 }
 
 // UserPublic 公开的用户信息（不含敏感数据）
 type UserPublic struct {
-	ID                 int64     `json:"id"`
-	Username           string    `json:"username"`
-	Email              string    `json:"email"`
-	AvatarURL          string    `json:"avatar_url"`
-	Role               int       `json:"role"`
-	MicrosoftID        *string   `json:"microsoft_id,omitempty"`
-	MicrosoftName      *string   `json:"microsoft_name,omitempty"`
-	MicrosoftAvatarURL *string   `json:"microsoft_avatar_url,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 int64      `json:"id"`
+	Username           string     `json:"username"`
+	Email              string     `json:"email"`
+	AvatarURL          string     `json:"avatar_url"`
+	Role               int        `json:"role"`
+	MicrosoftID        *string    `json:"microsoft_id,omitempty"`
+	MicrosoftName      *string    `json:"microsoft_name,omitempty"`
+	MicrosoftAvatarURL *string    `json:"microsoft_avatar_url,omitempty"`
+	IsBanned           bool       `json:"is_banned"`
+	BanReason          *string    `json:"ban_reason,omitempty"`
+	BannedAt           *time.Time `json:"banned_at,omitempty"`
+	UnbanAt            *time.Time `json:"unban_at,omitempty"` // NULL 表示永封
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 // UserRepository 用户仓库
@@ -133,6 +142,7 @@ func (u *User) ToPublic() *UserPublic {
 		Email:     u.Email,
 		AvatarURL: avatarURL,
 		Role:      u.Role,
+		IsBanned:  u.IsBanned,
 		CreatedAt: u.CreatedAt,
 	}
 
@@ -144,6 +154,15 @@ func (u *User) ToPublic() *UserPublic {
 	}
 	if u.MicrosoftAvatarURL.Valid {
 		pub.MicrosoftAvatarURL = &u.MicrosoftAvatarURL.String
+	}
+	if u.BanReason.Valid {
+		pub.BanReason = &u.BanReason.String
+	}
+	if u.BannedAt.Valid {
+		pub.BannedAt = &u.BannedAt.Time
+	}
+	if u.UnbanAt.Valid {
+		pub.UnbanAt = &u.UnbanAt.Time
 	}
 
 	return pub
@@ -161,6 +180,28 @@ func (u *User) IsAdmin() bool {
 //   - bool: 是否为超级管理员
 func (u *User) IsSuperAdmin() bool {
 	return u != nil && u.Role >= RoleSuperAdmin
+}
+
+// CheckBanned 检查用户是否处于封禁状态
+// 会自动检查解封时间，如果已过期则返回 false
+// 返回：
+//   - bool: 是否被封禁
+func (u *User) CheckBanned() bool {
+	if u == nil || !u.IsBanned {
+		return false
+	}
+	// 如果有解封时间且已过期，则不再封禁
+	if u.UnbanAt.Valid && time.Now().After(u.UnbanAt.Time) {
+		return false
+	}
+	return true
+}
+
+// IsPermanentBan 检查是否为永久封禁
+// 返回：
+//   - bool: 是否为永久封禁
+func (u *User) IsPermanentBan() bool {
+	return u != nil && u.IsBanned && !u.UnbanAt.Valid
 }
 
 // Validate 验证用户数据
@@ -216,11 +257,13 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -256,12 +299,14 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE email = $1 OR username = $1
 		LIMIT 1
 	`, identifier).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -295,11 +340,13 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -333,11 +380,13 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE username = $1
 	`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -371,11 +420,13 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 	err := pool.QueryRow(ctx, `
 		SELECT id, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE microsoft_id = $1
 	`, msID).Scan(
 		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -626,6 +677,7 @@ type UserStats struct {
 	TodayNewUsers   int64 `json:"todayNewUsers"`
 	AdminCount      int64 `json:"adminCount"`
 	MicrosoftLinked int64 `json:"microsoftLinked"`
+	BannedCount     int64 `json:"bannedCount"`
 }
 
 // FindAll 查询用户列表（分页、搜索）
@@ -663,6 +715,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		rows, err = pool.Query(ctx, `
 			SELECT id, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+			       is_banned, ban_reason, banned_at, banned_by, unban_at,
 			       created_at, updated_at
 			FROM users
 			ORDER BY id DESC
@@ -683,6 +736,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		rows, err = pool.Query(ctx, `
 			SELECT id, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+			       is_banned, ban_reason, banned_at, banned_by, unban_at,
 			       created_at, updated_at
 			FROM users
 			WHERE username ILIKE $1 OR email ILIKE $1
@@ -709,6 +763,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		err := pgxRows.Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
@@ -771,5 +826,109 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		return nil, fmt.Errorf("count microsoft linked failed: %w", err)
 	}
 
+	// 封禁用户数
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users WHERE is_banned = true
+	`).Scan(&stats.BannedCount)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to count banned users: error=%v", err)
+		return nil, fmt.Errorf("count banned users failed: %w", err)
+	}
+
 	return stats, nil
+}
+
+
+// ====================  封禁管理方法 ====================
+
+// Ban 封禁用户
+// 参数：
+//   - ctx: 上下文
+//   - userID: 被封禁用户 ID
+//   - adminID: 操作管理员 ID
+//   - reason: 封禁原因
+//   - unbanAt: 解封时间（nil 表示永久封禁）
+//
+// 返回：
+//   - error: 错误信息
+func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason string, unbanAt *time.Time) error {
+	// 参数验证
+	if userID <= 0 {
+		return ErrUserRepoInvalidID
+	}
+	if adminID <= 0 {
+		return fmt.Errorf("%w: invalid admin ID", ErrInvalidUserData)
+	}
+
+	// 检查数据库连接
+	if err := r.checkDB(); err != nil {
+		return err
+	}
+
+	// 执行封禁
+	result, err := pool.Exec(ctx, `
+		UPDATE users SET 
+			is_banned = true,
+			ban_reason = $1,
+			banned_at = CURRENT_TIMESTAMP,
+			banned_by = $2,
+			unban_at = $3,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4
+	`, reason, adminID, unbanAt, userID)
+
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to ban user: id=%d, error=%v", userID, err)
+		return fmt.Errorf("ban user failed: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	utils.LogPrintf("[USER] User banned: id=%d, admin_id=%d, reason=%s", userID, adminID, reason)
+	return nil
+}
+
+// Unban 解封用户
+// 参数：
+//   - ctx: 上下文
+//   - userID: 被解封用户 ID
+//
+// 返回：
+//   - error: 错误信息
+func (r *UserRepository) Unban(ctx context.Context, userID int64) error {
+	// 参数验证
+	if userID <= 0 {
+		return ErrUserRepoInvalidID
+	}
+
+	// 检查数据库连接
+	if err := r.checkDB(); err != nil {
+		return err
+	}
+
+	// 执行解封
+	result, err := pool.Exec(ctx, `
+		UPDATE users SET 
+			is_banned = false,
+			ban_reason = NULL,
+			banned_at = NULL,
+			banned_by = NULL,
+			unban_at = NULL,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, userID)
+
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to unban user: id=%d, error=%v", userID, err)
+		return fmt.Errorf("unban user failed: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	utils.LogPrintf("[USER] User unbanned: id=%d", userID)
+	return nil
 }

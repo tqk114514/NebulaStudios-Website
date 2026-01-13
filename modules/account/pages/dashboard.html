@@ -18,6 +18,33 @@
   </div>
   
   <main class="dashboard-main">
+    <!-- 封禁盖章（JS 动态显示） -->
+    <div id="banned-stamp" class="banned-stamp is-hidden">
+      <div class="banned-stamp-inner">
+        <span class="banned-stamp-text" data-i18n="dashboard.banned"></span>
+      </div>
+    </div>
+
+    <!-- 封禁信息卡片（JS 动态显示） -->
+    <section id="banned-info" class="banned-info is-hidden">
+      <h3 class="banned-info-title">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        <span data-i18n="dashboard.bannedInfo"></span>
+      </h3>
+      <div class="banned-info-item">
+        <span class="banned-info-label" data-i18n="dashboard.bannedReason"></span>
+        <span class="banned-info-value" id="banned-reason">-</span>
+      </div>
+      <div class="banned-info-item">
+        <span class="banned-info-label" data-i18n="dashboard.bannedAt"></span>
+        <span class="banned-info-value" id="banned-at">-</span>
+      </div>
+      <div class="banned-info-item">
+        <span class="banned-info-label" data-i18n="dashboard.unbanAt"></span>
+        <span class="banned-info-value" id="unban-at">-</span>
+      </div>
+    </section>
+
     <!-- 用户头像和欢迎区 -->
     <section class="profile-header">
       <div class="avatar-large" id="user-avatar">U</div>
