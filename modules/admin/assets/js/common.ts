@@ -20,6 +20,10 @@ export interface UserPublic {
   microsoft_id?: string;
   microsoft_name?: string;
   microsoft_avatar_url?: string;
+  is_banned?: boolean;
+  ban_reason?: string;
+  banned_at?: string;
+  unban_at?: string;
   created_at?: string;
 }
 
@@ -95,7 +99,9 @@ export const ROLE_CLASSES: Record<number, string> = {
 
 export const ACTION_NAMES: Record<string, string> = {
   'set_role': '修改角色',
-  'delete_user': '删除用户'
+  'delete_user': '删除用户',
+  'ban_user': '封禁用户',
+  'unban_user': '解封用户'
 };
 
 // ==================== DOM 元素 ====================
@@ -109,6 +115,14 @@ export const confirmTitle = document.getElementById('confirm-title') as HTMLElem
 export const confirmMessage = document.getElementById('confirm-message') as HTMLElement;
 export const confirmCancel = document.getElementById('confirm-cancel') as HTMLButtonElement;
 export const confirmOk = document.getElementById('confirm-ok') as HTMLButtonElement;
+export const banModal = document.getElementById('ban-modal') as HTMLElement;
+export const banReason = document.getElementById('ban-reason') as HTMLSelectElement;
+export const banCustomReasonGroup = document.getElementById('ban-custom-reason-group') as HTMLElement;
+export const banCustomReason = document.getElementById('ban-custom-reason') as HTMLInputElement;
+export const banDuration = document.getElementById('ban-duration') as HTMLSelectElement;
+export const banCancel = document.getElementById('ban-cancel') as HTMLButtonElement;
+export const banConfirm = document.getElementById('ban-confirm') as HTMLButtonElement;
+export const banModalClose = document.getElementById('ban-modal-close') as HTMLButtonElement;
 
 // ==================== API 函数 ====================
 

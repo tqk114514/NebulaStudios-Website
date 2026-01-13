@@ -58,6 +58,17 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
     return `${username} (${email})`;
   }
 
+  if (action === 'ban_user') {
+    const username = escapeHtml(details.target_username as string || '');
+    const reason = escapeHtml(details.reason as string || '');
+    return `${username}: ${reason}`;
+  }
+
+  if (action === 'unban_user') {
+    const username = escapeHtml(details.target_username as string || '');
+    return username;
+  }
+
   return JSON.stringify(details);
 }
 

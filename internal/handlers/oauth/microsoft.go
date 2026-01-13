@@ -212,6 +212,21 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 			return
 		}
 
+		// 检查用户是否被封禁
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+		user, err := h.userCache.GetOrLoad(ctx, claims.UserID, h.userRepo.FindByID)
+		if err != nil {
+			utils.LogPrintf("[OAUTH-MS] ERROR: Failed to get user for ban check: userID=%d, error=%v", claims.UserID, err)
+			RedirectWithError(c, h.baseURL, "/account/dashboard", "oauth_error")
+			return
+		}
+		if user.CheckBanned() {
+			utils.LogPrintf("[OAUTH-MS] WARN: Banned user attempted to link Microsoft: userID=%d", claims.UserID)
+			RedirectWithError(c, h.baseURL, "/account/dashboard", "user_banned")
+			return
+		}
+
 		stateData.UserID = claims.UserID
 		utils.LogPrintf("[OAUTH-MS] Link action initiated: userID=%d", claims.UserID)
 	}
