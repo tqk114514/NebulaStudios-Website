@@ -218,6 +218,53 @@
     </div>
   </div>
 
+  <!-- 封禁用户弹窗 -->
+  <div id="ban-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 class="modal-title">封禁用户</h2>
+        <button class="modal-close-btn" id="ban-modal-close" aria-label="关闭">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="ban-reason">封禁原因</label>
+          <select id="ban-reason" class="form-select">
+            <option value="">请选择封禁原因</option>
+            <option value="违反服务条款">违反服务条款</option>
+            <option value="滥用服务">滥用服务</option>
+            <option value="恶意行为">恶意行为</option>
+            <option value="垃圾信息">垃圾信息</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="form-group" id="ban-custom-reason-group" style="display: none;">
+          <label for="ban-custom-reason">自定义原因</label>
+          <input type="text" id="ban-custom-reason" class="form-input" placeholder="请输入封禁原因" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label for="ban-duration">封禁时长</label>
+          <select id="ban-duration" class="form-select">
+            <option value="1">1 天</option>
+            <option value="3">3 天</option>
+            <option value="7" selected>7 天</option>
+            <option value="30">30 天</option>
+            <option value="90">90 天</option>
+            <option value="365">1 年</option>
+            <option value="0">永久封禁</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="ban-cancel" class="btn btn-secondary">取消</button>
+        <button id="ban-confirm" class="btn btn-danger" disabled>确认封禁</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast 提示 -->
   <div id="toast-container" class="toast-container"></div>
 
