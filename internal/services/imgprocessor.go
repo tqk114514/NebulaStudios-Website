@@ -54,10 +54,11 @@ var imgProcessorBin []byte
 
 // ImgProcessor 图片处理服务
 type ImgProcessor struct {
-	mu        sync.Mutex
-	available bool
-	sem       chan struct{} // 并发限制信号量
-	cmd       *exec.Cmd     // 子进程
+	mu         sync.Mutex
+	available  bool
+	sem        chan struct{} // 并发限制信号量
+	cmd        *exec.Cmd     // 子进程
+	restarting bool          // 是否正在重启
 }
 
 // NewImgProcessor 创建图片处理服务
@@ -126,6 +127,51 @@ func (p *ImgProcessor) IsAvailable() bool {
 	return p.available
 }
 
+// tryRestart 尝试重启处理器（非阻塞，后台执行）
+func (p *ImgProcessor) tryRestart() {
+	p.mu.Lock()
+	if p.restarting {
+		p.mu.Unlock()
+		return
+	}
+	p.restarting = true
+	p.mu.Unlock()
+
+	go func() {
+		defer func() {
+			p.mu.Lock()
+			p.restarting = false
+			p.mu.Unlock()
+		}()
+
+		utils.LogPrintf("[IMG] Attempting to restart processor...")
+
+		// 先清理旧进程
+		if p.cmd != nil && p.cmd.Process != nil {
+			p.cmd.Process.Kill()
+			p.cmd.Wait()
+		}
+
+		// 重新启动
+		p.startProcessor()
+	}()
+}
+
+// checkAndRestart 检查进程状态，必要时重启
+func (p *ImgProcessor) checkAndRestart() {
+	// 检查进程是否还活着
+	if p.cmd == nil || p.cmd.Process == nil {
+		p.tryRestart()
+		return
+	}
+
+	// 检查 socket 是否存在
+	if _, err := os.Stat(SocketPath); os.IsNotExist(err) {
+		p.tryRestart()
+		return
+	}
+}
+
 // ToWebP 将图片转换为 WebP 格式
 func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	if len(imageData) == 0 {
@@ -143,6 +189,7 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	conn, err := net.DialTimeout("unix", SocketPath, ConnectTimeout)
 	if err != nil {
 		p.available = false
+		p.checkAndRestart() // 连接失败时触发重启检查
 		return nil, fmt.Errorf("%w: %v", ErrProcessorNotAvailable, err)
 	}
 	defer conn.Close()
