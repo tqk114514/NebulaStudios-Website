@@ -213,6 +213,8 @@
   "dashboard.logAction.link_microsoft": "綁定微軟帳戶",
   "dashboard.logAction.unlink_microsoft": "解綁微軟帳戶",
   "dashboard.logAction.delete_account": "刪除帳戶",
+  "dashboard.logAction.banned": "帳戶被封禁",
+  "dashboard.logAction.unbanned": "帳戶已解封",
   "dashboard.dataExport": "資料匯出",
   "dashboard.dataExportHint": "下載您的所有帳戶資料",
   "dashboard.dataExportConfirm": "確定要匯出您的帳戶資料嗎？匯出將包含您的所有用戶資訊和操作日誌。",
@@ -220,6 +222,13 @@
   "dashboard.dataExportSuccess": "資料匯出成功",
   "dashboard.dataExportFailed": "資料匯出失敗，請稍後重試",
   "dashboard.dataExportRateLimit": "24小時內只能匯出一次，請稍後再試",
+
+  "dashboard.banned": "已封禁",
+  "dashboard.bannedReason": "封禁原因",
+  "dashboard.bannedAt": "封禁時間",
+  "dashboard.unbanAt": "解封時間",
+  "dashboard.permanentBan": "永久封禁",
+  "dashboard.bannedInfo": "帳戶狀態",
 
   "linkConfirm.title": "確認綁定帳戶",
   "linkConfirm.subtitle": "檢測到您的微軟帳戶郵箱與已有帳戶相同",
@@ -230,5 +239,7 @@
   "linkConfirm.cancel": "取消",
   "linkConfirm.invalidLink": "無效的綁定連結",
   "linkConfirm.linkExpired": "綁定連結已過期，請重新操作",
-  "linkConfirm.linkFailed": "綁定失敗，請稍後重試"
+  "linkConfirm.linkFailed": "綁定失敗，請稍後重試",
+
+  "error.userBanned": "您的帳戶已被封禁，無法執行此操作"
 }

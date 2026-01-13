@@ -361,7 +361,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 
 	// Admin Handler
 	adminLogRepo := models.NewAdminLogRepository()
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo)
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}
@@ -640,7 +640,7 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	setupUserAPI(apiGroup, hdlrs, svcs)
 
 	// 扫码登录 API
-	setupQRLoginAPI(apiGroup, hdlrs)
+	setupQRLoginAPI(apiGroup, hdlrs, svcs)
 
 	// 管理后台 API
 	setupAdminAPI(apiGroup, hdlrs, svcs)
@@ -680,18 +680,36 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		// 密码相关
 		authAPI.POST("/send-reset-code", middleware.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)
 		authAPI.POST("/reset-password", hdlrs.authHandler.ResetPassword)
-		authAPI.POST("/change-password", middleware.AuthMiddleware(svcs.sessionService), hdlrs.authHandler.ChangePassword)
+		// 修改密码需要封禁检查
+		authAPI.POST("/change-password",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.authHandler.ChangePassword)
 
-		// 账户删除
-		authAPI.POST("/send-delete-code", middleware.AuthMiddleware(svcs.sessionService), hdlrs.userHandler.SendDeleteCode)
-		authAPI.POST("/delete-account", middleware.AuthMiddleware(svcs.sessionService), hdlrs.userHandler.DeleteAccount)
+		// 账户删除（需要封禁检查）
+		authAPI.POST("/send-delete-code",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.userHandler.SendDeleteCode)
+		authAPI.POST("/delete-account",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.userHandler.DeleteAccount)
 
 		// Microsoft OAuth
 		authAPI.GET("/microsoft", hdlrs.microsoftHandler.Auth)
 		authAPI.GET("/microsoft/callback", hdlrs.microsoftHandler.Callback)
-		authAPI.POST("/microsoft/unlink", middleware.AuthMiddleware(svcs.sessionService), hdlrs.microsoftHandler.Unlink)
+		// 解绑微软账户需要封禁检查
+		authAPI.POST("/microsoft/unlink",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
-		authAPI.POST("/microsoft/confirm-link", hdlrs.microsoftHandler.ConfirmLink)
+		// 确认绑定微软账户需要封禁检查
+		authAPI.POST("/microsoft/confirm-link",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.microsoftHandler.ConfirmLink)
 	}
 }
 
@@ -699,6 +717,8 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	userAPI := r.Group("/api/user")
 	userAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
+	// 封禁检查：被封禁用户无法调用这些 API
+	userAPI.Use(middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo))
 	{
 		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
@@ -711,13 +731,17 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupQRLoginAPI 配置扫码登录 API
-func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers) {
+func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	qrAPI := r.Group("/api/qr-login")
 	{
 		qrAPI.POST("/generate", hdlrs.qrLoginHandler.Generate)
 		qrAPI.POST("/cancel", hdlrs.qrLoginHandler.Cancel)
 		qrAPI.POST("/scan", hdlrs.qrLoginHandler.Scan)
-		qrAPI.POST("/mobile-confirm", hdlrs.qrLoginHandler.MobileConfirm)
+		// 移动端确认登录需要封禁检查（被封禁用户不能授权其他设备登录）
+		qrAPI.POST("/mobile-confirm",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.qrLoginHandler.MobileConfirm)
 		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
 		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
 	}
@@ -753,6 +777,10 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		// 用户列表和详情（管理员可访问）
 		adminAPI.GET("/users", hdlrs.adminHandler.GetUsers)
 		adminAPI.GET("/users/:id", hdlrs.adminHandler.GetUser)
+
+		// 封禁/解封（管理员可访问）
+		adminAPI.POST("/users/:id/ban", hdlrs.adminHandler.BanUser)
+		adminAPI.POST("/users/:id/unban", hdlrs.adminHandler.UnbanUser)
 
 		// 敏感操作（仅超级管理员）
 		superAdminAPI := adminAPI.Group("")

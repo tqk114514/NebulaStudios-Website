@@ -311,6 +311,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (error === 'session_expired') {
       setTimeout(() => showAlert(t('error.sessionExpired')), 100);
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (error === 'user_banned') {
+      setTimeout(() => showAlert(t('error.userBanned')), 100);
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     // ==================== 用户信息展示 ====================
@@ -319,6 +322,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     const usernameEl = document.getElementById('display-username');
     const emailEl = document.getElementById('display-email');
     const avatarEl = document.getElementById('user-avatar');
+
+    // ==================== 封禁状态检查 ====================
+    
+    /**
+     * 检查用户是否被封禁（考虑解封时间）
+     */
+    function checkBanned(): boolean {
+      if (!user.is_banned) return false;
+      // 如果有解封时间且已过期，则不再封禁
+      if (user.unban_at && new Date(user.unban_at) < new Date()) {
+        return false;
+      }
+      return true;
+    }
+
+    /**
+     * 格式化日期时间
+     */
+    function formatDateTime(dateStr: string | null | undefined): string {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleString(document.documentElement.lang || 'zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // 显示封禁状态
+    if (checkBanned()) {
+      const bannedStamp = document.getElementById('banned-stamp');
+      const bannedInfo = document.getElementById('banned-info');
+      const bannedReason = document.getElementById('banned-reason');
+      const bannedAt = document.getElementById('banned-at');
+      const unbanAt = document.getElementById('unban-at');
+      const dashboardMain = document.querySelector('.dashboard-main');
+
+      // 添加封禁状态类，禁用页面交互
+      if (dashboardMain) dashboardMain.classList.add('is-banned');
+
+      if (bannedStamp) bannedStamp.classList.remove('is-hidden');
+      if (bannedInfo) bannedInfo.classList.remove('is-hidden');
+      if (bannedReason) bannedReason.textContent = user.ban_reason || '-';
+      if (bannedAt) bannedAt.textContent = formatDateTime(user.banned_at);
+      if (unbanAt) {
+        if (user.unban_at) {
+          unbanAt.textContent = formatDateTime(user.unban_at);
+        } else {
+          unbanAt.textContent = t('dashboard.permanentBan');
+          unbanAt.classList.add('permanent');
+        }
+      }
+    }
 
     // 显示用户名
     if (usernameEl) {

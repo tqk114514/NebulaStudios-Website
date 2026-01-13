@@ -48,6 +48,10 @@ const (
 	UserActionUnlinkMicrosoft = "unlink_microsoft"
 	// UserActionDeleteAccount 删除账户
 	UserActionDeleteAccount = "delete_account"
+	// UserActionBanned 被封禁
+	UserActionBanned = "banned"
+	// UserActionUnbanned 被解封
+	UserActionUnbanned = "unbanned"
 )
 
 // ====================  数据结构 ====================
@@ -83,6 +87,12 @@ type LinkMicrosoftDetails struct {
 type UnlinkMicrosoftDetails struct {
 	MicrosoftID   string `json:"microsoft_id"`
 	MicrosoftName string `json:"microsoft_name"`
+}
+
+// BannedDetails 被封禁详情
+type BannedDetails struct {
+	Reason  string     `json:"reason"`
+	UnbanAt *time.Time `json:"unban_at,omitempty"` // nil 表示永久封禁
 }
 
 // UserLogRepository 用户日志仓库
@@ -229,6 +239,34 @@ func (r *UserLogRepository) LogDeleteAccount(ctx context.Context, userID int64) 
 	log := &UserLog{
 		UserID: userID,
 		Action: UserActionDeleteAccount,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogBanned 记录被封禁
+func (r *UserLogRepository) LogBanned(ctx context.Context, userID int64, reason string, unbanAt *time.Time) error {
+	details := BannedDetails{
+		Reason:  reason,
+		UnbanAt: unbanAt,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &UserLog{
+		UserID:  userID,
+		Action:  UserActionBanned,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogUnbanned 记录被解封
+func (r *UserLogRepository) LogUnbanned(ctx context.Context, userID int64) error {
+	log := &UserLog{
+		UserID: userID,
+		Action: UserActionUnbanned,
 	}
 	return r.Create(ctx, log)
 }
