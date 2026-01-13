@@ -1,2 +1,5 @@
 # 统一使用 LF 行尾符
 * text=auto eol=lf
+
+# 排除 vendor 目录的语言统计
+img-processor/vendor/** linguist-vendored
