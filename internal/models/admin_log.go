@@ -38,6 +38,10 @@ const (
 	ActionSetRole = "set_role"
 	// ActionDeleteUser 删除用户
 	ActionDeleteUser = "delete_user"
+	// ActionBanUser 封禁用户
+	ActionBanUser = "ban_user"
+	// ActionUnbanUser 解封用户
+	ActionUnbanUser = "unban_user"
 )
 
 // ====================  数据结构 ====================
@@ -74,6 +78,18 @@ type SetRoleDetails struct {
 type DeleteUserDetails struct {
 	TargetUsername string `json:"target_username"`
 	TargetEmail    string `json:"target_email"`
+}
+
+// BanUserDetails 封禁用户操作详情
+type BanUserDetails struct {
+	TargetUsername string     `json:"target_username"`
+	Reason         string     `json:"reason"`
+	UnbanAt        *time.Time `json:"unban_at,omitempty"` // nil 表示永久封禁
+}
+
+// UnbanUserDetails 解封用户操作详情
+type UnbanUserDetails struct {
+	TargetUsername string `json:"target_username"`
 }
 
 // AdminLogRepository 管理员日志仓库
@@ -190,6 +206,68 @@ func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminID, targetI
 	log := &AdminLog{
 		AdminID:  adminID,
 		Action:   ActionDeleteUser,
+		TargetID: &targetID,
+		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogBanUser 记录封禁用户操作
+// 参数：
+//   - ctx: 上下文
+//   - adminID: 操作者 ID
+//   - targetID: 目标用户 ID
+//   - targetUsername: 目标用户名
+//   - reason: 封禁原因
+//   - unbanAt: 解封时间（nil 表示永久封禁）
+//
+// 返回：
+//   - error: 错误信息
+func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminID, targetID int64, targetUsername, reason string, unbanAt *time.Time) error {
+	details := BanUserDetails{
+		TargetUsername: targetUsername,
+		Reason:         reason,
+		UnbanAt:        unbanAt,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID:  adminID,
+		Action:   ActionBanUser,
+		TargetID: &targetID,
+		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogUnbanUser 记录解封用户操作
+// 参数：
+//   - ctx: 上下文
+//   - adminID: 操作者 ID
+//   - targetID: 目标用户 ID
+//   - targetUsername: 目标用户名
+//
+// 返回：
+//   - error: 错误信息
+func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminID, targetID int64, targetUsername string) error {
+	details := UnbanUserDetails{
+		TargetUsername: targetUsername,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID:  adminID,
+		Action:   ActionUnbanUser,
 		TargetID: &targetID,
 		Details:  detailsJSON,
 	}

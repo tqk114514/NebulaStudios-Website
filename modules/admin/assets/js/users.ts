@@ -19,6 +19,14 @@ import {
   userModal,
   userModalBody,
   userModalFooter,
+  banModal,
+  banReason,
+  banCustomReasonGroup,
+  banCustomReason,
+  banDuration,
+  banCancel,
+  banConfirm,
+  banModalClose,
   showToast,
   showModal,
   hideModal,
@@ -88,6 +96,21 @@ async function setUserRole(id: number, role: number): Promise<boolean> {
 async function deleteUser(id: number): Promise<boolean> {
   const result = await fetchApi(`/admin/api/users/${id}`, {
     method: 'DELETE'
+  });
+  return result.success;
+}
+
+async function banUser(id: number, reason: string, days: number): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${id}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, days })
+  });
+  return result.success;
+}
+
+async function unbanUser(id: number): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${id}/unban`, {
+    method: 'POST'
   });
   return result.success;
 }
@@ -282,12 +305,45 @@ const userDetailSkeleton = `
 `;
 
 /**
+ * 检查用户是否被封禁（考虑解封时间）
+ */
+function checkUserBanned(user: UserPublic): boolean {
+  if (!user.is_banned) return false;
+  if (user.unban_at && new Date(user.unban_at) < new Date()) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * 渲染用户详情弹窗内容
  * @param user - 用户数据
  * @param cachedAt - 缓存时间戳（可选）
  * @param isRefreshing - 是否正在刷新数据（可选）
  */
 function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshing?: boolean): void {
+  const isBanned = checkUserBanned(user);
+  const banStatusHtml = isBanned ? `
+    <div class="user-detail-row user-detail-banned">
+      <span class="user-detail-label">封禁状态</span>
+      <span class="user-detail-value">
+        <span class="status-badge banned">已封禁</span>
+      </span>
+    </div>
+    <div class="user-detail-row">
+      <span class="user-detail-label">封禁原因</span>
+      <span class="user-detail-value">${escapeHtml(user.ban_reason || '-')}</span>
+    </div>
+    <div class="user-detail-row">
+      <span class="user-detail-label">封禁时间</span>
+      <span class="user-detail-value">${formatDate(user.banned_at)}</span>
+    </div>
+    <div class="user-detail-row">
+      <span class="user-detail-label">解封时间</span>
+      <span class="user-detail-value ${!user.unban_at ? 'permanent-ban' : ''}">${user.unban_at ? formatDate(user.unban_at) : '永久封禁'}</span>
+    </div>
+  ` : '';
+
   userModalBody.innerHTML = `
     <div class="user-detail">
       <div class="user-detail-row">
@@ -316,6 +372,7 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
         <span class="user-detail-label">注册时间</span>
         <span class="user-detail-value">${formatDate(user.created_at)}</span>
       </div>
+      ${banStatusHtml}
     </div>
     <div class="user-detail-meta" id="user-detail-meta">
       ${cachedAt ? `数据更新于 ${formatRelativeTime(cachedAt)}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
@@ -330,8 +387,21 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
 function bindUserDetailButtons(user: UserPublic): void {
   let footerHtml = '<button class="btn btn-secondary" id="close-user-modal">关闭</button>';
 
+  const isBanned = checkUserBanned(user);
+
+  // 管理员可以封禁/解封普通用户
+  if (currentUserRole >= 1 && user.role < 1) {
+    if (isBanned) {
+      footerHtml += `<button class="btn btn-success" id="unban-user" data-user-id="${user.id}">解除封禁</button>`;
+    } else {
+      footerHtml += `<button class="btn btn-warning" id="ban-user" data-user-id="${user.id}">封禁用户</button>`;
+    }
+  }
+
+  // 超级管理员可以设置角色和删除用户
   if (currentUserRole >= 2 && user.role < 2) {
-    if (user.role === 0) {
+    // 封禁用户不能设为管理员
+    if (user.role === 0 && !isBanned) {
       footerHtml += `<button class="btn btn-warning" id="promote-user" data-user-id="${user.id}">设为管理员</button>`;
     } else if (user.role === 1) {
       footerHtml += `<button class="btn btn-secondary" id="demote-user" data-user-id="${user.id}">撤销管理员</button>`;
@@ -342,6 +412,27 @@ function bindUserDetailButtons(user: UserPublic): void {
   userModalFooter.innerHTML = footerHtml;
 
   document.getElementById('close-user-modal')?.addEventListener('click', () => hideModal(userModal));
+
+  // 封禁用户
+  document.getElementById('ban-user')?.addEventListener('click', () => {
+    hideModal(userModal);
+    showBanModal(user);
+  });
+
+  // 解封用户
+  document.getElementById('unban-user')?.addEventListener('click', async () => {
+    showConfirm('确认解封', `确定要解除 ${user.username} 的封禁吗？`, async () => {
+      const success = await unbanUser(user.id);
+      if (success) {
+        showToast('已解除封禁', 'success');
+        hideModal(userModal);
+        updateUserRow(user.id);
+        loadStats();
+      } else {
+        showToast('操作失败', 'error');
+      }
+    });
+  });
 
   document.getElementById('promote-user')?.addEventListener('click', async () => {
     showConfirm('确认操作', `确定要将 ${user.username} 设为管理员吗？`, async () => {
@@ -383,6 +474,86 @@ function bindUserDetailButtons(user: UserPublic): void {
         showToast('删除失败', 'error');
       }
     });
+  });
+}
+
+// ==================== 封禁弹窗 ====================
+
+let currentBanUser: UserPublic | null = null;
+
+/**
+ * 显示封禁用户弹窗
+ */
+function showBanModal(user: UserPublic): void {
+  currentBanUser = user;
+  
+  // 重置表单
+  banReason.value = '';
+  banCustomReason.value = '';
+  banCustomReasonGroup.style.display = 'none';
+  banDuration.value = '7';
+  banConfirm.disabled = true;
+
+  showModal(banModal);
+}
+
+/**
+ * 初始化封禁弹窗事件
+ */
+function initBanModal(): void {
+  // 封禁原因选择
+  banReason.addEventListener('change', () => {
+    if (banReason.value === '其他') {
+      banCustomReasonGroup.style.display = 'block';
+      banConfirm.disabled = !banCustomReason.value.trim();
+    } else {
+      banCustomReasonGroup.style.display = 'none';
+      banConfirm.disabled = !banReason.value;
+    }
+  });
+
+  // 自定义原因输入
+  banCustomReason.addEventListener('input', () => {
+    banConfirm.disabled = !banCustomReason.value.trim();
+  });
+
+  // 取消按钮
+  banCancel.addEventListener('click', () => {
+    hideModal(banModal);
+    currentBanUser = null;
+  });
+
+  // 关闭按钮
+  banModalClose.addEventListener('click', () => {
+    hideModal(banModal);
+    currentBanUser = null;
+  });
+
+  // 确认封禁
+  banConfirm.addEventListener('click', async () => {
+    if (!currentBanUser) return;
+
+    const reason = banReason.value === '其他' ? banCustomReason.value.trim() : banReason.value;
+    const days = parseInt(banDuration.value, 10);
+
+    if (!reason) {
+      showToast('请选择或输入封禁原因', 'error');
+      return;
+    }
+
+    banConfirm.disabled = true;
+
+    const success = await banUser(currentBanUser.id, reason, days);
+    if (success) {
+      showToast('用户已封禁', 'success');
+      hideModal(banModal);
+      updateUserRow(currentBanUser.id);
+      loadStats();
+      currentBanUser = null;
+    } else {
+      showToast('封禁失败', 'error');
+      banConfirm.disabled = false;
+    }
   });
 }
 
@@ -455,4 +626,7 @@ export function initUsersPage(): void {
       loadUsers();
     }
   });
+
+  // 初始化封禁弹窗
+  initBanModal();
 }

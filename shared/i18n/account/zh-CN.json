@@ -213,6 +213,8 @@
   "dashboard.logAction.link_microsoft": "绑定微软账户",
   "dashboard.logAction.unlink_microsoft": "解绑微软账户",
   "dashboard.logAction.delete_account": "删除账户",
+  "dashboard.logAction.banned": "账户被封禁",
+  "dashboard.logAction.unbanned": "账户已解封",
   "dashboard.dataExport": "数据导出",
   "dashboard.dataExportHint": "下载您的所有账户数据",
   "dashboard.dataExportConfirm": "确定要导出您的账户数据吗？导出将包含您的所有用户信息和操作日志。",
@@ -220,6 +222,13 @@
   "dashboard.dataExportSuccess": "数据导出成功",
   "dashboard.dataExportFailed": "数据导出失败，请稍后重试",
   "dashboard.dataExportRateLimit": "24小时内只能导出一次，请稍后再试",
+
+  "dashboard.banned": "已封禁",
+  "dashboard.bannedReason": "封禁原因",
+  "dashboard.bannedAt": "封禁时间",
+  "dashboard.unbanAt": "解封时间",
+  "dashboard.permanentBan": "永久封禁",
+  "dashboard.bannedInfo": "账户状态",
 
   "linkConfirm.title": "确认绑定账户",
   "linkConfirm.subtitle": "检测到您的微软账户邮箱与已有账户相同",
@@ -230,5 +239,7 @@
   "linkConfirm.cancel": "取消",
   "linkConfirm.invalidLink": "无效的绑定链接",
   "linkConfirm.linkExpired": "绑定链接已过期，请重新操作",
-  "linkConfirm.linkFailed": "绑定失败，请稍后重试"
+  "linkConfirm.linkFailed": "绑定失败，请稍后重试",
+
+  "error.userBanned": "您的账户已被封禁，无法执行此操作"
 }

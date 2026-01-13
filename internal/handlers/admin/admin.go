@@ -64,9 +64,10 @@ const (
 
 // AdminHandler 管理后台 Handler
 type AdminHandler struct {
-	userRepo  *models.UserRepository
-	userCache *cache.UserCache
-	logRepo   *models.AdminLogRepository
+	userRepo    *models.UserRepository
+	userCache   *cache.UserCache
+	logRepo     *models.AdminLogRepository
+	userLogRepo *models.UserLogRepository
 }
 
 // userListResponse 用户列表响应
@@ -98,11 +99,12 @@ type setRoleRequest struct {
 //   - userRepo: 用户数据仓库
 //   - userCache: 用户缓存
 //   - logRepo: 管理员日志仓库
+//   - userLogRepo: 用户日志仓库
 //
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository) (*AdminHandler, error) {
+func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -116,9 +118,10 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 	utils.LogPrintf("[ADMIN] Admin handler initialized")
 
 	return &AdminHandler{
-		userRepo:  userRepo,
-		userCache: userCache,
-		logRepo:   logRepo,
+		userRepo:    userRepo,
+		userCache:   userCache,
+		logRepo:     logRepo,
+		userLogRepo: userLogRepo,
 	}, nil
 }
 
@@ -265,6 +268,14 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		return
 	}
 
+	// 不能将封禁用户设为管理员
+	if req.Role > models.RoleUser && targetUser.CheckBanned() {
+		utils.LogPrintf("[ADMIN] WARN: Attempted to promote banned user: operatorID=%d, targetID=%d",
+			operatorID, targetUserID)
+		h.respondError(c, http.StatusBadRequest, "CANNOT_PROMOTE_BANNED_USER")
+		return
+	}
+
 	// 执行更新
 	err = h.userRepo.Update(ctx, targetUserID, map[string]interface{}{
 		"role": req.Role,
@@ -365,6 +376,181 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		operatorID, targetUserID, targetUser.Username)
 
 	h.respondSuccess(c, gin.H{"message": "User deleted"})
+}
+
+// ====================  封禁管理 ====================
+
+// banUserRequest 封禁用户请求
+type banUserRequest struct {
+	Reason  string `json:"reason"`
+	Days    int    `json:"days"` // 0 表示永久封禁
+}
+
+// BanUser 封禁用户
+// POST /admin/api/users/:id/ban
+//
+// 权限：管理员（不能封禁管理员及以上）
+func (h *AdminHandler) BanUser(c *gin.Context) {
+	// 获取当前操作者信息
+	operatorID, _ := middleware.GetUserID(c)
+
+	// 解析目标用户 ID
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || targetUserID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+		return
+	}
+
+	// 不能封禁自己
+	if targetUserID == operatorID {
+		utils.LogPrintf("[ADMIN] WARN: Attempted to ban self: userID=%d", operatorID)
+		h.respondError(c, http.StatusBadRequest, "CANNOT_BAN_SELF")
+		return
+	}
+
+	// 解析请求
+	var req banUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		return
+	}
+
+	// 验证封禁原因
+	if req.Reason == "" {
+		h.respondError(c, http.StatusBadRequest, "REASON_REQUIRED")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	// 查询目标用户
+	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
+		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		return
+	}
+
+	// 不能封禁管理员及以上
+	if targetUser.IsAdmin() {
+		utils.LogPrintf("[ADMIN] WARN: Attempted to ban admin: operatorID=%d, targetID=%d",
+			operatorID, targetUserID)
+		h.respondError(c, http.StatusForbidden, "CANNOT_BAN_ADMIN")
+		return
+	}
+
+	// 检查是否已被封禁
+	if targetUser.CheckBanned() {
+		h.respondError(c, http.StatusBadRequest, "ALREADY_BANNED")
+		return
+	}
+
+	// 计算解封时间
+	var unbanAt *time.Time
+	if req.Days > 0 {
+		t := time.Now().AddDate(0, 0, req.Days)
+		unbanAt = &t
+	}
+
+	// 执行封禁
+	err = h.userRepo.Ban(ctx, targetUserID, operatorID, req.Reason, unbanAt)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to ban user: userID=%d, error=%v", targetUserID, err)
+		h.respondError(c, http.StatusInternalServerError, "BAN_FAILED")
+		return
+	}
+
+	// 使缓存失效
+	h.userCache.Invalidate(targetUserID)
+
+	// 记录审计日志到数据库
+	if err := h.logRepo.LogBanUser(ctx, operatorID, targetUserID, targetUser.Username, req.Reason, unbanAt); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log ban_user: error=%v", err)
+	}
+
+	// 记录用户日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogBanned(ctx, targetUserID, req.Reason, unbanAt); err != nil {
+			utils.LogPrintf("[ADMIN] WARN: Failed to log user banned: error=%v", err)
+		}
+	}
+
+	// 记录审计日志到控制台
+	utils.LogPrintf("[ADMIN] User banned: operatorID=%d, targetID=%d, reason=%s, days=%d",
+		operatorID, targetUserID, req.Reason, req.Days)
+
+	h.respondSuccess(c, gin.H{"message": "User banned"})
+}
+
+// UnbanUser 解封用户
+// POST /admin/api/users/:id/unban
+//
+// 权限：管理员
+func (h *AdminHandler) UnbanUser(c *gin.Context) {
+	// 获取当前操作者信息
+	operatorID, _ := middleware.GetUserID(c)
+
+	// 解析目标用户 ID
+	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || targetUserID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	// 查询目标用户
+	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			h.respondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			return
+		}
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
+		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		return
+	}
+
+	// 检查是否已被封禁
+	if !targetUser.CheckBanned() {
+		h.respondError(c, http.StatusBadRequest, "NOT_BANNED")
+		return
+	}
+
+	// 执行解封
+	err = h.userRepo.Unban(ctx, targetUserID)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to unban user: userID=%d, error=%v", targetUserID, err)
+		h.respondError(c, http.StatusInternalServerError, "UNBAN_FAILED")
+		return
+	}
+
+	// 使缓存失效
+	h.userCache.Invalidate(targetUserID)
+
+	// 记录审计日志到数据库
+	if err := h.logRepo.LogUnbanUser(ctx, operatorID, targetUserID, targetUser.Username); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log unban_user: error=%v", err)
+	}
+
+	// 记录用户日志
+	if h.userLogRepo != nil {
+		if err := h.userLogRepo.LogUnbanned(ctx, targetUserID); err != nil {
+			utils.LogPrintf("[ADMIN] WARN: Failed to log user unbanned: error=%v", err)
+		}
+	}
+
+	// 记录审计日志到控制台
+	utils.LogPrintf("[ADMIN] User unbanned: operatorID=%d, targetID=%d",
+		operatorID, targetUserID)
+
+	h.respondSuccess(c, gin.H{"message": "User unbanned"})
 }
 
 // ====================  统计 ====================

@@ -213,6 +213,8 @@
   "dashboard.logAction.link_microsoft": "Microsoftアカウント連携",
   "dashboard.logAction.unlink_microsoft": "Microsoftアカウント連携解除",
   "dashboard.logAction.delete_account": "アカウント削除",
+  "dashboard.logAction.banned": "アカウント停止",
+  "dashboard.logAction.unbanned": "アカウント停止解除",
   "dashboard.dataExport": "データエクスポート",
   "dashboard.dataExportHint": "すべてのアカウントデータをダウンロード",
   "dashboard.dataExportConfirm": "アカウントデータをエクスポートしますか？すべてのユーザー情報と操作履歴が含まれます。",
@@ -220,6 +222,13 @@
   "dashboard.dataExportSuccess": "データのエクスポートが完了しました",
   "dashboard.dataExportFailed": "データのエクスポートに失敗しました。後でもう一度お試しください",
   "dashboard.dataExportRateLimit": "24時間に1回のみエクスポートできます。後でもう一度お試しください",
+
+  "dashboard.banned": "利用停止",
+  "dashboard.bannedReason": "停止理由",
+  "dashboard.bannedAt": "停止日時",
+  "dashboard.unbanAt": "解除日時",
+  "dashboard.permanentBan": "永久停止",
+  "dashboard.bannedInfo": "アカウント状態",
 
   "linkConfirm.title": "アカウント連携確認",
   "linkConfirm.subtitle": "Microsoftアカウントのメールが既存のアカウントと一致しています",
@@ -230,5 +239,7 @@
   "linkConfirm.cancel": "キャンセル",
   "linkConfirm.invalidLink": "無効な連携リンク",
   "linkConfirm.linkExpired": "連携リンクの有効期限が切れました。再度操作してください",
-  "linkConfirm.linkFailed": "連携に失敗しました。後でもう一度お試しください"
+  "linkConfirm.linkFailed": "連携に失敗しました。後でもう一度お試しください",
+
+  "error.userBanned": "アカウントが停止されているため、この操作を実行できません"
 }
