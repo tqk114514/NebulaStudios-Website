@@ -1,30 +1,44 @@
-# img-processor
+# img-processor (Zig)
 
-高性能图片处理服务，将图片转换为 WebP 格式。
+图片处理服务 - 通过 Unix Socket 接收图片，转换为 WebP 格式
 
-## 架构
+## 依赖
 
-此服务**嵌入到 Go 主程序中**，无需单独部署：
+### 1. stb_image (header-only)
 
-1. GitHub Actions 编译 Rust 二进制
-2. Go 通过 `//go:embed` 嵌入二进制
-3. Go 启动时自动释放到 `/tmp/img-processor` 并启动
-4. 通过 Unix Socket (`/tmp/img-processor.sock`) 通信
-5. Go 关闭时自动清理
-
-## 本地开发
+下载到 `vendor/` 目录：
 
 ```bash
-cd img-processor
-cargo build --release
+mkdir -p vendor
+curl -o vendor/stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
 ```
 
-编译后的二进制文件在 `target/release/img-processor`
+### 2. libwebp
+
+Ubuntu/Debian:
+```bash
+sudo apt install libwebp-dev
+```
+
+macOS:
+```bash
+brew install webp
+```
+
+## 编译
+
+```bash
+zig build -Doptimize=ReleaseFast
+```
+
+输出: `zig-out/bin/img-processor`
 
 ## 协议
 
-请求: `[4字节长度(大端)][图片数据]`
-响应: `[1字节状态][4字节长度(大端)][数据]`
+与 Go 端通信协议：
 
-- 状态 0: 成功，数据为 WebP
-- 状态 1: 失败，数据为错误信息
+**请求**: `[4字节长度(大端)][图片数据]`
+
+**响应**: `[1字节状态][4字节长度(大端)][数据]`
+- 状态 0 = 成功，数据为 WebP
+- 状态 1 = 错误，数据为错误消息

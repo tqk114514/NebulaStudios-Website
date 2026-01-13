@@ -14,24 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 缓存 Rust 依赖
-        uses: actions/cache@v4
+      - name: 安装 Zig
+        uses: mlugg/setup-zig@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            img-processor/target
-          key: rust-${{ hashFiles('img-processor/Cargo.lock') }}
-          restore-keys: rust-
+          version: 0.15.2
 
-      - name: 编译 Rust 图片处理器
+      - name: 编译 Zig 图片处理器
         run: |
           cd img-processor
-          cargo build --release
-          cp target/release/img-processor ../internal/services/img-processor-bin
+          zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu
+          cp zig-out/bin/img-processor ../internal/services/img-processor-bin
 
       - name: 安装 Go
         uses: actions/setup-go@v5

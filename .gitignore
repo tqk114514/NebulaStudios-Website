@@ -32,3 +32,8 @@ index.js
 .htmlhintrc
 eslint.config.mjs
 .stylelintrc.json
+
+# zig
+img-processor/zig-cache/
+img-processor/zig-out/
+img-processor/.zig-cache/
