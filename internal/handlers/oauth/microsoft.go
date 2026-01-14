@@ -577,19 +577,33 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 		return
 	}
 
-	// 保存解绑前的信息（用于日志）
+	// 保存解绑前的信息（用于日志和异步删除）
 	oldMicrosoftID := user.MicrosoftID.String
 	oldMicrosoftName := ""
 	if user.MicrosoftName.Valid {
 		oldMicrosoftName = user.MicrosoftName.String
 	}
+	oldAvatarURL := ""
+	if user.MicrosoftAvatarURL.Valid {
+		oldAvatarURL = user.MicrosoftAvatarURL.String
+	}
 
-	// 执行解绑
-	err = h.userRepo.Update(ctx, userID, map[string]interface{}{
-		"microsoft_id":         nil,
-		"microsoft_name":       nil,
-		"microsoft_avatar_url": nil,
-	})
+	// 构建更新字段
+	updateFields := map[string]interface{}{
+		"microsoft_id":          nil,
+		"microsoft_name":        nil,
+		"microsoft_avatar_url":  nil,
+		"microsoft_avatar_hash": nil,
+	}
+
+	// 如果用户头像使用的是微软头像，也需要清除（设为默认头像）
+	if user.AvatarURL == "microsoft" {
+		updateFields["avatar_url"] = "https://cdn01.nebulastudios.top/images/default-avatar.svg"
+		utils.LogPrintf("[OAUTH-MS] User was using Microsoft avatar, resetting to default: userID=%d", userID)
+	}
+
+	// 执行解绑（同步清除数据库字段）
+	err = h.userRepo.Update(ctx, userID, updateFields)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to unlink Microsoft account: userID=%d, error=%v", userID, err)
 		RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
@@ -605,6 +619,21 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 
 	// 使缓存失效
 	h.userCache.Invalidate(userID)
+
+	// 异步删除 R2 中的头像（不阻塞响应）
+	if oldAvatarURL != "" && !strings.HasPrefix(oldAvatarURL, "data:") {
+		go func(uid int64) {
+			if h.r2Service != nil && h.r2Service.IsConfigured() {
+				deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := h.r2Service.DeleteAvatar(deleteCtx, uid); err != nil {
+					utils.LogPrintf("[OAUTH-MS] WARN: Failed to delete avatar from R2: userID=%d, error=%v", uid, err)
+				} else {
+					utils.LogPrintf("[OAUTH-MS] Avatar deleted from R2: userID=%d", uid)
+				}
+			}
+		}(userID)
+	}
 
 	utils.LogPrintf("[OAUTH-MS] Microsoft account unlinked: username=%s, userID=%d", user.Username, userID)
 	RespondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
