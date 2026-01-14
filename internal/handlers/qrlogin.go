@@ -113,7 +113,6 @@ type QRLoginHandler struct {
 	sessionService *services.SessionService   // Session 服务
 	wsService      *services.WebSocketService // WebSocket 服务
 	encryptKey     []byte                     // AES-256-GCM 加密密钥
-	isProduction   bool                       // 是否为生产环境
 	isConfigured   bool                       // 是否已配置（加密密钥有效）
 }
 
@@ -125,7 +124,6 @@ type QRLoginHandler struct {
 //   - sessionService: Session 服务（必需）
 //   - wsService: WebSocket 服务（必需）
 //   - encryptKey: AES-256-GCM 加密密钥（必需，用于加密 Token）
-//   - isProduction: 是否为生产环境
 //
 // 返回：
 //   - *QRLoginHandler: Handler 实例
@@ -134,7 +132,6 @@ func NewQRLoginHandler(
 	sessionService *services.SessionService,
 	wsService *services.WebSocketService,
 	encryptKey string,
-	isProduction bool,
 ) (*QRLoginHandler, error) {
 	// 参数验证
 	if sessionService == nil {
@@ -163,13 +160,12 @@ func NewQRLoginHandler(
 		}
 	}
 
-	utils.LogPrintf("[QR-LOGIN] QRLoginHandler initialized: production=%v, configured=%v", isProduction, isConfigured)
+	utils.LogPrintf("[QR-LOGIN] QRLoginHandler initialized: configured=%v", isConfigured)
 
 	return &QRLoginHandler{
 		sessionService: sessionService,
 		wsService:      wsService,
 		encryptKey:     derivedKey,
-		isProduction:   isProduction,
 		isConfigured:   isConfigured,
 	}, nil
 }
@@ -549,7 +545,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		Value:    sessionToken,
 		MaxAge:   QRCookieMaxAge,
 		Path:     "/",
-		Secure:   h.isProduction,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
