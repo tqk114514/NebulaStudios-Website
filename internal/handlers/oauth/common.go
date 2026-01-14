@@ -78,9 +78,6 @@ const (
 	// CleanupInterval 清理任务间隔
 	CleanupInterval = 5 * time.Minute
 
-	// DefaultBaseURL 默认基础 URL
-	DefaultBaseURL = "https://www.nebulastudios.top"
-
 	// ActionLogin 登录操作
 	ActionLogin = "login"
 
@@ -272,8 +269,7 @@ func GenerateLinkToken() (string, error) {
 // 参数：
 //   - c: Gin 上下文
 //   - token: JWT Token
-//   - isProduction: 是否为生产环境
-func SetAuthCookie(c *gin.Context, token string, isProduction bool) {
+func SetAuthCookie(c *gin.Context, token string) {
 	if token == "" {
 		utils.LogPrintf("[OAUTH] WARN: Attempted to set empty token cookie")
 		return
@@ -283,7 +279,7 @@ func SetAuthCookie(c *gin.Context, token string, isProduction bool) {
 		Value:    token,
 		MaxAge:   CookieMaxAge,
 		Path:     "/",
-		Secure:   isProduction,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
