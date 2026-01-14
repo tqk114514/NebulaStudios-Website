@@ -313,6 +313,12 @@ func ServeLinkConfirmPage(c *gin.Context) {
 	serveHTML(c, DistAccountPages, "link.html")
 }
 
+// ServeOAuthPage 服务 OAuth 授权页面
+// GET /account/oauth
+func ServeOAuthPage(c *gin.Context) {
+	serveHTML(c, DistAccountPages, "oauth.html")
+}
+
 // ====================  Policy 模块页面路由 ====================
 
 // ServePolicyPage 服务政策中心 SPA 页面

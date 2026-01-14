@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-i18n-title="page.title.oauthAuthorize">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula Account</title>
+  <link rel="stylesheet" href="/shared/css/general.css">
+  <link rel="stylesheet" href="/account/assets/css/common.css">
+  <link rel="stylesheet" href="/account/assets/css/oauth.css">
+  <script src="/shared/js/translations.js"></script>
+</head>
+<body>
+  {{HEADER}}
+  
+  <!-- 页面加载遮罩 -->
+  <div id="page-loader" class="page-loader">
+    <div class="loader-spinner"></div>
+  </div>
+  
+  <div class="content-container">
+    <div class="card">
+      <h1 class="card-title" data-i18n="oauth.authorize.title"></h1>
+      <p class="subtitle" data-i18n="oauth.authorize.subtitle"></p>
+      
+      <!-- 应用信息 -->
+      <div class="oauth-app-info">
+        <div class="oauth-app-icon" id="app-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        </div>
+        <div class="oauth-app-name" id="app-name">-</div>
+        <div class="oauth-app-desc" id="app-desc"></div>
+      </div>
+      
+      <!-- 当前用户 -->
+      <div class="oauth-user-info">
+        <span data-i18n="oauth.authorize.loginAs"></span>
+        <div class="oauth-user-avatar" id="user-avatar">U</div>
+        <span class="oauth-user-name" id="user-name">-</span>
+      </div>
+      
+      <!-- 权限列表 -->
+      <div class="oauth-scopes">
+        <p class="oauth-scopes-title" data-i18n="oauth.authorize.permissions"></p>
+        <ul class="oauth-scope-list" id="scope-list">
+          <!-- 动态填充 -->
+        </ul>
+      </div>
+      
+      <!-- 按钮组 -->
+      <div class="button-group">
+        <button type="button" id="authorize-btn" class="button-primary" data-i18n="oauth.authorize.allow" aria-label="Authorize"></button>
+        <button type="button" id="deny-btn" class="button-secondary" data-i18n="oauth.authorize.deny" aria-label="Deny"></button>
+      </div>
+      
+      <p class="oauth-notice" data-i18n="oauth.authorize.notice"></p>
+    </div>
+    <div class="policy-links">
+      <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
+      <span>|</span>
+      <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
+    </div>
+    <div class="page-footer" data-i18n="footer.copyright"></div>
+  </div>
+
+  <!-- 通用提示弹窗 -->
+  <div id="alert-modal" class="modal-overlay is-hidden">
+    <div class="modal-container">
+      <div class="modal-content">
+        <h2 id="alert-title" class="modal-title" data-i18n="modal.alert"></h2>
+        <div class="modal-body">
+          <p id="alert-message" class="modal-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="alert-close-btn" class="button-primary modal-close" data-i18n="modal.close"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/account/assets/js/oauth.js"></script>
+</body>
+</html>

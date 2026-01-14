@@ -19,6 +19,7 @@ import {
 import { loadStats } from './stats';
 import { loadUsers, setCurrentUserRole, initUsersPage } from './users';
 import { loadLogs } from './logs';
+import { loadOAuthClients, initOAuthPage } from './oauth';
 
 // ==================== DOM 元素 ====================
 
@@ -30,6 +31,7 @@ const pageTitle = document.getElementById('page-title') as HTMLElement;
 const currentAvatarEl = document.getElementById('current-avatar') as HTMLElement;
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
 const navLogs = document.getElementById('nav-logs') as HTMLAnchorElement;
+const navOAuth = document.getElementById('nav-oauth') as HTMLAnchorElement;
 
 // ==================== 页面路由 ====================
 
@@ -48,7 +50,8 @@ function navigateTo(page: string): void {
   const titles: Record<string, string> = {
     dashboard: '仪表盘',
     users: '用户管理',
-    logs: '操作日志'
+    logs: '操作日志',
+    oauth: 'OAuth 应用'
   };
   pageTitle.textContent = titles[page] || page;
 
@@ -59,6 +62,8 @@ function navigateTo(page: string): void {
     loadUsers();
   } else if (page === 'logs') {
     loadLogs();
+  } else if (page === 'oauth') {
+    loadOAuthClients();
   }
 }
 
@@ -76,6 +81,11 @@ async function init(): Promise<void> {
 
   // 显示日志导航（所有管理员可见）
   navLogs.classList.remove('is-hidden');
+
+  // 显示 OAuth 导航（超级管理员可见）
+  if (user.role >= 2) {
+    navOAuth.classList.remove('is-hidden');
+  }
 
   // 显示头像
   currentAvatarEl.innerHTML = '';
@@ -118,6 +128,9 @@ async function init(): Promise<void> {
 
   // 初始化用户管理页面
   initUsersPage();
+
+  // 初始化 OAuth 管理页面
+  initOAuthPage();
 
   // 绑定退出登录
   logoutBtn.addEventListener('click', logout);
