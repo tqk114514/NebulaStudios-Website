@@ -268,3 +268,47 @@ func errorMiddleware(err error) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// GuestOnlyMiddleware 仅限未登录用户访问的中间件
+// 用于登录、注册等页面，已登录用户会被重定向到 dashboard
+//
+// 参数：
+//   - sessionService: 会话服务，用于验证 Token
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
+	if sessionService == nil {
+		utils.LogPrintf("[AUTH-MW] WARN: SessionService is nil for guest-only, skipping check")
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+
+	return func(c *gin.Context) {
+		// 提取 Token
+		token := extractToken(c)
+		if token == "" {
+			// 没有 Token，是访客，继续
+			c.Next()
+			return
+		}
+
+		// 验证 Token
+		claims, err := sessionService.VerifyToken(token)
+		if err != nil {
+			// Token 无效，视为访客，继续
+			c.Next()
+			return
+		}
+
+		// Token 有效且用户 ID 有效，重定向到 dashboard
+		if claims != nil && claims.UserID > 0 {
+			c.Redirect(http.StatusFound, "/account/dashboard")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

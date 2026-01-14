@@ -541,8 +541,9 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 		accountPages.GET("", func(c *gin.Context) {
 			c.Redirect(http.StatusFound, "/account/login")
 		})
-		accountPages.GET("/login", handlers.ServeLoginPage)
-		accountPages.GET("/register", handlers.ServeRegisterPage)
+		// 登录/注册页：已登录则跳转 dashboard
+		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeLoginPage)
+		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeRegisterPage)
 		accountPages.GET("/verify", handlers.ServeVerifyPage)
 		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
 		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
