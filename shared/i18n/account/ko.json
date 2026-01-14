@@ -240,6 +240,7 @@
   "linkConfirm.invalidLink": "잘못된 연결 링크",
   "linkConfirm.linkExpired": "연결 링크가 만료되었습니다. 나중에 다시 시도하세요",
   "linkConfirm.linkFailed": "연결에 실패했습니다. 나중에 다시 시도하세요",
+  "linkConfirm.userBanned": "이 계정은 정지되어 연결할 수 없습니다",
 
   "error.userBanned": "계정이 정지되어 이 작업을 수행할 수 없습니다"
 }

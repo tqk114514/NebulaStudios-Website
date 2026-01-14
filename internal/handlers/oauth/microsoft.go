@@ -790,6 +790,13 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 		return
 	}
 
+	// 检查用户是否被封禁
+	if user.CheckBanned() {
+		utils.LogPrintf("[OAUTH-MS] WARN: Banned user attempted to confirm link: userID=%d", pendingData.UserID)
+		RespondError(c, http.StatusForbidden, "USER_BANNED")
+		return
+	}
+
 	// 解析头像数据（用于异步处理）
 	var avatarData []byte
 	var avatarContentType string

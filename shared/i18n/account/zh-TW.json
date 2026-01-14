@@ -240,6 +240,7 @@
   "linkConfirm.invalidLink": "無效的綁定連結",
   "linkConfirm.linkExpired": "綁定連結已過期，請重新操作",
   "linkConfirm.linkFailed": "綁定失敗，請稍後重試",
+  "linkConfirm.userBanned": "該帳戶已被封禁，無法綁定",
 
   "error.userBanned": "您的帳戶已被封禁，無法執行此操作"
 }
