@@ -306,12 +306,19 @@ func createUsersTable(ctx context.Context) error {
 			username VARCHAR(50) NOT NULL UNIQUE,
 			email VARCHAR(255) NOT NULL UNIQUE,
 			password VARCHAR(255) NOT NULL,
-			avatar_url TEXT DEFAULT 'https://cdn01.nebulastudios.top/images/default-avatar.svg',
+			avatar_url TEXT NOT NULL,
+			role INTEGER NOT NULL DEFAULT 0,
 			microsoft_id VARCHAR(255) UNIQUE,
 			microsoft_name VARCHAR(255),
 			microsoft_avatar_url TEXT,
-			created_at TIMESTAMPTZ DEFAULT NOW(),
-			updated_at TIMESTAMPTZ DEFAULT NOW()
+			microsoft_avatar_hash VARCHAR(64),
+			is_banned BOOLEAN NOT NULL DEFAULT FALSE,
+			ban_reason TEXT,
+			banned_at TIMESTAMPTZ,
+			banned_by BIGINT,
+			unban_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {

@@ -73,11 +73,6 @@ const (
 	CacheControlNoStore = "no-store, no-cache, must-revalidate, max-age=0"
 )
 
-// ====================  包级变量 ====================
-
-// IsProduction 是否为生产环境（由 main.go 设置）
-var IsProduction bool
-
 // ====================  Handler 结构 ====================
 
 // StaticHandler 静态文件 Handler

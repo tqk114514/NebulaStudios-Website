@@ -28,11 +28,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"auth-system/internal/cache"
+	"auth-system/internal/config"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
@@ -62,7 +62,6 @@ type MicrosoftHandler struct {
 	clientSecret   string                    // Microsoft 应用密钥
 	redirectURI    string                    // OAuth 回调地址
 	baseURL        string                    // 基础 URL
-	isProduction   bool                      // 是否为生产环境
 }
 
 // ====================  构造函数 ====================
@@ -75,7 +74,6 @@ type MicrosoftHandler struct {
 //   - sessionService: Session 服务（必需）
 //   - userCache: 用户缓存（必需）
 //   - r2Service: R2 存储服务（可选）
-//   - isProduction: 是否为生产环境
 //
 // 返回：
 //   - *MicrosoftHandler: Handler 实例
@@ -86,7 +84,6 @@ func NewMicrosoftHandler(
 	sessionService *services.SessionService,
 	userCache *cache.UserCache,
 	r2Service *services.R2Service,
-	isProduction bool,
 ) (*MicrosoftHandler, error) {
 	// 参数验证
 	if userRepo == nil {
@@ -102,16 +99,13 @@ func NewMicrosoftHandler(
 		return nil, fmt.Errorf("userCache is required")
 	}
 
-	// 获取基础 URL
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-		utils.LogPrintf("[OAUTH-MS] WARN: BASE_URL not set, using default: %s", baseURL)
-	}
+	// 获取基础 URL（从 config）
+	cfg := config.Get()
+	baseURL := cfg.BaseURL
 
-	// 获取 Microsoft OAuth 配置
-	clientID := os.Getenv("MICROSOFT_CLIENT_ID")
-	clientSecret := os.Getenv("MICROSOFT_CLIENT_SECRET")
+	// 获取 Microsoft OAuth 配置（从 config）
+	clientID := cfg.MicrosoftClientID
+	clientSecret := cfg.MicrosoftClientSecret
 
 	// 检查 OAuth 配置
 	if clientID == "" || clientSecret == "" {
@@ -121,8 +115,8 @@ func NewMicrosoftHandler(
 	// redirectURI 基于 BASE_URL 自动生成
 	redirectURI := baseURL + "/api/auth/microsoft/callback"
 
-	utils.LogPrintf("[OAUTH-MS] MicrosoftHandler initialized: production=%v, baseURL=%s, configured=%v",
-		isProduction, baseURL, clientID != "" && clientSecret != "")
+	utils.LogPrintf("[OAUTH-MS] MicrosoftHandler initialized: baseURL=%s, configured=%v",
+		baseURL, clientID != "" && clientSecret != "")
 
 	return &MicrosoftHandler{
 		userRepo:       userRepo,
@@ -134,7 +128,6 @@ func NewMicrosoftHandler(
 		clientSecret:   clientSecret,
 		redirectURI:    redirectURI,
 		baseURL:        baseURL,
-		isProduction:   isProduction,
 	}, nil
 }
 
@@ -502,7 +495,7 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 		return
 	}
 
-	SetAuthCookie(c, token, h.isProduction)
+	SetAuthCookie(c, token)
 	utils.LogPrintf("[OAUTH-MS] Microsoft login successful: username=%s, userID=%d", user.Username, user.ID)
 	c.Redirect(http.StatusFound, h.baseURL+"/account/dashboard")
 }
@@ -598,7 +591,7 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 
 	// 如果用户头像使用的是微软头像，也需要清除（设为默认头像）
 	if user.AvatarURL == "microsoft" {
-		updateFields["avatar_url"] = "https://cdn01.nebulastudios.top/images/default-avatar.svg"
+		updateFields["avatar_url"] = config.Get().DefaultAvatarURL
 		utils.LogPrintf("[OAUTH-MS] User was using Microsoft avatar, resetting to default: userID=%d", userID)
 	}
 
@@ -837,7 +830,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	}
 
 	// 设置认证 Cookie
-	SetAuthCookie(c, jwtToken, h.isProduction)
+	SetAuthCookie(c, jwtToken)
 
 	utils.LogPrintf("[OAUTH-MS] Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID)
 	RespondSuccess(c, nil)
