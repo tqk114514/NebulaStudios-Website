@@ -240,6 +240,7 @@
   "linkConfirm.invalidLink": "Invalid link",
   "linkConfirm.linkExpired": "Link expired, please try again",
   "linkConfirm.linkFailed": "Link failed, please try again later",
+  "linkConfirm.userBanned": "This account has been banned and cannot be linked",
 
   "error.userBanned": "Your account has been banned and cannot perform this action"
 }
