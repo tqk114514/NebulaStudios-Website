@@ -15,6 +15,7 @@
 package models
 
 import (
+	"auth-system/internal/config"
 	"auth-system/internal/utils"
 	"context"
 	"database/sql"
@@ -50,9 +51,6 @@ var (
 // ====================  常量定义 ====================
 
 const (
-	// DefaultAvatar 默认头像 URL
-	DefaultAvatar = "https://cdn01.nebulastudios.top/images/default-avatar.svg"
-
 	// maxUpdateFields 最大更新字段数
 	maxUpdateFields = 10
 
@@ -464,7 +462,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 
 	// 设置默认头像
 	if user.AvatarURL == "" {
-		user.AvatarURL = DefaultAvatar
+		user.AvatarURL = config.Get().DefaultAvatarURL
 	}
 
 	// 设置默认角色（普通用户）

@@ -22,11 +22,11 @@ import (
 	"errors"
 
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"auth-system/internal/cache"
+	"auth-system/internal/config"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
@@ -62,9 +62,6 @@ const (
 
 	// DefaultLanguage 默认语言
 	DefaultLanguage = "zh-CN"
-
-	// DefaultBaseURL 默认基础 URL
-	DefaultBaseURL = "https://www.nebulastudios.top"
 )
 
 // ====================  Handler 结构 ====================
@@ -72,15 +69,14 @@ const (
 // AuthHandler 认证 Handler
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo         *models.UserRepository     // 用户数据仓库
-	userLogRepo      *models.UserLogRepository  // 用户日志仓库
-	tokenService     *services.TokenService     // Token 服务
-	sessionService  *services.SessionService  // Session 服务
-	emailService    *services.EmailService    // 邮件服务
-	captchaService  *services.CaptchaService  // 验证码服务
-	userCache       *cache.UserCache          // 用户缓存
-	isProduction     bool                       // 是否为生产环境
-	baseURL          string                     // 基础 URL
+	userRepo       *models.UserRepository     // 用户数据仓库
+	userLogRepo    *models.UserLogRepository  // 用户日志仓库
+	tokenService   *services.TokenService     // Token 服务
+	sessionService *services.SessionService   // Session 服务
+	emailService   *services.EmailService     // 邮件服务
+	captchaService *services.CaptchaService   // 验证码服务
+	userCache      *cache.UserCache           // 用户缓存
+	baseURL        string                     // 基础 URL
 }
 
 // ====================  构造函数 ====================
@@ -95,7 +91,6 @@ type AuthHandler struct {
 //   - emailService: 邮件服务（必需）
 //   - captchaService: 验证码服务（必需）
 //   - userCache: 用户缓存（必需）
-//   - isProduction: 是否为生产环境
 //
 // 返回：
 //   - *AuthHandler: Handler 实例
@@ -108,7 +103,6 @@ func NewAuthHandler(
 	emailService *services.EmailService,
 	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
-	isProduction bool,
 ) (*AuthHandler, error) {
 	// 参数验证
 	if userRepo == nil {
@@ -136,25 +130,20 @@ func NewAuthHandler(
 		return nil, errors.New("userCache is required")
 	}
 
-	// 获取基础 URL
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-		utils.LogPrintf("[AUTH] WARN: BASE_URL not set, using default: %s", baseURL)
-	}
+	// 获取基础 URL（从 config）
+	baseURL := config.Get().BaseURL
 
-	utils.LogPrintf("[AUTH] AuthHandler initialized: production=%v, baseURL=%s", isProduction, baseURL)
+	utils.LogPrintf("[AUTH] AuthHandler initialized: baseURL=%s", baseURL)
 
 	return &AuthHandler{
-		userRepo:         userRepo,
-		userLogRepo:      userLogRepo,
-		tokenService:     tokenService,
-		sessionService:  sessionService,
-		emailService:    emailService,
-		captchaService:  captchaService,
-		userCache:       userCache,
-		isProduction:     isProduction,
-		baseURL:          baseURL,
+		userRepo:       userRepo,
+		userLogRepo:    userLogRepo,
+		tokenService:   tokenService,
+		sessionService: sessionService,
+		emailService:   emailService,
+		captchaService: captchaService,
+		userCache:      userCache,
+		baseURL:        baseURL,
 	}, nil
 }
 
@@ -175,7 +164,7 @@ func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 		Value:    token,
 		MaxAge:   CookieMaxAge,
 		Path:     "/",
-		Secure:   h.isProduction,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -191,7 +180,7 @@ func (h *AuthHandler) clearAuthCookie(c *gin.Context) {
 		Value:    "",
 		MaxAge:   -1,
 		Path:     "/",
-		Secure:   h.isProduction,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
