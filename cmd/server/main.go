@@ -172,6 +172,7 @@ type Services struct {
 	userCache      *cache.UserCache
 	r2Service      *services.R2Service
 	imgProcessor   *services.ImgProcessor
+	oauthService   *services.OAuthService
 }
 
 // initServices 初始化所有服务
@@ -253,6 +254,10 @@ func initServices(cfg *config.Config) (*Services, error) {
 		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
 	}
 
+	// OAuth 服务
+	svcs.oauthService = services.NewOAuthService()
+	utils.LogPrintf("[SERVICES] OAuthService initialized")
+
 	utils.LogPrintf("[SERVICES] All services initialized successfully")
 	return svcs, nil
 }
@@ -261,12 +266,13 @@ func initServices(cfg *config.Config) (*Services, error) {
 
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
-	authHandler      *handlers.AuthHandler
-	userHandler      *handlers.UserHandler
-	microsoftHandler *oauth.MicrosoftHandler
-	qrLoginHandler   *handlers.QRLoginHandler
-	staticHandler    *handlers.StaticHandler
-	adminHandler     *admin.AdminHandler
+	authHandler          *handlers.AuthHandler
+	userHandler          *handlers.UserHandler
+	microsoftHandler     *oauth.MicrosoftHandler
+	oauthProviderHandler *oauth.OAuthProviderHandler
+	qrLoginHandler       *handlers.QRLoginHandler
+	staticHandler        *handlers.StaticHandler
+	adminHandler         *admin.AdminHandler
 }
 
 // initHandlers 初始化所有 Handlers
@@ -300,6 +306,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.captchaService,
 		svcs.userCache,
 		svcs.r2Service,
+		svcs.oauthService,
 		cfg.BaseURL,
 	)
 	if err != nil {
@@ -319,6 +326,17 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		return nil, fmt.Errorf("failed to create microsoft oauth handler: %w", err)
 	}
 	utils.LogPrintf("[HANDLERS] MicrosoftHandler initialized")
+
+	// OAuth Provider Handler
+	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
+		svcs.oauthService,
+		svcs.userRepo,
+		svcs.userLogRepo,
+		svcs.userCache,
+		svcs.sessionService,
+		cfg.BaseURL,
+	)
+	utils.LogPrintf("[HANDLERS] OAuthProviderHandler initialized")
 
 	// QR Login Handler
 	hdlrs.qrLoginHandler, err = handlers.NewQRLoginHandler(
@@ -340,7 +358,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 
 	// Admin Handler
 	adminLogRepo := models.NewAdminLogRepository()
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo)
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}
@@ -532,6 +550,8 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
 		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
 		accountPages.GET("/link", handlers.ServeLinkConfirmPage)
+		// OAuth 授权页面
+		accountPages.GET("/oauth", handlers.ServeOAuthPage)
 	}
 
 	// Policy 模块页面（SPA）
@@ -630,6 +650,9 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// 管理后台 API
 	setupAdminAPI(apiGroup, hdlrs, svcs)
 
+	// OAuth Provider API
+	setupOAuthProviderAPI(r, hdlrs, svcs)
+
 	// AI 聊天 API（单独设置 128KB 限制）
 	setupAIAPI(r)
 
@@ -706,6 +729,10 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
 		userAPI.GET("/logs", hdlrs.userHandler.GetLogs)
 		userAPI.POST("/export/request", hdlrs.userHandler.RequestDataExport)
+
+		// OAuth 授权管理
+		userAPI.GET("/oauth/grants", hdlrs.userHandler.GetOAuthGrants)
+		userAPI.DELETE("/oauth/grants/:client_id", hdlrs.userHandler.RevokeOAuthGrant)
 	}
 
 	// 数据导出下载（不需要 session 认证，使用一次性 token）
@@ -771,10 +798,57 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 			superAdminAPI.PUT("/users/:id/role", hdlrs.adminHandler.SetUserRole)
 			superAdminAPI.DELETE("/users/:id", hdlrs.adminHandler.DeleteUser)
 			superAdminAPI.GET("/logs", hdlrs.adminHandler.GetLogs)
+
+			// OAuth 客户端管理（仅超级管理员）
+			superAdminAPI.GET("/oauth/clients", hdlrs.adminHandler.GetOAuthClients)
+			superAdminAPI.GET("/oauth/clients/:id", hdlrs.adminHandler.GetOAuthClient)
+			superAdminAPI.POST("/oauth/clients", hdlrs.adminHandler.CreateOAuthClient)
+			superAdminAPI.PUT("/oauth/clients/:id", hdlrs.adminHandler.UpdateOAuthClient)
+			superAdminAPI.DELETE("/oauth/clients/:id", hdlrs.adminHandler.DeleteOAuthClient)
+			superAdminAPI.POST("/oauth/clients/:id/regenerate-secret", hdlrs.adminHandler.RegenerateOAuthClientSecret)
+			superAdminAPI.POST("/oauth/clients/:id/toggle", hdlrs.adminHandler.ToggleOAuthClient)
 		}
 	}
 
 	utils.LogPrintf("[ROUTER] Admin API routes configured")
+}
+
+// setupOAuthProviderAPI 配置 OAuth Provider API
+// OAuth 2.0 Provider 端点，供第三方应用使用
+func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+	oauthGroup := r.Group("/oauth")
+	{
+		// 授权端点 - 需要用户登录
+		// GET: 验证参数并重定向到授权页面
+		// POST: 处理授权决定
+		oauthGroup.GET("/authorize",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.oauthProviderHandler.Authorize)
+		oauthGroup.POST("/authorize",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.oauthProviderHandler.AuthorizePost)
+
+		// 授权信息 API - 供授权页面获取应用和用户信息
+		oauthGroup.GET("/authorize/info",
+			middleware.AuthMiddleware(svcs.sessionService),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			hdlrs.oauthProviderHandler.AuthorizeInfo)
+
+		// Token 端点 - 需要限流（防止暴力破解）
+		oauthGroup.POST("/token",
+			middleware.OAuthTokenRateLimit(),
+			hdlrs.oauthProviderHandler.Token)
+
+		// UserInfo 端点 - Bearer Token 认证（在 Handler 内部处理）
+		oauthGroup.GET("/userinfo", hdlrs.oauthProviderHandler.UserInfo)
+
+		// Revoke 端点 - Token 撤销
+		oauthGroup.POST("/revoke", hdlrs.oauthProviderHandler.Revoke)
+	}
+
+	utils.LogPrintf("[ROUTER] OAuth Provider API routes configured")
 }
 
 // setupWebSocketRoutes 配置 WebSocket 路由

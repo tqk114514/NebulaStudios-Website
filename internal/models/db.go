@@ -288,6 +288,11 @@ func initTables(ctx context.Context) error {
 		return fmt.Errorf("create user_logs table: %w", err)
 	}
 
+	// 创建 OAuth 相关表
+	if err := createOAuthTables(ctx); err != nil {
+		return fmt.Errorf("create oauth tables: %w", err)
+	}
+
 	// 创建索引
 	if err := createIndexes(ctx); err != nil {
 		// 索引创建失败不是致命错误，只记录警告
@@ -434,6 +439,107 @@ func createUserLogsTable(ctx context.Context) error {
 	return nil
 }
 
+// createOAuthTables 创建 OAuth 相关表
+// 包含：oauth_clients, oauth_auth_codes, oauth_access_tokens, oauth_refresh_tokens, oauth_grants
+func createOAuthTables(ctx context.Context) error {
+	// 创建 OAuth 客户端表
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS oauth_clients (
+			id BIGSERIAL PRIMARY KEY,
+			client_id VARCHAR(64) UNIQUE NOT NULL,
+			client_secret_hash VARCHAR(255) NOT NULL,
+			name VARCHAR(100) NOT NULL,
+			description TEXT,
+			redirect_uri TEXT NOT NULL,
+			is_enabled BOOLEAN DEFAULT true,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create oauth_clients table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] OAuth clients table ready")
+
+	// 创建授权码表
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS oauth_auth_codes (
+			id BIGSERIAL PRIMARY KEY,
+			code VARCHAR(64) UNIQUE NOT NULL,
+			client_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			redirect_uri TEXT NOT NULL,
+			scope VARCHAR(255) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			used BOOLEAN DEFAULT false,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create oauth_auth_codes table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] OAuth auth codes table ready")
+
+	// 创建 Access Token 表
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+			id BIGSERIAL PRIMARY KEY,
+			token_hash VARCHAR(64) UNIQUE NOT NULL,
+			client_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			scope VARCHAR(255) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create oauth_access_tokens table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] OAuth access tokens table ready")
+
+	// 创建 Refresh Token 表
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+			id BIGSERIAL PRIMARY KEY,
+			token_hash VARCHAR(64) UNIQUE NOT NULL,
+			client_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			scope VARCHAR(255) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			access_token_id BIGINT REFERENCES oauth_access_tokens(id) ON DELETE SET NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create oauth_refresh_tokens table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] OAuth refresh tokens table ready")
+
+	// 创建用户授权记录表
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS oauth_grants (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			client_id VARCHAR(64) NOT NULL,
+			scope VARCHAR(255) NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW(),
+			UNIQUE(user_id, client_id)
+		)
+	`)
+	if err != nil {
+		utils.LogPrintf("[DATABASE] ERROR: Failed to create oauth_grants table: %v", err)
+		return err
+	}
+	utils.LogPrintf("[DATABASE] OAuth grants table ready")
+
+	return nil
+}
+
 // createIndexes 创建数据库索引
 func createIndexes(ctx context.Context) error {
 	indexes := []struct {
@@ -452,6 +558,17 @@ func createIndexes(ctx context.Context) error {
 		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
 		{"idx_user_logs_user_id", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_id ON user_logs(user_id)"},
 		{"idx_user_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at DESC)"},
+		// OAuth 相关索引
+		{"idx_oauth_clients_client_id", "CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id ON oauth_clients(client_id)"},
+		{"idx_oauth_auth_codes_code", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_code ON oauth_auth_codes(code)"},
+		{"idx_oauth_auth_codes_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_expires ON oauth_auth_codes(expires_at)"},
+		{"idx_oauth_access_tokens_hash", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_hash ON oauth_access_tokens(token_hash)"},
+		{"idx_oauth_access_tokens_user", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_user ON oauth_access_tokens(user_id)"},
+		{"idx_oauth_access_tokens_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_expires ON oauth_access_tokens(expires_at)"},
+		{"idx_oauth_refresh_tokens_hash", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_hash ON oauth_refresh_tokens(token_hash)"},
+		{"idx_oauth_refresh_tokens_user", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user ON oauth_refresh_tokens(user_id)"},
+		{"idx_oauth_refresh_tokens_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at)"},
+		{"idx_oauth_grants_user", "CREATE INDEX IF NOT EXISTS idx_oauth_grants_user ON oauth_grants(user_id)"},
 	}
 
 	var lastErr error

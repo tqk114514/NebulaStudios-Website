@@ -130,7 +130,27 @@
       </div>
     </section>
     
-    <!-- 安全设置�?-->
+    <!-- 已授权应用区 -->
+    <section class="account-section">
+      <h2 class="section-title" data-i18n="dashboard.oauthGrants"></h2>
+      
+      <div class="info-list">
+        <div class="info-item clickable" id="oauth-grants-item">
+          <div class="info-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.oauthGrantsLabel"></span>
+            <span class="info-hint" data-i18n="dashboard.oauthGrantsHint"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- 安全设置区 -->
     <section class="account-section">
       <h2 class="section-title" data-i18n="dashboard.security"></h2>
       
@@ -416,6 +436,25 @@
         <div class="modal-footer modal-footer-buttons">
           <button id="qr-login-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="qr-login-confirm-btn" class="button-primary" data-i18n="dashboard.confirmLogin" aria-label="Confirm Login"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已授权应用弹窗 -->
+  <div id="oauth-grants-modal" class="modal-overlay is-hidden">
+    <div class="modal-container modal-container-wide">
+      <div class="modal-content oauth-grants-modal-content">
+        <h2 class="modal-title" data-i18n="dashboard.oauthGrantsLabel"></h2>
+        <div class="modal-body">
+          <div id="oauth-grants-list" class="oauth-grants-list"></div>
+          <div id="oauth-grants-loading" class="oauth-grants-loading is-hidden">
+            <div class="loader-spinner"></div>
+          </div>
+          <div id="oauth-grants-empty" class="oauth-grants-empty is-hidden" data-i18n="dashboard.oauthGrantsEmpty"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="oauth-grants-close-btn" class="button-primary modal-close" data-i18n="modal.close" aria-label="Close"></button>
         </div>
       </div>
     </div>
