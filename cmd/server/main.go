@@ -82,8 +82,8 @@ func run() error {
 		return fmt.Errorf("config load failed: %w", err)
 	}
 
-	// 2. 设置 Gin 模式
-	setupGinMode(cfg.IsProduction)
+	// 2. 设置 Gin 模式（始终使用 Release 模式）
+	gin.SetMode(gin.ReleaseMode)
 
 	// 3. 初始化数据库
 	if err := initDatabase(cfg); err != nil {
@@ -141,19 +141,8 @@ func loadConfig() (*config.Config, error) {
 		cfg.Port = "8080"
 	}
 
-	utils.LogPrintf("[CONFIG] Configuration loaded: port=%s, production=%v", cfg.Port, cfg.IsProduction)
+	utils.LogPrintf("[CONFIG] Configuration loaded: port=%s", cfg.Port)
 	return cfg, nil
-}
-
-// setupGinMode 设置 Gin 运行模式
-func setupGinMode(isProduction bool) {
-	if isProduction {
-		gin.SetMode(gin.ReleaseMode)
-		utils.LogPrintf("[GIN] Running in release mode")
-	} else {
-		gin.SetMode(gin.DebugMode)
-		utils.LogPrintf("[GIN] Running in debug mode")
-	}
 }
 
 // initDatabase 初始化数据库连接
@@ -284,9 +273,6 @@ type Handlers struct {
 func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogPrintf("[HANDLERS] Initializing handlers...")
 
-	// 设置生产环境标志（用于 HTML 压缩服务）
-	handlers.IsProduction = cfg.IsProduction
-
 	hdlrs := &Handlers{}
 	var err error
 
@@ -299,7 +285,6 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.emailService,
 		svcs.captchaService,
 		svcs.userCache,
-		cfg.IsProduction,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
@@ -307,10 +292,6 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogPrintf("[HANDLERS] AuthHandler initialized")
 
 	// User Handler
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		utils.LogPrintf("[HANDLERS] WARN: BASE_URL not set, using empty string")
-	}
 	hdlrs.userHandler, err = handlers.NewUserHandler(
 		svcs.userRepo,
 		svcs.userLogRepo,
@@ -319,7 +300,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.captchaService,
 		svcs.userCache,
 		svcs.r2Service,
-		baseURL,
+		cfg.BaseURL,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user handler: %w", err)
@@ -333,7 +314,6 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.sessionService,
 		svcs.userCache,
 		svcs.r2Service,
-		cfg.IsProduction,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create microsoft oauth handler: %w", err)
@@ -345,7 +325,6 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.sessionService,
 		svcs.wsService,
 		cfg.QREncryptionKey,
-		cfg.IsProduction,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create qr login handler: %w", err)

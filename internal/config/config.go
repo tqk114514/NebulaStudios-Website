@@ -49,9 +49,8 @@ var (
 // 包含所有服务运行所需的配置项
 type Config struct {
 	// 服务器配置
-	Port         string // 服务端口，默认 3001
-	Environment  string // 运行环境：development/production
-	IsProduction bool   // 是否为生产环境
+	Port    string // 服务端口，默认 3000
+	BaseURL string // 基础 URL（用于重定向等）
 
 	// 数据库配置
 	DatabaseURL string // PostgreSQL 连接字符串
@@ -95,6 +94,9 @@ type Config struct {
 	R2SecretKey string // R2 Secret Key
 	R2Endpoint  string // R2 Endpoint
 	R2Bucket    string // R2 Bucket 名称
+
+	// 默认头像
+	DefaultAvatarURL string // 默认头像 URL
 }
 
 // ====================  全局配置实例 ====================
@@ -157,8 +159,7 @@ func loadConfig() error {
 
 	// 加载服务器配置
 	newCfg.Port = getEnv("PORT", "3000")
-	newCfg.Environment = getEnv("NODE_ENV", "development")
-	newCfg.IsProduction = newCfg.Environment == "production"
+	newCfg.BaseURL = getEnv("BASE_URL", "http://localhost:3000")
 
 	// 加载数据库配置
 	newCfg.DatabaseURL = getEnv("DATABASE_URL", "")
@@ -200,8 +201,8 @@ func loadConfig() error {
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
 	newCfg.MicrosoftRedirectURI = getEnv("MICROSOFT_REDIRECT_URI", "")
 
-	// 加载 QR 登录加密密钥（兼容旧版 QR_ENCRYPT_KEY 变量名）
-	newCfg.QREncryptionKey = getEnvWithFallback("QR_ENCRYPTION_KEY", "QR_ENCRYPT_KEY", "")
+	// 加载 QR 登录加密密钥
+	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 
 	// 加载 AI 配置
 	newCfg.AIAPIKey = getEnv("AI_API_KEY", "")
@@ -215,6 +216,9 @@ func loadConfig() error {
 	newCfg.R2Endpoint = getEnv("R2_ENDPOINT", "")
 	newCfg.R2Bucket = getEnv("R2_BUCKET", "")
 
+	// 加载默认头像 URL
+	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "https://cdn01.nebulastudios.top/images/default-avatar.svg")
+
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {
 		return err
@@ -226,8 +230,8 @@ func loadConfig() error {
 	cfgMu.Unlock()
 
 	// 记录配置加载成功（不记录敏感信息）
-	utils.LogPrintf("[CONFIG] Configuration loaded: env=%s, port=%s, db_max_conns=%d",
-		newCfg.Environment, newCfg.Port, newCfg.DBMaxConns)
+	utils.LogPrintf("[CONFIG] Configuration loaded: port=%s, db_max_conns=%d",
+		newCfg.Port, newCfg.DBMaxConns)
 
 	return nil
 }
@@ -244,21 +248,13 @@ func validateConfig(c *Config) error {
 	var missingKeys []string
 	var warnings []string
 
-	// 必需配置（生产环境必须有）
+	// 必需配置
 	if c.DatabaseURL == "" {
-		if c.IsProduction {
-			missingKeys = append(missingKeys, "DATABASE_URL")
-		} else {
-			warnings = append(warnings, "DATABASE_URL is empty")
-		}
+		missingKeys = append(missingKeys, "DATABASE_URL")
 	}
 
 	if c.JWTSecret == "" {
-		if c.IsProduction {
-			missingKeys = append(missingKeys, "JWT_SECRET")
-		} else {
-			warnings = append(warnings, "JWT_SECRET is empty (using empty string)")
-		}
+		missingKeys = append(missingKeys, "JWT_SECRET")
 	}
 
 	// 可选但建议配置
@@ -348,9 +344,7 @@ func MustGet() *Config {
 // 用于配置加载失败时的降级处理
 func getDefaultConfig() *Config {
 	return &Config{
-		Port:         "3001",
-		Environment:  "development",
-		IsProduction: false,
+		Port:         "3000",
 		DBMaxConns:   10,
 		JWTExpiresIn: 60 * 24 * time.Hour,
 		SMTPHost:     "smtp.163.com",
