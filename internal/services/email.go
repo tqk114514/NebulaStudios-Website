@@ -21,7 +21,8 @@ import (
 	"auth-system/internal/utils"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"fmt"
+
 	"os"
 	"strings"
 	"sync"
@@ -78,6 +79,12 @@ const (
 
 	// textsPath 文案文件路径
 	textsPath = "dist/data/email-texts.json"
+
+	// connMaxIdleTime 连接最大空闲时间
+	connMaxIdleTime = 5 * time.Minute
+
+	// connCheckInterval 连接检查间隔
+	connCheckInterval = 30 * time.Second
 )
 
 // templatePlaceholders 模板占位符列表
@@ -105,6 +112,12 @@ type EmailService struct {
 	template string
 	texts    EmailTexts
 	mu       sync.RWMutex
+
+	// 连接池相关
+	client     *mail.Client
+	clientMu   sync.Mutex
+	lastUsed   time.Time
+	stopKeeper chan struct{}
 }
 
 // ====================  构造函数 ====================
@@ -148,11 +161,17 @@ func NewEmailService(cfg *config.Config) (*EmailService, error) {
 	utils.LogPrintf("[EMAIL] Email service initialized: host=%s, port=%d, from=%s",
 		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
 
-	return &EmailService{
-		cfg:      cfg,
-		template: template,
-		texts:    texts,
-	}, nil
+	service := &EmailService{
+		cfg:        cfg,
+		template:   template,
+		texts:      texts,
+		stopKeeper: make(chan struct{}),
+	}
+
+	// 启动连接保活协程
+	go service.connectionKeeper()
+
+	return service, nil
 }
 
 // ====================  公开方法 ====================
@@ -180,7 +199,22 @@ func (s *EmailService) VerifyConnection() error {
 	return nil
 }
 
-// SendVerificationEmail 发送验证邮件
+// SendVerificationEmailAsync 异步发送验证邮件（不阻塞调用方）
+// 参数：
+//   - to: 收件人邮箱
+//   - emailType: 邮件类型（register, reset_password, delete_account 等）
+//   - language: 语言代码（zh-CN, en, ja 等）
+//   - verifyURL: 验证链接
+//   - logContext: 日志上下文（用于错误日志，如 "[AUTH]"）
+func (s *EmailService) SendVerificationEmailAsync(to, emailType, language, verifyURL, logContext string) {
+	go func() {
+		if err := s.SendVerificationEmail(to, emailType, language, verifyURL); err != nil {
+			utils.LogPrintf("%s ERROR: Async email send failed: to=%s, type=%s, error=%v", logContext, to, emailType, err)
+		}
+	}()
+}
+
+// SendVerificationEmail 发送验证邮件（同步）
 // 参数：
 //   - to: 收件人邮箱
 //   - emailType: 邮件类型（register, reset_password, delete_account 等）
@@ -360,8 +394,8 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 		return ErrEmailEmptySubject
 	}
 
-	// 创建客户端
-	client, err := s.createClient()
+	// 获取连接（从连接池）
+	client, err := s.getClient()
 	if err != nil {
 		return err
 	}
@@ -389,6 +423,8 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 	// 发送邮件
 	if err := client.DialAndSend(msg); err != nil {
 		utils.LogPrintf("[EMAIL] ERROR: Failed to send email: to=%s, subject=%s, error=%v", to, subject, err)
+		// 发送失败，重置连接（下次会重新建立）
+		s.resetClient()
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
@@ -454,6 +490,88 @@ func (s *EmailService) createClient() (*mail.Client, error) {
 	}
 
 	return client, nil
+}
+
+// getClient 获取或创建 SMTP 客户端（连接池）
+// 返回：
+//   - *mail.Client: SMTP 客户端
+//   - error: 获取失败时返回错误
+func (s *EmailService) getClient() (*mail.Client, error) {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+
+	// 如果已有连接，直接返回
+	if s.client != nil {
+		s.lastUsed = time.Now()
+		return s.client, nil
+	}
+
+	// 创建新连接
+	client, err := s.createClient()
+	if err != nil {
+		return nil, err
+	}
+
+	s.client = client
+	s.lastUsed = time.Now()
+	utils.LogPrintf("[EMAIL] SMTP connection established (pooled)")
+
+	return s.client, nil
+}
+
+// closeClient 关闭当前连接
+func (s *EmailService) closeClient() {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+
+	if s.client != nil {
+		if err := s.client.Close(); err != nil {
+			utils.LogPrintf("[EMAIL] WARN: Failed to close SMTP client: %v", err)
+		}
+		s.client = nil
+		utils.LogPrintf("[EMAIL] SMTP connection closed")
+	}
+}
+
+// resetClient 重置连接（发送失败时调用）
+func (s *EmailService) resetClient() {
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
+
+	if s.client != nil {
+		_ = s.client.Close()
+		s.client = nil
+	}
+}
+
+// connectionKeeper 连接保活协程
+// 定期检查连接状态，关闭空闲过久的连接
+func (s *EmailService) connectionKeeper() {
+	ticker := time.NewTicker(connCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.clientMu.Lock()
+			if s.client != nil && time.Since(s.lastUsed) > connMaxIdleTime {
+				_ = s.client.Close()
+				s.client = nil
+				utils.LogPrintf("[EMAIL] SMTP connection closed due to idle timeout")
+			}
+			s.clientMu.Unlock()
+		case <-s.stopKeeper:
+			s.closeClient()
+			return
+		}
+	}
+}
+
+// Close 关闭邮件服务
+func (s *EmailService) Close() {
+	if s.stopKeeper != nil {
+		close(s.stopKeeper)
+	}
 }
 
 // ====================  辅助函数 ====================
