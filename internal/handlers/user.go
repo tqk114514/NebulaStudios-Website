@@ -375,11 +375,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	}
 
 	// 异步发送邮件（不阻塞用户请求）
-	go func(email, emailType, lang, url string, uid int64) {
-		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
-			utils.LogPrintf("[USER] ERROR: Async delete code email failed: userID=%d, email=%s, error=%v", uid, email, err)
-		}
-	}(user.Email, "delete_account", language, verifyURL, userID)
+	h.emailService.SendVerificationEmailAsync(user.Email, "delete_account", language, verifyURL, "[USER]")
 
 	utils.LogPrintf("[USER] Delete code sent (async): userID=%d, email=%s", userID, user.Email)
 	h.respondSuccess(c, nil)

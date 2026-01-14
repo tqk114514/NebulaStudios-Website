@@ -340,11 +340,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
 	// 异步发送邮件（不阻塞用户请求）
-	go func(email, emailType, lang, url string) {
-		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
-			utils.LogPrintf("[AUTH] ERROR: Async email send failed: email=%s, error=%v", email, err)
-		}
-	}(validatedEmail, "register", language, verifyURL)
+	h.emailService.SendVerificationEmailAsync(validatedEmail, "register", language, verifyURL, "[AUTH]")
 
 	utils.LogPrintf("[AUTH] Verification code sent (async): email=%s", validatedEmail)
 	h.respondSuccess(c, gin.H{
@@ -1014,11 +1010,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
 	// 异步发送邮件（不阻塞用户请求）
-	go func(email, emailType, lang, url string) {
-		if err := h.emailService.SendVerificationEmail(email, emailType, lang, url); err != nil {
-			utils.LogPrintf("[AUTH] ERROR: Async reset email send failed: email=%s, error=%v", email, err)
-		}
-	}(normalizedEmail, "reset_password", language, verifyURL)
+	h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "[AUTH]")
 
 	utils.LogPrintf("[AUTH] Reset password code sent (async): email=%s", normalizedEmail)
 	h.respondSuccess(c, gin.H{"expireTime": expireTime})
