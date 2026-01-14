@@ -240,6 +240,7 @@
   "linkConfirm.invalidLink": "無効な連携リンク",
   "linkConfirm.linkExpired": "連携リンクの有効期限が切れました。再度操作してください",
   "linkConfirm.linkFailed": "連携に失敗しました。後でもう一度お試しください",
+  "linkConfirm.userBanned": "このアカウントは停止されているため、連携できません",
 
   "error.userBanned": "アカウントが停止されているため、この操作を実行できません"
 }
