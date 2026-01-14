@@ -502,6 +502,11 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 // 始终从 ./dist 目录读取预压缩的静态文件
 // 开发时请先运行 go run ./cmd/build 生成 dist 目录
 func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
+	// favicon.ico - 返回 204 No Content（避免 404 或错误响应）
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
 	// 使用 Brotli 预压缩中间件服务静态文件
 	r.Use(middleware.PreCompressedStatic("./dist"))
 	utils.LogPrintf("[STATIC] Serving pre-compressed static files from ./dist")
