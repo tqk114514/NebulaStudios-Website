@@ -685,11 +685,8 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
-		// 确认绑定微软账户需要封禁检查
-		authAPI.POST("/microsoft/confirm-link",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
-			hdlrs.microsoftHandler.ConfirmLink)
+		// 确认绑定微软账户（用户未登录状态，通过 pending link token 验证）
+		authAPI.POST("/microsoft/confirm-link", hdlrs.microsoftHandler.ConfirmLink)
 	}
 }
 

@@ -171,7 +171,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               'INVALID_TOKEN': 'linkConfirm.invalidLink',
               'TOKEN_EXPIRED': 'linkConfirm.linkExpired',
               'MICROSOFT_ALREADY_LINKED': 'dashboard.microsoftAlreadyLinked',
-              'USER_NOT_FOUND': 'error.sessionError'
+              'USER_NOT_FOUND': 'error.sessionError',
+              'USER_BANNED': 'linkConfirm.userBanned'
             };
             const errorKey = errorMessages[result.errorCode || ''] || 'linkConfirm.linkFailed';
             showAlert(t(errorKey));
