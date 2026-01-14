@@ -77,6 +77,12 @@ const (
 	// defaultResetPasswordBurst 默认密码重置突发值
 	defaultResetPasswordBurst = 3
 
+	// defaultOAuthTokenRate 默认 OAuth Token 限流速率（每 2 秒 1 次）
+	defaultOAuthTokenRate = 2 * time.Second
+
+	// defaultOAuthTokenBurst 默认 OAuth Token 突发值
+	defaultOAuthTokenBurst = 10
+
 	// defaultEmailInterval 默认邮件发送间隔
 	defaultEmailInterval = 60 * time.Second
 )
@@ -510,6 +516,9 @@ var (
 	// ResetPasswordLimiter 密码重置限流：3 次/分钟
 	ResetPasswordLimiter = NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst)
 
+	// OAuthTokenLimiter OAuth Token 端点限流：10 次/20 秒
+	OAuthTokenLimiter = NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst)
+
 	// EmailLimiter 邮件发送限流：60 秒/邮箱
 	EmailLimiter = NewShardedEmailRateLimiter(defaultEmailInterval)
 
@@ -577,4 +586,13 @@ func RegisterRateLimit() gin.HandlerFunc {
 //   - gin.HandlerFunc: Gin 中间件函数
 func ResetPasswordRateLimit() gin.HandlerFunc {
 	return RateLimitMiddleware(ResetPasswordLimiter)
+}
+
+// OAuthTokenRateLimit OAuth Token 端点限流中间件
+// 限制：10 次/20 秒
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func OAuthTokenRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(OAuthTokenLimiter)
 }

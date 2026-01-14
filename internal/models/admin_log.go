@@ -42,6 +42,16 @@ const (
 	ActionBanUser = "ban_user"
 	// ActionUnbanUser 解封用户
 	ActionUnbanUser = "unban_user"
+	// ActionOAuthClientCreate 创建 OAuth 客户端
+	ActionOAuthClientCreate = "oauth_client_create"
+	// ActionOAuthClientUpdate 更新 OAuth 客户端
+	ActionOAuthClientUpdate = "oauth_client_update"
+	// ActionOAuthClientDelete 删除 OAuth 客户端
+	ActionOAuthClientDelete = "oauth_client_delete"
+	// ActionOAuthClientRegenerateSecret 重新生成 OAuth 客户端密钥
+	ActionOAuthClientRegenerateSecret = "oauth_client_regenerate_secret"
+	// ActionOAuthClientToggle 启用/禁用 OAuth 客户端
+	ActionOAuthClientToggle = "oauth_client_toggle"
 )
 
 // ====================  数据结构 ====================
@@ -90,6 +100,21 @@ type BanUserDetails struct {
 // UnbanUserDetails 解封用户操作详情
 type UnbanUserDetails struct {
 	TargetUsername string `json:"target_username"`
+}
+
+// OAuthClientDetails OAuth 客户端操作详情
+type OAuthClientDetails struct {
+	ClientDBID int64  `json:"client_db_id"`
+	ClientID   string `json:"client_id"`
+	ClientName string `json:"client_name"`
+}
+
+// OAuthClientToggleDetails OAuth 客户端启用/禁用操作详情
+type OAuthClientToggleDetails struct {
+	ClientDBID int64  `json:"client_db_id"`
+	ClientID   string `json:"client_id"`
+	ClientName string `json:"client_name"`
+	Enabled    bool   `json:"enabled"`
 }
 
 // AdminLogRepository 管理员日志仓库
@@ -270,6 +295,117 @@ func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminID, targetID
 		Action:   ActionUnbanUser,
 		TargetID: &targetID,
 		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogOAuthClientCreate 记录创建 OAuth 客户端操作
+func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+	details := OAuthClientDetails{
+		ClientDBID: clientDBID,
+		ClientID:   clientID,
+		ClientName: clientName,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID: adminID,
+		Action:  ActionOAuthClientCreate,
+		Details: detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogOAuthClientUpdate 记录更新 OAuth 客户端操作
+func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+	details := OAuthClientDetails{
+		ClientDBID: clientDBID,
+		ClientID:   clientID,
+		ClientName: clientName,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID: adminID,
+		Action:  ActionOAuthClientUpdate,
+		Details: detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogOAuthClientDelete 记录删除 OAuth 客户端操作
+func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+	details := OAuthClientDetails{
+		ClientDBID: clientDBID,
+		ClientID:   clientID,
+		ClientName: clientName,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID: adminID,
+		Action:  ActionOAuthClientDelete,
+		Details: detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogOAuthClientRegenerateSecret 记录重新生成 OAuth 客户端密钥操作
+func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+	details := OAuthClientDetails{
+		ClientDBID: clientDBID,
+		ClientID:   clientID,
+		ClientName: clientName,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID: adminID,
+		Action:  ActionOAuthClientRegenerateSecret,
+		Details: detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogOAuthClientToggle 记录启用/禁用 OAuth 客户端操作
+func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminID, clientDBID int64, clientID, clientName string, enabled bool) error {
+	details := OAuthClientToggleDetails{
+		ClientDBID: clientDBID,
+		ClientID:   clientID,
+		ClientName: clientName,
+		Enabled:    enabled,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID: adminID,
+		Action:  ActionOAuthClientToggle,
+		Details: detailsJSON,
 	}
 
 	return r.Create(ctx, log)
