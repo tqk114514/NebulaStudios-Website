@@ -33,6 +33,7 @@ import (
 	"auth-system/internal/middleware"
 	adminmw "auth-system/internal/middleware/admin"
 	"auth-system/internal/models"
+	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -64,10 +65,11 @@ const (
 
 // AdminHandler 管理后台 Handler
 type AdminHandler struct {
-	userRepo    *models.UserRepository
-	userCache   *cache.UserCache
-	logRepo     *models.AdminLogRepository
-	userLogRepo *models.UserLogRepository
+	userRepo     *models.UserRepository
+	userCache    *cache.UserCache
+	logRepo      *models.AdminLogRepository
+	userLogRepo  *models.UserLogRepository
+	oauthService *services.OAuthService
 }
 
 // userListResponse 用户列表响应
@@ -100,11 +102,12 @@ type setRoleRequest struct {
 //   - userCache: 用户缓存
 //   - logRepo: 管理员日志仓库
 //   - userLogRepo: 用户日志仓库
+//   - oauthService: OAuth 服务（可选）
 //
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository) (*AdminHandler, error) {
+func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -118,10 +121,11 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 	utils.LogPrintf("[ADMIN] Admin handler initialized")
 
 	return &AdminHandler{
-		userRepo:    userRepo,
-		userCache:   userCache,
-		logRepo:     logRepo,
-		userLogRepo: userLogRepo,
+		userRepo:     userRepo,
+		userCache:    userCache,
+		logRepo:      logRepo,
+		userLogRepo:  userLogRepo,
+		oauthService: oauthService,
 	}, nil
 }
 
@@ -643,4 +647,346 @@ func (h *AdminHandler) respondError(c *gin.Context, status int, errorCode string
 		"success":   false,
 		"errorCode": errorCode,
 	})
+}
+
+// ====================  OAuth 客户端管理 ====================
+
+// oauthClientListResponse OAuth 客户端列表响应
+type oauthClientListResponse struct {
+	Clients    []*models.OAuthClient `json:"clients"`
+	Total      int64                 `json:"total"`
+	Page       int                   `json:"page"`
+	PageSize   int                   `json:"pageSize"`
+	TotalPages int                   `json:"totalPages"`
+}
+
+// createOAuthClientRequest 创建 OAuth 客户端请求
+type createOAuthClientRequest struct {
+	Name        string `json:"name" binding:"required,min=1,max=100"`
+	Description string `json:"description" binding:"max=500"`
+	RedirectURI string `json:"redirect_uri" binding:"required"`
+}
+
+// updateOAuthClientRequest 更新 OAuth 客户端请求
+type updateOAuthClientRequest struct {
+	Name        string `json:"name" binding:"omitempty,min=1,max=100"`
+	Description string `json:"description" binding:"max=500"`
+	RedirectURI string `json:"redirect_uri"`
+}
+
+// toggleOAuthClientRequest 启用/禁用 OAuth 客户端请求
+type toggleOAuthClientRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// GetOAuthClients 获取 OAuth 客户端列表
+// GET /admin/api/oauth/clients?page=1&pageSize=20&search=xxx
+//
+// 权限：超级管理员
+func (h *AdminHandler) GetOAuthClients(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	// 解析分页参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize)))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > maxPageSize {
+		pageSize = defaultPageSize
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	clients, total, err := h.oauthService.GetClients(ctx, page, pageSize, search)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get OAuth clients: error=%v", err)
+		h.respondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		return
+	}
+
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	h.respondSuccess(c, oauthClientListResponse{
+		Clients:    clients,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	})
+}
+
+// GetOAuthClient 获取 OAuth 客户端详情
+// GET /admin/api/oauth/clients/:id
+//
+// 权限：超级管理员
+func (h *AdminHandler) GetOAuthClient(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || clientID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, err := h.oauthService.GetClient(ctx, clientID)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to get OAuth client: id=%d, error=%v", clientID, err)
+		h.respondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	h.respondSuccess(c, client)
+}
+
+// CreateOAuthClient 创建 OAuth 客户端
+// POST /admin/api/oauth/clients
+//
+// 权限：超级管理员
+func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+
+	var req createOAuthClientRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Invalid create OAuth client request: error=%v", err)
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, clientSecret, err := h.oauthService.CreateClient(ctx, req.Name, req.Description, req.RedirectURI)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to create OAuth client: error=%v", err)
+		h.respondError(c, http.StatusInternalServerError, "CREATE_FAILED")
+		return
+	}
+
+	// 记录审计日志
+	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorID, client.ID, client.ClientID, client.Name); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log create OAuth client: error=%v", err)
+	}
+
+	utils.LogPrintf("[ADMIN] OAuth client created: operatorID=%d, clientID=%s, name=%s",
+		operatorID, client.ClientID, client.Name)
+
+	h.respondSuccess(c, gin.H{
+		"client":        client,
+		"client_secret": clientSecret,
+	})
+}
+
+// UpdateOAuthClient 更新 OAuth 客户端
+// PUT /admin/api/oauth/clients/:id
+//
+// 权限：超级管理员
+func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+
+	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || clientID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		return
+	}
+
+	var req updateOAuthClientRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Invalid update OAuth client request: error=%v", err)
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, err := h.oauthService.GetClient(ctx, clientID)
+	if err != nil {
+		h.respondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	err = h.oauthService.UpdateClient(ctx, clientID, req.Name, req.Description, req.RedirectURI)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to update OAuth client: id=%d, error=%v", clientID, err)
+		h.respondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
+		return
+	}
+
+	// 记录审计日志
+	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log update OAuth client: error=%v", err)
+	}
+
+	utils.LogPrintf("[ADMIN] OAuth client updated: operatorID=%d, clientID=%s", operatorID, client.ClientID)
+
+	h.respondSuccess(c, gin.H{"message": "Client updated"})
+}
+
+// DeleteOAuthClient 删除 OAuth 客户端
+// DELETE /admin/api/oauth/clients/:id
+//
+// 权限：超级管理员
+func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+
+	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || clientID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, err := h.oauthService.GetClient(ctx, clientID)
+	if err != nil {
+		h.respondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	err = h.oauthService.DeleteClient(ctx, clientID)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to delete OAuth client: id=%d, error=%v", clientID, err)
+		h.respondError(c, http.StatusInternalServerError, "DELETE_FAILED")
+		return
+	}
+
+	// 记录审计日志
+	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log delete OAuth client: error=%v", err)
+	}
+
+	utils.LogPrintf("[ADMIN] OAuth client deleted: operatorID=%d, clientID=%s, name=%s",
+		operatorID, client.ClientID, client.Name)
+
+	h.respondSuccess(c, gin.H{"message": "Client deleted"})
+}
+
+// RegenerateOAuthClientSecret 重新生成 OAuth 客户端密钥
+// POST /admin/api/oauth/clients/:id/regenerate-secret
+//
+// 权限：超级管理员
+func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+
+	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || clientID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, err := h.oauthService.GetClient(ctx, clientID)
+	if err != nil {
+		h.respondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	newSecret, err := h.oauthService.RegenerateSecret(ctx, clientID)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to regenerate OAuth client secret: id=%d, error=%v", clientID, err)
+		h.respondError(c, http.StatusInternalServerError, "REGENERATE_FAILED")
+		return
+	}
+
+	// 记录审计日志
+	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log regenerate OAuth client secret: error=%v", err)
+	}
+
+	utils.LogPrintf("[ADMIN] OAuth client secret regenerated: operatorID=%d, clientID=%s", operatorID, client.ClientID)
+
+	h.respondSuccess(c, gin.H{"client_secret": newSecret})
+}
+
+// ToggleOAuthClient 启用/禁用 OAuth 客户端
+// POST /admin/api/oauth/clients/:id/toggle
+//
+// 权限：超级管理员
+func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+
+	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || clientID <= 0 {
+		h.respondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		return
+	}
+
+	var req toggleOAuthClientRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	client, err := h.oauthService.GetClient(ctx, clientID)
+	if err != nil {
+		h.respondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	err = h.oauthService.ToggleClient(ctx, clientID, req.Enabled)
+	if err != nil {
+		utils.LogPrintf("[ADMIN] ERROR: Failed to toggle OAuth client: id=%d, error=%v", clientID, err)
+		h.respondError(c, http.StatusInternalServerError, "TOGGLE_FAILED")
+		return
+	}
+
+	// 记录审计日志
+	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
+		utils.LogPrintf("[ADMIN] WARN: Failed to log toggle OAuth client: error=%v", err)
+	}
+
+	status := "disabled"
+	if req.Enabled {
+		status = "enabled"
+	}
+	utils.LogPrintf("[ADMIN] OAuth client %s: operatorID=%d, clientID=%s", status, operatorID, client.ClientID)
+
+	h.respondSuccess(c, gin.H{"message": "Client " + status})
 }

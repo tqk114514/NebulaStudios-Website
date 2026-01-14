@@ -52,6 +52,10 @@ const (
 	UserActionBanned = "banned"
 	// UserActionUnbanned 被解封
 	UserActionUnbanned = "unbanned"
+	// UserActionOAuthAuthorize OAuth 授权第三方应用
+	UserActionOAuthAuthorize = "oauth_authorize"
+	// UserActionOAuthRevoke OAuth 撤销第三方应用授权
+	UserActionOAuthRevoke = "oauth_revoke"
 )
 
 // ====================  数据结构 ====================
@@ -93,6 +97,19 @@ type UnlinkMicrosoftDetails struct {
 type BannedDetails struct {
 	Reason  string     `json:"reason"`
 	UnbanAt *time.Time `json:"unban_at,omitempty"` // nil 表示永久封禁
+}
+
+// OAuthAuthorizeDetails OAuth 授权详情
+type OAuthAuthorizeDetails struct {
+	ClientID   string `json:"client_id"`
+	ClientName string `json:"client_name"`
+	Scope      string `json:"scope"`
+}
+
+// OAuthRevokeDetails OAuth 撤销授权详情
+type OAuthRevokeDetails struct {
+	ClientID   string `json:"client_id"`
+	ClientName string `json:"client_name"`
 }
 
 // UserLogRepository 用户日志仓库
@@ -267,6 +284,45 @@ func (r *UserLogRepository) LogUnbanned(ctx context.Context, userID int64) error
 	log := &UserLog{
 		UserID: userID,
 		Action: UserActionUnbanned,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogOAuthAuthorize 记录 OAuth 授权第三方应用
+func (r *UserLogRepository) LogOAuthAuthorize(ctx context.Context, userID int64, clientID, clientName, scope string) error {
+	details := OAuthAuthorizeDetails{
+		ClientID:   clientID,
+		ClientName: clientName,
+		Scope:      scope,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &UserLog{
+		UserID:  userID,
+		Action:  UserActionOAuthAuthorize,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogOAuthRevoke 记录 OAuth 撤销第三方应用授权
+func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userID int64, clientID, clientName string) error {
+	details := OAuthRevokeDetails{
+		ClientID:   clientID,
+		ClientName: clientName,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &UserLog{
+		UserID:  userID,
+		Action:  UserActionOAuthRevoke,
+		Details: detailsJSON,
 	}
 	return r.Create(ctx, log)
 }

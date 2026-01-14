@@ -608,6 +608,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       userLogsItem.addEventListener('click', showUserLogsModal);
     }
 
+    // 已授权应用
+    const oauthGrantsItem = document.getElementById('oauth-grants-item');
+    if (oauthGrantsItem) {
+      oauthGrantsItem.addEventListener('click', showOAuthGrantsModal);
+    }
+
     // 数据导出
     const dataExportItem = document.getElementById('data-export-item');
     if (dataExportItem) {
@@ -1992,4 +1998,194 @@ async function handleDataExport(): Promise<void> {
   } catch {
     showAlert(t('error.networkError'));
   }
+}
+
+// ==================== 已授权应用弹窗 ====================
+
+/**
+ * OAuth 授权信息接口
+ */
+interface OAuthGrant {
+  client_id: string;
+  client_name: string;
+  client_icon?: string;
+  scopes: string[];
+  authorized_at: string;
+}
+
+/**
+ * OAuth 授权列表响应接口
+ */
+interface OAuthGrantsResponse {
+  success: boolean;
+  grants?: OAuthGrant[];
+  errorCode?: string;
+}
+
+/**
+ * 显示已授权应用弹窗
+ */
+function showOAuthGrantsModal(): void {
+  const listEl = document.getElementById('oauth-grants-list');
+  const loadingEl = document.getElementById('oauth-grants-loading');
+  const emptyEl = document.getElementById('oauth-grants-empty');
+
+  if (!listEl || !loadingEl || !emptyEl) {return;}
+
+  // 创建弹窗控制器
+  const controller = createModalController({
+    modalId: 'oauth-grants-modal',
+    cancelBtnId: 'oauth-grants-close-btn'
+  });
+
+  if (!controller.modal) {return;}
+
+  // 重置状态
+  listEl.innerHTML = '';
+  loadingEl.classList.remove('is-hidden');
+  emptyEl.classList.add('is-hidden');
+
+  /**
+   * 格式化授权时间
+   */
+  function formatAuthorizedTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(document.documentElement.lang || 'zh-CN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+
+  /**
+   * 格式化权限范围显示
+   */
+  function formatScopes(scopes: string[]): string {
+    return scopes.map(scope => {
+      const key = `oauth.scope.${scope}.name`;
+      const translated = t(key);
+      return translated !== key ? translated : scope;
+    }).join(', ');
+  }
+
+  /**
+   * 创建授权项元素
+   */
+  function createGrantItemElement(grant: OAuthGrant): HTMLElement {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'oauth-grant-item';
+
+    // 图标
+    const iconEl = document.createElement('div');
+    iconEl.className = 'oauth-grant-icon';
+    if (grant.client_icon) {
+      const img = document.createElement('img');
+      img.src = grant.client_icon;
+      img.alt = grant.client_name;
+      img.onerror = (): void => {
+        iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>';
+      };
+      iconEl.appendChild(img);
+    } else {
+      iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>';
+    }
+    itemEl.appendChild(iconEl);
+
+    // 内容
+    const contentEl = document.createElement('div');
+    contentEl.className = 'oauth-grant-content';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'oauth-grant-name';
+    nameEl.textContent = grant.client_name;
+    contentEl.appendChild(nameEl);
+
+    const scopesEl = document.createElement('div');
+    scopesEl.className = 'oauth-grant-scopes';
+    scopesEl.textContent = formatScopes(grant.scopes);
+    contentEl.appendChild(scopesEl);
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'oauth-grant-time';
+    timeEl.textContent = t('dashboard.oauthAuthorizedAt').replace('{time}', formatAuthorizedTime(grant.authorized_at));
+    contentEl.appendChild(timeEl);
+
+    itemEl.appendChild(contentEl);
+
+    // 撤销按钮
+    const revokeBtn = document.createElement('button');
+    revokeBtn.className = 'oauth-grant-revoke';
+    revokeBtn.textContent = t('dashboard.oauthRevoke');
+    revokeBtn.addEventListener('click', async () => {
+      const confirmed = await showConfirm(
+        t('dashboard.oauthRevokeConfirm').replace('{name}', grant.client_name),
+        t('dashboard.oauthRevoke')
+      );
+      if (!confirmed) {return;}
+
+      revokeBtn.disabled = true;
+      try {
+        const response = await fetch(`/api/user/oauth/grants/${encodeURIComponent(grant.client_id)}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          itemEl.remove();
+          // 检查是否还有授权
+          if (listEl!.children.length === 0) {
+            emptyEl!.classList.remove('is-hidden');
+          }
+          showAlert(t('dashboard.oauthRevokeSuccess'));
+        } else {
+          showAlert(t('dashboard.oauthRevokeFailed'));
+          revokeBtn.disabled = false;
+        }
+      } catch {
+        showAlert(t('error.networkError'));
+        revokeBtn.disabled = false;
+      }
+    });
+    itemEl.appendChild(revokeBtn);
+
+    return itemEl;
+  }
+
+  /**
+   * 加载授权列表
+   */
+  async function loadGrants(): Promise<void> {
+    try {
+      const response = await fetch('/api/user/oauth/grants', {
+        method: 'GET',
+        credentials: 'include'
+      });
+      const result: OAuthGrantsResponse = await response.json();
+
+      if (controller.isCleanedUp()) {return;}
+
+      if (result.success && result.grants) {
+        if (result.grants.length === 0) {
+          emptyEl!.classList.remove('is-hidden');
+        } else {
+          result.grants.forEach(grant => {
+            const itemEl = createGrantItemElement(grant);
+            listEl!.appendChild(itemEl);
+          });
+        }
+      } else {
+        emptyEl!.classList.remove('is-hidden');
+      }
+    } catch (error) {
+      console.error('[OAUTH_GRANTS] ERROR:', error);
+      emptyEl!.classList.remove('is-hidden');
+    } finally {
+      loadingEl!.classList.add('is-hidden');
+    }
+  }
+
+  // 显示弹窗并加载数据
+  controller.open();
+  loadGrants();
 }
