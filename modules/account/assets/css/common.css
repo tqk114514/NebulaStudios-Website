@@ -535,9 +535,9 @@ input.violation {
   opacity: 0;
   visibility: hidden;
   transition: 
-    opacity 0.3s ease,
-    visibility 0.3s ease,
-    backdrop-filter 0.3s ease;
+    opacity 0.2s ease-out,
+    visibility 0.2s ease-out;
+  will-change: opacity;
 }
 
 #alert-modal {
@@ -568,10 +568,11 @@ input.violation {
   flex-direction: column;
   transform: scale(0.9) translateY(20px);
   transition: 
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.3s ease;
+    transform 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.2s ease-out;
   overflow: hidden;
   opacity: 0;
+  will-change: transform, opacity;
 }
 
 .modal-overlay:not(.is-hidden) .modal-container {
