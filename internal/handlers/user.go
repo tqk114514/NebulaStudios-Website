@@ -66,6 +66,7 @@ type UserHandler struct {
 	captchaService *services.CaptchaService
 	userCache      *cache.UserCache
 	r2Service      *services.R2Service
+	oauthService   *services.OAuthService
 	baseURL        string
 }
 
@@ -117,6 +118,7 @@ var (
 //   - captchaService: 验证码服务
 //   - userCache: 用户缓存
 //   - r2Service: R2 存储服务（可选）
+//   - oauthService: OAuth 服务（可选）
 //   - baseURL: 基础 URL
 //
 // 返回：
@@ -130,6 +132,7 @@ func NewUserHandler(
 	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
 	r2Service *services.R2Service,
+	oauthService *services.OAuthService,
 	baseURL string,
 ) (*UserHandler, error) {
 	// 参数验证
@@ -162,6 +165,7 @@ func NewUserHandler(
 		captchaService: captchaService,
 		userCache:      userCache,
 		r2Service:      r2Service,
+		oauthService:   oauthService,
 		baseURL:        baseURL,
 	}, nil
 }
@@ -581,6 +585,83 @@ func (h *UserHandler) GetLogs(c *gin.Context) {
 		"pageSize":   pageSize,
 		"totalPages": totalPages,
 	})
+}
+
+// ====================  OAuth 授权管理 ====================
+
+// GetOAuthGrants 获取用户已授权的应用列表
+// GET /api/user/oauth/grants
+func (h *UserHandler) GetOAuthGrants(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		return
+	}
+
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusInternalServerError, "SERVICE_UNAVAILABLE")
+		return
+	}
+
+	ctx := c.Request.Context()
+	grants, err := h.oauthService.GetUserGrants(ctx, userID)
+	if err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to get OAuth grants: userID=%d, error=%v", userID, err)
+		h.respondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"grants":  grants,
+	})
+}
+
+// RevokeOAuthGrant 撤销用户对某应用的授权
+// DELETE /api/user/oauth/grants/:client_id
+func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		return
+	}
+
+	clientID := c.Param("client_id")
+	if clientID == "" {
+		h.respondError(c, http.StatusBadRequest, "MISSING_CLIENT_ID")
+		return
+	}
+
+	if h.oauthService == nil {
+		h.respondError(c, http.StatusInternalServerError, "SERVICE_UNAVAILABLE")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 获取客户端信息（用于日志记录）
+	client, err := h.oauthService.GetClientByClientID(ctx, clientID)
+	if err != nil {
+		utils.LogPrintf("[USER] WARN: OAuth client not found for revoke: userID=%d, clientID=%s", userID, clientID)
+		// 即使客户端不存在，也尝试撤销（幂等操作）
+	}
+
+	// 撤销授权
+	if err := h.oauthService.RevokeUserClientTokens(ctx, userID, clientID); err != nil {
+		utils.LogPrintf("[USER] ERROR: Failed to revoke OAuth grant: userID=%d, clientID=%s, error=%v", userID, clientID, err)
+		h.respondError(c, http.StatusInternalServerError, "REVOKE_FAILED")
+		return
+	}
+
+	// 记录操作日志
+	if h.userLogRepo != nil && client != nil {
+		if err := h.userLogRepo.LogOAuthRevoke(ctx, userID, clientID, client.Name); err != nil {
+			utils.LogPrintf("[USER] WARN: Failed to log OAuth revoke: userID=%d, error=%v", userID, err)
+		}
+	}
+
+	utils.LogPrintf("[USER] OAuth grant revoked: userID=%d, clientID=%s", userID, clientID)
+	h.respondSuccess(c, nil)
 }
 
 

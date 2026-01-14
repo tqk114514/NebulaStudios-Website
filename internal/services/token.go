@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"strings"
 	"time"
@@ -610,6 +611,7 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 }
 
 // CleanupExpired 清理过期数据
+// 所有清理操作并行执行，提高效率
 // 参数：
 //   - ctx: 上下文
 func (s *TokenService) CleanupExpired(ctx context.Context) {
@@ -620,32 +622,105 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		return
 	}
 
+	var wg sync.WaitGroup
 	now := time.Now().UnixMilli()
 
-	// 清理过期 Token
-	tokenResult, err := pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
-	if err != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired tokens: %v", err)
-	}
+	// 清理过期 Token（异步）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TOKEN] ERROR: Token cleanup panic: %v", r)
+			}
+		}()
 
-	// 清理过期验证码
-	codeResult, codeErr := pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
-	if codeErr != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired codes: %v", codeErr)
-	}
+		result, err := pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
+		if err != nil {
+			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired tokens: %v", err)
+			return
+		}
+		if count := result.RowsAffected(); count > 0 {
+			utils.LogPrintf("[TOKEN] Cleaned up %d expired tokens", count)
+		}
+	}()
 
-	// 记录清理结果
-	var tokenCount, codeCount int64
-	if err == nil {
-		tokenCount = tokenResult.RowsAffected()
-	}
-	if codeErr == nil {
-		codeCount = codeResult.RowsAffected()
-	}
+	// 清理过期验证码（异步）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TOKEN] ERROR: Code cleanup panic: %v", r)
+			}
+		}()
 
-	if tokenCount > 0 || codeCount > 0 {
-		utils.LogPrintf("[TOKEN] Cleanup completed: %d tokens, %d codes removed", tokenCount, codeCount)
-	}
+		result, err := pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
+		if err != nil {
+			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired codes: %v", err)
+			return
+		}
+		if count := result.RowsAffected(); count > 0 {
+			utils.LogPrintf("[TOKEN] Cleaned up %d expired codes", count)
+		}
+	}()
+
+	// 清理过期 OAuth 授权码（异步）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TOKEN] ERROR: OAuth auth code cleanup panic: %v", r)
+			}
+		}()
+
+		repo := models.NewOAuthAuthCodeRepository()
+		if count, err := repo.DeleteExpired(ctx); err != nil {
+			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth auth codes: %v", err)
+		} else if count > 0 {
+			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth auth codes", count)
+		}
+	}()
+
+	// 清理过期 OAuth Access Token（异步）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TOKEN] ERROR: OAuth access token cleanup panic: %v", r)
+			}
+		}()
+
+		repo := models.NewOAuthAccessTokenRepository()
+		if count, err := repo.DeleteExpired(ctx); err != nil {
+			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth access tokens: %v", err)
+		} else if count > 0 {
+			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth access tokens", count)
+		}
+	}()
+
+	// 清理过期 OAuth Refresh Token（异步）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogPrintf("[TOKEN] ERROR: OAuth refresh token cleanup panic: %v", r)
+			}
+		}()
+
+		repo := models.NewOAuthRefreshTokenRepository()
+		if count, err := repo.DeleteExpired(ctx); err != nil {
+			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth refresh tokens: %v", err)
+		} else if count > 0 {
+			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth refresh tokens", count)
+		}
+	}()
+
+	// 等待所有清理任务完成
+	wg.Wait()
 }
 
 // GetTokenExpiry 获取 Token 过期时间配置
