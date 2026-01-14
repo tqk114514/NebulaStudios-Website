@@ -11,7 +11,7 @@
 import { initializeModals, showAlert } from './lib/ui/feedback.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { validateLoginForm } from './lib/validators.ts';
-import { login, verifySession, errorCodeMap } from './lib/api/auth.ts';
+import { login, errorCodeMap } from './lib/api/auth.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { initQrLogin } from './lib/qr.ts';
@@ -37,13 +37,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 等待翻译系统就绪
     await waitForTranslations();
-
-    // 检查是否已登录，已登录则跳转 dashboard
-    const sessionResult = await verifySession();
-    if (sessionResult.success) {
-      window.location.href = '/account/dashboard';
-      return;
-    }
 
     // 加载验证码配置
     await loadCaptchaConfig();
