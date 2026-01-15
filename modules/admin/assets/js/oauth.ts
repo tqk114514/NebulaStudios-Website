@@ -29,7 +29,7 @@ export interface OAuthClient {
   name: string;
   description: string;
   redirect_uri: string;
-  enabled: boolean;
+  is_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -151,10 +151,10 @@ async function toggleClient(id: number, enabled: boolean): Promise<boolean> {
  * 渲染客户端表格行
  */
 function renderClientRow(client: OAuthClient): string {
-  const statusClass = client.enabled ? 'enabled' : 'disabled';
-  const statusText = client.enabled ? '已启用' : '已禁用';
-  const toggleText = client.enabled ? '禁用' : '启用';
-  const toggleClass = client.enabled ? '' : 'off';
+  const statusClass = client.is_enabled ? 'enabled' : 'disabled';
+  const statusText = client.is_enabled ? '已启用' : '已禁用';
+  const toggleText = client.is_enabled ? '禁用' : '启用';
+  const toggleClass = client.is_enabled ? '' : 'off';
 
   return `
     <tr data-client-id="${client.id}">
@@ -168,7 +168,7 @@ function renderClientRow(client: OAuthClient): string {
       <td>
         <div class="action-btns">
           <button class="action-btn view" data-client-id="${client.id}">查看</button>
-          <button class="action-btn toggle ${toggleClass}" data-client-id="${client.id}" data-enabled="${client.enabled}">${toggleText}</button>
+          <button class="action-btn toggle ${toggleClass}" data-client-id="${client.id}" data-enabled="${client.is_enabled}">${toggleText}</button>
         </div>
       </td>
     </tr>
@@ -302,8 +302,8 @@ async function showClientDetail(clientId: number): Promise<void> {
  * 渲染客户端详情
  */
 function renderClientDetail(client: OAuthClient): void {
-  const statusClass = client.enabled ? 'enabled' : 'disabled';
-  const statusText = client.enabled ? '已启用' : '已禁用';
+  const statusClass = client.is_enabled ? 'enabled' : 'disabled';
+  const statusText = client.is_enabled ? '已启用' : '已禁用';
 
   oauthModalBody.innerHTML = `
     <div class="oauth-detail">
