@@ -259,6 +259,11 @@ button {
   transition: opacity 0.2s ease;
 }
 
+/* 确认弹窗层级更高，确保显示在其他弹窗之上 */
+#confirm-modal {
+  z-index: 250;
+}
+
 .modal-overlay.is-hidden {
   opacity: 0;
   pointer-events: none;
