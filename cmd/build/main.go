@@ -57,6 +57,7 @@ var (
 		"modules/account/assets/js/forgot.ts",
 		"modules/account/assets/js/dashboard.ts",
 		"modules/account/assets/js/link.ts",
+		"modules/account/assets/js/oauth.ts",
 		"modules/account/assets/js/404.ts",
 	}
 
