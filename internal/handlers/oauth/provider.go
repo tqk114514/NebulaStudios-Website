@@ -254,6 +254,12 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 	// 规范化 scope
 	normalizedScope := h.normalizeScope(scope)
 
+	// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
+	avatarURL := user.AvatarURL
+	if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
+		avatarURL = user.MicrosoftAvatarURL.String
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -261,7 +267,7 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 			"clientDescription": client.Description,
 			"scopes":            h.parseScopeList(normalizedScope),
 			"username":          user.Username,
-			"userAvatar":        user.AvatarURL,
+			"userAvatar":        avatarURL,
 		},
 	})
 }
@@ -545,7 +551,12 @@ func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope st
 			response["sub"] = strconv.FormatInt(user.ID, 10)
 		case ScopeProfile:
 			response["username"] = user.Username
-			response["avatar_url"] = user.AvatarURL
+			// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
+			avatarURL := user.AvatarURL
+			if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
+				avatarURL = user.MicrosoftAvatarURL.String
+			}
+			response["avatar_url"] = avatarURL
 		case ScopeEmail:
 			response["email"] = user.Email
 		}
