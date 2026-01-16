@@ -2008,9 +2008,10 @@ async function handleDataExport(): Promise<void> {
 interface OAuthGrant {
   client_id: string;
   client_name: string;
-  client_icon?: string;
-  scopes: string[];
-  authorized_at: string;
+  client_description?: string;
+  scope: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -2060,11 +2061,12 @@ function showOAuthGrantsModal(): void {
   /**
    * 格式化权限范围显示
    */
-  function formatScopes(scopes: string[]): string {
-    return scopes.map(scope => {
-      const key = `oauth.scope.${scope}.name`;
+  function formatScopes(scope: string): string {
+    const scopes = scope.split(' ').filter(s => s);
+    return scopes.map(s => {
+      const key = `oauth.scope.${s}.name`;
       const translated = t(key);
-      return translated !== key ? translated : scope;
+      return translated !== key ? translated : s;
     }).join(', ');
   }
 
@@ -2075,20 +2077,10 @@ function showOAuthGrantsModal(): void {
     const itemEl = document.createElement('div');
     itemEl.className = 'oauth-grant-item';
 
-    // 图标
+    // 图标（使用与授权页面一致的地球图标）
     const iconEl = document.createElement('div');
     iconEl.className = 'oauth-grant-icon';
-    if (grant.client_icon) {
-      const img = document.createElement('img');
-      img.src = grant.client_icon;
-      img.alt = grant.client_name;
-      img.onerror = (): void => {
-        iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>';
-      };
-      iconEl.appendChild(img);
-    } else {
-      iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>';
-    }
+    iconEl.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>';
     itemEl.appendChild(iconEl);
 
     // 内容
@@ -2102,12 +2094,12 @@ function showOAuthGrantsModal(): void {
 
     const scopesEl = document.createElement('div');
     scopesEl.className = 'oauth-grant-scopes';
-    scopesEl.textContent = formatScopes(grant.scopes);
+    scopesEl.textContent = formatScopes(grant.scope);
     contentEl.appendChild(scopesEl);
 
     const timeEl = document.createElement('div');
     timeEl.className = 'oauth-grant-time';
-    timeEl.textContent = t('dashboard.oauthAuthorizedAt').replace('{time}', formatAuthorizedTime(grant.authorized_at));
+    timeEl.textContent = t('dashboard.oauthAuthorizedAt').replace('{time}', formatAuthorizedTime(grant.created_at));
     contentEl.appendChild(timeEl);
 
     itemEl.appendChild(contentEl);
