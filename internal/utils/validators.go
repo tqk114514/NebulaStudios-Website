@@ -45,12 +45,12 @@ const (
 
 // 密码验证错误码
 const (
-	ErrInvalidPassword  = "INVALID_PASSWORD"
-	ErrPasswordTooShort = "PASSWORD_TOO_SHORT"
-	ErrPasswordTooLong  = "PASSWORD_TOO_LONG"
-	ErrPasswordNoNumber = "PASSWORD_NO_NUMBER"
+	ErrInvalidPassword   = "INVALID_PASSWORD"
+	ErrPasswordTooShort  = "PASSWORD_TOO_SHORT"
+	ErrPasswordTooLong   = "PASSWORD_TOO_LONG"
+	ErrPasswordNoNumber  = "PASSWORD_NO_NUMBER"
 	ErrPasswordNoSpecial = "PASSWORD_NO_SPECIAL"
-	ErrPasswordNoCase   = "PASSWORD_NO_CASE"
+	ErrPasswordNoCase    = "PASSWORD_NO_CASE"
 )
 
 // URL 验证错误码
@@ -488,32 +488,49 @@ func isBlockedHost(hostname string) bool {
 		return true
 	}
 
-	// 解析 IP 地址
+	// 尝试直接解析为 IP 地址
 	ip := net.ParseIP(hostname)
-	if ip == nil {
-		// 不是 IP 地址，可能是域名，允许通过
+	if ip != nil {
+		return isBlockedIP(ip)
+	}
+
+	// 如果是域名，执行 DNS 解析并检查所有解析出的 IP
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		// 解析失败，出于安全考虑暂时放行（可能是无 A 记录的非 IP 主机名）
+		// 但由于 net.ParseIP 已失败，说明它也不是直接的 IP，因此理论上风险较低
 		return false
 	}
 
-	// 检查是否为私有地址
+	for _, resolvedIP := range ips {
+		if isBlockedIP(resolvedIP) {
+			LogPrintf("[VALIDATOR] Blocked domain pointing to internal IP: %s (IP: %s)", hostname, resolvedIP.String())
+			return true
+		}
+	}
+
+	return false
+}
+
+// isBlockedIP 检查单个 IP 是否为受限的内网或本地地址
+func isBlockedIP(ip net.IP) bool {
+	// 检查是否为回环地址
 	if ip.IsLoopback() {
-		LogPrintf("[VALIDATOR] Blocked loopback address: %s", hostname)
 		return true
 	}
 
+	// 检查是否为私有地址
 	if ip.IsPrivate() {
-		LogPrintf("[VALIDATOR] Blocked private address: %s", hostname)
 		return true
 	}
 
+	// 检查是否为未指定地址
 	if ip.IsUnspecified() {
-		LogPrintf("[VALIDATOR] Blocked unspecified address: %s", hostname)
 		return true
 	}
 
 	// 检查链路本地地址
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		LogPrintf("[VALIDATOR] Blocked link-local address: %s", hostname)
 		return true
 	}
 
