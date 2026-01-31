@@ -37,6 +37,17 @@ function isMobileDevice(): boolean {
   return mobileKeywords.some(keyword => userAgent.includes(keyword));
 }
 
+// ==================== 工具函数 ====================
+
+/**
+ * 转义 HTML 字符，防止 XSS
+ */
+function escapeHtml(str: string): string {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ==================== 弹窗封装 ====================
 
 /**
@@ -59,7 +70,7 @@ function showConfirm(message: string, title: string | null = null): Promise<bool
  * 更新头像显示
  */
 function updateAvatarDisplay(avatarEl: HTMLElement | null, avatarUrl: string | null, username: string): void {
-  if (!avatarEl) {return;}
+  if (!avatarEl) { return; }
   avatarEl.innerHTML = '';
 
   if (avatarUrl) {
@@ -87,7 +98,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   const microsoftBtn = document.getElementById('use-microsoft-avatar-btn');
   const confirmBtn = document.getElementById('avatar-confirm-btn') as HTMLButtonElement | null;
 
-  if (!urlInput || !confirmBtn || !currentPreview || !newPreview || !errorEl) {return;}
+  if (!urlInput || !confirmBtn || !currentPreview || !newPreview || !errorEl) { return; }
 
   let validatedUrl: string | null = null; // 已验证的头像 URL
 
@@ -103,7 +114,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     }
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 重置弹窗状态
   urlInput.value = '';
@@ -147,7 +158,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     confirmBtn!.disabled = true;
     validatedUrl = null;
 
-    if (!url || !url.trim()) {return;}
+    if (!url || !url.trim()) { return; }
 
     // 验证 URL 格式（前端验证）
     const urlValidation = validateAvatarUrl(url);
@@ -177,7 +188,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
 
   // 输入框失焦时加载预览
   const handleBlur = (): void => {
-    if (urlInput!.readOnly) {return;}
+    if (urlInput!.readOnly) { return; }
     loadNewAvatar(urlInput!.value.trim());
   };
 
@@ -197,19 +208,19 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   // 使用微软头像按钮点击
   const handleMicrosoftClick = (): void => {
     const msAvatarUrl = user.microsoft_avatar_url;
-    if (!msAvatarUrl) {return;}
-    
+    if (!msAvatarUrl) { return; }
+
     // 显示占位符，实际发送 "microsoft" 给后端
     urlInput!.value = '[Microsoft Avatar]';
     urlInput!.readOnly = true;
     urlInput!.classList.add('readonly-placeholder');
-    
+
     // 预览使用实际 URL
     newPreview!.innerHTML = '';
     newPreview!.classList.remove('is-loaded');
     errorEl!.classList.add('is-hidden');
     urlInput!.classList.remove('is-error');
-    
+
     const img = document.createElement('img');
     img.onload = (): void => {
       newPreview!.innerHTML = '';
@@ -228,7 +239,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
 
   // 确认更换头像
   controller.onConfirm(async () => {
-    if (!validatedUrl || controller.isCleanedUp()) {return;}
+    if (!validatedUrl || controller.isCleanedUp()) { return; }
 
     confirmBtn!.disabled = true;
     try {
@@ -324,7 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const avatarEl = document.getElementById('user-avatar');
 
     // ==================== 封禁状态检查 ====================
-    
+
     /**
      * 检查用户是否被封禁（考虑解封时间）
      */
@@ -410,8 +421,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const infoEmail = document.getElementById('info-email');
     const infoMicrosoft = document.getElementById('info-microsoft');
 
-    if (infoUsername) {infoUsername.textContent = user.username;}
-    if (infoEmail) {infoEmail.textContent = user.email;}
+    if (infoUsername) { infoUsername.textContent = user.username; }
+    if (infoEmail) { infoEmail.textContent = user.email; }
 
     const microsoftLinkItem = document.getElementById('microsoft-link-item');
 
@@ -451,7 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (user.microsoft_id) {
           // 解绑流程
           const confirmed = await showConfirm(t('dashboard.confirmUnlink'), t('dashboard.unlinkThirdParty'));
-          if (!confirmed) {return;}
+          if (!confirmed) { return; }
 
           try {
             const response = await fetch('/api/auth/microsoft/unlink', {
@@ -474,7 +485,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           // 绑定流程
           const confirmed = await showConfirm(t('dashboard.confirmLink'), t('dashboard.linkThirdParty'));
-          if (!confirmed) {return;}
+          if (!confirmed) { return; }
           window.location.href = '/api/auth/microsoft?action=link';
         }
       });
@@ -516,7 +527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (logoutBtn) {
       logoutBtn.addEventListener('click', async () => {
         const confirmed = await showConfirm(t('dashboard.confirmLogout'), t('dashboard.logout'));
-        if (confirmed) {logout();}
+        if (confirmed) { logout(); }
       });
     }
 
@@ -547,8 +558,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         showChangeUsernameModal(user, (newUsername) => {
           // 更新用户数据和页面显示
           user.username = newUsername;
-          if (usernameEl) {usernameEl.textContent = newUsername;}
-          if (infoUsername) {infoUsername.textContent = newUsername;}
+          if (usernameEl) { usernameEl.textContent = newUsername; }
+          if (infoUsername) { infoUsername.textContent = newUsername; }
           // 更新头像显示（如果是首字母头像）
           if (!user.avatar_url && avatarEl) {
             avatarEl.textContent = newUsername.charAt(0).toUpperCase();
@@ -642,7 +653,7 @@ function showDeleteAccountModal(): void {
   const passwordError = document.getElementById('delete-password-error');
   const captchaContainer = document.getElementById('delete-captcha-container');
 
-  if (!codeInput || !passwordInput || !sendCodeBtn || !confirmBtn || !codeError || !passwordError || !captchaContainer) {return;}
+  if (!codeInput || !passwordInput || !sendCodeBtn || !confirmBtn || !codeError || !passwordError || !captchaContainer) { return; }
 
   const DELETE_COUNTDOWN_KEY = 'delete_countdown_end';
   let codeSent = false;
@@ -662,7 +673,7 @@ function showDeleteAccountModal(): void {
     }
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
   clearCaptcha('delete-captcha-container');
@@ -704,7 +715,7 @@ function showDeleteAccountModal(): void {
    * 发送删除账户验证码
    */
   async function handleSendCode(): Promise<void> {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     try {
       const response = await fetch('/api/auth/send-delete-code', {
@@ -719,7 +730,7 @@ function showDeleteAccountModal(): void {
       });
       const result = await response.json();
 
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (result.success) {
         codeSent = true;
@@ -740,7 +751,7 @@ function showDeleteAccountModal(): void {
         }
       }
     } catch {
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
       sendCodeBtn!.disabled = false;
       showAlert(t('error.networkError'));
     }
@@ -761,18 +772,18 @@ function showDeleteAccountModal(): void {
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
         async () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           captchaContainer!.classList.add('is-hidden');
           await handleSendCode();
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
           sendCodeBtn!.disabled = false;
           clearCaptcha('delete-captcha-container');
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           sendCodeBtn!.disabled = false;
           clearCaptcha('delete-captcha-container');
         },
@@ -783,7 +794,7 @@ function showDeleteAccountModal(): void {
 
   // 确认删除账户
   controller.onConfirm(async () => {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     const code = codeInput!.value.trim();
     const password = passwordInput!.value;
@@ -867,7 +878,7 @@ function showChangePasswordModal(): void {
   const reqSpecial = document.getElementById('pwd-req-special');
   const reqCase = document.getElementById('pwd-req-case');
 
-  if (!currentPasswordInput || !newPasswordInput || !confirmPasswordInput || !confirmBtn || !currentPasswordError || !confirmPasswordError || !captchaContainer) {return;}
+  if (!currentPasswordInput || !newPasswordInput || !confirmPasswordInput || !confirmBtn || !currentPasswordError || !confirmPasswordError || !captchaContainer) { return; }
 
   // 创建弹窗控制器
   const controller = createModalController({
@@ -883,7 +894,7 @@ function showChangePasswordModal(): void {
     }
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
   clearCaptcha('change-password-captcha-container');
@@ -959,7 +970,7 @@ function showChangePasswordModal(): void {
    * 执行修改密码请求
    */
   async function doChangePassword(): Promise<void> {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     const currentPassword = currentPasswordInput!.value;
     const newPassword = newPasswordInput!.value;
@@ -978,7 +989,7 @@ function showChangePasswordModal(): void {
       });
       const result = await response.json();
 
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (result.success) {
         controller.close();
@@ -999,7 +1010,7 @@ function showChangePasswordModal(): void {
         confirmBtn!.disabled = false;
       }
     } catch {
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
       showAlert(t('error.networkError'));
       confirmBtn!.disabled = false;
     }
@@ -1010,7 +1021,7 @@ function showChangePasswordModal(): void {
 
   // 确认修改密码
   controller.onConfirm(async () => {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     const newPassword = newPasswordInput!.value;
     const confirmPassword = confirmPasswordInput!.value;
@@ -1038,18 +1049,18 @@ function showChangePasswordModal(): void {
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
         async () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           await doChangePassword();
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
           confirmBtn!.disabled = false;
           clearCaptcha('change-password-captcha-container');
           captchaContainer!.classList.add('is-hidden');
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           confirmBtn!.disabled = false;
           clearCaptcha('change-password-captcha-container');
           captchaContainer!.classList.add('is-hidden');
@@ -1076,7 +1087,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
   const confirmBtn = document.getElementById('change-username-confirm-btn') as HTMLButtonElement | null;
   const captchaContainer = document.getElementById('change-username-captcha-container');
 
-  if (!usernameInput || !usernameError || !confirmBtn || !captchaContainer) {return;}
+  if (!usernameInput || !usernameError || !confirmBtn || !captchaContainer) { return; }
 
   // 创建弹窗控制器
   const controller = createModalController({
@@ -1090,7 +1101,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
     }
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
   clearCaptcha('change-username-captcha-container');
@@ -1135,7 +1146,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
    * 执行修改用户名请求
    */
   async function doChangeUsername(): Promise<void> {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     const newUsername = usernameInput!.value.trim();
 
@@ -1152,7 +1163,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
       });
       const result = await response.json();
 
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (result.success) {
         controller.close();
@@ -1175,7 +1186,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
         confirmBtn!.disabled = false;
       }
     } catch {
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
       showAlert(t('error.networkError'));
       confirmBtn!.disabled = false;
     }
@@ -1186,7 +1197,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
 
   // 确认修改用户名
   controller.onConfirm(async () => {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     const newUsername = usernameInput!.value.trim();
 
@@ -1206,18 +1217,18 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
         async () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           await doChangeUsername();
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
           confirmBtn!.disabled = false;
           clearCaptcha('change-username-captcha-container');
           captchaContainer!.classList.add('is-hidden');
         },
         () => {
-          if (controller.isCleanedUp()) {return;}
+          if (controller.isCleanedUp()) { return; }
           confirmBtn!.disabled = false;
           clearCaptcha('change-username-captcha-container');
           captchaContainer!.classList.add('is-hidden');
@@ -1244,7 +1255,7 @@ function showQrScanModal(onClose: () => void): void {
   const statusEl = document.getElementById('qr-scan-status');
 
   if (!video) {
-    if (onClose) {onClose();}
+    if (onClose) { onClose(); }
     return;
   }
 
@@ -1267,13 +1278,13 @@ function showQrScanModal(onClose: () => void): void {
     onCleanup: () => {
       stopCamera();
       setTimeout(() => {
-        if (onClose) {onClose();}
+        if (onClose) { onClose(); }
       }, 300);
     }
   });
 
   if (!controller.modal) {
-    if (onClose) {onClose();}
+    if (onClose) { onClose(); }
     return;
   }
 
@@ -1284,8 +1295,8 @@ function showQrScanModal(onClose: () => void): void {
     if (statusEl) {
       statusEl.textContent = t(key);
       statusEl.className = 'qr-scan-status';
-      if (type === 'error') {statusEl.classList.add('error');}
-      if (type === 'success') {statusEl.classList.add('success');}
+      if (type === 'error') { statusEl.classList.add('error'); }
+      if (type === 'success') { statusEl.classList.add('success'); }
     }
   }
 
@@ -1397,7 +1408,7 @@ function showQrScanModal(onClose: () => void): void {
    * 使用 BarcodeDetector API 扫描
    */
   async function startBarcodeDetection(): Promise<void> {
-    if (controller.isCleanedUp() || detectionStarted) {return;}
+    if (controller.isCleanedUp() || detectionStarted) { return; }
     detectionStarted = true;
 
     try {
@@ -1405,7 +1416,7 @@ function showQrScanModal(onClose: () => void): void {
       console.log('[QR-SCAN] Using BarcodeDetector');
 
       const detectFrame = async (): Promise<void> => {
-        if (controller.isCleanedUp()) {return;}
+        if (controller.isCleanedUp()) { return; }
 
         if (!video!.videoWidth || !video!.videoHeight || video!.paused || video!.ended) {
           animationId = requestAnimationFrame(detectFrame);
@@ -1448,7 +1459,7 @@ function showQrScanModal(onClose: () => void): void {
    * 使用 jsQR 库扫描
    */
   function startJsQRDetection(): void {
-    if (controller.isCleanedUp() || detectionStarted) {return;}
+    if (controller.isCleanedUp() || detectionStarted) { return; }
     detectionStarted = true;
 
     console.log('[QR-SCAN] Using jsQR library');
@@ -1457,7 +1468,7 @@ function showQrScanModal(onClose: () => void): void {
     canvasCtx = canvas.getContext('2d', { willReadFrequently: true });
 
     const detectFrame = (): void => {
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (!video!.videoWidth || !video!.videoHeight || video!.paused || video!.ended) {
         animationId = requestAnimationFrame(detectFrame);
@@ -1492,15 +1503,15 @@ function showQrScanModal(onClose: () => void): void {
    * 验证二维码数据格式是否合法
    */
   function isValidQrToken(data: string): boolean {
-    if (typeof data !== 'string' || !data.trim()) {return false;}
-    if (data.length < 50 || data.length > 500) {return false;}
+    if (typeof data !== 'string' || !data.trim()) { return false; }
+    if (data.length < 50 || data.length > 500) { return false; }
 
     const parts = data.split('.');
-    if (parts.length !== 3) {return false;}
+    if (parts.length !== 3) { return false; }
 
     const base64Regex = /^[A-Za-z0-9+/=]+$/;
     for (const part of parts) {
-      if (!part || !base64Regex.test(part)) {return false;}
+      if (!part || !base64Regex.test(part)) { return false; }
     }
 
     const dangerousPatterns = [
@@ -1508,7 +1519,7 @@ function showQrScanModal(onClose: () => void): void {
       /on\w+=/i, /<iframe/i, /<img/i, /eval\(/i
     ];
     for (const pattern of dangerousPatterns) {
-      if (pattern.test(data)) {return false;}
+      if (pattern.test(data)) { return false; }
     }
 
     return true;
@@ -1518,7 +1529,7 @@ function showQrScanModal(onClose: () => void): void {
    * 处理扫描到的二维码
    */
   async function handleQrCodeScanned(data: string): Promise<void> {
-    if (controller.isCleanedUp()) {return;}
+    if (controller.isCleanedUp()) { return; }
 
     if (!isValidQrToken(data)) {
       console.warn('[QR-SCAN] Invalid QR code format, rejected');
@@ -1620,20 +1631,20 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
     closeOnOverlay: false  // 点击遮罩层不关闭，需要明确选择
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 显示 PC 端信息
-  if (ipEl) {ipEl.textContent = pcInfo.ip || '-';}
-  if (browserEl) {browserEl.textContent = pcInfo.browser || '-';}
-  if (osEl) {osEl.textContent = pcInfo.os || '-';}
+  if (ipEl) { ipEl.textContent = pcInfo.ip || '-'; }
+  if (browserEl) { browserEl.textContent = pcInfo.browser || '-'; }
+  if (osEl) { osEl.textContent = pcInfo.os || '-'; }
 
   // 重置按钮状态
-  if (confirmBtn) {confirmBtn.disabled = false;}
-  if (cancelBtn) {cancelBtn.disabled = false;}
+  if (confirmBtn) { confirmBtn.disabled = false; }
+  if (cancelBtn) { cancelBtn.disabled = false; }
 
   // 确认登录
   controller.onConfirm(async () => {
-    if (confirmBtn) {confirmBtn.disabled = true;}
+    if (confirmBtn) { confirmBtn.disabled = true; }
 
     try {
       const response = await fetch('/api/qr-login/mobile-confirm', {
@@ -1649,19 +1660,19 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
         controller.close();
         showAlert(t('dashboard.qrLoginSuccess'));
       } else {
-        if (confirmBtn) {confirmBtn.disabled = false;}
+        if (confirmBtn) { confirmBtn.disabled = false; }
         showAlert(t('dashboard.qrLoginFailed'));
       }
     } catch (error) {
       console.error('[QR-LOGIN] ERROR:', error);
-      if (confirmBtn) {confirmBtn.disabled = false;}
+      if (confirmBtn) { confirmBtn.disabled = false; }
       showAlert(t('error.networkError'));
     }
   });
 
   // 取消登录
   controller.onCancel(async () => {
-    if (cancelBtn) {cancelBtn.disabled = true;}
+    if (cancelBtn) { cancelBtn.disabled = true; }
 
     try {
       await fetch('/api/qr-login/mobile-cancel', {
@@ -1750,18 +1761,20 @@ function getLogActionIcon(action: string): { svg: string; type: 'normal' | 'dang
  * 格式化日志详情
  */
 function formatLogDetails(action: string, details?: UserLogItem['details']): string {
-  if (!details) {return '';}
+  if (!details) { return ''; }
 
   switch (action) {
     case 'change_username':
       if (details.old_username && details.new_username) {
-        return `${details.old_username} → ${details.new_username}`;
+        // 对用户名进行转义，防止 XSS
+        return `${escapeHtml(details.old_username)} → ${escapeHtml(details.new_username)}`;
       }
       break;
     case 'link_microsoft':
     case 'unlink_microsoft':
       if (details.microsoft_name) {
-        return details.microsoft_name;
+        // 对第三方名称进行转义，防止 XSS
+        return escapeHtml(details.microsoft_name);
       }
       break;
   }
@@ -1775,7 +1788,7 @@ function formatLogTime(isoString: string): string {
   const date = new Date(isoString);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
-  
+
   // 1分钟内
   if (diff < 60 * 1000) {
     return t('dashboard.timeJustNow');
@@ -1827,13 +1840,13 @@ function formatAbsoluteTime(isoString: string): string {
 function createLogItemElement(log: UserLogItem): HTMLElement {
   const item = document.createElement('div');
   item.className = 'user-log-item';
-  
+
   const iconInfo = getLogActionIcon(log.action);
   const actionText = t(`dashboard.logAction.${log.action}`) || log.action;
   const details = formatLogDetails(log.action, log.details);
   const relativeTime = formatLogTime(log.created_at);
   const absoluteTime = formatAbsoluteTime(log.created_at);
-  
+
   item.innerHTML = `
     <div class="user-log-icon ${iconInfo.type}">${iconInfo.svg}</div>
     <div class="user-log-content">
@@ -1845,7 +1858,7 @@ function createLogItemElement(log: UserLogItem): HTMLElement {
       <span class="user-log-time-absolute">${absoluteTime}</span>
     </span>
   `;
-  
+
   return item;
 }
 
@@ -1858,7 +1871,7 @@ function showUserLogsModal(): void {
   const emptyEl = document.getElementById('user-logs-empty');
   const loadMoreBtn = document.getElementById('user-logs-load-more') as HTMLButtonElement | null;
 
-  if (!listEl || !loadingEl || !emptyEl || !loadMoreBtn) {return;}
+  if (!listEl || !loadingEl || !emptyEl || !loadMoreBtn) { return; }
 
   let currentPage = 1;
   const pageSize = 5;
@@ -1874,7 +1887,7 @@ function showUserLogsModal(): void {
     }
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 重置状态
   listEl.innerHTML = '';
@@ -1886,7 +1899,7 @@ function showUserLogsModal(): void {
    * 加载日志
    */
   async function loadLogs(page: number): Promise<void> {
-    if (isLoading) {return;}
+    if (isLoading) { return; }
     isLoading = true;
 
     if (page === 1) {
@@ -1901,7 +1914,7 @@ function showUserLogsModal(): void {
       });
       const result: UserLogsResponse = await response.json();
 
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (result.success && result.logs) {
         totalLogs = result.total || 0;
@@ -1964,7 +1977,7 @@ function showUserLogsModal(): void {
 async function handleDataExport(): Promise<void> {
   // 确认导出
   const confirmed = await showConfirm(t('dashboard.dataExportConfirm'), t('dashboard.dataExport'));
-  if (!confirmed) {return;}
+  if (!confirmed) { return; }
 
   try {
     // 请求生成下载 token
@@ -1977,7 +1990,7 @@ async function handleDataExport(): Promise<void> {
     if (result.success && result.token) {
       // 使用 token 触发下载
       const downloadUrl = `/api/user/export/download?token=${encodeURIComponent(result.token)}`;
-      
+
       // 创建隐藏的 a 标签触发下载
       const link = document.createElement('a');
       link.href = downloadUrl;
@@ -2031,7 +2044,7 @@ function showOAuthGrantsModal(): void {
   const loadingEl = document.getElementById('oauth-grants-loading');
   const emptyEl = document.getElementById('oauth-grants-empty');
 
-  if (!listEl || !loadingEl || !emptyEl) {return;}
+  if (!listEl || !loadingEl || !emptyEl) { return; }
 
   // 创建弹窗控制器
   const controller = createModalController({
@@ -2039,7 +2052,7 @@ function showOAuthGrantsModal(): void {
     cancelBtnId: 'oauth-grants-close-btn'
   });
 
-  if (!controller.modal) {return;}
+  if (!controller.modal) { return; }
 
   // 重置状态
   listEl.innerHTML = '';
@@ -2110,10 +2123,10 @@ function showOAuthGrantsModal(): void {
     revokeBtn.textContent = t('dashboard.oauthRevoke');
     revokeBtn.addEventListener('click', async () => {
       const confirmed = await showConfirm(
-        t('dashboard.oauthRevokeConfirm').replace('{name}', grant.client_name),
+        t('dashboard.oauthRevokeConfirm').replace('{name}', escapeHtml(grant.client_name)),
         t('dashboard.oauthRevoke')
       );
-      if (!confirmed) {return;}
+      if (!confirmed) { return; }
 
       revokeBtn.disabled = true;
       try {
@@ -2155,7 +2168,7 @@ function showOAuthGrantsModal(): void {
       });
       const result: OAuthGrantsResponse = await response.json();
 
-      if (controller.isCleanedUp()) {return;}
+      if (controller.isCleanedUp()) { return; }
 
       if (result.success && result.grants) {
         if (result.grants.length === 0) {
