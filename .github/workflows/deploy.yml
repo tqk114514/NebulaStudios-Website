@@ -36,7 +36,7 @@ jobs:
         run: go mod download
 
       - name: 编译后端
-        run: GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o server ./cmd/server
 
       - name: 编译前端
         run: go run ./cmd/build
