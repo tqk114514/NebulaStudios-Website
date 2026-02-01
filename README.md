@@ -14,7 +14,7 @@
 
 ## 技术栈
 
-* **语言**: Go 1.25+ (主逻辑), Zig 0.13+ (图片处理), TypeScript (部分前端逻辑)
+* **语言**: Go 1.25+ (主逻辑), Zig 0.15+ (图片处理), TypeScript (部分前端逻辑)
 * **Web 框架**: Gin
 * **数据库**: PostgreSQL (使用 `pgx` 驱动)
 * **缓存/限流**: 内存 LRU 缓存 (基于 `hashicorp/golang-lru`)
