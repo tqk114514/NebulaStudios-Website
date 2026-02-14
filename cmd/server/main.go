@@ -817,6 +817,7 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 // OAuth 2.0 Provider 端点，供第三方应用使用
 func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	oauthGroup := r.Group("/oauth")
+	oauthGroup.Use(middleware.APIBodySizeLimit())
 	{
 		// 授权端点 - 需要用户登录
 		// GET: 验证参数并重定向到授权页面
