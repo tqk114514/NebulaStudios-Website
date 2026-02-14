@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -117,27 +118,22 @@ func GenerateSecureToken() (string, error) {
 }
 
 // GenerateCode 生成 6 字符的验证码
-// 使用排除易混淆字符的字符集
+// 使用 crypto/rand.Int 实现密码学安全的均匀随机选择
 //
 // 返回：
 //   - string: 6 字符验证码
 //   - error: 随机数生成失败时返回错误
 func GenerateCode() (string, error) {
 	code := make([]byte, codeLength)
-	charLen := len(codeChars)
+	charLen := big.NewInt(int64(len(codeChars)))
 
 	for i := 0; i < codeLength; i++ {
-		b := make([]byte, 1)
-		n, err := rand.Read(b)
+		n, err := rand.Int(rand.Reader, charLen)
 		if err != nil {
 			LogPrintf("[CRYPTO] ERROR: Failed to generate verification code: %v", err)
 			return "", fmt.Errorf("%w: %v", ErrRandomGeneration, err)
 		}
-		if n != 1 {
-			LogPrintf("[CRYPTO] ERROR: Incomplete random read for code generation")
-			return "", fmt.Errorf("%w: incomplete read", ErrRandomGeneration)
-		}
-		code[i] = codeChars[int(b[0])%charLen]
+		code[i] = codeChars[n.Int64()]
 	}
 
 	result := string(code)
