@@ -371,7 +371,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 // ====================  后台任务 ====================
 
 // startBackgroundTasks 启动后台任务
-func startBackgroundTasks(hdlrs *Handlers, svcs *Services) {
+func startBackgroundTasks(_ *Handlers, svcs *Services) {
 	utils.LogPrintf("[TASKS] Starting background tasks...")
 
 	// 启动 OAuth 清理任务
@@ -500,7 +500,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engin
 }
 
 // setupMiddleware 配置中间件
-func setupMiddleware(r *gin.Engine, cfg *config.Config) {
+func setupMiddleware(r *gin.Engine, _ *config.Config) {
 	// Recovery 中间件（防止 panic 导致服务器崩溃）
 	r.Use(gin.Recovery())
 
@@ -519,7 +519,7 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 // setupStaticFiles 配置静态文件服务
 // 始终从 ./dist 目录读取预压缩的静态文件
 // 开发时请先运行 go run ./cmd/build 生成 dist 目录
-func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
+func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 	// favicon.ico - 返回 204 No Content（避免 404 或错误响应）
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
