@@ -480,7 +480,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	// 清除 Cookie
-	c.SetCookie("token", "", -1, "/", "", false, true)
+	utils.ClearTokenCookieGin(c)
 
 	utils.LogPrintf("[USER] Account deleted: userID=%d, email=%s", userID, user.Email)
 	h.respondSuccess(c, nil)
@@ -664,7 +664,6 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 	h.respondSuccess(c, nil)
 }
 
-
 // ====================  数据导出 ====================
 
 // generateExportToken 生成数据导出 Token
@@ -793,15 +792,15 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 			"user_id":     userID,
 		},
 		"user_info": gin.H{
-			"username":           user.Username,
-			"email":              user.Email,
-			"password_hash":      user.Password,
-			"avatar_url":         user.AvatarURL,
-			"microsoft_id":       user.MicrosoftID,
-			"microsoft_name":     user.MicrosoftName,
-			"microsoft_avatar":   user.MicrosoftAvatarURL,
-			"created_at":         user.CreatedAt,
-			"updated_at":         user.UpdatedAt,
+			"username":         user.Username,
+			"email":            user.Email,
+			"password_hash":    user.Password,
+			"avatar_url":       user.AvatarURL,
+			"microsoft_id":     user.MicrosoftID,
+			"microsoft_name":   user.MicrosoftName,
+			"microsoft_avatar": user.MicrosoftAvatarURL,
+			"created_at":       user.CreatedAt,
+			"updated_at":       user.UpdatedAt,
 		},
 		"operation_logs": logs,
 	}
@@ -815,7 +814,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	}
 
 	// 获取语言设置（从 cookie）
-	lang, _ := c.Cookie("selectedLanguage")
+	lang := utils.GetLanguageCookie(c)
 	if lang == "" {
 		lang = "en"
 	}
