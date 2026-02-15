@@ -69,14 +69,14 @@ const (
 // AuthHandler 认证 Handler
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo       *models.UserRepository     // 用户数据仓库
-	userLogRepo    *models.UserLogRepository  // 用户日志仓库
-	tokenService   *services.TokenService     // Token 服务
-	sessionService *services.SessionService   // Session 服务
-	emailService   *services.EmailService     // 邮件服务
-	captchaService *services.CaptchaService   // 验证码服务
-	userCache      *cache.UserCache           // 用户缓存
-	baseURL        string                     // 基础 URL
+	userRepo       *models.UserRepository    // 用户数据仓库
+	userLogRepo    *models.UserLogRepository // 用户日志仓库
+	tokenService   *services.TokenService    // Token 服务
+	sessionService *services.SessionService  // Session 服务
+	emailService   *services.EmailService    // 邮件服务
+	captchaService *services.CaptchaService  // 验证码服务
+	userCache      *cache.UserCache          // 用户缓存
+	baseURL        string                    // 基础 URL
 }
 
 // ====================  构造函数 ====================
@@ -159,15 +159,7 @@ func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 		utils.LogPrintf("[AUTH] WARN: Attempted to set empty token cookie")
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		MaxAge:   CookieMaxAge,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	utils.SetTokenCookieGin(c, token)
 }
 
 // clearAuthCookie 清除认证 Cookie
@@ -175,15 +167,7 @@ func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 // 参数：
 //   - c: Gin 上下文
 func (h *AuthHandler) clearAuthCookie(c *gin.Context) {
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		MaxAge:   -1,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	utils.ClearTokenCookieGin(c)
 }
 
 // getClientIP 安全获取客户端 IP
@@ -788,7 +772,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 //   - USER_NOT_FOUND: 用户不存在
 func (h *AuthHandler) VerifySession(c *gin.Context) {
 	// 获取 Token（优先 Cookie，其次 Header）
-	token, _ := c.Cookie("token")
+	token, _ := utils.GetTokenCookie(c)
 	if token == "" {
 		authHeader := c.GetHeader("Authorization")
 		if strings.HasPrefix(authHeader, "Bearer ") {

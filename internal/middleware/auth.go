@@ -49,7 +49,7 @@ const (
 	authHeaderPrefixLen = 7
 
 	// tokenCookieName Token Cookie 名称
-	tokenCookieName = "token"
+	tokenCookieName = utils.TokenCookieName
 )
 
 // ====================  公开函数 ====================

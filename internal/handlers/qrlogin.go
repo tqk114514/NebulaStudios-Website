@@ -540,15 +540,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	}
 
 	// 设置 Cookie
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "token",
-		Value:    sessionToken,
-		MaxAge:   QRCookieMaxAge,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	utils.SetTokenCookieGin(c, sessionToken)
 
 	utils.LogPrintf("[QR-LOGIN] Session cookie set for PC: userID=%d", claims.UserID)
 	h.respondSuccess(c, nil)
@@ -717,7 +709,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	}
 
 	// 获取用户会话
-	sessionToken, err := c.Cookie("token")
+	sessionToken, err := utils.GetTokenCookie(c)
 	if err != nil || sessionToken == "" {
 		utils.LogPrintf("[QR-LOGIN] WARN: No session cookie in MobileConfirm")
 		h.respondError(c, http.StatusUnauthorized, "NOT_LOGGED_IN")
