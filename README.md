@@ -18,7 +18,7 @@
 * **Web 框架**: Gin
 * **数据库**: PostgreSQL (使用 `pgx` 驱动)
 * **缓存/限流**: 内存 LRU 缓存 (基于 `hashicorp/golang-lru`)
-* **AI 模型**: 智谱 AI (GLM-4-Flash)
+* **AI 模型**: 智谱 AI (GLM-4.6v-Flash)
 * **图片处理**: `libwebp` + `stb_image` (通过 Unix Domain Socket 通信)
 
 ## 功能模块

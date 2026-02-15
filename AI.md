@@ -8,7 +8,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| 模型 | glm-4-flash |
+| 模型 | glm-4.6v-flash |
 | API URL | https://open.bigmodel.cn/api/paas/v4/chat/completions |
 | 认证方式 | Bearer Token |
 
@@ -17,14 +17,14 @@
 ```env
 AI_API_KEY=your_api_key_here
 AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/chat/completions
-AI_MODEL=glm-4-flash
+AI_MODEL=glm-4.6v-flash
 ```
 
 ## 请求格式
 
 ```json
 {
-  "model": "glm-4-flash",
+  "model": "glm-4.6v-flash",
   "messages": [
     {"role": "system", "content": "系统提示词"},
     {"role": "user", "content": "用户消息"}
@@ -48,7 +48,7 @@ AI_MODEL=glm-4-flash
   ],
   "created": 1767610577,
   "id": "请求ID",
-  "model": "glm-4-flash",
+  "model": "glm-4.6v-flash",
   "object": "chat.completion",
   "request_id": "请求ID",
   "usage": {
