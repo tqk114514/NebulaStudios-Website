@@ -185,7 +185,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 
 	// 绑定操作：验证用户登录状态
 	if action == ActionLink {
-		token, err := c.Cookie("token")
+		token, err := utils.GetTokenCookie(c)
 		if err != nil || token == "" {
 			utils.LogPrintf("[OAUTH-MS] WARN: Link action but no token cookie")
 			RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
@@ -369,7 +369,6 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	// 处理登录操作
 	h.handleLoginAction(c, ctx, microsoftID, email, displayName, avatarData, avatarContentType)
 }
-
 
 // handleLinkAction 处理绑定操作
 func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserID int64, microsoftID, displayName string, avatarData []byte, avatarContentType string) {
@@ -875,7 +874,6 @@ func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
 
 	return imageData, contentType
 }
-
 
 // ====================  API 调用 ====================
 
