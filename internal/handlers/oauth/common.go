@@ -98,12 +98,12 @@ type State struct {
 // PendingLink 待确认绑定数据
 // 当用户通过 OAuth 登录但邮箱已存在时，需要确认绑定
 type PendingLink struct {
-	UserID             int64  // 已存在用户的 ID
-	ProviderID         string // 第三方账户 ID
-	DisplayName        string // 第三方显示名称
-	ProviderAvatarURL  string // 第三方头像 URL
-	Email              string // 邮箱地址
-	Timestamp          int64  // 创建时间戳（毫秒）
+	UserID            int64  // 已存在用户的 ID
+	ProviderID        string // 第三方账户 ID
+	DisplayName       string // 第三方显示名称
+	ProviderAvatarURL string // 第三方头像 URL
+	Email             string // 邮箱地址
+	Timestamp         int64  // 创建时间戳（毫秒）
 }
 
 // ====================  全局存储 ====================
@@ -274,15 +274,7 @@ func SetAuthCookie(c *gin.Context, token string) {
 		utils.LogPrintf("[OAUTH] WARN: Attempted to set empty token cookie")
 		return
 	}
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		MaxAge:   CookieMaxAge,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	utils.SetTokenCookieGin(c, token)
 }
 
 // RedirectWithError 重定向并附带错误参数
