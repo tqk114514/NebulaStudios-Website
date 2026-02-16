@@ -285,20 +285,6 @@ input.violation {
   margin-top: 10px;
   text-shadow: none;
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.button-primary::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: rgb(var(--white-rgb), 0.2);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: width 0.4s ease, height 0.4s ease;
 }
 
 .button-primary:hover {
@@ -313,11 +299,6 @@ input.violation {
 .button-primary:active {
   transform: translateY(0) scale(0.98);
   transition-duration: 0.1s;
-}
-
-.button-primary:active::before {
-  width: 200px;
-  height: 200px;
 }
 
 .button-primary:disabled {
@@ -351,21 +332,6 @@ input.violation {
     color 0.25s ease,
     transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.25s ease;
-  overflow: hidden;
-}
-
-.button-secondary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    120deg,
-    transparent 30%,
-    rgb(var(--white-rgb), 0.05) 50%,
-    transparent 70%
-  );
-  transform: translateX(-100%);
-  transition: transform 0.5s ease;
 }
 
 .button-secondary:disabled {
@@ -383,10 +349,6 @@ input.violation {
   color: var(--text);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgb(var(--black-rgb), 0.35);
-}
-
-.button-secondary:hover:not(:disabled)::after {
-  transform: translateX(100%);
 }
 
 .button-secondary:active:not(:disabled) {
