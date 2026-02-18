@@ -50,12 +50,36 @@ let currentLanguage: string = 'zh-CN';
 // ==================== Cookie 操作 ====================
 
 /**
+ * 检查用户是否同意使用 Cookie（通过检查 consent cookie）
+ * 注意：此函数仅检查 cookie 存在性，不依赖其他模块
+ */
+function hasCookieConsent(): boolean {
+  const nameEQ = 'cookieConsent=';
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') { c = c.substring(1, c.length); }
+    if (c.indexOf(nameEQ) === 0) {
+      const value = c.substring(nameEQ.length, c.length);
+      return value === 'accepted';
+    }
+  }
+  return false;
+}
+
+/**
  * 设置 Cookie
  * @param name - Cookie 名称
  * @param value - Cookie 值
  * @param days - 有效天数
+ * @param requireConsent - 是否需要用户同意（默认 true，用于语言偏好等可选 cookie）
  */
-function setCookie(name: string, value: string, days: number = 365): void {
+function setCookie(name: string, value: string, days: number = 365, requireConsent: boolean = true): void {
+  // 语言偏好和登录状态保存需要用户同意
+  if (requireConsent && !hasCookieConsent()) {
+    return;
+  }
+
   const date = new Date();
   date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
   const expires = 'expires=' + date.toUTCString();
