@@ -157,7 +157,12 @@ func run() error {
 		return fmt.Errorf("HTML build failed: %w", err)
 	}
 
-	// 8. 生产模式下生成 Brotli 预压缩文件
+	// 9. 保存资源清单
+	if err := saveAssetManifest(); err != nil {
+		log.Printf("[BUILD] WARN: Failed to save asset manifest: %v", err)
+	}
+
+	// 10. 生产模式下生成 Brotli 预压缩文件
 	if !*isDev {
 		if err := brotliCompressDir(distDir); err != nil {
 			log.Printf("[BUILD] WARN: Brotli compression had errors: %v", err)
