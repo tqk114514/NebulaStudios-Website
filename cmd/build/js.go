@@ -349,6 +349,7 @@ func buildCookieConsent() error {
 		Outfile:     filepath.Join(distDir, "shared/js/cookie-consent.js"),
 		Sourcemap:   sourcemap,
 		Target:      api.ES2020,
+		Format:      api.FormatIIFE,
 		Write:       true,
 		LogLevel:    api.LogLevelWarning,
 	}
