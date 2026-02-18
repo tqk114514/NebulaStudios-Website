@@ -318,3 +318,57 @@ func buildTranslations() error {
 	log.Printf("[BUILD] Built translations.js with %d languages", len(allTranslations))
 	return nil
 }
+
+// buildCookieConsent 构建 cookie-consent.js
+func buildCookieConsent() error {
+	log.Println("[BUILD] Building cookie-consent.js...")
+
+	cookieConsentPath := filepath.Join(sharedDir, "js", "cookie-consent.ts")
+	cookieConsentData, err := os.ReadFile(cookieConsentPath)
+	if err != nil {
+		return fmt.Errorf("failed to read cookie-consent.ts: %w", err)
+	}
+
+	tmpFile := filepath.Join(distDir, "shared/js/cookie-consent.tmp.ts")
+	if err := os.WriteFile(tmpFile, cookieConsentData, filePerm); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile); err != nil {
+			log.Printf("[BUILD] WARN: Failed to remove temp file: %v", err)
+		}
+	}()
+
+	sourcemap := api.SourceMapNone
+	if *isDev {
+		sourcemap = api.SourceMapLinked
+	}
+
+	opts := api.BuildOptions{
+		EntryPoints: []string{tmpFile},
+		Outfile:     filepath.Join(distDir, "shared/js/cookie-consent.js"),
+		Sourcemap:   sourcemap,
+		Target:      api.ES2020,
+		Write:       true,
+		LogLevel:    api.LogLevelWarning,
+	}
+
+	if !*isDev {
+		opts.MinifyWhitespace = true
+		opts.MinifyIdentifiers = true
+		opts.MinifySyntax = true
+	}
+
+	result := api.Build(opts)
+
+	if len(result.Errors) > 0 {
+		for _, err := range result.Errors {
+			log.Printf("[BUILD] ERROR: cookie-consent: %s", err.Text)
+		}
+		return errors.New("cookie-consent.js build failed")
+	}
+
+	atomic.AddInt64(&stats.FilesProcessed, 1)
+	log.Printf("[BUILD] Built cookie-consent.js")
+	return nil
+}

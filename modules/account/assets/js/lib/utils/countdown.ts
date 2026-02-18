@@ -79,7 +79,7 @@ export function startCountdown(
   clearCountdown(cookieKey);
 
   const endTime = Date.now() + (seconds * 1000);
-  setCookie(cookieKey, String(endTime), seconds);
+  setCookie(cookieKey, String(endTime), seconds, true);
   button.disabled = true;
 
   const getCompleteText = (): string => {
@@ -229,8 +229,8 @@ export function startCodeExpiryTimer(
 ): void {
   codeExpiryTime = expireTime;
 
-  setCookie('codeExpiryTime', String(expireTime), 86400);
-  setCookie('codeEmail', email, 86400);
+  setCookie('codeExpiryTime', String(expireTime), 86400, true);
+  setCookie('codeEmail', email, 86400, true);
 
   if (codeExpiryTimer) {
     clearInterval(codeExpiryTimer);
