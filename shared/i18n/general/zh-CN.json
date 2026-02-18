@@ -27,6 +27,10 @@
   "policy.termsOfService": "服务条款",
   "policy.and": "和",
 
+  "cookieConsent.message": "我们使用 Cookie 来改善您的体验。拒绝后仅影响可选功能（如语言偏好和登录状态保存），核心功能仍可正常使用。",
+  "cookieConsent.accept": "同意",
+  "cookieConsent.reject": "拒绝",
+
   "error.loadEmailWhitelistFailed": "加载邮箱白名单失败，请刷新页面重试",
   "error.networkError": "网络错误，请稍后重试",
   "error.sessionExpired": "登录已过期，请重新登录",

@@ -435,3 +435,118 @@ body::-webkit-scrollbar {
   margin: 0 8px;
   color: var(--text-disabled);
 }
+
+/* --- Cookie 同意横幅 --- */
+.cookie-consent-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-light);
+  padding: 16px 24px;
+  z-index: 10000;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 -4px 20px rgb(var(--black-rgb), 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cookie-consent-banner.cookie-consent-hidden {
+  animation: slideDown 0.3s ease forwards;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.cookie-consent-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cookie-consent-text {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  flex: 1;
+  min-width: 280px;
+}
+
+.cookie-consent-buttons {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.cookie-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.cookie-btn-reject {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+}
+
+.cookie-btn-reject:hover {
+  background: rgb(var(--white-rgb), 0.05);
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.cookie-btn-accept {
+  background: var(--primary);
+  color: var(--white);
+  box-shadow: var(--glow-primary);
+}
+
+.cookie-btn-accept:hover {
+  background: var(--orange-light);
+  box-shadow: var(--glow-primary-strong);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+  .cookie-consent-content {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .cookie-consent-text {
+    min-width: unset;
+  }
+
+  .cookie-consent-buttons {
+    justify-content: center;
+  }
+}
