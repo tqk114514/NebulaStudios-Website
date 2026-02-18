@@ -17,7 +17,8 @@ import {
   hideModal,
   showConfirm,
   formatDate,
-  escapeHtml
+  escapeHtml,
+  renderPagination
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -229,50 +230,14 @@ export async function loadOAuthClients(): Promise<void> {
     bindClientRowEvents(row as HTMLTableRowElement);
   });
 
-  renderPagination(data.page, data.totalPages);
-}
-
-/**
- * 渲染分页
- */
-function renderPagination(current: number, total: number): void {
-  if (total <= 1) {
-    oauthPagination.innerHTML = '';
-    return;
-  }
-
-  let html = '';
-  html += `<button ${current === 1 ? 'disabled' : ''} data-page="${current - 1}">上一页</button>`;
-
-  const start = Math.max(1, current - 2);
-  const end = Math.min(total, current + 2);
-
-  if (start > 1) {
-    html += `<button data-page="1">1</button>`;
-    if (start > 2) html += `<button disabled>...</button>`;
-  }
-
-  for (let i = start; i <= end; i++) {
-    html += `<button ${i === current ? 'class="active"' : ''} data-page="${i}">${i}</button>`;
-  }
-
-  if (end < total) {
-    if (end < total - 1) html += `<button disabled>...</button>`;
-    html += `<button data-page="${total}">${total}</button>`;
-  }
-
-  html += `<button ${current === total ? 'disabled' : ''} data-page="${current + 1}">下一页</button>`;
-
-  oauthPagination.innerHTML = html;
-
-  oauthPagination.querySelectorAll('button[data-page]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const page = Number((btn as HTMLElement).dataset.page);
-      if (page && page !== currentPage) {
-        currentPage = page;
-        loadOAuthClients();
-      }
-    });
+  renderPagination({
+    container: oauthPagination,
+    current: data.page,
+    total: data.totalPages,
+    onPageChange: (page) => {
+      currentPage = page;
+      loadOAuthClients();
+    }
   });
 }
 
