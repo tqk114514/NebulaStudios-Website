@@ -188,6 +188,25 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		}
 	}
 
+	// 哈希化所有输出的 JS 文件
+	files, err := os.ReadDir(outdir)
+	if err != nil {
+		return fmt.Errorf("failed to read output dir: %w", err)
+	}
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		name := f.Name()
+		if strings.HasSuffix(name, ".js") {
+			originalPath := filepath.Join(outdir, name)
+			_, err := addToManifest(originalPath)
+			if err != nil {
+				log.Printf("[BUILD] WARN: Failed to hash %s: %v", name, err)
+			}
+		}
+	}
+
 	// 处理警告
 	for _, warn := range result.Warnings {
 		log.Printf("[BUILD] WARN: %s: %s", moduleName, warn.Text)
@@ -284,15 +303,16 @@ func buildTranslations() error {
 		}
 	}()
 
-	// 使用 esbuild 压缩
+	// 使用 esbuild 压缩到临时文件
 	sourcemap := api.SourceMapNone
 	if *isDev {
 		sourcemap = api.SourceMapLinked
 	}
 
+	tmpOutFile := filepath.Join(distDir, "shared/js/translations.tmp.js")
 	opts := api.BuildOptions{
 		EntryPoints: []string{tmpFile},
-		Outfile:     filepath.Join(distDir, "shared/js/translations.js"),
+		Outfile:     tmpOutFile,
 		Sourcemap:   sourcemap,
 		Target:      api.ES2020,
 		Write:       true,
@@ -314,8 +334,23 @@ func buildTranslations() error {
 		return errors.New("translations.js build failed")
 	}
 
+	// 重命名为正式文件名
+	finalPath := filepath.Join(distDir, "shared/js/translations.js")
+	if err := os.Rename(tmpOutFile, finalPath); err != nil {
+		return fmt.Errorf("failed to rename translations.js: %w", err)
+	}
+
+	hashedName, err := addToManifest(finalPath)
+	if err != nil {
+		return fmt.Errorf("failed to hash translations.js: %w", err)
+	}
+
+	// 同时存储不带 .tmp 的映射
+	assetManifest[finalPath] = hashedName
+	assetManifest["shared/js/translations.js"] = hashedName
+
 	atomic.AddInt64(&stats.FilesProcessed, 1)
-	log.Printf("[BUILD] Built translations.js with %d languages", len(allTranslations))
+	log.Printf("[BUILD] Built translations.js with %d languages -> %s", len(allTranslations), hashedName)
 	return nil
 }
 
@@ -344,9 +379,10 @@ func buildCookieConsent() error {
 		sourcemap = api.SourceMapLinked
 	}
 
+	tmpOutFile := filepath.Join(distDir, "shared/js/cookie-consent.tmp.js")
 	opts := api.BuildOptions{
 		EntryPoints: []string{tmpFile},
-		Outfile:     filepath.Join(distDir, "shared/js/cookie-consent.js"),
+		Outfile:     tmpOutFile,
 		Sourcemap:   sourcemap,
 		Target:      api.ES2020,
 		Format:      api.FormatIIFE,
@@ -369,7 +405,22 @@ func buildCookieConsent() error {
 		return errors.New("cookie-consent.js build failed")
 	}
 
+	// 重命名为正式文件名
+	finalPath := filepath.Join(distDir, "shared/js/cookie-consent.js")
+	if err := os.Rename(tmpOutFile, finalPath); err != nil {
+		return fmt.Errorf("failed to rename cookie-consent.js: %w", err)
+	}
+
+	hashedName, err := addToManifest(finalPath)
+	if err != nil {
+		return fmt.Errorf("failed to hash cookie-consent.js: %w", err)
+	}
+
+	// 同时存储不带 .tmp 的映射
+	assetManifest[finalPath] = hashedName
+	assetManifest["shared/js/cookie-consent.js"] = hashedName
+
 	atomic.AddInt64(&stats.FilesProcessed, 1)
-	log.Printf("[BUILD] Built cookie-consent.js")
+	log.Printf("[BUILD] Built cookie-consent.js -> %s", hashedName)
 	return nil
 }
