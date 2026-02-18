@@ -33,7 +33,8 @@ import {
   showConfirm,
   formatDate,
   formatRelativeTime,
-  escapeHtml
+  escapeHtml,
+  renderPagination
 } from './common';
 import { loadStats } from './stats';
 
@@ -224,52 +225,14 @@ export async function loadUsers(): Promise<void> {
     bindUserRowEvents(row as HTMLTableRowElement);
   });
 
-  renderPagination(data.page, data.totalPages);
-}
-
-/**
- * 渲染分页控件
- * @param current - 当前页码
- * @param total - 总页数
- */
-function renderPagination(current: number, total: number): void {
-  if (total <= 1) {
-    pagination.innerHTML = '';
-    return;
-  }
-
-  let html = '';
-  html += `<button ${current === 1 ? 'disabled' : ''} data-page="${current - 1}">上一页</button>`;
-
-  const start = Math.max(1, current - 2);
-  const end = Math.min(total, current + 2);
-
-  if (start > 1) {
-    html += `<button data-page="1">1</button>`;
-    if (start > 2) html += `<button disabled>...</button>`;
-  }
-
-  for (let i = start; i <= end; i++) {
-    html += `<button ${i === current ? 'class="active"' : ''} data-page="${i}">${i}</button>`;
-  }
-
-  if (end < total) {
-    if (end < total - 1) html += `<button disabled>...</button>`;
-    html += `<button data-page="${total}">${total}</button>`;
-  }
-
-  html += `<button ${current === total ? 'disabled' : ''} data-page="${current + 1}">下一页</button>`;
-
-  pagination.innerHTML = html;
-
-  pagination.querySelectorAll('button[data-page]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const page = Number((btn as HTMLElement).dataset.page);
-      if (page && page !== currentPage) {
-        currentPage = page;
-        loadUsers();
-      }
-    });
+  renderPagination({
+    container: pagination,
+    current: data.page,
+    total: data.totalPages,
+    onPageChange: (page) => {
+      currentPage = page;
+      loadUsers();
+    }
   });
 }
 
