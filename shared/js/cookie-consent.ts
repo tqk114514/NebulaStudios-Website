@@ -76,8 +76,16 @@ function createBanner(): void {
 
   document.body.appendChild(banner);
 
-  if (typeof window !== 'undefined' && typeof (window as unknown as { updatePageTranslations: unknown }).updatePageTranslations === 'function') {
-    (window as unknown as { updatePageTranslations: () => void }).updatePageTranslations();
+  function translateBanner(): void {
+    if (typeof window !== 'undefined' && typeof (window as unknown as { updatePageTranslations: unknown }).updatePageTranslations === 'function') {
+      (window as unknown as { updatePageTranslations: () => void }).updatePageTranslations();
+    }
+  }
+
+  if (typeof window !== 'undefined' && (window as unknown as { translationsLoaded: boolean }).translationsLoaded) {
+    translateBanner();
+  } else {
+    window.addEventListener('translationsReady', translateBanner);
   }
 
   document.getElementById('cookie-accept')?.addEventListener('click', () => {
