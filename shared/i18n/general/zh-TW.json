@@ -27,6 +27,10 @@
   "policy.termsOfService": "服務條款",
   "policy.and": "和",
 
+  "cookieConsent.message": "我們使用 Cookie 來改善您的體驗。拒絕後僅影響可選功能（如語言偏好和登入狀態保存），核心功能仍可正常使用。",
+  "cookieConsent.accept": "同意",
+  "cookieConsent.reject": "拒絕",
+
   "error.loadEmailWhitelistFailed": "載入郵箱白名單失敗，請重新整理頁面重試",
   "error.networkError": "網路錯誤，請稍後重試",
   "error.sessionExpired": "登入已過期，請重新登入",
