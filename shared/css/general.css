@@ -501,38 +501,78 @@ body::-webkit-scrollbar {
   flex-shrink: 0;
 }
 
-.cookie-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
+.cookie-consent-buttons .button-primary,
+.cookie-consent-buttons .button-secondary {
+  width: auto;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
-.cookie-btn-reject {
-  background: transparent;
-  border: 1px solid var(--border-light);
-  color: var(--text-muted);
-}
-
-.cookie-btn-reject:hover {
-  background: rgb(var(--white-rgb), 0.05);
-  border-color: var(--border-hover);
-  color: var(--text);
-}
-
-.cookie-btn-accept {
+.button-primary {
+  position: relative;
+  box-sizing: border-box;
   background: var(--primary);
-  color: var(--white);
-  box-shadow: var(--glow-primary);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.3s ease,
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
+  margin-top: 10px;
+  text-shadow: none;
+  box-shadow: var(--shadow-sm);
 }
 
-.cookie-btn-accept:hover {
-  background: var(--orange-light);
-  box-shadow: var(--glow-primary-strong);
-  transform: translateY(-1px);
+.button-primary:hover {
+  background: var(--text);
+  color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 20px rgb(var(--primary-rgb), 0.35),
+    0 0 0 1px rgb(var(--primary-rgb), 0.1);
+}
+
+.button-primary:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.1s;
+}
+
+.button-secondary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 12px 20px;
+  background-color: rgb(var(--white-rgb), 0.05);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s ease;
+}
+
+.button-secondary:hover:not(:disabled) {
+  background-color: rgb(var(--white-rgb), 0.1);
+  border-color: var(--border-active);
+  color: var(--text);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgb(var(--black-rgb), 0.35);
 }
 
 @media (max-width: 600px) {

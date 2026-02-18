@@ -68,8 +68,8 @@ function createBanner(): void {
     <div class="cookie-consent-content">
       <span class="cookie-consent-text" data-i18n="cookieConsent.message"></span>
       <div class="cookie-consent-buttons">
-        <button id="cookie-reject" class="cookie-btn cookie-btn-reject" data-i18n="cookieConsent.reject"></button>
-        <button id="cookie-accept" class="cookie-btn cookie-btn-accept" data-i18n="cookieConsent.accept"></button>
+        <button id="cookie-reject" class="button-secondary" data-i18n="cookieConsent.reject"></button>
+        <button id="cookie-accept" class="button-primary" data-i18n="cookieConsent.accept"></button>
       </div>
     </div>
   `;
