@@ -14,7 +14,8 @@ import {
   ACTION_NAMES,
   ROLE_NAMES,
   formatDate,
-  escapeHtml
+  escapeHtml,
+  renderPagination
 } from './common';
 
 // ==================== 状态 ====================
@@ -118,51 +119,16 @@ export async function loadLogs(): Promise<void> {
   }
 
   logsTableBody.innerHTML = data.logs.map(log => renderLogRow(log)).join('');
-  renderPagination(data.page, data.totalPages);
-}
 
-/**
- * 渲染分页控件
- */
-function renderPagination(current: number, total: number): void {
-  if (!logsPagination) return;
-
-  if (total <= 1) {
-    logsPagination.innerHTML = '';
-    return;
-  }
-
-  let html = '';
-  html += `<button ${current === 1 ? 'disabled' : ''} data-page="${current - 1}">上一页</button>`;
-
-  const start = Math.max(1, current - 2);
-  const end = Math.min(total, current + 2);
-
-  if (start > 1) {
-    html += `<button data-page="1">1</button>`;
-    if (start > 2) html += `<button disabled>...</button>`;
-  }
-
-  for (let i = start; i <= end; i++) {
-    html += `<button ${i === current ? 'class="active"' : ''} data-page="${i}">${i}</button>`;
-  }
-
-  if (end < total) {
-    if (end < total - 1) html += `<button disabled>...</button>`;
-    html += `<button data-page="${total}">${total}</button>`;
-  }
-
-  html += `<button ${current === total ? 'disabled' : ''} data-page="${current + 1}">下一页</button>`;
-
-  logsPagination.innerHTML = html;
-
-  logsPagination.querySelectorAll('button[data-page]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const page = Number((btn as HTMLElement).dataset.page);
-      if (page && page !== currentPage) {
+  if (logsPagination) {
+    renderPagination({
+      container: logsPagination,
+      current: data.page,
+      total: data.totalPages,
+      onPageChange: (page) => {
         currentPage = page;
         loadLogs();
       }
     });
-  });
+  }
 }

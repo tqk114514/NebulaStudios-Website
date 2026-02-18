@@ -228,3 +228,54 @@ export function escapeHtml(str: string): string {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ==================== 分页控件 ====================
+
+export interface PaginationConfig {
+  container: HTMLElement;
+  current: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}
+
+export function renderPagination(config: PaginationConfig): void {
+  const { container, current, total, onPageChange } = config;
+
+  if (total <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  html += `<button ${current === 1 ? 'disabled' : ''} data-page="${current - 1}">上一页</button>`;
+
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  if (start > 1) {
+    html += `<button data-page="1">1</button>`;
+    if (start > 2) html += `<button disabled>...</button>`;
+  }
+
+  for (let i = start; i <= end; i++) {
+    html += `<button ${i === current ? 'class="active"' : ''} data-page="${i}">${i}</button>`;
+  }
+
+  if (end < total) {
+    if (end < total - 1) html += `<button disabled>...</button>`;
+    html += `<button data-page="${total}">${total}</button>`;
+  }
+
+  html += `<button ${current === total ? 'disabled' : ''} data-page="${current + 1}">下一页</button>`;
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = Number((btn as HTMLElement).dataset.page);
+      if (page && page !== current) {
+        onPageChange(page);
+      }
+    });
+  });
+}
