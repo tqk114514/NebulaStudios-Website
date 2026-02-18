@@ -170,6 +170,9 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent string) error {
 		content = strings.ReplaceAll(content, "{{HEADER}}", headerContent)
 	}
 
+	// 替换资源引用为哈希化版本
+	content = replaceAssetRefs(content)
+
 	minified := minifyHTML(content)
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
@@ -196,7 +199,9 @@ func minifyHTMLFileTo(src, dst string) error {
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
-	minified := minifyHTML(string(data))
+	content := string(data)
+	content = replaceAssetRefs(content)
+	minified := minifyHTML(content)
 
 	if err := os.WriteFile(dst, []byte(minified), filePerm); err != nil {
 		return fmt.Errorf("failed to write: %w", err)
@@ -225,4 +230,35 @@ func minifyHTML(html string) string {
 	html = strings.TrimSpace(html)
 
 	return html
+}
+
+// replaceAssetRefs 替换 HTML 中的资源引用为哈希化版本
+func replaceAssetRefs(html string) string {
+	// 匹配 <link href="..."> 和 <script src="...">
+	// 支持 .css 和 .js 文件
+	re := regexp.MustCompile(`(href|src)=["']([^"']+\.(css|js))["']`)
+
+	return re.ReplaceAllStringFunc(html, func(match string) string {
+		parts := re.FindStringSubmatch(match)
+		if len(parts) < 4 {
+			return match
+		}
+
+		attr := parts[1]     // href 或 src
+		original := parts[2] // 完整路径如 /shared/css/general.css
+		_ = parts[3]         // css 或 js (忽略)
+
+		// 查找映射
+		for originalPath, hashedName := range assetManifest {
+			// 提取文件名进行比较
+			originalBase := filepath.Base(originalPath)
+			if strings.HasSuffix(original, originalBase) {
+				// 替换为哈希化后的文件名
+				newPath := strings.Replace(original, filepath.Base(originalPath), hashedName, 1)
+				return fmt.Sprintf(`%s="%s"`, attr, newPath)
+			}
+		}
+
+		return match
+	})
 }
