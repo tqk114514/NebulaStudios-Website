@@ -132,22 +132,27 @@ func run() error {
 		return fmt.Errorf("translations build failed: %w", err)
 	}
 
-	// 4. 构建 Account 数据文件
+	// 4. 构建 cookie-consent.js
+	if err := buildCookieConsent(); err != nil {
+		return fmt.Errorf("cookie-consent build failed: %w", err)
+	}
+
+	// 5. 构建 Account 数据文件
 	if err := buildAccountData(); err != nil {
 		return fmt.Errorf("account data build failed: %w", err)
 	}
 
-	// 5. 构建 JavaScript（包含 Policy 数据内嵌）
+	// 6. 构建 JavaScript（包含 Policy 数据内嵌）
 	if err := buildJS(); err != nil {
 		return fmt.Errorf("JS build failed: %w", err)
 	}
 
-	// 6. 构建 CSS
+	// 7. 构建 CSS
 	if err := buildCSS(); err != nil {
 		return fmt.Errorf("CSS build failed: %w", err)
 	}
 
-	// 7. 构建 HTML
+	// 8. 构建 HTML
 	if err := buildHTML(); err != nil {
 		return fmt.Errorf("HTML build failed: %w", err)
 	}

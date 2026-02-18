@@ -7,14 +7,35 @@
  */
 
 /**
+ * 检查用户是否同意使用 Cookie
+ */
+function hasCookieConsent(): boolean {
+  const nameEQ = 'cookieConsent=';
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') { c = c.substring(1, c.length); }
+    if (c.indexOf(nameEQ) === 0) {
+      return c.substring(nameEQ.length, c.length) === 'accepted';
+    }
+  }
+  return false;
+}
+
+/**
  * 设置 Cookie
  * @param name - Cookie 名称
  * @param value - Cookie 值
  * @param seconds - 过期时间（秒）
+ * @param required - 是否为必需 cookie（默认 false，可选 cookie 需要用户同意）
  */
-export function setCookie(name: string, value: unknown, seconds: number): void {
+export function setCookie(name: string, value: unknown, seconds: number, required: boolean = false): void {
   if (!name || typeof name !== 'string') {
     console.warn('[COOKIE] WARN: Invalid cookie name');
+    return;
+  }
+
+  if (!required && !hasCookieConsent()) {
     return;
   }
 

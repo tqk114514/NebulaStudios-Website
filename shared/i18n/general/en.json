@@ -27,6 +27,10 @@
   "policy.termsOfService": "Terms of Service",
   "policy.and": "and",
 
+  "cookieConsent.message": "We use cookies to improve your experience. Rejecting will only affect optional features (like language preference and login state), core features will still work normally.",
+  "cookieConsent.accept": "Accept",
+  "cookieConsent.reject": "Reject",
+
   "error.loadEmailWhitelistFailed": "Failed to load email whitelist, please refresh the page",
   "error.networkError": "Network error, please try again later",
   "error.sessionExpired": "Session expired, please sign in again",

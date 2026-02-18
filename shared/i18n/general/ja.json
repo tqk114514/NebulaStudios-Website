@@ -27,6 +27,10 @@
   "policy.termsOfService": "利用規約",
   "policy.and": "および",
 
+  "cookieConsent.message": "当サイトはCookieを使用してユーザー体験を向上させています。拒否してもコア機能は正常に動作しますが、言語設定やログイン状態の保存などのオプショナル機能に影響します。",
+  "cookieConsent.accept": "同意",
+  "cookieConsent.reject": "拒否",
+
   "error.loadEmailWhitelistFailed": "メールホワイトリストの読み込みに失敗しました。ページを更新してください",
   "error.networkError": "ネットワークエラー。後でもう一度お試しください",
   "error.sessionExpired": "セッションの有効期限が切れました。再度ログインしてください",
