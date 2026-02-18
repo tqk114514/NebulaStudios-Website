@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"github.com/evanw/esbuild/pkg/api"
@@ -94,6 +95,9 @@ func buildAdminCSS() error {
 		return fmt.Errorf("failed to write %s: %w", outFile, err)
 	}
 
+	// 哈希化 admin CSS
+	_, _ = addToManifest(outFile)
+
 	atomic.AddInt64(&stats.FilesProcessed, int64(len(cssFiles)))
 	atomic.AddInt64(&stats.BytesWritten, int64(len(result.Code)))
 	log.Printf("[BUILD] Built admin CSS (merged %d files)", len(cssFiles))
@@ -132,6 +136,25 @@ func buildCSSModule(pattern, outdir, moduleName string) error {
 		}
 		atomic.AddInt64(&stats.Errors, int64(len(result.Errors)))
 		return fmt.Errorf("%s CSS build failed", moduleName)
+	}
+
+	// 哈希化所有输出的 CSS 文件
+	files, err := os.ReadDir(outdir)
+	if err != nil {
+		return fmt.Errorf("failed to read output dir: %w", err)
+	}
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		name := f.Name()
+		if strings.HasSuffix(name, ".css") {
+			originalPath := filepath.Join(outdir, name)
+			_, err = addToManifest(originalPath)
+			if err != nil {
+				log.Printf("[BUILD] WARN: Failed to hash %s: %v", name, err)
+			}
+		}
 	}
 
 	atomic.AddInt64(&stats.FilesProcessed, int64(len(entries)))
