@@ -37,3 +37,5 @@ eslint.config.mjs
 img-processor/zig-cache/
 img-processor/zig-out/
 img-processor/.zig-cache/
+
+.trae/
