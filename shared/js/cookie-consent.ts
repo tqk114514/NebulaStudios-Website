@@ -11,6 +11,8 @@
 const CONSENT_COOKIE_NAME = 'cookieConsent';
 const CONSENT_EXPIRY_DAYS = 365;
 
+const OPTIONAL_COOKIES = ['selectedLanguage', 'token'];
+
 export type ConsentType = 'accepted' | 'rejected' | null;
 
 let cachedConsent: ConsentType = null;
@@ -24,6 +26,18 @@ function getCookie(name: string): string | null {
     if (c.indexOf(nameEQ) === 0) { return c.substring(nameEQ.length, c.length); }
   }
   return null;
+}
+
+function deleteCookie(name: string): void {
+  document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
+}
+
+function clearOptionalCookies(): void {
+  for (const name of OPTIONAL_COOKIES) {
+    if (getCookie(name) !== null) {
+      deleteCookie(name);
+    }
+  }
 }
 
 function setCookie(name: string, value: string, days: number): void {
@@ -57,9 +71,12 @@ function setConsent(value: 'accepted' | 'rejected'): void {
 }
 
 function createBanner(): void {
-  if (getConsent() !== null) {
+  const consent = getConsent();
+  if (consent !== null) {
     return;
   }
+
+  clearOptionalCookies();
 
   const banner = document.createElement('div');
   banner.id = 'cookie-consent-banner';
