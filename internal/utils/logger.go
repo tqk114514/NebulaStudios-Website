@@ -128,15 +128,27 @@ func SyncLogger() {
 
 // maskSensitiveData 脱敏敏感数据
 // 按顺序处理：邮箱 -> IP -> Token
+// 先做字符串包含预检查，避免不必要的正则扫描
 func maskSensitiveData(message string) string {
 	// 1. 脱敏邮箱
-	message = logEmailRegex.ReplaceAllStringFunc(message, maskEmail)
+	// 必须同时包含 @ 和 . 才可能是邮箱
+	if strings.Contains(message, "@") && strings.Contains(message, ".") {
+		message = logEmailRegex.ReplaceAllStringFunc(message, maskEmail)
+	}
 
 	// 2. 脱敏 IPv4 地址
-	message = logIPv4Regex.ReplaceAllStringFunc(message, maskIPv4)
+	// 日志中数字较多，用长度过滤短字符串
+	if len(message) > 7 && strings.Contains(message, ".") {
+		message = logIPv4Regex.ReplaceAllStringFunc(message, maskIPv4)
+	}
 
-	// 3. 脱敏 Token（使用分组替换）
-	message = logTokenRegex.ReplaceAllStringFunc(message, maskToken)
+	// 3. 脱敏 Token
+	// 截断首字母实现忽略大小写匹配，避免 ToLower 内存分配
+	if strings.Contains(message, "oken") || strings.Contains(message, "OKEN") ||
+		strings.Contains(message, "earer") || strings.Contains(message, "EARER") ||
+		strings.Contains(message, "uthorization") || strings.Contains(message, "UTHORIZATION") {
+		message = logTokenRegex.ReplaceAllStringFunc(message, maskToken)
+	}
 
 	return message
 }
