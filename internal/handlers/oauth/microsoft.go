@@ -158,7 +158,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	// 检查 OAuth 配置
 	if !h.isConfigured() {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Microsoft OAuth not configured")
-		RespondError(c, http.StatusInternalServerError, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusInternalServerError, "OAUTH_NOT_CONFIGURED")
 		return
 	}
 
@@ -535,14 +535,14 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
 		utils.LogPrintf("[OAUTH-MS] WARN: Unlink called without valid userID")
-		RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
 	// 验证 userID
 	if userID <= 0 {
 		utils.LogPrintf("[OAUTH-MS] WARN: Invalid userID in Unlink: %d", userID)
-		RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
 		return
 	}
 
@@ -552,20 +552,20 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: FindByID failed in Unlink: userID=%d, error=%v", userID, err)
-		RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: User not found in Unlink: userID=%d", userID)
-		RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	// 检查是否已绑定
 	if !user.MicrosoftID.Valid || user.MicrosoftID.String == "" {
 		utils.LogPrintf("[OAUTH-MS] WARN: User not linked to Microsoft: userID=%d", userID)
-		RespondError(c, http.StatusBadRequest, "NOT_LINKED")
+		utils.RespondError(c, http.StatusBadRequest, "NOT_LINKED")
 		return
 	}
 
@@ -598,7 +598,7 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	err = h.userRepo.Update(ctx, userID, updateFields)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to unlink Microsoft account: userID=%d, error=%v", userID, err)
-		RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
 		return
 	}
 
@@ -628,7 +628,7 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	}
 
 	utils.LogPrintf("[OAUTH-MS] Microsoft account unlinked: username=%s, userID=%d", user.Username, userID)
-	RespondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
+	utils.RespondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
 }
 
 // GetPendingLinkInfo 获取待绑定信息
@@ -649,7 +649,7 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	token := strings.TrimSpace(c.Query("token"))
 	if token == "" {
 		utils.LogPrintf("[OAUTH-MS] WARN: Empty token in GetPendingLinkInfo")
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
@@ -657,7 +657,7 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	pendingData, exists := GetPendingLink(token)
 	if !exists {
 		utils.LogPrintf("[OAUTH-MS] WARN: Pending link not found: token=%s", token)
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
@@ -665,7 +665,7 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	if pendingData == nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Pending link data is nil: token=%s", token)
 		DeletePendingLink(token)
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
@@ -673,7 +673,7 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
 		utils.LogPrintf("[OAUTH-MS] WARN: Pending link expired: token=%s", token)
 		DeletePendingLink(token)
-		RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
 
@@ -683,18 +683,18 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: FindByID failed in GetPendingLinkInfo: userID=%d, error=%v", pendingData.UserID, err)
-		RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: User not found in GetPendingLinkInfo: userID=%d", pendingData.UserID)
-		RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	utils.LogPrintf("[OAUTH-MS] Pending link info retrieved: userID=%d, msName=%s", pendingData.UserID, pendingData.DisplayName)
-	RespondSuccess(c, gin.H{
+	utils.RespondSuccess(c, gin.H{
 		"data": gin.H{
 			"microsoftName":   pendingData.DisplayName,
 			"microsoftAvatar": pendingData.ProviderAvatarURL,
@@ -727,14 +727,14 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: Invalid request body for ConfirmLink: %v", err)
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	token := strings.TrimSpace(req.Token)
 	if token == "" {
 		utils.LogPrintf("[OAUTH-MS] WARN: Empty token in ConfirmLink")
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
@@ -742,21 +742,21 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	pendingData, exists := GetAndDeletePendingLink(token)
 	if !exists {
 		utils.LogPrintf("[OAUTH-MS] WARN: Pending link not found in ConfirmLink: token=%s", token)
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	// 检查数据有效性
 	if pendingData == nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Pending link data is nil in ConfirmLink: token=%s", token)
-		RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	// 检查是否过期
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
 		utils.LogPrintf("[OAUTH-MS] WARN: Pending link expired in ConfirmLink: token=%s", token)
-		RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
 
@@ -771,7 +771,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	if existingMsUser != nil && existingMsUser.ID != pendingData.UserID {
 		utils.LogPrintf("[OAUTH-MS] WARN: Microsoft account already linked in ConfirmLink: msID=%s, existingUserID=%d, targetUserID=%d",
 			pendingData.ProviderID, existingMsUser.ID, pendingData.UserID)
-		RespondError(c, http.StatusBadRequest, "MICROSOFT_ALREADY_LINKED")
+		utils.RespondError(c, http.StatusBadRequest, "MICROSOFT_ALREADY_LINKED")
 		return
 	}
 
@@ -779,20 +779,20 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: FindByID failed in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
-		RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
 		utils.LogPrintf("[OAUTH-MS] WARN: User not found in ConfirmLink: userID=%d", pendingData.UserID)
-		RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	// 检查用户是否被封禁
 	if user.CheckBanned() {
 		utils.LogPrintf("[OAUTH-MS] WARN: Banned user attempted to confirm link: userID=%d", pendingData.UserID)
-		RespondError(c, http.StatusForbidden, "USER_BANNED")
+		utils.RespondError(c, http.StatusForbidden, "USER_BANNED")
 		return
 	}
 
@@ -810,7 +810,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	})
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Failed to link Microsoft account in ConfirmLink: userID=%d, error=%v", pendingData.UserID, err)
-		RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
 		return
 	}
 
@@ -831,7 +831,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	jwtToken, err := h.sessionService.GenerateToken(user.ID)
 	if err != nil {
 		utils.LogPrintf("[OAUTH-MS] ERROR: Token generation failed in ConfirmLink: userID=%d, error=%v", user.ID, err)
-		RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
 		return
 	}
 
@@ -839,7 +839,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	SetAuthCookie(c, jwtToken)
 
 	utils.LogPrintf("[OAUTH-MS] Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID)
-	RespondSuccess(c, nil)
+	utils.RespondSuccess(c, gin.H{})
 }
 
 // parseDataURL 解析 data URL，返回二进制数据和 content-type
