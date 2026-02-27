@@ -18,8 +18,9 @@ interface ChatMessage {
 }
 
 interface AIChatResponse {
+  success: boolean;
   content?: string;
-  error?: string;
+  errorCode?: string;
 }
 
 interface AITool {
@@ -502,9 +503,7 @@ async function sendMessage(): Promise<void> {
 
     removeThinkingMessage();
 
-    if (data.error) {
-      addMessage('assistant', data.error, false, true);
-    } else if (data.content) {
+    if (data.success && data.content) {
       addMessage('assistant', data.content);
     } else {
       addMessage('assistant', window.t?.('ai.error') || '抱歉，出现了一些问题。', false, true);
