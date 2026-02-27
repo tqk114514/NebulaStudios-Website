@@ -299,32 +299,6 @@ func RedirectWithSuccess(c *gin.Context, baseURL, path, successCode string) {
 	c.Redirect(http.StatusFound, baseURL+path+"?success="+successCode)
 }
 
-// RespondError 返回错误响应
-//
-// 参数：
-//   - c: Gin 上下文
-//   - status: HTTP 状态码
-//   - errorCode: 错误代码
-func RespondError(c *gin.Context, status int, errorCode string) {
-	c.JSON(status, gin.H{
-		"success":   false,
-		"errorCode": errorCode,
-	})
-}
-
-// RespondSuccess 返回成功响应
-//
-// 参数：
-//   - c: Gin 上下文
-//   - data: 响应数据
-func RespondSuccess(c *gin.Context, data gin.H) {
-	response := gin.H{"success": true}
-	for k, v := range data {
-		response[k] = v
-	}
-	c.JSON(http.StatusOK, response)
-}
-
 // ====================  清理任务 ====================
 
 // StartCleanup 启动清理任务
