@@ -745,9 +745,9 @@ function showDeleteAccountModal(): void {
         if (result.errorCode === 'CAPTCHA_FAILED') {
           showAlert(t('register.humanVerifyFailed'));
         } else if (result.errorCode === 'RATE_LIMIT') {
-          showAlert(t('error.rateLimitExceeded') || '请求过于频繁，请稍后再试');
+          showAlert(t('error.rateLimitExceeded'));
         } else {
-          showAlert(t('dashboard.sendCodeFailed') || '发送验证码失败，请稍后再试');
+          showAlert(t('dashboard.sendCodeFailed'));
         }
       }
     } catch {
@@ -1842,7 +1842,7 @@ function createLogItemElement(log: UserLogItem): HTMLElement {
   item.className = 'user-log-item';
 
   const iconInfo = getLogActionIcon(log.action);
-  const actionText = t(`dashboard.logAction.${log.action}`) || log.action;
+  const actionText = t(`dashboard.logAction.${log.action}`);
   const details = formatLogDetails(log.action, log.details);
   const relativeTime = formatLogTime(log.created_at);
   const absoluteTime = formatAbsoluteTime(log.created_at);

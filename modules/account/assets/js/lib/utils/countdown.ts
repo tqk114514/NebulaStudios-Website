@@ -36,7 +36,7 @@ export interface CountdownConfig {
   /** 关联的输入框（倒计时结束后启用） */
   input?: HTMLInputElement | null;
   /** 翻译函数 */
-  t?: TranslateFunction | null;
+  t?: TranslateFunction;
   /** 完成回调 */
   onComplete?: () => void;
 }
@@ -71,7 +71,7 @@ export function startCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t,
+    t = window.t,
     onComplete
   } = config;
 
@@ -84,7 +84,7 @@ export function startCountdown(
 
   const getCompleteText = (): string => {
     if (completeText) {return completeText;}
-    return t ? t('register.sendCodeButton') : '发送验证码';
+    return t('register.sendCodeButton');
   };
 
   const updateCountdown = (): void => {
@@ -126,7 +126,7 @@ export function resumeCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t,
+    t = window.t,
     onComplete
   } = config;
 
@@ -150,7 +150,7 @@ export function resumeCountdown(
 
       const getCompleteText = (): string => {
         if (completeText) {return completeText;}
-        return t ? t('register.sendCodeButton') : '发送验证码';
+        return t('register.sendCodeButton');
       };
 
       const updateCountdown = (): void => {

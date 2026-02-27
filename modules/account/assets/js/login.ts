@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 禁用按钮，显示加载状态
         loginButton!.disabled = true;
-        loginButton!.textContent = t('login.loggingIn') || '登录中...';
+        loginButton!.textContent = t('login.loggingIn');
 
         const result = await login(email, password, token || '', captchaType);
 

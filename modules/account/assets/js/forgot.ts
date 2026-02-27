@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       resetSubmitBtn!.disabled = true;
-      resetSubmitBtn!.textContent = t('forgotPassword.resetting') || '重置中...';
+      resetSubmitBtn!.textContent = t('forgotPassword.resetting');
 
       try {
         const response = await fetch('/api/auth/reset-password', {
