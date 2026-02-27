@@ -118,7 +118,7 @@ export function initAIChat(): void {
 function addWelcomeMessage(): void {
   if (!messagesContainer) return;
   
-  const welcomeMsg = window.t?.('ai.welcome') || '您好！我是政策助手，可以帮您解答关于隐私政策、服务条款等问题。';
+  const welcomeMsg = window.t('ai.welcome');
   
   const msgEl = document.createElement('div');
   msgEl.className = 'ai-chat-message assistant ai-chat-welcome';
@@ -133,7 +133,7 @@ function createChatUI(): void {
   // 创建气泡按钮
   bubble = document.createElement('button');
   bubble.className = 'ai-chat-bubble';
-  bubble.setAttribute('aria-label', window.t?.('ai.title') || 'AI 助手');
+  bubble.setAttribute('aria-label', window.t('ai.title'));
   bubble.innerHTML = `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -146,19 +146,19 @@ function createChatUI(): void {
   panel.className = 'ai-chat-panel';
   panel.innerHTML = `
     <div class="ai-chat-header">
-      <h3>${window.t?.('ai.title') || 'AI 助手'}</h3>
-      <button class="ai-chat-close" aria-label="${window.t?.('ai.close') || '关闭'}">
+      <h3>${window.t('ai.title')}</h3>
+      <button class="ai-chat-close" aria-label="${window.t('ai.close')}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     </div>
-    <div class="ai-chat-disclaimer">${window.t?.('ai.disclaimer') || 'AI 回答仅供参考，不构成法律建议。'}</div>
+    <div class="ai-chat-disclaimer">${window.t('ai.disclaimer')}</div>
     <div class="ai-chat-messages"></div>
     <div class="ai-chat-input-area">
-      <input type="text" class="ai-chat-input" placeholder="${window.t?.('ai.placeholder') || '输入您的问题...'}" />
-      <button class="ai-chat-send" aria-label="${window.t?.('ai.send') || '发送'}">
+      <input type="text" class="ai-chat-input" placeholder="${window.t('ai.placeholder')}" />
+      <button class="ai-chat-send" aria-label="${window.t('ai.send')}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="22" y1="2" x2="11" y2="13"/>
           <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -338,7 +338,7 @@ function executeGoto(url: string): Promise<void> {
     }
 
     showCountdown(
-      window.t?.('ai.countdown.goto') || '即将跳转',
+      window.t('ai.countdown.goto'),
       () => { window.location.href = url; },
       resolve
     );
@@ -355,7 +355,7 @@ function executeMail(email: string): Promise<void> {
     }
 
     showCountdown(
-      window.t?.('ai.countdown.mail') || '即将打开邮箱',
+      window.t('ai.countdown.mail'),
       () => { window.location.href = `mailto:${email}`; },
       resolve
     );
@@ -378,7 +378,7 @@ function showCountdown(message: string, onComplete: () => void, onFinish: () => 
   const updateContent = () => {
     countdownEl.innerHTML = `
       <span class="ai-chat-countdown-text">${message} (${seconds}秒)</span>
-      <button class="ai-chat-countdown-cancel">${window.t?.('ai.countdown.cancel') || '取消'}</button>
+      <button class="ai-chat-countdown-cancel">${window.t('ai.countdown.cancel')}</button>
     `;
   };
   
@@ -431,7 +431,7 @@ function addMessage(role: 'user' | 'assistant', content: string, isThinking = fa
   if (isThinking) {
     msgEl.classList.add('thinking');
     msgEl.innerHTML = `
-      <span>${window.t?.('ai.thinking') || '正在思考'}</span>
+      <span>${window.t('ai.thinking')}</span>
       <div class="ai-chat-thinking-dots">
         <span></span><span></span><span></span>
       </div>
@@ -506,11 +506,11 @@ async function sendMessage(): Promise<void> {
     if (data.success && data.content) {
       addMessage('assistant', data.content);
     } else {
-      addMessage('assistant', window.t?.('ai.error') || '抱歉，出现了一些问题。', false, true);
+      addMessage('assistant', window.t('ai.error'), false, true);
     }
   } catch {
     removeThinkingMessage();
-    addMessage('assistant', window.t?.('ai.error') || '抱歉，出现了一些问题。', false, true);
+    addMessage('assistant', window.t('ai.error'), false, true);
   } finally {
     isLoading = false;
     updateSendButton();
@@ -529,29 +529,29 @@ export function updateAIChatLanguage(): void {
   if (!panel || !bubble) return;
 
   // 更新气泡
-  bubble.setAttribute('aria-label', window.t?.('ai.title') || 'AI 助手');
+  bubble.setAttribute('aria-label', window.t('ai.title'));
 
   // 更新面板标题
   const header = panel.querySelector('.ai-chat-header h3');
-  if (header) header.textContent = window.t?.('ai.title') || 'AI 助手';
+  if (header) header.textContent = window.t('ai.title');
 
   // 更新关闭按钮
   const closeBtn = panel.querySelector('.ai-chat-close');
-  if (closeBtn) closeBtn.setAttribute('aria-label', window.t?.('ai.close') || '关闭');
+  if (closeBtn) closeBtn.setAttribute('aria-label', window.t('ai.close'));
 
   // 更新免责声明
   const disclaimer = panel.querySelector('.ai-chat-disclaimer');
-  if (disclaimer) disclaimer.textContent = window.t?.('ai.disclaimer') || 'AI 回答仅供参考，不构成法律建议。';
+  if (disclaimer) disclaimer.textContent = window.t('ai.disclaimer');
 
   // 更新输入框
-  if (input) input.placeholder = window.t?.('ai.placeholder') || '输入您的问题...';
+  if (input) input.placeholder = window.t('ai.placeholder');
 
   // 更新发送按钮
-  if (sendBtn) sendBtn.setAttribute('aria-label', window.t?.('ai.send') || '发送');
+  if (sendBtn) sendBtn.setAttribute('aria-label', window.t('ai.send'));
 
   // 更新欢迎消息
   const welcomeEl = messagesContainer?.querySelector('.ai-chat-welcome');
   if (welcomeEl) {
-    welcomeEl.textContent = window.t?.('ai.welcome') || '您好！我是政策助手，可以帮您解答关于隐私政策、服务条款等问题。';
+    welcomeEl.textContent = window.t('ai.welcome');
   }
 }

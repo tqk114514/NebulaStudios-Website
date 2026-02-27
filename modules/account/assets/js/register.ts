@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!emailWhitelistResult.success) {
       hidePageLoader();
       initializeModals(t);
-      showAlertWithTranslation(t('error.loadEmailWhitelistFailed') || '加载邮箱白名单失败，请刷新页面重试');
+      showAlertWithTranslation(t('error.loadEmailWhitelistFailed'));
       return;
     }
 
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isUsernameTooLong(username)) {
         if (usernameErrorText) {
           usernameErrorText.setAttribute('data-i18n', 'register.usernameTooLong');
-          usernameErrorText.textContent = t('register.usernameTooLong') || '用户名过长';
+          usernameErrorText.textContent = t('register.usernameTooLong');
         }
         if (wasHidden) {
           usernameError?.classList.remove('is-hidden');
@@ -333,7 +333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 禁用按钮，显示加载状态
         registerButton!.disabled = true;
-        registerButton!.textContent = t('register.registering') || '注册中...';
+        registerButton!.textContent = t('register.registering');
 
         // 发送注册请求
         const result = await register(formData);

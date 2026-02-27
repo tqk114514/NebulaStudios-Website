@@ -144,7 +144,7 @@ export const showWarning = (msg: string, duration?: number): void => showToast(m
 /**
  * 显示通用提示弹窗
  */
-export function showAlert(message: string, title: string = '', t?: TranslateFunction): void {
+export function showAlert(message: string, title: string = '', t: TranslateFunction = window.t): void {
   const alertModal = document.getElementById('alert-modal');
   const alertTitle = document.getElementById('alert-title');
   const alertMessage = document.getElementById('alert-message');
@@ -156,8 +156,8 @@ export function showAlert(message: string, title: string = '', t?: TranslateFunc
   }
 
   alertMessage.textContent = message;
-  if (alertTitle) {alertTitle.textContent = title || (t ? t('modal.alert') : '') || '提示';}
-  if (alertCloseBtn) {alertCloseBtn.textContent = (t ? t('modal.close') : '') || '关闭';}
+  if (alertTitle) {alertTitle.textContent = title || t('modal.alert');}
+  if (alertCloseBtn) {alertCloseBtn.textContent = t('modal.close');}
   alertModal.classList.remove('is-hidden');
 
   const handleClose = (): void => {
@@ -184,7 +184,7 @@ export function closeAlert(): void {
 /**
  * 显示确认弹窗
  */
-export function showConfirm(message: string, title: string | null = null, t?: TranslateFunction): Promise<boolean> {
+export function showConfirm(message: string, title: string | null = null, t: TranslateFunction = window.t): Promise<boolean> {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirm-modal');
     const titleEl = document.getElementById('confirm-title');
@@ -202,7 +202,7 @@ export function showConfirm(message: string, title: string | null = null, t?: Tr
         titleEl.textContent = title;
         titleEl.removeAttribute('data-i18n');
       } else {
-        titleEl.textContent = t ? t('modal.confirm') : '确认';
+        titleEl.textContent = t('modal.confirm');
         titleEl.setAttribute('data-i18n', 'modal.confirm');
       }
     }
@@ -230,7 +230,7 @@ export function showConfirm(message: string, title: string | null = null, t?: Tr
 /**
  * 显示外部链接确认弹窗
  */
-export function showExternalLinkConfirm(url: string, t?: TranslateFunction): void {
+export function showExternalLinkConfirm(url: string, t: TranslateFunction = window.t): void {
   const modal = document.getElementById('external-link-modal');
 
   if (!modal) {
@@ -247,8 +247,8 @@ export function showExternalLinkConfirm(url: string, t?: TranslateFunction): voi
     urlDisplay.href = url;
   }
 
-  if (confirmBtn) {confirmBtn.textContent = (t ? t('modal.externalLink.continue') : '') || '继续访问';}
-  if (cancelBtn) {cancelBtn.textContent = (t ? t('modal.cancel') : '') || '取消';}
+  if (confirmBtn) {confirmBtn.textContent = t('modal.externalLink.continue');}
+  if (cancelBtn) {cancelBtn.textContent = t('modal.cancel');}
 
   if (confirmBtn && confirmBtn.parentNode) {
     const newConfirmBtn = confirmBtn.cloneNode(true) as HTMLElement;
@@ -314,7 +314,7 @@ export function showSupportedEmailsModal(emailProviders: EmailProviders, t: Tran
     });
   }
 
-  if (modalCloseBtn) {modalCloseBtn.textContent = t('modal.close') || '关闭';}
+  if (modalCloseBtn) {modalCloseBtn.textContent = t('modal.close');}
   modalOverlay.classList.remove('is-hidden');
 }
 
@@ -372,14 +372,14 @@ export function initializeModalTranslations(t: TranslateFunction): void {
   document.querySelectorAll('.modal-close').forEach(btn => {
     if (btn.hasAttribute('data-i18n')) {
       const key = btn.getAttribute('data-i18n');
-      if (key) {btn.textContent = t(key) || btn.textContent;}
+      if (key) {btn.textContent = t(key);}
     }
   });
 
   document.querySelectorAll('[data-i18n]').forEach(element => {
     if (element.closest('.modal-overlay')) {
       const key = element.getAttribute('data-i18n');
-      if (key) {element.textContent = t(key) || element.textContent;}
+      if (key) {element.textContent = t(key);}
     }
   });
 }

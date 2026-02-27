@@ -146,7 +146,7 @@ function renderPolicy(type: PolicyType): void {
     `;
   }
 
-  html += `<footer class="policy-footer">${window.t?.('footer.copyright') || '© 2025 Nebula Studios'}</footer>`;
+  html += `<footer class="policy-footer">${window.t('footer.copyright')}</footer>`;
 
   // 添加淡入动画
   container.classList.remove('fade-in');
