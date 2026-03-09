@@ -18,8 +18,11 @@ package oauth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -90,9 +93,10 @@ const (
 // State OAuth state 数据
 // 用于防止 CSRF 攻击，存储授权请求的上下文
 type State struct {
-	Timestamp int64  // 创建时间戳（毫秒）
-	Action    string // 操作类型：login/link
-	UserID    int64  // 用户 ID（仅 link 操作）
+	Timestamp    int64  // 创建时间戳（毫秒）
+	Action       string // 操作类型：login/link
+	UserID       int64  // 用户 ID（仅 link 操作）
+	CodeVerifier string // PKCE code_verifier
 }
 
 // PendingLink 待确认绑定数据
@@ -262,6 +266,34 @@ func GenerateLinkToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// GenerateCodeVerifier 生成 PKCE code_verifier
+// 用于 PKCE 流程，防止授权码拦截攻击
+//
+// 返回：
+//   - string: 43-128 字符的 base64url 编码字符串
+//   - error: 随机数生成错误
+func GenerateCodeVerifier() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		utils.LogError("OAUTH", "GenerateCodeVerifier", err, "Failed to generate code verifier")
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// GenerateCodeChallenge 生成 PKCE code_challenge
+// 使用 S256 方法（SHA256 哈希）
+//
+// 参数：
+//   - verifier: code_verifier 字符串
+//
+// 返回：
+//   - string: base64url 编码的 SHA256 哈希值
+func GenerateCodeChallenge(verifier string) string {
+	h := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 // SetAuthCookie 设置认证 Cookie
