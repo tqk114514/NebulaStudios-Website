@@ -25,8 +25,8 @@ import (
 	"auth-system/internal/utils"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
-
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -95,11 +95,11 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		// 生产环境应该检查 Origin
 		// 这里允许所有来源，因为有其他安全措施
+		return true
 	},
 	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 		utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
 	},
-}},
 }
 
 // ====================  数据结构 ====================

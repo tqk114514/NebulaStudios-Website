@@ -14,12 +14,12 @@
 package middleware
 
 import (
-	"auth-system/internal/utils"
 	"errors"
-
+	"fmt"
 	"net/http"
 
 	"auth-system/internal/services"
+	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

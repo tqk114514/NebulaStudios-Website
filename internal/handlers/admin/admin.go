@@ -24,6 +24,7 @@ package admin
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -199,7 +200,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	// 查询用户
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
+		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -252,7 +253,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	// 查询目标用户
 	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
+		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -323,7 +324,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	// 查询目标用户
 	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
+		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -413,7 +414,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	// 查询目标用户
 	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
+		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -490,7 +491,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	// 查询目标用户
 	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
+		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
