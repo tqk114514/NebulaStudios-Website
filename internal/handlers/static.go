@@ -23,9 +23,8 @@
 package handlers
 
 import (
-	"auth-system/internal/utils"
 	"errors"
-
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,6 +33,7 @@ import (
 	"auth-system/internal/config"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
+	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

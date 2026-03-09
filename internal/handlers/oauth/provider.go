@@ -27,6 +27,7 @@
 package oauth
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
