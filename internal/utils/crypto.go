@@ -103,17 +103,16 @@ func GenerateSecureToken() (string, error) {
 	bytes := make([]byte, tokenByteSize)
 	n, err := rand.Read(bytes)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to generate secure token: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrRandomGeneration, err)
+		return "", LogError("CRYPTO", "GenerateSecureToken", err)
 	}
 
 	if n != tokenByteSize {
-		LogPrintf("[CRYPTO] ERROR: Incomplete random read: got %d bytes, expected %d", n, tokenByteSize)
-		return "", fmt.Errorf("%w: incomplete read", ErrRandomGeneration)
+		err := fmt.Errorf("incomplete random read: got %d bytes, expected %d", n, tokenByteSize)
+		return "", LogError("CRYPTO", "GenerateSecureToken", err)
 	}
 
 	token := hex.EncodeToString(bytes)
-	LogPrintf("[CRYPTO] Generated secure token: length=%d", len(token))
+	LogDebug("CRYPTO", fmt.Sprintf("Generated secure token: length=%d", len(token)))
 	return token, nil
 }
 
@@ -130,14 +129,13 @@ func GenerateCode() (string, error) {
 	for i := 0; i < codeLength; i++ {
 		n, err := rand.Int(rand.Reader, charLen)
 		if err != nil {
-			LogPrintf("[CRYPTO] ERROR: Failed to generate verification code: %v", err)
-			return "", fmt.Errorf("%w: %v", ErrRandomGeneration, err)
+			return "", LogError("CRYPTO", "GenerateCode", err)
 		}
 		code[i] = codeChars[n.Int64()]
 	}
 
 	result := string(code)
-	LogPrintf("[CRYPTO] Generated verification code: length=%d", len(result))
+	LogDebug("CRYPTO", fmt.Sprintf("Generated verification code: length=%d", len(result)))
 	return result, nil
 }
 
@@ -155,7 +153,7 @@ func GenerateCode() (string, error) {
 func HashPassword(password string) (string, error) {
 	// 参数验证
 	if password == "" {
-		LogPrintf("[CRYPTO] WARN: Attempted to hash empty password")
+		LogWarn("CRYPTO", "Attempted to hash empty password")
 		return "", ErrEmptyPassword
 	}
 
@@ -163,12 +161,11 @@ func HashPassword(password string) (string, error) {
 	salt := make([]byte, argon2SaltLen)
 	n, err := rand.Read(salt)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to generate salt: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrRandomGeneration, err)
+		return "", LogError("CRYPTO", "HashPassword", err, "failed to generate salt")
 	}
 	if n != argon2SaltLen {
-		LogPrintf("[CRYPTO] ERROR: Incomplete salt generation: got %d bytes, expected %d", n, argon2SaltLen)
-		return "", fmt.Errorf("%w: incomplete salt", ErrRandomGeneration)
+		err := fmt.Errorf("incomplete salt generation: got %d bytes, expected %d", n, argon2SaltLen)
+		return "", LogError("CRYPTO", "HashPassword", err)
 	}
 
 	// 生成哈希
@@ -181,7 +178,7 @@ func HashPassword(password string) (string, error) {
 	result := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argon2Memory, argon2Time, argon2Threads, b64Salt, b64Hash)
 
-	LogPrintf("[CRYPTO] Password hashed successfully: algorithm=argon2id, memory=%dKB", argon2Memory/1024)
+	LogDebug("CRYPTO", fmt.Sprintf("Password hashed successfully: algorithm=argon2id, memory=%dKB", argon2Memory/1024))
 	return result, nil
 }
 
@@ -198,32 +195,32 @@ func HashPassword(password string) (string, error) {
 func VerifyPassword(password, encodedHash string) (bool, error) {
 	// 参数验证
 	if password == "" {
-		LogPrintf("[CRYPTO] WARN: Attempted to verify empty password")
+		LogWarn("CRYPTO", "Attempted to verify empty password")
 		return false, ErrEmptyPassword
 	}
 
 	if encodedHash == "" {
-		LogPrintf("[CRYPTO] WARN: Attempted to verify against empty hash")
+		LogWarn("CRYPTO", "Attempted to verify against empty hash")
 		return false, ErrInvalidHash
 	}
 
 	// 检查是否为 Argon2id 格式
 	if !strings.HasPrefix(encodedHash, "$argon2id$") {
-		LogPrintf("[CRYPTO] WARN: Invalid hash format: not argon2id")
+		LogWarn("CRYPTO", "Invalid hash format: not argon2id")
 		return false, ErrInvalidHash
 	}
 
 	// 解析哈希格式：$argon2id$v=19$m=65536,t=1,p=4$salt$hash
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 {
-		LogPrintf("[CRYPTO] WARN: Invalid hash format: expected 6 parts, got %d", len(parts))
+		LogWarn("CRYPTO", fmt.Sprintf("Invalid hash format: expected 6 parts, got %d", len(parts)))
 		return false, ErrInvalidHash
 	}
 
 	// 解析版本号
 	var version int
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to parse version: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to parse version: %v", err))
 		return false, fmt.Errorf("%w: invalid version", ErrInvalidHash)
 	}
 
@@ -231,37 +228,37 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	var memory, time uint32
 	var threads uint8
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to parse parameters: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to parse parameters: %v", err))
 		return false, fmt.Errorf("%w: invalid parameters", ErrInvalidHash)
 	}
 
 	// 验证参数合理性
 	if memory == 0 || time == 0 || threads == 0 {
-		LogPrintf("[CRYPTO] WARN: Invalid hash parameters: memory=%d, time=%d, threads=%d", memory, time, threads)
+		LogWarn("CRYPTO", fmt.Sprintf("Invalid hash parameters: memory=%d, time=%d, threads=%d", memory, time, threads))
 		return false, fmt.Errorf("%w: zero parameters", ErrInvalidHash)
 	}
 
 	// 解码 salt
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to decode salt: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode salt: %v", err))
 		return false, fmt.Errorf("%w: invalid salt encoding", ErrInvalidHash)
 	}
 
 	if len(salt) == 0 {
-		LogPrintf("[CRYPTO] WARN: Empty salt in hash")
+		LogWarn("CRYPTO", "Empty salt in hash")
 		return false, fmt.Errorf("%w: empty salt", ErrInvalidHash)
 	}
 
 	// 解码期望的哈希
 	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to decode hash: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode hash: %v", err))
 		return false, fmt.Errorf("%w: invalid hash encoding", ErrInvalidHash)
 	}
 
 	if len(expectedHash) == 0 {
-		LogPrintf("[CRYPTO] WARN: Empty hash value")
+		LogWarn("CRYPTO", "Empty hash value")
 		return false, fmt.Errorf("%w: empty hash", ErrInvalidHash)
 	}
 
@@ -271,11 +268,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	// 常量时间比较（防止时序攻击）
 	match := subtle.ConstantTimeCompare(hash, expectedHash) == 1
 
-	if match {
-		LogPrintf("[CRYPTO] Password verification successful")
-	} else {
-		LogPrintf("[CRYPTO] Password verification failed")
-	}
+	LogDebug("CRYPTO", fmt.Sprintf("Password verification result: %v", match))
 
 	return match, nil
 }
@@ -296,39 +289,36 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 	// 参数验证
 	if len(plaintext) == 0 {
-		LogPrintf("[CRYPTO] WARN: Attempted to encrypt empty plaintext")
+		LogWarn("CRYPTO", "Attempted to encrypt empty plaintext")
 		return "", ErrEmptyPlaintext
 	}
 
 	if len(key) != aesKeySize {
-		LogPrintf("[CRYPTO] ERROR: Invalid key length: got %d, expected %d", len(key), aesKeySize)
-		return "", ErrInvalidKeyLength
+		err := fmt.Errorf("invalid key length: got %d, expected %d", len(key), aesKeySize)
+		return "", LogError("CRYPTO", "EncryptAESGCM", err)
 	}
 
 	// 创建 AES cipher
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to create AES cipher: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrCipherCreation, err)
+		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to create AES cipher")
 	}
 
 	// 创建 GCM 模式
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to create GCM mode: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrGCMCreation, err)
+		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to create GCM mode")
 	}
 
 	// 生成随机 nonce (12 字节，GCM 推荐)
 	nonce := make([]byte, gcm.NonceSize())
 	n, err := io.ReadFull(rand.Reader, nonce)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to generate nonce: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrRandomGeneration, err)
+		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to generate nonce")
 	}
 	if n != gcm.NonceSize() {
-		LogPrintf("[CRYPTO] ERROR: Incomplete nonce generation")
-		return "", fmt.Errorf("%w: incomplete nonce", ErrRandomGeneration)
+		err := fmt.Errorf("incomplete nonce generation")
+		return "", LogError("CRYPTO", "EncryptAESGCM", err)
 	}
 
 	// 加密
@@ -337,8 +327,8 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 	// 分离 ciphertext 和 authTag（authTag 是最后 16 字节）
 	tagSize := gcm.Overhead()
 	if len(ciphertext) < tagSize {
-		LogPrintf("[CRYPTO] ERROR: Ciphertext too short")
-		return "", ErrDecryptionFailed
+		err := fmt.Errorf("ciphertext too short")
+		return "", LogError("CRYPTO", "EncryptAESGCM", err)
 	}
 
 	actualCiphertext := ciphertext[:len(ciphertext)-tagSize]
@@ -349,7 +339,7 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 		base64.StdEncoding.EncodeToString(authTag) + "." +
 		base64.StdEncoding.EncodeToString(actualCiphertext)
 
-	LogPrintf("[CRYPTO] Data encrypted successfully: plaintext_size=%d, ciphertext_size=%d", len(plaintext), len(result))
+	LogDebug("CRYPTO", fmt.Sprintf("Data encrypted successfully: plaintext_size=%d, ciphertext_size=%d", len(plaintext), len(result)))
 	return result, nil
 }
 
@@ -367,65 +357,63 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 	// 参数验证
 	if ciphertextB64 == "" {
-		LogPrintf("[CRYPTO] WARN: Attempted to decrypt empty ciphertext")
+		LogWarn("CRYPTO", "Attempted to decrypt empty ciphertext")
 		return nil, ErrEmptyCiphertext
 	}
 
 	if len(key) != aesKeySize {
-		LogPrintf("[CRYPTO] ERROR: Invalid key length: got %d, expected %d", len(key), aesKeySize)
-		return nil, ErrInvalidKeyLength
+		err := fmt.Errorf("invalid key length: got %d, expected %d", len(key), aesKeySize)
+		return nil, LogError("CRYPTO", "DecryptAESGCM", err)
 	}
 
 	// 解析三段格式
 	parts := strings.Split(ciphertextB64, ".")
 	if len(parts) != 3 {
-		LogPrintf("[CRYPTO] WARN: Invalid ciphertext format: expected 3 parts, got %d", len(parts))
+		LogWarn("CRYPTO", fmt.Sprintf("Invalid ciphertext format: expected 3 parts, got %d", len(parts)))
 		return nil, ErrInvalidCiphertextFormat
 	}
 
 	// 解码 nonce
 	nonce, err := base64.StdEncoding.DecodeString(parts[0])
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to decode nonce: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode nonce: %v", err))
 		return nil, fmt.Errorf("%w: invalid nonce", ErrDecryptionFailed)
 	}
 
 	if len(nonce) != gcmNonceSize {
-		LogPrintf("[CRYPTO] WARN: Invalid nonce size: got %d, expected %d", len(nonce), gcmNonceSize)
+		LogWarn("CRYPTO", fmt.Sprintf("Invalid nonce size: got %d, expected %d", len(nonce), gcmNonceSize))
 		return nil, fmt.Errorf("%w: invalid nonce size", ErrDecryptionFailed)
 	}
 
 	// 解码 authTag
 	authTag, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to decode authTag: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode authTag: %v", err))
 		return nil, fmt.Errorf("%w: invalid authTag", ErrDecryptionFailed)
 	}
 
 	if len(authTag) != gcmTagSize {
-		LogPrintf("[CRYPTO] WARN: Invalid authTag size: got %d, expected %d", len(authTag), gcmTagSize)
+		LogWarn("CRYPTO", fmt.Sprintf("Invalid authTag size: got %d, expected %d", len(authTag), gcmTagSize))
 		return nil, fmt.Errorf("%w: invalid authTag size", ErrDecryptionFailed)
 	}
 
 	// 解码 ciphertext
 	ciphertext, err := base64.StdEncoding.DecodeString(parts[2])
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Failed to decode ciphertext: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode ciphertext: %v", err))
 		return nil, fmt.Errorf("%w: invalid ciphertext", ErrDecryptionFailed)
 	}
 
 	// 创建 AES cipher
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to create AES cipher: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrCipherCreation, err)
+		return nil, LogError("CRYPTO", "DecryptAESGCM", err, "failed to create AES cipher")
 	}
 
 	// 创建 GCM 模式
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		LogPrintf("[CRYPTO] ERROR: Failed to create GCM mode: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrGCMCreation, err)
+		return nil, LogError("CRYPTO", "DecryptAESGCM", err, "failed to create GCM mode")
 	}
 
 	// 重新组合 ciphertext + authTag（Go 的 GCM 期望这种格式）
@@ -434,11 +422,11 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 	// 解密
 	plaintext, err := gcm.Open(nil, nonce, combined, nil)
 	if err != nil {
-		LogPrintf("[CRYPTO] WARN: Decryption failed: %v", err)
+		LogWarn("CRYPTO", fmt.Sprintf("Decryption failed: %v", err))
 		return nil, ErrDecryptionFailed
 	}
 
-	LogPrintf("[CRYPTO] Data decrypted successfully: ciphertext_size=%d, plaintext_size=%d", len(ciphertextB64), len(plaintext))
+	LogDebug("CRYPTO", fmt.Sprintf("Data decrypted successfully: ciphertext_size=%d, plaintext_size=%d", len(ciphertextB64), len(plaintext)))
 	return plaintext, nil
 }
 
@@ -457,7 +445,7 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 func DeriveKeyFromString(keyStr string) ([]byte, error) {
 	// 参数验证
 	if keyStr == "" {
-		LogPrintf("[CRYPTO] WARN: Attempted to derive key from empty string")
+		LogWarn("CRYPTO", "Attempted to derive key from empty string")
 		return nil, errors.New("key string cannot be empty")
 	}
 
@@ -465,12 +453,12 @@ func DeriveKeyFromString(keyStr string) ([]byte, error) {
 	if len(keyStr) == 64 {
 		decoded, err := hex.DecodeString(keyStr)
 		if err == nil && len(decoded) == aesKeySize {
-			LogPrintf("[CRYPTO] Key derived from hex string: length=%d", len(decoded))
+			LogDebug("CRYPTO", fmt.Sprintf("Key derived from hex string: length=%d", len(decoded)))
 			return decoded, nil
 		}
 		// 如果解码失败，继续使用回退方法
 		if err != nil {
-			LogPrintf("[CRYPTO] WARN: Failed to decode as hex, using fallback: %v", err)
+			LogWarn("CRYPTO", fmt.Sprintf("Failed to decode as hex, using fallback: %v", err))
 		}
 	}
 
@@ -480,9 +468,9 @@ func DeriveKeyFromString(keyStr string) ([]byte, error) {
 
 	// 如果原始字符串太短，记录警告
 	if len(keyStr) < aesKeySize {
-		LogPrintf("[CRYPTO] WARN: Key string too short (%d bytes), padded with zeros", len(keyStr))
+		LogWarn("CRYPTO", fmt.Sprintf("Key string too short (%d bytes), padded with zeros", len(keyStr)))
 	} else if len(keyStr) > aesKeySize {
-		LogPrintf("[CRYPTO] WARN: Key string too long (%d bytes), truncated to %d", len(keyStr), aesKeySize)
+		LogWarn("CRYPTO", fmt.Sprintf("Key string too long (%d bytes), truncated to %d", len(keyStr), aesKeySize))
 	}
 
 	return key, nil

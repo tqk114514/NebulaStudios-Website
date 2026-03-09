@@ -123,7 +123,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	// 验证 client_id
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Invalid client_id: %s, error=%v", clientID, err)
+		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id", fmt.Sprintf("clientID=%s", clientID))
 		h.redirectToErrorPage(c, "invalid_client", "Invalid client_id")
 		return
 	}
@@ -135,7 +135,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	}
 
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
-		utils.LogPrintf("[OAUTH-PROVIDER] Invalid redirect_uri: %s, expected=%s", redirectURI, client.RedirectURI)
+		utils.LogWarn("OAUTH-PROVIDER", "Invalid redirect_uri", fmt.Sprintf("redirectURI=%s, expected=%s", redirectURI, client.RedirectURI))
 		h.redirectToErrorPage(c, "invalid_request", "Invalid redirect_uri")
 		return
 	}
@@ -171,14 +171,14 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	// 获取用户信息
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Failed to get user: userID=%d, error=%v", userID, err)
+		utils.LogError("OAUTH-PROVIDER", "Authorize", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
 		return
 	}
 
 	// 检查用户是否被封禁
 	if user.CheckBanned() {
-		utils.LogPrintf("[OAUTH-PROVIDER] Banned user attempted to authorize: userID=%d", userID)
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize", fmt.Sprintf("userID=%d", userID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
@@ -301,14 +301,14 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	// 验证 client_id
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Invalid client_id in POST: %s, error=%v", clientID, err)
+		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id in POST", fmt.Sprintf("clientID=%s", clientID))
 		h.redirectToErrorPage(c, "invalid_client", "Invalid client_id")
 		return
 	}
 
 	// 验证 redirect_uri
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
-		utils.LogPrintf("[OAUTH-PROVIDER] Invalid redirect_uri in POST: %s", redirectURI)
+		utils.LogWarn("OAUTH-PROVIDER", "Invalid redirect_uri in POST", fmt.Sprintf("redirectURI=%s", redirectURI))
 		h.redirectToErrorPage(c, "invalid_request", "Invalid redirect_uri")
 		return
 	}
@@ -323,20 +323,20 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	// 获取用户信息并检查封禁状态
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Failed to get user in POST: userID=%d, error=%v", userID, err)
+		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to get user in POST: userID=%d", userID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogPrintf("[OAUTH-PROVIDER] Banned user attempted to authorize in POST: userID=%d", userID)
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize in POST", fmt.Sprintf("userID=%d", userID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
 
 	// 处理用户决定
 	if decision != "approve" {
-		utils.LogPrintf("[OAUTH-PROVIDER] User denied authorization: userID=%d, clientID=%s", userID, clientID)
+		utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("User denied authorization: userID=%d, clientID=%s", userID, clientID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User denied authorization")
 		return
 	}
@@ -351,7 +351,7 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	// 生成授权码
 	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userID, redirectURI, normalizedScope)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Failed to create auth code: userID=%d, clientID=%s, error=%v", userID, clientID, err)
+		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userID=%d, clientID=%s", userID, clientID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to create authorization code")
 		return
 	}
@@ -359,13 +359,13 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	// 记录用户操作日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogOAuthAuthorize(c.Request.Context(), userID, clientID, client.Name, normalizedScope); err != nil {
-			utils.LogPrintf("[OAUTH-PROVIDER] WARN: Failed to log OAuth authorize: userID=%d, error=%v", userID, err)
+			utils.LogWarn("OAUTH-PROVIDER", "Failed to log OAuth authorize", fmt.Sprintf("userID=%d", userID))
 		}
 	}
 
 	// 重定向到回调地址
 	redirectURL := h.buildRedirectURL(redirectURI, code, state)
-	utils.LogPrintf("[OAUTH-PROVIDER] Authorization granted: userID=%d, clientID=%s", userID, clientID)
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Authorization granted: userID=%d, clientID=%s", userID, clientID))
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -405,7 +405,7 @@ func (h *OAuthProviderHandler) Token(c *gin.Context) {
 
 	_, err := h.oauthService.ValidateClient(c.Request.Context(), clientID, clientSecret)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Client validation failed: clientID=%s, error=%v", clientID, err)
+		utils.LogWarn("OAUTH-PROVIDER", "Client validation failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
@@ -439,7 +439,7 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 	// 换取 Token
 	tokenResp, userID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Code exchange failed: clientID=%s, error=%v", clientID, err)
+		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid authorization code")
 		return
 	}
@@ -447,12 +447,12 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 	// 检查用户是否被封禁
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
 	if err != nil || user.CheckBanned() {
-		utils.LogPrintf("[OAUTH-PROVIDER] User banned or not found during token exchange: userID=%d", userID)
+		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token exchange", fmt.Sprintf("userID=%d", userID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogPrintf("[OAUTH-PROVIDER] Token issued: clientID=%s, userID=%d", clientID, userID)
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token issued: clientID=%s, userID=%d", clientID, userID))
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -468,7 +468,7 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 	// 刷新 Token
 	tokenResp, userID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Token refresh failed: clientID=%s, error=%v", clientID, err)
+		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid refresh token")
 		return
 	}
@@ -476,12 +476,12 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 	// 检查用户是否被封禁
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
 	if err != nil || user.CheckBanned() {
-		utils.LogPrintf("[OAUTH-PROVIDER] User banned or not found during token refresh: userID=%d", userID)
+		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token refresh", fmt.Sprintf("userID=%d", userID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogPrintf("[OAUTH-PROVIDER] Token refreshed: clientID=%s, userID=%d", clientID, userID)
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token refreshed: clientID=%s, userID=%d", clientID, userID))
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -515,7 +515,7 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 	// 验证 Token
 	tokenInfo, err := h.oauthService.ValidateAccessToken(c.Request.Context(), accessToken)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Access token validation failed: error=%v", err)
+		utils.LogWarn("OAUTH-PROVIDER", "Access token validation failed", "")
 		h.respondUserInfoError(c, http.StatusUnauthorized, "invalid_token", "Invalid or expired access token")
 		return
 	}
@@ -523,14 +523,14 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 	// 获取用户信息
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), tokenInfo.UserID, h.userRepo.FindByID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH-PROVIDER] Failed to get user for userinfo: userID=%d, error=%v", tokenInfo.UserID, err)
+		utils.LogError("OAUTH-PROVIDER", "UserInfo", err, fmt.Sprintf("Failed to get user for userinfo: userID=%d", tokenInfo.UserID))
 		h.respondUserInfoError(c, http.StatusInternalServerError, "server_error", "Failed to get user info")
 		return
 	}
 
 	// 检查用户是否被封禁
 	if user.CheckBanned() {
-		utils.LogPrintf("[OAUTH-PROVIDER] Banned user attempted to access userinfo: userID=%d", tokenInfo.UserID)
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to access userinfo", fmt.Sprintf("userID=%d", tokenInfo.UserID))
 		h.respondUserInfoError(c, http.StatusForbidden, "access_denied", "User is banned")
 		return
 	}
@@ -588,7 +588,7 @@ func (h *OAuthProviderHandler) Revoke(c *gin.Context) {
 	// 撤销 Token（始终返回成功）
 	_ = h.oauthService.RevokeToken(c.Request.Context(), token)
 
-	utils.LogPrintf("[OAUTH-PROVIDER] Token revoked")
+	utils.LogInfo("OAUTH-PROVIDER", "Token revoked")
 	c.Status(http.StatusOK)
 }
 

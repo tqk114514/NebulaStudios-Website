@@ -22,7 +22,8 @@ package services
 import (
 	"auth-system/internal/utils"
 	"errors"
-	"fmt"
+	"fmt"
+
 	"time"
 
 	"auth-system/internal/config"
@@ -96,7 +97,7 @@ type SessionService struct {
 func NewSessionService(cfg *config.Config) *SessionService {
 	// 参数验证
 	if cfg == nil {
-		utils.LogPrintf("[SESSION] ERROR: Config is nil, using defaults")
+		utils.LogError("SESSION", "NewSessionService", fmt.Errorf("config is nil"), "Using default config")
 		return &SessionService{
 			jwtSecret:    []byte("default-secret-please-change-in-production"),
 			jwtExpiresIn: defaultJWTExpiry,
@@ -106,27 +107,26 @@ func NewSessionService(cfg *config.Config) *SessionService {
 	// 验证 JWT 密钥
 	secret := cfg.JWTSecret
 	if secret == "" {
-		utils.LogPrintf("[SESSION] WARN: JWT secret is empty, using default")
+		utils.LogWarn("SESSION", "JWT secret is empty, using default", "")
 		secret = "default-secret-please-change-in-production"
 	} else if len(secret) < minSecretLength {
-		utils.LogPrintf("[SESSION] WARN: JWT secret is too short (%d chars), recommended minimum is %d",
-			len(secret), minSecretLength)
+		utils.LogWarn("SESSION", "JWT secret is too short, recommended minimum is 32", fmt.Sprintf("length=%d", len(secret)))
 	}
 
 	// 验证过期时间
 	expiry := cfg.JWTExpiresIn
 	if expiry <= 0 {
-		utils.LogPrintf("[SESSION] WARN: Invalid JWT expiry %v, using default %v", expiry, defaultJWTExpiry)
+		utils.LogWarn("SESSION", "Invalid JWT expiry, using default", fmt.Sprintf("expiry=%v, default=%v", expiry, defaultJWTExpiry))
 		expiry = defaultJWTExpiry
 	} else if expiry < minJWTExpiry {
-		utils.LogPrintf("[SESSION] WARN: JWT expiry %v is too short, using minimum %v", expiry, minJWTExpiry)
+		utils.LogWarn("SESSION", "JWT expiry is too short, using minimum", fmt.Sprintf("expiry=%v, min=%v", expiry, minJWTExpiry))
 		expiry = minJWTExpiry
 	} else if expiry > maxJWTExpiry {
-		utils.LogPrintf("[SESSION] WARN: JWT expiry %v is too long, using maximum %v", expiry, maxJWTExpiry)
+		utils.LogWarn("SESSION", "JWT expiry is too long, using maximum", fmt.Sprintf("expiry=%v, max=%v", expiry, maxJWTExpiry))
 		expiry = maxJWTExpiry
 	}
 
-	utils.LogPrintf("[SESSION] Session service initialized: expiry=%v", expiry)
+	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v", expiry))
 
 	return &SessionService{
 		jwtSecret:    []byte(secret),
@@ -172,18 +172,18 @@ func NewSessionServiceWithValidation(cfg *config.Config) (*SessionService, error
 func (s *SessionService) GenerateToken(userID int64) (string, error) {
 	// 参数验证
 	if userID <= 0 {
-		utils.LogPrintf("[SESSION] WARN: Invalid user ID for token generation: %d", userID)
+		utils.LogWarn("SESSION", "Invalid user ID for token generation", fmt.Sprintf("userID=%d", userID))
 		return "", ErrInvalidUser
 	}
 
 	// 检查服务是否已初始化
 	if s == nil {
-		utils.LogPrintf("[SESSION] ERROR: Session service is nil")
+		utils.LogError("SESSION", "GenerateToken", fmt.Errorf("session service is nil"), "")
 		return "", ErrTokenGenerationFailed
 	}
 
 	if len(s.jwtSecret) == 0 {
-		utils.LogPrintf("[SESSION] ERROR: JWT secret is empty")
+		utils.LogError("SESSION", "GenerateToken", fmt.Errorf("JWT secret is empty"), "")
 		return "", ErrTokenGenerationFailed
 	}
 
@@ -204,11 +204,11 @@ func (s *SessionService) GenerateToken(userID int64) (string, error) {
 	// 签名 Token
 	tokenString, err := token.SignedString(s.jwtSecret)
 	if err != nil {
-		utils.LogPrintf("[SESSION] ERROR: Failed to sign token: userID=%d, error=%v", userID, err)
+		utils.LogError("SESSION", "GenerateToken", err, fmt.Sprintf("Failed to sign token: userID=%d", userID))
 		return "", fmt.Errorf("%w: %v", ErrTokenGenerationFailed, err)
 	}
 
-	utils.LogPrintf("[SESSION] Token generated: userID=%d, expiry=%v", userID, s.jwtExpiresIn)
+	utils.LogInfo("SESSION", fmt.Sprintf("Token generated: userID=%d, expiry=%v", userID, s.jwtExpiresIn))
 	return tokenString, nil
 }
 
@@ -227,12 +227,12 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 
 	// 检查服务是否已初始化
 	if s == nil {
-		utils.LogPrintf("[SESSION] ERROR: Session service is nil")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("session service is nil"), "")
 		return nil, ErrTokenError
 	}
 
 	if len(s.jwtSecret) == 0 {
-		utils.LogPrintf("[SESSION] ERROR: JWT secret is empty")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("JWT secret is empty"), "")
 		return nil, ErrTokenError
 	}
 
@@ -240,7 +240,7 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// 验证签名方法
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			utils.LogPrintf("[SESSION] WARN: Unexpected signing method: %v", token.Header["alg"])
+			utils.LogWarn("SESSION", "Unexpected signing method", fmt.Sprintf("alg=%v", token.Header["alg"]))
 			return nil, ErrInvalidSigningMethod
 		}
 		return s.jwtSecret, nil
@@ -253,20 +253,20 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 
 	// 验证 Token 有效性
 	if token == nil {
-		utils.LogPrintf("[SESSION] ERROR: Parsed token is nil")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("parsed token is nil"), "")
 		return nil, ErrInvalidTokenSession
 	}
 
 	// 提取 Claims
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		utils.LogPrintf("[SESSION] ERROR: Failed to extract claims from token")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("failed to extract claims"), "")
 		return nil, ErrInvalidTokenSession
 	}
 
 	// 验证 Token 是否有效
 	if !token.Valid {
-		utils.LogPrintf("[SESSION] WARN: Token is not valid")
+		utils.LogWarn("SESSION", "Token is not valid", "")
 		return nil, ErrInvalidTokenSession
 	}
 
@@ -306,30 +306,30 @@ func (s *SessionService) IsConfigured() bool {
 func (s *SessionService) handleParseError(err error) error {
 	// 检查是否是过期错误
 	if errors.Is(err, jwt.ErrTokenExpired) {
-		utils.LogPrintf("[SESSION] DEBUG: Token expired")
+		utils.LogDebug("SESSION", "Token expired")
 		return ErrTokenExpiredSession
 	}
 
 	// 检查是否是签名无效
 	if errors.Is(err, jwt.ErrSignatureInvalid) {
-		utils.LogPrintf("[SESSION] WARN: Invalid token signature")
+		utils.LogWarn("SESSION", "Invalid token signature", "")
 		return ErrInvalidTokenSession
 	}
 
 	// 检查是否是格式错误
 	if errors.Is(err, jwt.ErrTokenMalformed) {
-		utils.LogPrintf("[SESSION] WARN: Malformed token")
+		utils.LogWarn("SESSION", "Malformed token", "")
 		return ErrInvalidTokenSession
 	}
 
 	// 检查是否是未激活
 	if errors.Is(err, jwt.ErrTokenNotValidYet) {
-		utils.LogPrintf("[SESSION] WARN: Token not valid yet")
+		utils.LogWarn("SESSION", "Token not valid yet", "")
 		return ErrInvalidTokenSession
 	}
 
 	// 其他错误
-	utils.LogPrintf("[SESSION] WARN: Token parse error: %v", err)
+	utils.LogWarn("SESSION", "Token parse error", fmt.Sprintf("error=%v", err))
 	return ErrInvalidTokenSession
 }
 
@@ -346,19 +346,19 @@ func (s *SessionService) validateClaims(claims *Claims) error {
 
 	// 验证用户 ID
 	if claims.UserID <= 0 {
-		utils.LogPrintf("[SESSION] WARN: Invalid user ID in claims: %d", claims.UserID)
+		utils.LogWarn("SESSION", "Invalid user ID in claims", fmt.Sprintf("userID=%d", claims.UserID))
 		return ErrInvalidUser
 	}
 
 	// 验证过期时间
 	if claims.ExpiresAt == nil {
-		utils.LogPrintf("[SESSION] WARN: Token has no expiry time")
+		utils.LogWarn("SESSION", "Token has no expiry time", "")
 		return ErrInvalidTokenSession
 	}
 
 	// 验证签发时间
 	if claims.IssuedAt == nil {
-		utils.LogPrintf("[SESSION] DEBUG: Token has no issued time")
+		utils.LogDebug("SESSION", "Token has no issued time")
 		// 不返回错误，只记录日志
 	}
 

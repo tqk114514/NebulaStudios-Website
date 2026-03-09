@@ -24,12 +24,7 @@ import (
 
 // ====================  错误定义 ====================
 
-var (
-	// ErrUserLogDBNotReady 数据库未就绪
-	ErrUserLogDBNotReady = errors.New("database not ready")
-	// ErrUserLogInvalidData 无效的日志数据
-	ErrUserLogInvalidData = errors.New("invalid user log data")
-)
+// 移除不必要的错误定义，使用统一的错误处理
 
 // ====================  常量定义 ====================
 
@@ -128,17 +123,17 @@ func NewUserLogRepository() *UserLogRepository {
 // Create 创建日志记录
 func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 	if log == nil {
-		return ErrUserLogInvalidData
+		return errors.New("log object is nil")
 	}
 	if log.UserID <= 0 {
-		return fmt.Errorf("%w: user_id is required", ErrUserLogInvalidData)
+		return errors.New("user_id is required")
 	}
 	if log.Action == "" {
-		return fmt.Errorf("%w: action is required", ErrUserLogInvalidData)
+		return errors.New("action is required")
 	}
 
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	err := pool.QueryRow(ctx, `
@@ -148,12 +143,10 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 	`, log.UserID, log.Action, log.Details).Scan(&log.ID, &log.CreatedAt)
 
 	if err != nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Failed to create log: error=%v", err)
-		return fmt.Errorf("create user log failed: %w", err)
+		return utils.LogError("USER_LOG", "Create", err, fmt.Sprintf("user_id=%d, action=%s", log.UserID, log.Action))
 	}
 
-	utils.LogPrintf("[USER_LOG] Log created: id=%d, user_id=%d, action=%s",
-		log.ID, log.UserID, log.Action)
+	utils.LogInfo("USER_LOG", fmt.Sprintf("Log created: id=%d, user_id=%d, action=%s", log.ID, log.UserID, log.Action))
 	return nil
 }
 
@@ -332,8 +325,8 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userID int64, cl
 
 // FindByUserID 查询用户的操作日志（分页）
 func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page, pageSize int) ([]*UserLog, int64, error) {
-	if err := r.checkDB(); err != nil {
-		return nil, 0, err
+	if pool == nil {
+		return nil, 0, errors.New("database not ready")
 	}
 
 	offset := (page - 1) * pageSize
@@ -345,8 +338,7 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 		userID,
 	).Scan(&total)
 	if err != nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Failed to count logs: error=%v", err)
-		return nil, 0, fmt.Errorf("count user logs failed: %w", err)
+		return nil, 0, utils.LogError("USER_LOG", "CountLogs", err, fmt.Sprintf("user_id=%d", userID))
 	}
 
 	// 查询日志列表
@@ -358,8 +350,7 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 		LIMIT $2 OFFSET $3
 	`, userID, pageSize, offset)
 	if err != nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Failed to query logs: error=%v", err)
-		return nil, 0, fmt.Errorf("query user logs failed: %w", err)
+		return nil, 0, utils.LogError("USER_LOG", "QueryLogs", err, fmt.Sprintf("user_id=%d", userID))
 	}
 	defer rows.Close()
 
@@ -368,7 +359,7 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 		log := &UserLog{}
 		err := rows.Scan(&log.ID, &log.UserID, &log.Action, &log.Details, &log.CreatedAt)
 		if err != nil {
-			utils.LogPrintf("[USER_LOG] ERROR: Failed to scan log: error=%v", err)
+			utils.LogWarn("USER_LOG", fmt.Sprintf("Failed to scan log: %v", err))
 			continue
 		}
 		logs = append(logs, log)
@@ -380,48 +371,36 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 // DeleteByUserID 删除用户的所有日志（账户删除时调用）
 // 注意：根据隐私政策，用户日志保留6个月，此方法仅供特殊情况使用
 func (r *UserLogRepository) DeleteByUserID(ctx context.Context, userID int64) error {
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	_, err := pool.Exec(ctx, "DELETE FROM user_logs WHERE user_id = $1", userID)
 	if err != nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Failed to delete logs: user_id=%d, error=%v", userID, err)
-		return fmt.Errorf("delete user logs failed: %w", err)
+		return utils.LogError("USER_LOG", "DeleteByUserID", err, fmt.Sprintf("user_id=%d", userID))
 	}
 
-	utils.LogPrintf("[USER_LOG] Logs deleted: user_id=%d", userID)
+	utils.LogInfo("USER_LOG", fmt.Sprintf("Logs deleted: user_id=%d", userID))
 	return nil
 }
 
 // DeleteExpiredLogs 删除超过6个月的过期日志
 // 应通过定时任务定期调用（如每天一次）
 func (r *UserLogRepository) DeleteExpiredLogs(ctx context.Context) (int64, error) {
-	if err := r.checkDB(); err != nil {
-		return 0, err
+	if pool == nil {
+		return 0, errors.New("database not ready")
 	}
 
 	// 删除6个月前的日志
 	result, err := pool.Exec(ctx,
 		"DELETE FROM user_logs WHERE created_at < NOW() - INTERVAL '6 months'")
 	if err != nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Failed to delete expired logs: error=%v", err)
-		return 0, fmt.Errorf("delete expired logs failed: %w", err)
+		return 0, utils.LogError("USER_LOG", "DeleteExpiredLogs", err)
 	}
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogPrintf("[USER_LOG] Expired logs deleted: count=%d", count)
+		utils.LogInfo("USER_LOG", fmt.Sprintf("Expired logs deleted: count=%d", count))
 	}
 	return count, nil
-}
-
-// ====================  私有方法 ====================
-
-func (r *UserLogRepository) checkDB() error {
-	if pool == nil {
-		utils.LogPrintf("[USER_LOG] ERROR: Database pool is nil")
-		return ErrUserLogDBNotReady
-	}
-	return nil
 }

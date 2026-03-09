@@ -35,33 +35,17 @@ import (
 
 // ====================  错误定义 ====================
 
+// 错误定义从 models 层导入
 var (
-	// ErrTokenDBNotReady 数据库未就绪
-	ErrTokenDBNotReady = errors.New("database not ready")
-	// ErrInvalidToken Token 无效
-	ErrInvalidToken = errors.New("INVALID_TOKEN")
-	// ErrTokenExpired Token 已过期
-	ErrTokenExpired = errors.New("TOKEN_EXPIRED")
-	// ErrTokenUsed Token 已使用
-	ErrTokenUsed = errors.New("TOKEN_USED")
-	// ErrTokenCreateFailed Token 创建失败
-	ErrTokenCreateFailed = errors.New("TOKEN_CREATE_FAILED")
-	// ErrTokenValidationFailed Token 验证失败
-	ErrTokenValidationFailed = errors.New("TOKEN_VALIDATION_FAILED")
-	// ErrInvalidCode 验证码无效
-	ErrInvalidCode = errors.New("INVALID_CODE")
-	// ErrCodeExpired 验证码已过期
-	ErrCodeExpired = errors.New("CODE_EXPIRED")
-	// ErrEmailMismatch 邮箱不匹配
-	ErrEmailMismatch = errors.New("EMAIL_MISMATCH")
-	// ErrTypeMismatch 类型不匹配
-	ErrTypeMismatch = errors.New("TYPE_MISMATCH")
-	// ErrTooManyAttempts 尝试次数过多
-	ErrTooManyAttempts = errors.New("TOO_MANY_ATTEMPTS")
-	// ErrCodeNotVerified 验证码未验证
-	ErrCodeNotVerified = errors.New("CODE_NOT_VERIFIED")
-	// ErrEmptyEmail 邮箱为空
-	ErrEmptyEmail = errors.New("email is empty")
+	ErrInvalidToken     = models.ErrInvalidToken
+	ErrTokenExpired     = models.ErrTokenExpired
+	ErrTokenUsed        = models.ErrTokenUsed
+	ErrInvalidCode      = models.ErrInvalidCode
+	ErrCodeExpired      = models.ErrCodeExpired
+	ErrEmailMismatch    = models.ErrEmailMismatch
+	ErrTypeMismatch     = models.ErrTypeMismatch
+	ErrTooManyAttempts  = models.ErrTooManyAttempts
+	ErrCodeNotVerified  = models.ErrCodeNotVerified
 )
 
 // ====================  常量定义 ====================
@@ -113,7 +97,7 @@ type TokenService struct{}
 // 返回：
 //   - *TokenService: Token 服务实例
 func NewTokenService() *TokenService {
-	utils.LogPrintf("[TOKEN] Token service initialized")
+	utils.LogInfo("TOKEN", "Token service initialized")
 	return &TokenService{}
 }
 
@@ -130,16 +114,8 @@ func NewTokenService() *TokenService {
 //   - int64: 过期时间（毫秒时间戳）
 //   - error: 错误信息
 func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string) (string, int64, error) {
-	// 参数验证
 	if email == "" {
-		return "", 0, ErrEmptyEmail
-	}
-
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
-		return "", 0, ErrTokenDBNotReady
+		return "", 0, errors.New("email is empty")
 	}
 
 	// 规范化输入
@@ -150,31 +126,31 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 	}
 
 	// 生成安全 Token
-	token, err := utils.GenerateSecureToken()
+	tokenStr, err := utils.GenerateSecureToken()
 	if err != nil {
-		utils.LogPrintf("[TOKEN] ERROR: Failed to generate secure token: %v", err)
-		return "", 0, fmt.Errorf("%w: %v", ErrTokenCreateFailed, err)
+		return "", 0, utils.LogError("TOKEN", "GenerateSecureToken", err)
 	}
 
 	// 计算时间
 	now := time.Now().UnixMilli()
 	expireTime := now + int64(tokenExpiry.Milliseconds())
 
-	// 插入数据库
-	_, err = pool.Exec(ctx, `
-		INSERT INTO tokens (token, email, type, created_at, expire_time, used)
-		VALUES ($1, $2, $3, $4, $5, 0)
-	`, token, normalizedEmail, normalizedType, now, expireTime)
-
-	if err != nil {
-		utils.LogPrintf("[TOKEN] ERROR: Failed to insert token: email=%s, type=%s, error=%v",
-			normalizedEmail, normalizedType, err)
-		return "", 0, fmt.Errorf("%w: %v", ErrTokenCreateFailed, err)
+	// 创建 Token 对象
+	token := &models.Token{
+		Token:      tokenStr,
+		Email:      normalizedEmail,
+		Type:       normalizedType,
+		CreatedAt:  now,
+		ExpireTime: expireTime,
 	}
 
-	utils.LogPrintf("[TOKEN] Token created: email=%s, type=%s, expiry=%v",
-		normalizedEmail, normalizedType, tokenExpiry)
-	return token, expireTime, nil
+	// 保存到数据库
+	repo := models.NewTokenRepository()
+	if err := repo.Create(ctx, token); err != nil {
+		return "", 0, err
+	}
+
+	return tokenStr, expireTime, nil
 }
 
 // ValidateAndUseToken 验证并使用 Token
@@ -185,90 +161,71 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 // 返回：
 //   - *TokenResult: 验证结果
 //   - error: 错误信息
-func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*TokenResult, error) {
+func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string) (*TokenResult, error) {
 	// 参数验证
-	if token == "" {
-		return nil, ErrInvalidToken
+	if tokenStr == "" {
+		return nil, models.ErrInvalidToken
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
-		return nil, ErrTokenDBNotReady
-	}
-
-	trimmedToken := strings.TrimSpace(token)
+	tokenRepo := models.NewTokenRepository()
+	codeRepo := models.NewCodeRepository()
 
 	// 查询 Token
-	var email, tokenType string
-	var code *string
-	var expireTime int64
-	var used int
-
-	err := pool.QueryRow(ctx, `
-		SELECT email, type, code, expire_time, used FROM tokens WHERE token = $1
-	`, trimmedToken).Scan(&email, &tokenType, &code, &expireTime, &used)
-
+	token, err := tokenRepo.FindByToken(ctx, tokenStr)
 	if err != nil {
-		utils.LogPrintf("[TOKEN] DEBUG: Token not found or query error: %v", err)
-		return nil, ErrInvalidToken
+		if utils.IsDatabaseNotFound(err) {
+			utils.LogDebug("TOKEN", "Token not found", tokenStr)
+			return nil, models.ErrInvalidToken
+		}
+		return nil, err
+	}
+
+	// 检查过期
+	if token.IsExpired() {
+		tokenRepo.DeleteByToken(ctx, tokenStr)
+		return nil, models.ErrTokenExpired
+	}
+
+	// 检查是否已使用
+	if token.IsUsed() {
+		return nil, models.ErrTokenUsed
 	}
 
 	now := time.Now().UnixMilli()
 
-	// 检查过期
-	if now > expireTime {
-		// 删除过期 Token
-		if _, err := pool.Exec(ctx, "DELETE FROM tokens WHERE token = $1", trimmedToken); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired token: %v", err)
-		}
-		return nil, ErrTokenExpired
-	}
-
-	// 检查是否已使用
-	if used == tokenUsed {
-		return nil, ErrTokenUsed
-	}
-
 	// 生成验证码（如果没有）
 	var codeStr string
-	if code == nil || *code == "" {
-		var err error
+	if token.Code == nil || *token.Code == "" {
 		codeStr, err = utils.GenerateCode()
 		if err != nil {
-			utils.LogPrintf("[TOKEN] ERROR: Failed to generate verification code: %v", err)
-			return nil, fmt.Errorf("failed to generate code: %w", err)
+			return nil, utils.LogError("TOKEN", "GenerateCode", err)
 		}
-		codeExpireTime := now + int64(tokenExpiry.Milliseconds())
 
 		// 更新 Token 的验证码
-		if _, err := pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token = $2", codeStr, trimmedToken); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to update token code: %v", err)
-		}
+		tokenRepo.UpdateCode(ctx, tokenStr, codeStr)
 
 		// 创建验证码记录
-		if _, err := pool.Exec(ctx, `
-			INSERT INTO codes (code, email, type, created_at, expire_time, attempts, verified)
-			VALUES ($1, $2, $3, $4, $5, 0, 0)
-		`, codeStr, email, tokenType, now, codeExpireTime); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to create code record: %v", err)
+		code := &models.Code{
+			Code:       codeStr,
+			Email:      token.Email,
+			Type:       token.Type,
+			CreatedAt:  now,
+			ExpireTime: now + int64(tokenExpiry.Milliseconds()),
 		}
+		codeRepo.Create(ctx, code)
 	} else {
-		codeStr = *code
+		codeStr = *token.Code
 	}
 
 	// 标记 Token 已使用
-	if _, err := pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token = $1", trimmedToken); err != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to mark token as used: %v", err)
-	}
+	tokenRepo.MarkUsed(ctx, tokenStr)
 
-	utils.LogPrintf("[TOKEN] Token validated: email=%s, type=%s", email, tokenType)
+	utils.LogInfo("TOKEN", fmt.Sprintf("Token validated: email=%s, type=%s", token.Email, token.Type))
 
 	return &TokenResult{
 		Code:  codeStr,
-		Email: email,
-		Type:  tokenType,
+		Email: token.Email,
+		Type:  token.Type,
 	}, nil
 }
 
@@ -282,88 +239,66 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, token string) (*
 // 返回：
 //   - *CodeResult: 验证结果
 //   - error: 错误信息
-func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType string) (*CodeResult, error) {
+func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedType string) (*CodeResult, error) {
 	// 参数验证
-	if code == "" {
-		return nil, ErrInvalidCode
+	if codeStr == "" {
+		return nil, models.ErrInvalidCode
 	}
 	if email == "" {
-		return nil, ErrEmptyEmail
+		return nil, errors.New("email is empty")
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogPrintf("[TOKEN] ERROR: Database pool is nil")
-		return nil, ErrTokenDBNotReady
-	}
-
-	trimmedCode := strings.TrimSpace(code)
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	var codeEmail, codeType string
-	var expireTime int64
-	var attempts, verified int
-
-	err := pool.QueryRow(ctx, `
-		SELECT email, type, expire_time, attempts, verified FROM codes WHERE code = $1
-	`, trimmedCode).Scan(&codeEmail, &codeType, &expireTime, &attempts, &verified)
-
+	code, err := repo.FindByCode(ctx, codeStr)
 	if err != nil {
-		utils.LogPrintf("[TOKEN] DEBUG: Code not found or query error: %v", err)
-		return nil, ErrInvalidCode
+		if utils.IsDatabaseNotFound(err) {
+			utils.LogDebug("TOKEN", "Code not found", codeStr)
+			return nil, models.ErrInvalidCode
+		}
+		return nil, err
 	}
 
 	// 检查邮箱
-	if codeEmail != normalizedEmail {
-		utils.LogPrintf("[TOKEN] WARN: Email mismatch: expected=%s, got=%s", codeEmail, normalizedEmail)
-		return nil, ErrEmailMismatch
+	if code.Email != normalizedEmail {
+		utils.LogWarn("TOKEN", fmt.Sprintf("Email mismatch: expected=%s, got=%s", code.Email, normalizedEmail))
+		return nil, models.ErrEmailMismatch
 	}
 
 	// 检查类型
-	if expectedType != "" && codeType != expectedType {
-		utils.LogPrintf("[TOKEN] WARN: Type mismatch: expected=%s, got=%s", expectedType, codeType)
-		return nil, ErrTypeMismatch
+	if expectedType != "" && code.Type != expectedType {
+		utils.LogWarn("TOKEN", fmt.Sprintf("Type mismatch: expected=%s, got=%s", expectedType, code.Type))
+		return nil, models.ErrTypeMismatch
 	}
 
-	now := time.Now().UnixMilli()
-
 	// 检查过期
-	if now > expireTime {
-		// 删除过期验证码
-		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired code: %v", err)
-		}
-		return nil, ErrCodeExpired
+	if code.IsExpired() {
+		repo.DeleteByCode(ctx, codeStr)
+		return nil, models.ErrCodeExpired
 	}
 
 	// 检查是否已验证
-	if verified == codeVerified {
-		return &CodeResult{Type: codeType, AlreadyVerified: true}, nil
+	if code.IsVerified() {
+		return &CodeResult{Type: code.Type, AlreadyVerified: true}, nil
 	}
 
 	// 检查尝试次数
-	newAttempts := attempts + 1
+	newAttempts := code.Attempts + 1
 	if newAttempts > maxCodeAttempts {
-		// 删除超过尝试次数的验证码
-		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to delete code after max attempts: %v", err)
-		}
-		utils.LogPrintf("[TOKEN] WARN: Too many attempts for code: email=%s", normalizedEmail)
-		return nil, ErrTooManyAttempts
+		repo.DeleteByCode(ctx, codeStr)
+		utils.LogWarn("TOKEN", fmt.Sprintf("Too many attempts for code: email=%s", normalizedEmail))
+		return nil, models.ErrTooManyAttempts
 	}
 
 	// 更新验证状态
-	if _, err := pool.Exec(ctx, `
-		UPDATE codes SET attempts = $1, verified = 1, verified_at = $2 WHERE code = $3
-	`, newAttempts, now, trimmedCode); err != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to update code verification status: %v", err)
-	}
+	now := time.Now().UnixMilli()
+	repo.UpdateVerification(ctx, codeStr, newAttempts, now)
 
-	utils.LogPrintf("[TOKEN] Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, codeType, newAttempts)
+	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, code.Type, newAttempts))
 
-	return &CodeResult{Type: codeType}, nil
+	return &CodeResult{Type: code.Type}, nil
 }
 
 // IsCodeVerified 检查验证码是否已验证
@@ -375,55 +310,38 @@ func (s *TokenService) VerifyCode(ctx context.Context, code, email, expectedType
 // 返回：
 //   - bool: 是否已验证
 //   - error: 错误信息
-func (s *TokenService) IsCodeVerified(ctx context.Context, code, email string) (bool, error) {
+func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string) (bool, error) {
 	// 参数验证
-	if code == "" {
-		return false, ErrInvalidCode
+	if codeStr == "" {
+		return false, models.ErrInvalidCode
 	}
 	if email == "" {
-		return false, ErrEmptyEmail
+		return false, errors.New("email is empty")
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		return false, ErrTokenDBNotReady
-	}
-
-	trimmedCode := strings.TrimSpace(code)
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	var codeEmail string
-	var expireTime int64
-	var verified int
-
-	err := pool.QueryRow(ctx, `
-		SELECT email, expire_time, verified FROM codes WHERE code = $1
-	`, trimmedCode).Scan(&codeEmail, &expireTime, &verified)
-
+	code, err := repo.FindByCode(ctx, codeStr)
 	if err != nil {
-		return false, ErrInvalidCode
+		return false, models.ErrInvalidCode
 	}
 
 	// 检查邮箱
-	if codeEmail != normalizedEmail {
-		return false, ErrEmailMismatch
+	if code.Email != normalizedEmail {
+		return false, models.ErrEmailMismatch
 	}
 
 	// 检查过期
-	now := time.Now().UnixMilli()
-	if now > expireTime {
-		// 删除过期验证码
-		if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to delete expired code: %v", err)
-		}
-		return false, ErrCodeExpired
+	if code.IsExpired() {
+		repo.DeleteByCode(ctx, codeStr)
+		return false, models.ErrCodeExpired
 	}
 
 	// 检查是否已验证
-	if verified != codeVerified {
-		return false, ErrCodeNotVerified
+	if !code.IsVerified() {
+		return false, models.ErrCodeNotVerified
 	}
 
 	return true, nil
@@ -437,50 +355,36 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, code, email string) (
 //
 // 返回：
 //   - error: 错误信息
-func (s *TokenService) UseCode(ctx context.Context, code, email string) error {
+func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error {
 	// 参数验证
-	if code == "" {
-		return ErrInvalidCode
+	if codeStr == "" {
+		return models.ErrInvalidCode
 	}
 	if email == "" {
-		return ErrEmptyEmail
+		return errors.New("email is empty")
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		return ErrTokenDBNotReady
-	}
-
-	trimmedCode := strings.TrimSpace(code)
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	var codeEmail string
-	var verified int
-
-	err := pool.QueryRow(ctx, `
-		SELECT email, verified FROM codes WHERE code = $1
-	`, trimmedCode).Scan(&codeEmail, &verified)
-
+	code, err := repo.FindByCode(ctx, codeStr)
 	if err != nil {
-		return ErrInvalidCode
+		return models.ErrInvalidCode
 	}
 
 	// 验证邮箱和状态
-	if codeEmail != normalizedEmail {
-		return ErrEmailMismatch
+	if code.Email != normalizedEmail {
+		return models.ErrEmailMismatch
 	}
-	if verified != codeVerified {
-		return ErrCodeNotVerified
+	if !code.IsVerified() {
+		return models.ErrCodeNotVerified
 	}
 
 	// 删除验证码
-	if _, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", trimmedCode); err != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to delete used code: %v", err)
-	}
+	repo.DeleteByCode(ctx, codeStr)
 
-	utils.LogPrintf("[TOKEN] Code used and removed: email=%s", normalizedEmail)
+	utils.LogInfo("TOKEN", fmt.Sprintf("Code used and removed: email=%s", normalizedEmail))
 	return nil
 }
 
@@ -498,28 +402,10 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 		return nil
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		return ErrTokenDBNotReady
-	}
-
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
-	var err error
-	if tokenType != nil && *tokenType != "" {
-		_, err = pool.Exec(ctx, "DELETE FROM codes WHERE email = $1 AND type = $2", normalizedEmail, *tokenType)
-	} else {
-		_, err = pool.Exec(ctx, "DELETE FROM codes WHERE email = $1", normalizedEmail)
-	}
-
-	if err != nil {
-		utils.LogPrintf("[TOKEN] WARN: Failed to invalidate codes: email=%s, error=%v", normalizedEmail, err)
-		return fmt.Errorf("failed to invalidate codes: %w", err)
-	}
-
-	utils.LogPrintf("[TOKEN] Codes invalidated: email=%s", normalizedEmail)
-	return nil
+	return repo.DeleteByEmail(ctx, normalizedEmail, tokenType)
 }
 
 // GetCodeExpiry 获取验证码过期时间
@@ -531,42 +417,30 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 // 返回：
 //   - int64: 过期时间（毫秒时间戳）
 //   - error: 错误信息
-func (s *TokenService) GetCodeExpiry(ctx context.Context, code, email string) (int64, error) {
+func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string) (int64, error) {
 	// 参数验证
-	if code == "" {
-		return 0, ErrInvalidCode
+	if codeStr == "" {
+		return 0, models.ErrInvalidCode
 	}
 	if email == "" {
-		return 0, ErrEmptyEmail
+		return 0, errors.New("email is empty")
 	}
 
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		return 0, ErrTokenDBNotReady
-	}
-
-	trimmedCode := strings.TrimSpace(code)
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	var codeEmail string
-	var expireTime int64
-
-	err := pool.QueryRow(ctx, `
-		SELECT email, expire_time FROM codes WHERE code = $1
-	`, trimmedCode).Scan(&codeEmail, &expireTime)
-
+	code, err := repo.FindByCode(ctx, codeStr)
 	if err != nil {
-		return 0, ErrInvalidCode
+		return 0, models.ErrInvalidCode
 	}
 
 	// 检查邮箱
-	if codeEmail != normalizedEmail {
-		return 0, ErrEmailMismatch
+	if code.Email != normalizedEmail {
+		return 0, models.ErrEmailMismatch
 	}
 
-	return expireTime, nil
+	return code.ExpireTime, nil
 }
 
 // GetCodeExpiryByEmail 根据邮箱获取最新验证码的过期时间
@@ -581,29 +455,20 @@ func (s *TokenService) GetCodeExpiry(ctx context.Context, code, email string) (i
 func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (bool, int64, error) {
 	// 参数验证
 	if email == "" {
-		return true, 0, ErrEmptyEmail
-	}
-
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		return true, 0, ErrTokenDBNotReady
+		return true, 0, errors.New("email is empty")
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	repo := models.NewCodeRepository()
 
-	// 查询该邮箱最新的未过期验证码
-	var expireTime int64
 	now := time.Now().UnixMilli()
-
-	err := pool.QueryRow(ctx, `
-		SELECT expire_time FROM codes 
-		WHERE email = $1 AND expire_time > $2 
-		ORDER BY expire_time DESC LIMIT 1
-	`, normalizedEmail, now).Scan(&expireTime)
-
+	expireTime, err := repo.GetLatestExpiryByEmail(ctx, normalizedEmail, now)
 	if err != nil {
-		// 没有找到有效验证码，视为已过期
+		return true, 0, err
+	}
+
+	if expireTime == 0 {
+		// 没有找到有效验证码
 		return true, 0, nil
 	}
 
@@ -615,15 +480,11 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 // 参数：
 //   - ctx: 上下文
 func (s *TokenService) CleanupExpired(ctx context.Context) {
-	// 检查数据库连接
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogPrintf("[TOKEN] WARN: Cannot cleanup - database pool is nil")
-		return
-	}
-
 	var wg sync.WaitGroup
 	now := time.Now().UnixMilli()
+
+	tokenRepo := models.NewTokenRepository()
+	codeRepo := models.NewCodeRepository()
 
 	// 清理过期 Token（异步）
 	wg.Add(1)
@@ -631,17 +492,17 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TOKEN] ERROR: Token cleanup panic: %v", r)
+				utils.LogError("TOKEN", "TokenCleanupPanic", fmt.Errorf("%v", r))
 			}
 		}()
 
-		result, err := pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
+		count, err := tokenRepo.DeleteExpired(ctx, now)
 		if err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired tokens: %v", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup expired tokens", err)
 			return
 		}
-		if count := result.RowsAffected(); count > 0 {
-			utils.LogPrintf("[TOKEN] Cleaned up %d expired tokens", count)
+		if count > 0 {
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired tokens", count))
 		}
 	}()
 
@@ -651,17 +512,17 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TOKEN] ERROR: Code cleanup panic: %v", r)
+				utils.LogError("TOKEN", "CodeCleanupPanic", fmt.Errorf("%v", r))
 			}
 		}()
 
-		result, err := pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
+		count, err := codeRepo.DeleteExpired(ctx, now)
 		if err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup expired codes: %v", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup expired codes", err)
 			return
 		}
-		if count := result.RowsAffected(); count > 0 {
-			utils.LogPrintf("[TOKEN] Cleaned up %d expired codes", count)
+		if count > 0 {
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired codes", count))
 		}
 	}()
 
@@ -671,15 +532,15 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TOKEN] ERROR: OAuth auth code cleanup panic: %v", r)
+				utils.LogError("TOKEN", "OAuthAuthCodeCleanupPanic", fmt.Errorf("%v", r))
 			}
 		}()
 
 		repo := models.NewOAuthAuthCodeRepository()
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth auth codes: %v", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth auth codes", err)
 		} else if count > 0 {
-			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth auth codes", count)
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth auth codes", count))
 		}
 	}()
 
@@ -689,15 +550,15 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TOKEN] ERROR: OAuth access token cleanup panic: %v", r)
+				utils.LogError("TOKEN", "OAuthAccessTokenCleanupPanic", fmt.Errorf("%v", r))
 			}
 		}()
 
 		repo := models.NewOAuthAccessTokenRepository()
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth access tokens: %v", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth access tokens", err)
 		} else if count > 0 {
-			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth access tokens", count)
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth access tokens", count))
 		}
 	}()
 
@@ -707,15 +568,15 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		defer wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TOKEN] ERROR: OAuth refresh token cleanup panic: %v", r)
+				utils.LogError("TOKEN", "OAuthRefreshTokenCleanupPanic", fmt.Errorf("%v", r))
 			}
 		}()
 
 		repo := models.NewOAuthRefreshTokenRepository()
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogPrintf("[TOKEN] WARN: Failed to cleanup OAuth refresh tokens: %v", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", err)
 		} else if count > 0 {
-			utils.LogPrintf("[TOKEN] Cleaned up %d expired OAuth refresh tokens", count)
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth refresh tokens", count))
 		}
 	}()
 

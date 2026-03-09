@@ -46,7 +46,7 @@ const (
 //   - gin.HandlerFunc: Gin 中间件函数
 func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserRepository) gin.HandlerFunc {
 	if userCache == nil || userRepo == nil {
-		utils.LogPrintf("[BAN-MW] FATAL: userCache or userRepo is nil")
+		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"), "")
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -72,7 +72,7 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 		// 从缓存或数据库获取用户
 		user, err := userCache.GetOrLoad(ctx, userID, userRepo.FindByID)
 		if err != nil {
-			utils.LogPrintf("[BAN-MW] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
+			utils.LogError("BAN-MW", "BanCheckMiddleware", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
 			// 获取用户失败，允许继续（避免误杀）
 			c.Next()
 			return
@@ -80,8 +80,8 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 
 		// 检查封禁状态
 		if user.CheckBanned() {
-			utils.LogPrintf("[BAN-MW] WARN: Banned user attempted API access: userID=%d, reason=%s",
-				userID, user.BanReason.String)
+			utils.LogWarn("BAN-MW", "Banned user attempted API access", fmt.Sprintf("userID=%d, reason=%s",
+				userID, user.BanReason.String))
 			
 			// 构建封禁响应
 			response := gin.H{

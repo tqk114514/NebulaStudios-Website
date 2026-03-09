@@ -25,7 +25,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"io"
+
 	"net/http"
 	"strings"
 	"time"
@@ -140,7 +141,7 @@ type CaptchaService struct {
 func NewCaptchaService(cfg *config.Config) *CaptchaService {
 	// 参数验证
 	if cfg == nil {
-		utils.LogPrintf("[CAPTCHA] WARN: Config is nil, service will be disabled")
+		utils.LogWarn("CAPTCHA", "Config is nil, service will be disabled", "")
 		return &CaptchaService{
 			enabled:   false,
 			providers: make(map[string]*CaptchaProviderConfig),
@@ -159,7 +160,7 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 			SiteKey:   cfg.TurnstileSiteKey,
 			SecretKey: cfg.TurnstileSecretKey,
 		}
-		utils.LogPrintf("[CAPTCHA] Turnstile configured: siteKey=%s...", truncateCaptchaKey(cfg.TurnstileSiteKey, 8))
+		utils.LogInfo("CAPTCHA", fmt.Sprintf("Turnstile configured: siteKey=%s...", truncateCaptchaKey(cfg.TurnstileSiteKey, 8)))
 	}
 
 	// 加载 hCaptcha 配置
@@ -169,12 +170,12 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 			SiteKey:   cfg.HCaptchaSiteKey,
 			SecretKey: cfg.HCaptchaSecretKey,
 		}
-		utils.LogPrintf("[CAPTCHA] hCaptcha configured: siteKey=%s...", truncateCaptchaKey(cfg.HCaptchaSiteKey, 8))
+		utils.LogInfo("CAPTCHA", fmt.Sprintf("hCaptcha configured: siteKey=%s...", truncateCaptchaKey(cfg.HCaptchaSiteKey, 8)))
 	}
 
 	// 检查是否有可用的验证器
 	if len(providers) == 0 {
-		utils.LogPrintf("[CAPTCHA] WARN: No captcha providers configured, service will be disabled")
+		utils.LogWarn("CAPTCHA", "No captcha providers configured, service will be disabled", "")
 		return &CaptchaService{
 			enabled:   false,
 			providers: providers,
@@ -184,7 +185,7 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		}
 	}
 
-	utils.LogPrintf("[CAPTCHA] Service initialized: providers=%d, enabled=true", len(providers))
+	utils.LogInfo("CAPTCHA", fmt.Sprintf("Service initialized: providers=%d, enabled=true", len(providers)))
 
 	return &CaptchaService{
 		providers: providers,
@@ -221,13 +222,13 @@ func (s *CaptchaService) Verify(token, captchaType, remoteIP string) error {
 func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaType, remoteIP string) error {
 	// 检查服务是否启用
 	if !s.IsEnabled() {
-		utils.LogPrintf("[CAPTCHA] WARN: Service is disabled, skipping verification")
+		utils.LogWarn("CAPTCHA", "Service is disabled, skipping verification", "")
 		return nil
 	}
 
 	// 参数验证
 	if token == "" {
-		utils.LogPrintf("[CAPTCHA] WARN: Empty token provided")
+		utils.LogWarn("CAPTCHA", "Empty token provided", "")
 		return ErrCaptchaEmptyToken
 	}
 
@@ -239,14 +240,14 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaTy
 
 	// 验证器类型必须由前端指定
 	if captchaType == "" {
-		utils.LogPrintf("[CAPTCHA] WARN: Empty captcha type provided")
+		utils.LogWarn("CAPTCHA", "Empty captcha type provided", "")
 		return ErrCaptchaUnsupportedType
 	}
 
 	// 获取对应的验证器配置
 	provider, ok := s.providers[captchaType]
 	if !ok {
-		utils.LogPrintf("[CAPTCHA] ERROR: Unsupported or unconfigured captcha type: %s", captchaType)
+		utils.LogError("CAPTCHA", "Verify", fmt.Errorf("unsupported type: %s", captchaType), "Unsupported or unconfigured captcha type")
 		return ErrCaptchaUnsupportedType
 	}
 
@@ -257,7 +258,7 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaTy
 	case CaptchaTypeHCaptcha:
 		return s.doVerifyForm(ctx, hcaptchaVerifyURL, provider.SecretKey, cleanToken, remoteIP, hcaptchaErrorMessages)
 	default:
-		utils.LogPrintf("[CAPTCHA] ERROR: Unsupported captcha type: %s", captchaType)
+		utils.LogError("CAPTCHA", "Verify", fmt.Errorf("unsupported type: %s", captchaType), "Unsupported captcha type")
 		return ErrCaptchaUnsupportedType
 	}
 }
@@ -326,14 +327,14 @@ func (s *CaptchaService) doVerifyJSON(ctx context.Context, verifyURL, secretKey,
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		utils.LogPrintf("[CAPTCHA] ERROR: Failed to build request body: %v", err)
+		utils.LogError("CAPTCHA", "doVerifyJSON", err, "Failed to build request body")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		utils.LogPrintf("[CAPTCHA] ERROR: Failed to create request: %v", err)
+		utils.LogError("CAPTCHA", "doVerifyJSON", err, "Failed to create request")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 	req.Header.Set("Content-Type", captchaContentTypeJSON)
@@ -352,7 +353,7 @@ func (s *CaptchaService) doVerifyForm(ctx context.Context, verifyURL, secretKey,
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, strings.NewReader(formData))
 	if err != nil {
-		utils.LogPrintf("[CAPTCHA] ERROR: Failed to create request: %v", err)
+		utils.LogError("CAPTCHA", "doVerifyForm", err, "Failed to create request")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -366,46 +367,46 @@ func (s *CaptchaService) sendAndParseResponse(req *http.Request, remoteIP string
 	resp, err := s.client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "timeout") {
-			utils.LogPrintf("[CAPTCHA] ERROR: Request timeout: %v", err)
+			utils.LogError("CAPTCHA", "doVerify", err, "Request timeout")
 			return ErrCaptchaTimeout
 		}
-		utils.LogPrintf("[CAPTCHA] ERROR: Network error: %v", err)
+		utils.LogError("CAPTCHA", "doVerify", err, "Network error")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			utils.LogPrintf("[CAPTCHA] WARN: Failed to close response body: %v", err)
+			utils.LogWarn("CAPTCHA", "Failed to close response body", "")
 		}
 	}()
 
 	// 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		utils.LogPrintf("[CAPTCHA] ERROR: Unexpected status code: %d", resp.StatusCode)
+		utils.LogError("CAPTCHA", "doVerify", fmt.Errorf("status code %d", resp.StatusCode), "Unexpected status code")
 		return fmt.Errorf("%w: status code %d", ErrCaptchaFailed, resp.StatusCode)
 	}
 
 	// 读取响应
 	body, err := io.ReadAll(io.LimitReader(resp.Body, captchaMaxResponseSize))
 	if err != nil {
-		utils.LogPrintf("[CAPTCHA] ERROR: Failed to read response: %v", err)
+		utils.LogError("CAPTCHA", "doVerify", err, "Failed to read response")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 
 	// 解析响应
 	var result CaptchaResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		utils.LogPrintf("[CAPTCHA] ERROR: Failed to parse response: %v", err)
+		utils.LogError("CAPTCHA", "doVerify", err, "Failed to parse response")
 		return fmt.Errorf("%w: %v", ErrCaptchaInvalidResponse, err)
 	}
 
 	// 检查验证结果
 	if !result.Success {
 		errorMsg := formatCaptchaErrorCodes(result.ErrorCodes, errorMessages)
-		utils.LogPrintf("[CAPTCHA] Verification failed: %s, ip=%s", errorMsg, remoteIP)
+		utils.LogWarn("CAPTCHA", "Verification failed", fmt.Sprintf("error=%s, ip=%s", errorMsg, remoteIP))
 		return ErrCaptchaFailed
 	}
 
-	utils.LogPrintf("[CAPTCHA] Verification successful: hostname=%s, ip=%s", result.Hostname, remoteIP)
+	utils.LogInfo("CAPTCHA", fmt.Sprintf("Verification successful: hostname=%s, ip=%s", result.Hostname, remoteIP))
 	return nil
 }
 

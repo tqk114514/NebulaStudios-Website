@@ -20,7 +20,8 @@ import (
 	"auth-system/internal/utils"
 	"context"
 	"errors"
-	"fmt"
+	"fmt"
+
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -90,27 +91,23 @@ type UserCache struct {
 // 返回：
 //   - *UserCache: 缓存实例
 //   - error: 错误信息
-//     - ErrCacheInitFailed: 缓存初始化失败（参数无效或 LRU 创建失败）
 func NewUserCache(maxSize int, ttl time.Duration) (*UserCache, error) {
 	// 参数验证
 	if maxSize <= 0 {
-		utils.LogPrintf("[CACHE] ERROR: Invalid maxSize: %d (must be > 0)", maxSize)
-		return nil, fmt.Errorf("%w: maxSize must be positive, got %d", ErrCacheInitFailed, maxSize)
+		return nil, utils.LogError("CACHE", "NewUserCache", ErrCacheInitFailed, fmt.Sprintf("maxSize must be positive, got %d", maxSize))
 	}
 
 	if ttl <= 0 {
-		utils.LogPrintf("[CACHE] ERROR: Invalid ttl: %v (must be > 0)", ttl)
-		return nil, fmt.Errorf("%w: ttl must be positive, got %v", ErrCacheInitFailed, ttl)
+		return nil, utils.LogError("CACHE", "NewUserCache", ErrCacheInitFailed, fmt.Sprintf("ttl must be positive, got %v", ttl))
 	}
 
 	// 创建 LRU 缓存
 	cache, err := lru.New[int64, *CachedUser](maxSize)
 	if err != nil {
-		utils.LogPrintf("[CACHE] ERROR: Failed to create LRU cache: %v", err)
-		return nil, fmt.Errorf("%w: failed to create LRU cache: %v", ErrCacheInitFailed, err)
+		return nil, utils.LogError("CACHE", "NewUserCache", err, "Failed to create LRU cache")
 	}
 
-	utils.LogPrintf("[CACHE] User cache initialized: maxSize=%d, ttl=%v", maxSize, ttl)
+	utils.LogInfo("CACHE", fmt.Sprintf("User cache initialized: maxSize=%d, ttl=%v", maxSize, ttl))
 
 	return &UserCache{
 		cache:   cache,
@@ -133,7 +130,7 @@ func NewUserCache(maxSize int, ttl time.Duration) (*UserCache, error) {
 func (c *UserCache) Get(userID int64) (*models.User, bool) {
 	// 参数验证
 	if userID <= 0 {
-		utils.LogPrintf("[CACHE] WARN: Invalid userID for Get: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Invalid userID for Get: %d", userID))
 		atomic.AddUint64(&c.misses, 1)
 		return nil, false
 	}
@@ -151,7 +148,7 @@ func (c *UserCache) Get(userID int64) (*models.User, bool) {
 
 	// 安全检查：防止 nil entry
 	if entry == nil {
-		utils.LogPrintf("[CACHE] WARN: Nil entry found for userID: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Nil entry found for userID: %d", userID))
 		c.mu.Lock()
 		c.cache.Remove(userID)
 		c.mu.Unlock()
@@ -171,7 +168,7 @@ func (c *UserCache) Get(userID int64) (*models.User, bool) {
 
 	// 安全检查：防止 nil user
 	if entry.User == nil {
-		utils.LogPrintf("[CACHE] WARN: Nil user found in entry for userID: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Nil user found in entry for userID: %d", userID))
 		c.mu.Lock()
 		c.cache.Remove(userID)
 		c.mu.Unlock()
@@ -202,13 +199,11 @@ func (c *UserCache) Get(userID int64) (*models.User, bool) {
 func (c *UserCache) GetOrLoad(ctx context.Context, userID int64, loader func(context.Context, int64) (*models.User, error)) (*models.User, error) {
 	// 参数验证
 	if userID <= 0 {
-		utils.LogPrintf("[CACHE] ERROR: Invalid userID for GetOrLoad: %d", userID)
-		return nil, fmt.Errorf("%w: userID=%d", ErrInvalidUserID, userID)
+		return nil, utils.LogError("CACHE", "GetOrLoad", ErrInvalidUserID, fmt.Sprintf("userID=%d", userID))
 	}
 
 	if loader == nil {
-		utils.LogPrintf("[CACHE] ERROR: Loader function is nil for userID: %d", userID)
-		return nil, fmt.Errorf("%w: loader is nil", ErrLoaderFailed)
+		return nil, utils.LogError("CACHE", "GetOrLoad", ErrLoaderFailed, "loader is nil")
 	}
 
 	// 先尝试从缓存获取
@@ -228,7 +223,7 @@ func (c *UserCache) GetOrLoad(ctx context.Context, userID int64, loader func(con
 		// 检查 context 是否已取消
 		select {
 		case <-ctx.Done():
-			utils.LogPrintf("[CACHE] WARN: Context cancelled for userID: %d", userID)
+			utils.LogWarn("CACHE", fmt.Sprintf("Context cancelled for userID: %d", userID))
 			return nil, ctx.Err()
 		default:
 		}
@@ -236,14 +231,12 @@ func (c *UserCache) GetOrLoad(ctx context.Context, userID int64, loader func(con
 		// 从数据库加载
 		user, err := loader(ctx, userID)
 		if err != nil {
-			utils.LogPrintf("[CACHE] ERROR: Loader failed for userID %d: %v", userID, err)
-			return nil, fmt.Errorf("%w: %v", ErrLoaderFailed, err)
+			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", err, fmt.Sprintf("userID=%d", userID))
 		}
 
 		// 验证返回的用户对象
 		if user == nil {
-			utils.LogPrintf("[CACHE] ERROR: Loader returned nil user for userID: %d", userID)
-			return nil, ErrNilUser
+			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", ErrNilUser, fmt.Sprintf("userID=%d", userID))
 		}
 
 		// 写入缓存
@@ -258,14 +251,13 @@ func (c *UserCache) GetOrLoad(ctx context.Context, userID int64, loader func(con
 
 	// 记录是否使用了共享结果（singleflight 合并了请求）
 	if shared {
-		utils.LogPrintf("[CACHE] Singleflight shared result for userID: %d", userID)
+		utils.LogDebug("CACHE", fmt.Sprintf("Singleflight shared result for userID: %d", userID))
 	}
 
 	// 类型断言
 	user, ok := result.(*models.User)
 	if !ok {
-		utils.LogPrintf("[CACHE] ERROR: Type assertion failed for userID: %d", userID)
-		return nil, fmt.Errorf("%w: type assertion failed", ErrLoaderFailed)
+		return nil, utils.LogError("CACHE", "GetOrLoad.TypeAssertion", ErrLoaderFailed, fmt.Sprintf("userID=%d", userID))
 	}
 
 	return user, nil
@@ -282,12 +274,12 @@ func (c *UserCache) GetOrLoad(ctx context.Context, userID int64, loader func(con
 func (c *UserCache) Set(userID int64, user *models.User) {
 	// 参数验证
 	if userID <= 0 {
-		utils.LogPrintf("[CACHE] WARN: Invalid userID for Set: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Invalid userID for Set: %d", userID))
 		return
 	}
 
 	if user == nil {
-		utils.LogPrintf("[CACHE] WARN: Attempted to cache nil user for userID: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Attempted to cache nil user for userID: %d", userID))
 		return
 	}
 
@@ -304,7 +296,7 @@ func (c *UserCache) Set(userID int64, user *models.User) {
 
 	// 记录淘汰信息（仅在调试时）
 	if evicted {
-		utils.LogPrintf("[CACHE] DEBUG: Entry evicted when caching userID: %d", userID)
+		utils.LogDebug("CACHE", fmt.Sprintf("Entry evicted when caching userID: %d", userID))
 	}
 }
 
@@ -318,7 +310,7 @@ func (c *UserCache) Set(userID int64, user *models.User) {
 func (c *UserCache) Invalidate(userID int64) {
 	// 参数验证
 	if userID <= 0 {
-		utils.LogPrintf("[CACHE] WARN: Invalid userID for Invalidate: %d", userID)
+		utils.LogWarn("CACHE", fmt.Sprintf("Invalid userID for Invalidate: %d", userID))
 		return
 	}
 
@@ -327,7 +319,7 @@ func (c *UserCache) Invalidate(userID int64) {
 	c.mu.Unlock()
 
 	if removed {
-		utils.LogPrintf("[CACHE] Cache invalidated for userID: %d", userID)
+		utils.LogInfo("CACHE", fmt.Sprintf("Cache invalidated for userID: %d", userID))
 	}
 }
 
@@ -344,7 +336,7 @@ func (c *UserCache) InvalidateAll() {
 	atomic.StoreUint64(&c.hits, 0)
 	atomic.StoreUint64(&c.misses, 0)
 
-	utils.LogPrintf("[CACHE] All cache entries invalidated")
+	utils.LogInfo("CACHE", "All cache entries invalidated")
 }
 
 // ====================  统计信息 ====================
@@ -398,7 +390,7 @@ func (c *UserCache) Len() int {
 func (c *UserCache) ResetStats() {
 	atomic.StoreUint64(&c.hits, 0)
 	atomic.StoreUint64(&c.misses, 0)
-	utils.LogPrintf("[CACHE] Statistics reset")
+	utils.LogInfo("CACHE", "Statistics reset")
 }
 
 // IsFull 检查缓存是否已满

@@ -165,12 +165,12 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 	)
 
 	if err != nil {
-		utils.LogPrintf("[ADMIN_LOG] ERROR: Failed to create log: error=%v", err)
+		utils.LogError("ADMIN_LOG", "Create", err, "Failed to create log")
 		return fmt.Errorf("create admin log failed: %w", err)
 	}
 
-	utils.LogPrintf("[ADMIN_LOG] Log created: id=%d, admin_id=%d, action=%s",
-		log.ID, log.AdminID, log.Action)
+	utils.LogInfo("ADMIN_LOG", fmt.Sprintf("Log created: id=%d, admin_id=%d, action=%s",
+		log.ID, log.AdminID, log.Action))
 	return nil
 }
 
@@ -436,8 +436,7 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 	var total int64
 	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM admin_logs").Scan(&total)
 	if err != nil {
-		utils.LogPrintf("[ADMIN_LOG] ERROR: Failed to count logs: error=%v", err)
-		return nil, 0, fmt.Errorf("count admin logs failed: %w", err)
+		return nil, 0, utils.LogError("ADMIN_LOG", "FindAll.Count", err)
 	}
 
 	// 查询日志列表（关联用户表获取管理员用户名）
@@ -449,8 +448,7 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 		LIMIT $1 OFFSET $2
 	`, pageSize, offset)
 	if err != nil {
-		utils.LogPrintf("[ADMIN_LOG] ERROR: Failed to query logs: error=%v", err)
-		return nil, 0, fmt.Errorf("query admin logs failed: %w", err)
+		return nil, 0, utils.LogError("ADMIN_LOG", "FindAll.Query", err)
 	}
 	defer rows.Close()
 
@@ -464,7 +462,7 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 			&log.TargetID, &log.Details, &log.CreatedAt,
 		)
 		if err != nil {
-			utils.LogPrintf("[ADMIN_LOG] ERROR: Failed to scan log: error=%v", err)
+			utils.LogError("ADMIN_LOG", "FindAll.Scan", err)
 			continue
 		}
 		if adminUsername != nil {
@@ -483,7 +481,7 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 // checkDB 检查数据库连接是否就绪
 func (r *AdminLogRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[ADMIN_LOG] ERROR: Database pool is nil")
+		utils.LogError("ADMIN_LOG", "checkDB", ErrAdminLogDBNotReady)
 		return ErrAdminLogDBNotReady
 	}
 	return nil

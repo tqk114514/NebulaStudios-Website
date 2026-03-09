@@ -106,40 +106,34 @@ func NewAuthHandler(
 ) (*AuthHandler, error) {
 	// 参数验证
 	if userRepo == nil {
-		utils.LogPrintf("[AUTH] ERROR: userRepo is nil")
-		return nil, errors.New("userRepo is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userRepo is required"))
 	}
 	if tokenService == nil {
-		utils.LogPrintf("[AUTH] ERROR: tokenService is nil")
-		return nil, errors.New("tokenService is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("tokenService is required"))
 	}
 	if sessionService == nil {
-		utils.LogPrintf("[AUTH] ERROR: sessionService is nil")
-		return nil, errors.New("sessionService is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("sessionService is required"))
 	}
 	if emailService == nil {
-		utils.LogPrintf("[AUTH] ERROR: emailService is nil")
-		return nil, errors.New("emailService is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("emailService is required"))
 	}
 	if captchaService == nil {
-		utils.LogPrintf("[AUTH] ERROR: captchaService is nil")
-		return nil, errors.New("captchaService is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("captchaService is required"))
 	}
 	if userCache == nil {
-		utils.LogPrintf("[AUTH] ERROR: userCache is nil")
-		return nil, errors.New("userCache is required")
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userCache is required"))
 	}
 
 	// 获取基础 URL（从 config）
 	baseURL := config.Get().BaseURL
 
-	utils.LogPrintf("[AUTH] AuthHandler initialized: baseURL=%s", baseURL)
+	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s", baseURL))
 
 	return &AuthHandler{
 		userRepo:       userRepo,
 		userLogRepo:    userLogRepo,
 		tokenService:   tokenService,
-		sessionService: sessionService,
+		sessionService:   sessionService,
 		emailService:   emailService,
 		captchaService: captchaService,
 		userCache:      userCache,
@@ -156,7 +150,7 @@ func NewAuthHandler(
 //   - token: JWT Token
 func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 	if token == "" {
-		utils.LogPrintf("[AUTH] WARN: Attempted to set empty token cookie")
+		utils.LogWarn("AUTH", "Attempted to set empty token cookie")
 		return
 	}
 	utils.SetTokenCookieGin(c, token)
@@ -234,16 +228,14 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 
 	// 解析请求
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_REQUEST", fmt.Sprintf("Invalid request body: %v", err))
 		return
 	}
 
 	// 邮箱验证
 	emailResult := utils.ValidateEmail(req.Email)
 	if !emailResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: Email validation failed: email=%s, error=%s", req.Email, emailResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, emailResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, emailResult.ErrorCode, fmt.Sprintf("Email validation failed: email=%s", req.Email))
 		return
 	}
 	validatedEmail := emailResult.Value
@@ -251,8 +243,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 验证码验证
 	clientIP := h.getClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Captcha verification failed: email=%s, ip=%s, error=%v", validatedEmail, clientIP, err)
-		utils.RespondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
 		return
 	}
 
@@ -260,31 +251,28 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 
 	// 检查邮箱是否已注册
 	existingUser, err := h.userRepo.FindByEmail(ctx, validatedEmail)
-	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
-		// 真正的数据库错误
-		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error: email=%s, error=%v", validatedEmail, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
-		return
+	if err != nil {
+		if !utils.IsDatabaseNotFound(err) {
+			utils.HTTPDatabaseError(c, "AUTH", err)
+			return
+		}
 	}
 	if existingUser != nil {
-		utils.LogPrintf("[AUTH] WARN: Email already registered: %s", validatedEmail)
-		utils.RespondError(c, http.StatusBadRequest, "EMAIL_ALREADY_REGISTERED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "EMAIL_ALREADY_REGISTERED", fmt.Sprintf("Email already registered: %s", validatedEmail))
 		return
 	}
 
 	// 邮件发送频率限制
 	if !middleware.EmailLimiter.Allow(validatedEmail) {
 		waitTime := middleware.EmailLimiter.GetWaitTime(validatedEmail)
-		utils.LogPrintf("[AUTH] WARN: Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime)
-		utils.RespondError(c, http.StatusTooManyRequests, "RATE_LIMIT")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
 		return
 	}
 
 	// 生成 Token
 	token, _, err := h.tokenService.CreateToken(ctx, validatedEmail, services.TokenTypeRegister)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Token creation failed: email=%s, error=%v", validatedEmail, err)
-		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_CREATE_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_CREATE_FAILED", fmt.Sprintf("Token creation failed: email=%s", validatedEmail))
 		return
 	}
 
@@ -296,9 +284,9 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
 	// 异步发送邮件（不阻塞用户请求）
-	h.emailService.SendVerificationEmailAsync(validatedEmail, "register", language, verifyURL, "[AUTH]")
+	h.emailService.SendVerificationEmailAsync(validatedEmail, "register", language, verifyURL, "AUTH")
 
-	utils.LogPrintf("[AUTH] Verification code sent (async): email=%s", validatedEmail)
+	utils.LogInfo("AUTH", fmt.Sprintf("Verification code sent (async): email=%s", validatedEmail))
 	utils.RespondSuccess(c, gin.H{
 		"message":    "Code sent",
 		"expireTime": expireTime,
@@ -326,33 +314,29 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for VerifyToken: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "NO_TOKEN")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Invalid request body for VerifyToken")
 		return
 	}
 
 	if strings.TrimSpace(req.Token) == "" {
-		utils.LogPrintf("[AUTH] WARN: Empty token in VerifyToken request")
-		utils.RespondError(c, http.StatusBadRequest, "NO_TOKEN")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Empty token in VerifyToken request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	result, err := h.tokenService.ValidateAndUseToken(ctx, req.Token)
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: Token verification failed: error=%v", err)
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), "Token verification failed")
 		return
 	}
 
 	// 验证结果
 	if result == nil {
-		utils.LogPrintf("[AUTH] ERROR: ValidateAndUseToken returned nil result")
-		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_INVALID")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_INVALID", "ValidateAndUseToken returned nil result")
 		return
 	}
 
-	utils.LogPrintf("[AUTH] Token verified successfully: email=%s", result.Email)
+	utils.LogInfo("AUTH", fmt.Sprintf("Token verified successfully: email=%s", result.Email))
 	utils.RespondSuccess(c, gin.H{
 		"code":  result.Code,
 		"email": result.Email,
@@ -377,22 +361,19 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for CheckCodeExpiry: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for CheckCodeExpiry")
 		return
 	}
 
 	if strings.TrimSpace(req.Email) == "" {
-		utils.LogPrintf("[AUTH] WARN: Empty email in CheckCodeExpiry request")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in CheckCodeExpiry request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, req.Email)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: GetCodeExpiryByEmail failed: email=%s, error=%v", req.Email, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("GetCodeExpiryByEmail failed: email=%s", req.Email))
 		return
 	}
 
@@ -423,8 +404,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for VerifyCode: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for VerifyCode")
 		return
 	}
 
@@ -433,20 +413,18 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	email := strings.TrimSpace(req.Email)
 
 	if code == "" || email == "" {
-		utils.LogPrintf("[AUTH] WARN: Missing parameters in VerifyCode: code=%v, email=%v", code != "", email != "")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in VerifyCode: code=%v, email=%v", code != "", email != ""))
 		return
 	}
 
 	ctx := c.Request.Context()
 	_, err := h.tokenService.VerifyCode(ctx, code, email, "")
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: Code verification failed: email=%s, error=%v", email, err)
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Code verification failed: email=%s", email))
 		return
 	}
 
-	utils.LogPrintf("[AUTH] Code verified successfully: email=%s", email)
+	utils.LogInfo("AUTH", fmt.Sprintf("Code verified successfully: email=%s", email))
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -467,22 +445,20 @@ func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for InvalidateCode: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for InvalidateCode")
 		return
 	}
 
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
-		utils.LogPrintf("[AUTH] WARN: Empty email in InvalidateCode request")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in InvalidateCode request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, email, nil)
 
-	utils.LogPrintf("[AUTH] Code invalidated: email=%s", email)
+	utils.LogInfo("AUTH", fmt.Sprintf("Code invalidated: email=%s", email))
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -516,32 +492,28 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for Register: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body for Register")
 		return
 	}
 
 	// 验证用户名
 	usernameResult := utils.ValidateUsername(req.Username)
 	if !usernameResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: Username validation failed: username=%s, error=%s", req.Username, usernameResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, usernameResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, usernameResult.ErrorCode, fmt.Sprintf("Username validation failed: username=%s", req.Username))
 		return
 	}
 
 	// 验证邮箱
 	emailResult := utils.ValidateEmail(req.Email)
 	if !emailResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: Email validation failed: email=%s, error=%s", req.Email, emailResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, emailResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, emailResult.ErrorCode, fmt.Sprintf("Email validation failed: email=%s", req.Email))
 		return
 	}
 
 	// 验证密码
 	passwordResult := utils.ValidatePassword(req.Password)
 	if !passwordResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: Password validation failed: error=%s", passwordResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, passwordResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, passwordResult.ErrorCode, "Password validation failed")
 		return
 	}
 
@@ -550,49 +522,46 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	// 验证验证码
 	code := strings.TrimSpace(req.VerificationCode)
 	if code == "" {
-		utils.LogPrintf("[AUTH] WARN: Empty verification code in Register request")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty verification code in Register request")
 		return
 	}
 
 	_, err := h.tokenService.VerifyCode(ctx, code, emailResult.Value, "")
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: Registration code verification failed: email=%s, error=%v", emailResult.Value, err)
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Registration code verification failed: email=%s", emailResult.Value))
 		return
 	}
 
 	// 检查邮箱是否已存在
 	existingByEmail, err := h.userRepo.FindByEmail(ctx, emailResult.Value)
-	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
-		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error: email=%s, error=%v", emailResult.Value, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
-		return
+	if err != nil {
+		if !utils.IsDatabaseNotFound(err) {
+			utils.HTTPDatabaseError(c, "AUTH", err)
+			return
+		}
 	}
 	if existingByEmail != nil {
-		utils.LogPrintf("[AUTH] WARN: Email already exists: %s", emailResult.Value)
-		utils.RespondError(c, http.StatusBadRequest, "EMAIL_ALREADY_EXISTS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
 		return
 	}
 
 	// 检查用户名是否已存在
 	existingByUsername, err := h.userRepo.FindByUsername(ctx, usernameResult.Value)
-	if err != nil && !errors.Is(err, models.ErrUserNotFound) {
-		utils.LogPrintf("[AUTH] ERROR: FindByUsername database error: username=%s, error=%v", usernameResult.Value, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
-		return
+	if err != nil {
+		if !utils.IsDatabaseNotFound(err) {
+			utils.HTTPDatabaseError(c, "AUTH", err)
+			return
+		}
 	}
 	if existingByUsername != nil {
-		utils.LogPrintf("[AUTH] WARN: Username already exists: %s", usernameResult.Value)
-		utils.RespondError(c, http.StatusBadRequest, "USERNAME_ALREADY_EXISTS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
 		return
 	}
 
 	// 密码加密
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password hashing failed: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "REGISTER_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", "Password hashing failed")
 		return
 	}
 
@@ -604,22 +573,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.userRepo.Create(ctx, user); err != nil {
-		utils.LogPrintf("[AUTH] ERROR: User creation failed: username=%s, email=%s, error=%v", usernameResult.Value, emailResult.Value, err)
-		utils.RespondError(c, http.StatusInternalServerError, "REGISTER_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", fmt.Sprintf("User creation failed: username=%s, email=%s", usernameResult.Value, emailResult.Value))
 		return
 	}
 
 	// 记录注册日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogRegister(ctx, user.ID); err != nil {
-			utils.LogPrintf("[AUTH] WARN: Failed to log register: userID=%d, error=%v", user.ID, err)
+			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userID=%d", user.ID))
 		}
 	}
 
 	// 清除验证码（忽略错误，不影响注册成功）
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, nil)
 
-	utils.LogPrintf("[AUTH] User registered successfully: username=%s, email=%s", usernameResult.Value, emailResult.Value)
+	utils.LogInfo("AUTH", fmt.Sprintf("User registered successfully: username=%s, email=%s", usernameResult.Value, emailResult.Value))
 	utils.RespondSuccess(c, gin.H{"message": "Registration successful"})
 }
 
@@ -651,8 +619,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for Login: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for Login")
 		return
 	}
 
@@ -661,16 +628,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	password := req.Password
 
 	if email == "" || password == "" {
-		utils.LogPrintf("[AUTH] WARN: Missing parameters in Login: email=%v, password=%v", email != "", password != "")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in Login: email=%v, password=%v", email != "", password != ""))
 		return
 	}
 
 	// 验证码验证
 	clientIP := h.getClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Captcha verification failed for login: email=%s, ip=%s, error=%v", email, clientIP, err)
-		utils.RespondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for login: email=%s, ip=%s", email, clientIP))
 		return
 	}
 
@@ -680,35 +645,25 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 查找用户（一条 SQL 同时支持邮箱或用户名登录）
 	user, err := h.userRepo.FindByEmailOrUsername(ctx, normalizedEmail)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: Login failed - user not found: %s", email)
-			utils.RespondError(c, http.StatusBadRequest, "INVALID_CREDENTIALS")
-			return
-		}
-		// 真正的数据库错误
-		utils.LogPrintf("[AUTH] ERROR: FindByEmailOrUsername database error: identifier=%s, error=%v", email, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "INVALID_CREDENTIALS")
 		return
 	}
 
 	// 验证密码
 	match, err := utils.VerifyPassword(password, user.Password)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password verification error: email=%s, error=%v", email, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", "Password verification error")
 		return
 	}
 	if !match {
-		utils.LogPrintf("[AUTH] WARN: Login failed - invalid password: email=%s, userID=%d", email, user.ID)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CREDENTIALS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - invalid password: email=%s, userID=%d", email, user.ID))
 		return
 	}
 
 	// 生成 JWT
 	token, err := h.sessionService.GenerateToken(user.ID)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Token generation failed: userID=%d, error=%v", user.ID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userID=%d", user.ID))
 		return
 	}
 
@@ -718,7 +673,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 设置认证 Cookie
 	h.setAuthCookie(c, token)
 
-	utils.LogPrintf("[AUTH] User logged in: username=%s, userID=%d, ip=%s", user.Username, user.ID, clientIP)
+	utils.LogInfo("AUTH", fmt.Sprintf("User logged in: username=%s, userID=%d, ip=%s", user.Username, user.ID, clientIP))
 	utils.RespondSuccess(c, gin.H{
 		"message": "Login successful",
 		"data": gin.H{
@@ -761,15 +716,13 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 	// 验证 Token
 	claims, err := h.sessionService.VerifyToken(token)
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: Session verification failed: error=%v", err)
-		utils.RespondError(c, http.StatusUnauthorized, err.Error())
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, err.Error(), "Session verification failed")
 		return
 	}
 
 	// 验证 claims
 	if claims == nil {
-		utils.LogPrintf("[AUTH] ERROR: VerifyToken returned nil claims")
-		utils.RespondError(c, http.StatusUnauthorized, "TOKEN_INVALID")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "TOKEN_INVALID", "VerifyToken returned nil claims")
 		return
 	}
 
@@ -778,20 +731,13 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 	// 使用 GetOrLoad 防止缓存击穿
 	user, err := h.userCache.GetOrLoad(ctx, claims.UserID, h.userRepo.FindByID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: User not found in VerifySession: userID=%d", claims.UserID)
-			utils.RespondError(c, http.StatusUnauthorized, "USER_NOT_FOUND")
-			return
-		}
-		utils.LogPrintf("[AUTH] ERROR: GetOrLoad database error in VerifySession: userID=%d, error=%v", claims.UserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	// 验证用户对象
 	if user == nil {
-		utils.LogPrintf("[AUTH] ERROR: GetOrLoad returned nil user: userID=%d", claims.UserID)
-		utils.RespondError(c, http.StatusUnauthorized, "USER_NOT_FOUND")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user: userID=%d", claims.UserID))
 		return
 	}
 
@@ -815,15 +761,13 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		utils.LogPrintf("[AUTH] WARN: GetMe called without valid userID")
-		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "GetMe called without valid userID")
 		return
 	}
 
 	// 验证 userID
 	if userID <= 0 {
-		utils.LogPrintf("[AUTH] WARN: Invalid userID in GetMe: %d", userID)
-		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userID in GetMe: %d", userID))
 		return
 	}
 
@@ -832,20 +776,13 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	// 使用 GetOrLoad 防止缓存击穿
 	user, err := h.userCache.GetOrLoad(ctx, userID, h.userRepo.FindByID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: User not found in GetMe: userID=%d", userID)
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
-			return
-		}
-		utils.LogPrintf("[AUTH] ERROR: GetOrLoad database error in GetMe: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	// 验证用户对象
 	if user == nil {
-		utils.LogPrintf("[AUTH] ERROR: GetOrLoad returned nil user in GetMe: userID=%d", userID)
-		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusNotFound, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userID=%d", userID))
 		return
 	}
 
@@ -864,9 +801,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	// 尝试获取用户信息用于日志
 	userID, ok := middleware.GetUserID(c)
 	if ok && userID > 0 {
-		utils.LogPrintf("[AUTH] User logged out: userID=%d", userID)
+		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userID=%d", userID))
 	} else {
-		utils.LogPrintf("[AUTH] User logged out (no session)")
+		utils.LogInfo("AUTH", "User logged out (no session)")
 	}
 
 	h.clearAuthCookie(c)
@@ -904,16 +841,14 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for SendResetCode: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for SendResetCode")
 		return
 	}
 
 	// 参数验证
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
-		utils.LogPrintf("[AUTH] WARN: Empty email in SendResetCode request")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in SendResetCode request")
 		return
 	}
 
@@ -922,8 +857,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	// 验证码验证
 	clientIP := h.getClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Captcha verification failed for reset: email=%s, ip=%s, error=%v", normalizedEmail, clientIP, err)
-		utils.RespondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for reset: email=%s, ip=%s", normalizedEmail, clientIP))
 		return
 	}
 
@@ -932,29 +866,21 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	// 检查邮箱是否存在
 	_, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: Email not found for reset: %s", normalizedEmail)
-			utils.RespondError(c, http.StatusBadRequest, "EMAIL_NOT_FOUND")
-			return
-		}
-		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error in SendResetCode: email=%s, error=%v", normalizedEmail, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "EMAIL_NOT_FOUND")
 		return
 	}
 
 	// 邮件发送频率限制
 	if !middleware.EmailLimiter.Allow(normalizedEmail) {
 		waitTime := middleware.EmailLimiter.GetWaitTime(normalizedEmail)
-		utils.LogPrintf("[AUTH] WARN: Email rate limit exceeded for reset: email=%s, wait=%ds", normalizedEmail, waitTime)
-		utils.RespondError(c, http.StatusTooManyRequests, "RATE_LIMIT")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded for reset: email=%s, wait=%ds", normalizedEmail, waitTime))
 		return
 	}
 
 	// 生成 Token
 	token, _, err := h.tokenService.CreateToken(ctx, normalizedEmail, services.TokenTypeResetPassword)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Token creation failed for reset: email=%s, error=%v", normalizedEmail, err)
-		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_CREATE_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_CREATE_FAILED", fmt.Sprintf("Token creation failed for reset: email=%s", normalizedEmail))
 		return
 	}
 
@@ -966,9 +892,9 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
 	// 异步发送邮件（不阻塞用户请求）
-	h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "[AUTH]")
+	h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")
 
-	utils.LogPrintf("[AUTH] Reset password code sent (async): email=%s", normalizedEmail)
+	utils.LogInfo("AUTH", fmt.Sprintf("Reset password code sent (async): email=%s", normalizedEmail))
 	utils.RespondSuccess(c, gin.H{"expireTime": expireTime})
 }
 
@@ -997,8 +923,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for ResetPassword: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for ResetPassword")
 		return
 	}
 
@@ -1008,9 +933,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	password := req.Password
 
 	if email == "" || code == "" || password == "" {
-		utils.LogPrintf("[AUTH] WARN: Missing parameters in ResetPassword: email=%v, code=%v, password=%v",
-			email != "", code != "", password != "")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in ResetPassword: email=%v, code=%v, password=%v", email != "", code != "", password != ""))
 		return
 	}
 
@@ -1020,44 +943,34 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	// 验证验证码
 	_, err := h.tokenService.VerifyCode(ctx, code, normalizedEmail, services.TokenTypeResetPassword)
 	if err != nil {
-		utils.LogPrintf("[AUTH] WARN: Reset code verification failed: email=%s, error=%v", normalizedEmail, err)
-		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Reset code verification failed: email=%s", normalizedEmail))
 		return
 	}
 
 	// 验证密码强度
 	passwordResult := utils.ValidatePassword(password)
 	if !passwordResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: Password validation failed in ResetPassword: error=%s", passwordResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, passwordResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, passwordResult.ErrorCode, "Password validation failed in ResetPassword")
 		return
 	}
 
 	// 查找用户
 	user, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: User not found in ResetPassword: email=%s", normalizedEmail)
-			utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
-			return
-		}
-		utils.LogPrintf("[AUTH] ERROR: FindByEmail database error in ResetPassword: email=%s, error=%v", normalizedEmail, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	// 加密新密码
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password hashing failed in ResetPassword: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "RESET_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", "Password hashing failed in ResetPassword")
 		return
 	}
 
 	// 更新密码
 	if err := h.userRepo.Update(ctx, user.ID, map[string]interface{}{"password": hashedPassword}); err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password update failed: userID=%d, error=%v", user.ID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "RESET_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userID=%d", user.ID))
 		return
 	}
 
@@ -1068,7 +981,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	// 使缓存失效（密码已更改）
 	h.userCache.Invalidate(user.ID)
 
-	utils.LogPrintf("[AUTH] Password reset successful: email=%s, userID=%d", normalizedEmail, user.ID)
+	utils.LogInfo("AUTH", fmt.Sprintf("Password reset successful: email=%s, userID=%d", normalizedEmail, user.ID))
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -1099,15 +1012,13 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	// 获取当前用户 ID
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
-		utils.LogPrintf("[AUTH] WARN: ChangePassword called without valid userID")
-		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "ChangePassword called without valid userID")
 		return
 	}
 
 	// 验证 userID
 	if userID <= 0 {
-		utils.LogPrintf("[AUTH] WARN: Invalid userID in ChangePassword: %d", userID)
-		utils.RespondError(c, http.StatusUnauthorized, "UNAUTHORIZED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userID in ChangePassword: %d", userID))
 		return
 	}
 
@@ -1119,8 +1030,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Invalid request body for ChangePassword: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for ChangePassword")
 		return
 	}
 
@@ -1129,17 +1039,14 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	newPassword := req.NewPassword
 
 	if currentPassword == "" || newPassword == "" {
-		utils.LogPrintf("[AUTH] WARN: Missing parameters in ChangePassword: current=%v, new=%v",
-			currentPassword != "", newPassword != "")
-		utils.RespondError(c, http.StatusBadRequest, "MISSING_PARAMETERS")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in ChangePassword: current=%v, new=%v", currentPassword != "", newPassword != ""))
 		return
 	}
 
 	// 验证码验证
 	clientIP := h.getClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
-		utils.LogPrintf("[AUTH] WARN: Captcha verification failed for change password: userID=%d, ip=%s, error=%v", userID, clientIP, err)
-		utils.RespondError(c, http.StatusBadRequest, "CAPTCHA_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for change password: userID=%d, ip=%s", userID, clientIP))
 		return
 	}
 
@@ -1148,62 +1055,49 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	// 查找用户
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, models.ErrUserNotFound) {
-			utils.LogPrintf("[AUTH] WARN: User not found in ChangePassword: userID=%d", userID)
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
-			return
-		}
-		utils.LogPrintf("[AUTH] ERROR: FindByID database error in ChangePassword: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	// 验证当前密码
 	match, err := utils.VerifyPassword(currentPassword, user.Password)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password verification error in ChangePassword: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", "Password verification error in ChangePassword")
 		return
 	}
 	if !match {
-		utils.LogPrintf("[AUTH] WARN: Wrong current password in ChangePassword: userID=%d", userID)
-		utils.RespondError(c, http.StatusBadRequest, "WRONG_PASSWORD")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "WRONG_PASSWORD", fmt.Sprintf("Wrong current password in ChangePassword: userID=%d", userID))
 		return
 	}
 
 	// 验证新密码强度
 	passwordResult := utils.ValidatePassword(newPassword)
 	if !passwordResult.Valid {
-		utils.LogPrintf("[AUTH] WARN: New password validation failed in ChangePassword: error=%s", passwordResult.ErrorCode)
-		utils.RespondError(c, http.StatusBadRequest, passwordResult.ErrorCode)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, passwordResult.ErrorCode, "New password validation failed in ChangePassword")
 		return
 	}
 
 	// 检查新密码是否与旧密码相同
 	samePassword, err := utils.VerifyPassword(newPassword, user.Password)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password comparison error in ChangePassword: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", "Password comparison error in ChangePassword")
 		return
 	}
 	if samePassword {
-		utils.LogPrintf("[AUTH] WARN: New password same as old in ChangePassword: userID=%d", userID)
-		utils.RespondError(c, http.StatusBadRequest, "SAME_PASSWORD")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "SAME_PASSWORD", fmt.Sprintf("New password same as old in ChangePassword: userID=%d", userID))
 		return
 	}
 
 	// 加密新密码
 	hashedPassword, err := utils.HashPassword(newPassword)
 	if err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password hashing failed in ChangePassword: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", "Password hashing failed in ChangePassword")
 		return
 	}
 
 	// 更新密码
 	if err := h.userRepo.Update(ctx, userID, map[string]interface{}{"password": hashedPassword}); err != nil {
-		utils.LogPrintf("[AUTH] ERROR: Password update failed in ChangePassword: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Password update failed in ChangePassword: userID=%d", userID))
 		return
 	}
 
@@ -1213,10 +1107,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	// 记录操作日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogChangePassword(ctx, userID); err != nil {
-			utils.LogPrintf("[AUTH] WARN: Failed to log password change: userID=%d, error=%v", userID, err)
+			utils.LogWarn("AUTH", "Failed to log password change", fmt.Sprintf("userID=%d", userID))
 		}
 	}
 
-	utils.LogPrintf("[AUTH] Password changed successfully: userID=%d, email=%s", userID, user.Email)
+	utils.LogInfo("AUTH", fmt.Sprintf("Password changed successfully: userID=%d, email=%s", userID, user.Email))
 	utils.RespondSuccess(c, gin.H{})
 }
