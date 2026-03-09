@@ -173,10 +173,22 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		return
 	}
 
+	// 生成 PKCE code_verifier
+	codeVerifier, err := GenerateCodeVerifier()
+	if err != nil {
+		utils.LogError("OAUTH-MS", "Login", err, "Failed to generate code verifier")
+		RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+		return
+	}
+
+	// 生成 PKCE code_challenge
+	codeChallenge := GenerateCodeChallenge(codeVerifier)
+
 	// 创建 state 数据
 	stateData := &State{
-		Timestamp: time.Now().UnixMilli(),
-		Action:    action,
+		Timestamp:    time.Now().UnixMilli(),
+		Action:       action,
+		CodeVerifier: codeVerifier,
 	}
 
 	// 绑定操作：验证用户登录状态
@@ -232,9 +244,11 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	params.Set("scope", "openid profile email User.Read")
 	params.Set("response_mode", "query")
 	params.Set("state", state)
+	params.Set("code_challenge", codeChallenge)
+	params.Set("code_challenge_method", "S256")
 
 	redirectURL := authURL + "?" + params.Encode()
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Redirecting to Microsoft auth: action=%s", action))
+	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Redirecting to Microsoft auth with PKCE: action=%s", action))
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -299,6 +313,7 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	// 获取操作类型和用户 ID
 	action := stateData.Action
 	currentUserID := stateData.UserID
+	codeVerifier := stateData.CodeVerifier
 
 	// 绑定操作验证
 	if action == ActionLink && currentUserID <= 0 {
@@ -307,8 +322,15 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		return
 	}
 
+	// 验证 PKCE code_verifier
+	if codeVerifier == "" {
+		utils.LogError("OAUTH-MS", "Callback", fmt.Errorf("missing code_verifier"), "Code verifier not found in state")
+		RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		return
+	}
+
 	// 获取 Access Token
-	tokenData, err := h.exchangeCodeForToken(code)
+	tokenData, err := h.exchangeCodeForToken(code, codeVerifier)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "Callback", err, "Failed to exchange code for token")
 		RedirectWithError(c, h.baseURL, "/account/login", "oauth_failed")
@@ -874,9 +896,13 @@ func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
 // 返回：
 //   - map[string]interface{}: Token 响应数据
 //   - error: 错误信息
-func (h *MicrosoftHandler) exchangeCodeForToken(code string) (map[string]interface{}, error) {
+func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]interface{}, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", ErrOAuthTokenExchange)
+	}
+
+	if codeVerifier == "" {
+		return nil, fmt.Errorf("%w: empty code_verifier", ErrOAuthTokenExchange)
 	}
 
 	tokenURL := "https://login.microsoftonline.com/" + MicrosoftTenant + "/oauth2/v2.0/token"
@@ -888,6 +914,7 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string) (map[string]interfa
 	data.Set("code", code)
 	data.Set("redirect_uri", h.redirectURI)
 	data.Set("grant_type", "authorization_code")
+	data.Set("code_verifier", codeVerifier)
 
 	// 发送请求
 	client := &http.Client{Timeout: HTTPClientTimeout}
