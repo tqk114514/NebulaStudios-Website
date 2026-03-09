@@ -246,6 +246,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	params.Set("state", state)
 	params.Set("code_challenge", codeChallenge)
 	params.Set("code_challenge_method", "S256")
+	params.Set("prompt", "select_account")
 
 	redirectURL := authURL + "?" + params.Encode()
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Redirecting to Microsoft auth with PKCE: action=%s", action))
