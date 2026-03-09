@@ -81,13 +81,13 @@ var contentTypeMap = map[string]string{
 func PreCompressedStatic(basePath string) gin.HandlerFunc {
 	// 参数验证
 	if basePath == "" {
-		utils.LogPrintf("[COMPRESS] WARN: Empty base path, using default './dist'")
+		utils.LogWarn("COMPRESS", "Empty base path, using default './dist'", "")
 		basePath = "./dist"
 	}
 
 	// 检查基础路径是否存在
 	if _, err := os.Stat(basePath); os.IsNotExist(err) {
-		utils.LogPrintf("[COMPRESS] WARN: Base path does not exist: %s", basePath)
+		utils.LogWarn("COMPRESS", "Base path does not exist", fmt.Sprintf("path=%s", basePath))
 	}
 
 	return func(c *gin.Context) {
@@ -95,7 +95,7 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 
 		// 安全检查：防止路径遍历攻击
 		if strings.Contains(reqPath, "..") {
-			utils.LogPrintf("[COMPRESS] WARN: Path traversal attempt detected: %s", reqPath)
+			utils.LogWarn("COMPRESS", "Path traversal attempt detected", fmt.Sprintf("path=%s", reqPath))
 			c.Next()
 			return
 		}
@@ -126,7 +126,7 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 
 		// 检查文件是否存在
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogPrintf("[COMPRESS] DEBUG: Brotli file not found: %s", brPath)
+			utils.LogDebug("COMPRESS", fmt.Sprintf("Brotli file not found: %s", brPath))
 			c.Next()
 			return
 		}
@@ -156,17 +156,17 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 	// 参数验证
 	if basePath == "" {
-		utils.LogPrintf("[COMPRESS] WARN: Empty base path for HTML, using default './dist'")
+		utils.LogWarn("COMPRESS", "Empty base path for HTML, using default './dist'", "")
 		basePath = "./dist"
 	}
 	if htmlFile == "" {
-		utils.LogPrintf("[COMPRESS] ERROR: Empty HTML file name")
+		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("empty HTML file name"), "")
 		return errorHandler("HTML file name is empty")
 	}
 
 	// 安全检查：防止路径遍历
 	if strings.Contains(htmlFile, "..") || strings.Contains(htmlFile, "/") {
-		utils.LogPrintf("[COMPRESS] ERROR: Invalid HTML file name: %s", htmlFile)
+		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("invalid HTML file name: %s", htmlFile), "")
 		return errorHandler("Invalid HTML file name")
 	}
 
@@ -175,13 +175,13 @@ func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 
 	// 检查文件是否存在（启动时检查）
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		utils.LogPrintf("[COMPRESS] WARN: HTML file not found at startup: %s", brPath)
+		utils.LogWarn("COMPRESS", "HTML file not found at startup", fmt.Sprintf("path=%s", brPath))
 	}
 
 	return func(c *gin.Context) {
 		// 运行时再次检查文件是否存在
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogPrintf("[COMPRESS] ERROR: HTML file not found: %s", brPath)
+			utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("HTML file not found: %s", brPath), "")
 			c.String(404, "Page not found")
 			return
 		}
@@ -206,17 +206,17 @@ func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 	// 参数验证
 	if basePath == "" {
-		utils.LogPrintf("[COMPRESS] WARN: Empty base path for Policy HTML, using default './dist'")
+		utils.LogWarn("COMPRESS", "Empty base path for Policy HTML, using default './dist'", "")
 		basePath = "./dist"
 	}
 	if htmlFile == "" {
-		utils.LogPrintf("[COMPRESS] ERROR: Empty Policy HTML file name")
+		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("empty Policy HTML file name"), "")
 		return errorHandler("Policy HTML file name is empty")
 	}
 
 	// 安全检查
 	if strings.Contains(htmlFile, "..") || strings.Contains(htmlFile, "/") {
-		utils.LogPrintf("[COMPRESS] ERROR: Invalid Policy HTML file name: %s", htmlFile)
+		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("invalid Policy HTML file name: %s", htmlFile), "")
 		return errorHandler("Invalid Policy HTML file name")
 	}
 
@@ -225,13 +225,13 @@ func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 
 	// 检查文件是否存在（启动时检查）
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		utils.LogPrintf("[COMPRESS] WARN: Policy HTML file not found at startup: %s", brPath)
+		utils.LogWarn("COMPRESS", "Policy HTML file not found at startup", fmt.Sprintf("path=%s", brPath))
 	}
 
 	return func(c *gin.Context) {
 		// 运行时再次检查文件是否存在
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogPrintf("[COMPRESS] ERROR: Policy HTML file not found: %s", brPath)
+			utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("Policy HTML file not found: %s", brPath), "")
 			c.String(404, "Page not found")
 			return
 		}
@@ -316,7 +316,7 @@ func setCompressedHeaders(c *gin.Context, contentType, cacheControl string) {
 //   - func(*gin.Context): 返回 500 错误的处理函数
 func errorHandler(message string) func(*gin.Context) {
 	return func(c *gin.Context) {
-		utils.LogPrintf("[COMPRESS] ERROR: %s", message)
+		utils.LogError("COMPRESS", "errorHandler", fmt.Errorf("%s", message), "")
 		c.String(500, "Internal server error")
 	}
 }

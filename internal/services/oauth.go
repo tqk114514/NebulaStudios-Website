@@ -121,19 +121,19 @@ func NewOAuthService() *OAuthService {
 func (s *OAuthService) CreateClient(ctx context.Context, name, description, redirectURI string) (*models.OAuthClient, string, error) {
 	clientID, err := s.generateRandomHex(oauthClientIDLength)
 	if err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to generate client_id: %v", err)
+		utils.LogError("OAUTH", "CreateClient", err, "Failed to generate client_id")
 		return nil, "", err
 	}
 
 	clientSecret, err := s.generateRandomHex(oauthClientSecretLength)
 	if err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to generate client_secret: %v", err)
+		utils.LogError("OAUTH", "CreateClient", err, "Failed to generate client_secret")
 		return nil, "", err
 	}
 
 	secretHash, err := bcrypt.GenerateFromPassword([]byte(clientSecret), oauthBcryptCost)
 	if err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to hash client_secret: %v", err)
+		utils.LogError("OAUTH", "CreateClient", err, "Failed to hash client_secret")
 		return nil, "", err
 	}
 
@@ -150,7 +150,7 @@ func (s *OAuthService) CreateClient(ctx context.Context, name, description, redi
 		return nil, "", err
 	}
 
-	utils.LogPrintf("[OAUTH] Client created: id=%d, name=%s", client.ID, name)
+	utils.LogInfo("OAUTH", fmt.Sprintf("Client created: id=%d, name=%s", client.ID, name))
 	return client, clientSecret, nil
 }
 
@@ -215,7 +215,7 @@ func (s *OAuthService) RegenerateSecret(ctx context.Context, id int64) (string, 
 		return "", err
 	}
 
-	utils.LogPrintf("[OAUTH] Secret regenerated: id=%d", id)
+	utils.LogInfo("OAUTH", fmt.Sprintf("Secret regenerated: id=%d", id))
 	return newSecret, nil
 }
 
@@ -270,7 +270,7 @@ func (s *OAuthService) ToggleClient(ctx context.Context, id int64, enabled bool)
 		if !enabled {
 			status = "disabled"
 		}
-		utils.LogPrintf("[OAUTH] Client %s: id=%d", status, id)
+		utils.LogInfo("OAUTH", fmt.Sprintf("Client %s: id=%d", status, id))
 	}
 	return err
 }
@@ -297,7 +297,7 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userID int64, redirectURI, scope string) (string, error) {
 	code, err := s.generateRandomHex(oauthAuthCodeLength)
 	if err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to generate auth code: %v", err)
+		utils.LogError("OAUTH", "CreateAuthCode", err, "Failed to generate auth code")
 		return "", err
 	}
 
@@ -319,7 +319,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 	grant := &models.OAuthGrant{UserID: userID, ClientID: clientID, Scope: scope}
 	_ = s.grantRepo.CreateOrUpdate(ctx, grant)
 
-	utils.LogPrintf("[OAUTH] Auth code created: client_id=%s, user_id=%d", clientID, userID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code created: client_id=%s, user_id=%d", clientID, userID))
 	return code, nil
 }
 
@@ -360,7 +360,7 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, 0, err
 	}
 
-	utils.LogPrintf("[OAUTH] Auth code exchanged: client_id=%s, user_id=%d", clientID, authCode.UserID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code exchanged: client_id=%s, user_id=%d", clientID, authCode.UserID))
 	return tokenResp, authCode.UserID, nil
 }
 
@@ -398,7 +398,7 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 		return nil, 0, err
 	}
 
-	utils.LogPrintf("[OAUTH] Token refreshed: client_id=%s, user_id=%d", clientID, token.UserID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("Token refreshed: client_id=%s, user_id=%d", clientID, token.UserID))
 	return tokenResp, token.UserID, nil
 }
 
@@ -434,7 +434,7 @@ func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userID int64,
 	_, _ = s.accessTokenRepo.DeleteByUserAndClient(ctx, userID, clientID)
 	_, _ = s.refreshTokenRepo.DeleteByUserAndClient(ctx, userID, clientID)
 	_ = s.grantRepo.Delete(ctx, userID, clientID)
-	utils.LogPrintf("[OAUTH] User-client tokens revoked: user_id=%d, client_id=%s", userID, clientID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("User-client tokens revoked: user_id=%d, client_id=%s", userID, clientID))
 	return nil
 }
 
@@ -443,7 +443,7 @@ func (s *OAuthService) RevokeUserTokens(ctx context.Context, userID int64) error
 	_, _ = s.accessTokenRepo.DeleteByUser(ctx, userID)
 	_, _ = s.refreshTokenRepo.DeleteByUser(ctx, userID)
 	_, _ = s.grantRepo.DeleteByUser(ctx, userID)
-	utils.LogPrintf("[OAUTH] All user tokens revoked: user_id=%d", userID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("All user tokens revoked: user_id=%d", userID))
 	return nil
 }
 
@@ -457,7 +457,7 @@ func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) 
 	_, _ = s.accessTokenRepo.DeleteByClient(ctx, clientID)
 	_, _ = s.refreshTokenRepo.DeleteByClient(ctx, clientID)
 	_, _ = s.grantRepo.DeleteByClient(ctx, clientID)
-	utils.LogPrintf("[OAUTH] All client tokens revoked: client_id=%s", clientID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("All client tokens revoked: client_id=%s", clientID))
 	return nil
 }
 

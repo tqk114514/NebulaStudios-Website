@@ -145,13 +145,13 @@ func loadConfig() error {
 	envLoaded := false
 	for _, path := range envPaths {
 		if err := godotenv.Load(path); err == nil {
-			utils.LogPrintf("[CONFIG] Loaded .env from %s", path)
+			utils.LogInfo("CONFIG", fmt.Sprintf("Loaded .env from %s", path))
 			envLoaded = true
 			break
 		}
 	}
 	if !envLoaded {
-		utils.LogPrintf("[CONFIG] WARN: .env file not found (this is OK if using system env vars)")
+		utils.LogWarn("CONFIG", ".env file not found (this is OK if using system env vars)")
 	}
 
 	// 创建配置实例
@@ -165,7 +165,7 @@ func loadConfig() error {
 	newCfg.DatabaseURL = getEnv("DATABASE_URL", "")
 	dbMaxConns, err := getEnvInt("DB_MAX_CONNS", 10)
 	if err != nil {
-		utils.LogPrintf("[CONFIG] WARN: Invalid DB_MAX_CONNS, using default: %v", err)
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid DB_MAX_CONNS, using default: %v", err))
 	}
 	newCfg.DBMaxConns = dbMaxConns
 
@@ -173,7 +173,7 @@ func loadConfig() error {
 	newCfg.JWTSecret = getEnv("JWT_SECRET", "")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
 	if err != nil {
-		utils.LogPrintf("[CONFIG] WARN: Invalid JWT_EXPIRES_IN, using default (60 days): %v", err)
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid JWT_EXPIRES_IN, using default (60 days): %v", err))
 	}
 	newCfg.JWTExpiresIn = jwtExpires
 
@@ -181,7 +181,7 @@ func loadConfig() error {
 	newCfg.SMTPHost = getEnv("SMTP_HOST", "smtp.163.com")
 	smtpPort, err := getEnvInt("SMTP_PORT", 465)
 	if err != nil {
-		utils.LogPrintf("[CONFIG] WARN: Invalid SMTP_PORT, using default (465): %v", err)
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid SMTP_PORT, using default (465): %v", err))
 	}
 	newCfg.SMTPPort = smtpPort
 	newCfg.SMTPUser = getEnvWithFallback("SMTP_USER", "EMAIL", "")
@@ -230,8 +230,8 @@ func loadConfig() error {
 	cfgMu.Unlock()
 
 	// 记录配置加载成功（不记录敏感信息）
-	utils.LogPrintf("[CONFIG] Configuration loaded: port=%s, db_max_conns=%d",
-		newCfg.Port, newCfg.DBMaxConns)
+	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s, db_max_conns=%d",
+		newCfg.Port, newCfg.DBMaxConns))
 
 	return nil
 }
@@ -272,13 +272,13 @@ func validateConfig(c *Config) error {
 
 	// 记录警告
 	for _, w := range warnings {
-		utils.LogPrintf("[CONFIG] WARN: %s", w)
+		utils.LogWarn("CONFIG", w)
 	}
 
 	// 生产环境缺少必需配置时返回错误
 	if len(missingKeys) > 0 {
 		errMsg := fmt.Sprintf("missing required config: %s", strings.Join(missingKeys, ", "))
-		utils.LogPrintf("[CONFIG] ERROR: %s", errMsg)
+		utils.LogError("CONFIG", "Validate", ErrMissingRequired, errMsg)
 		return fmt.Errorf("%w: %s", ErrMissingRequired, errMsg)
 	}
 
@@ -307,7 +307,7 @@ func Get() *Config {
 	// 配置未加载，尝试加载
 	loadedCfg, err := Load()
 	if err != nil {
-		utils.LogPrintf("[CONFIG] ERROR: Failed to load config: %v, using defaults", err)
+		utils.LogError("CONFIG", "Get", err, "Failed to load config, using defaults")
 		// 返回默认配置，避免 nil panic
 		return getDefaultConfig()
 	}
@@ -334,7 +334,8 @@ func MustGet() *Config {
 
 	loadedCfg, err := Load()
 	if err != nil {
-		utils.LogFatalf("[CONFIG] FATAL: Failed to load config: %v", err)
+		utils.LogError("CONFIG", "init", err, "Failed to load config")
+		utils.LogFatalf("Config initialization failed")
 	}
 
 	return loadedCfg
@@ -478,7 +479,7 @@ func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
 		return value
 	}
 	if value := os.Getenv(fallbackKey); value != "" {
-		utils.LogPrintf("[CONFIG] Using fallback key %s instead of %s", fallbackKey, primaryKey)
+		utils.LogInfo("CONFIG", fmt.Sprintf("Using fallback key %s instead of %s", fallbackKey, primaryKey))
 		return value
 	}
 	return defaultValue
@@ -496,17 +497,16 @@ func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
 //   - 此方法会重置 sync.Once，允许重新加载
 //   - 生产环境慎用，可能导致配置不一致
 func Reload() error {
-	utils.LogPrintf("[CONFIG] Reloading configuration...")
+	utils.LogInfo("CONFIG", "Reloading configuration...")
 
 	// 重置 once（允许重新加载）
 	cfgOnce = sync.Once{}
 
 	_, err := Load()
 	if err != nil {
-		utils.LogPrintf("[CONFIG] ERROR: Failed to reload config: %v", err)
-		return err
+		return utils.LogError("CONFIG", "Reload", err)
 	}
 
-	utils.LogPrintf("[CONFIG] Configuration reloaded successfully")
+	utils.LogInfo("CONFIG", "Configuration reloaded successfully")
 	return nil
 }

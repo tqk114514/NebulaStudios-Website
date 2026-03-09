@@ -9,7 +9,7 @@
  * - 支持优雅关闭
  *
  * 用法（其他包）：
- *   utils.LogPrintf("[AUTH] User login: email=%s", email)
+ *   utils.LogInfo("AUTH", "User login", fmt.Sprintf("email=%s", email))
  *
  * 用法（utils 包内）：
  *   LogPrintf("[VALIDATOR] Email validation failed")

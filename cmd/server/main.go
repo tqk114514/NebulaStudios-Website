@@ -65,11 +65,12 @@ const (
 // ====================  主函数 ====================
 
 func main() {
-	utils.LogPrintf("[SERVER] Starting authentication server...")
+	utils.LogInfo("SERVER", "Starting authentication server...")
 
 	// 运行服务器
 	if err := run(); err != nil {
-		utils.LogFatalf("[SERVER] FATAL: Server failed: %v", err)
+		utils.LogError("SERVER", "main", err, "Server failed")
+		utils.LogFatalf("Server startup failed")
 	}
 }
 
@@ -104,7 +105,7 @@ func run() error {
 
 	// 6. 初始化 AI 模块
 	if err := handlers.InitAI(); err != nil {
-		utils.LogPrintf("[AI] WARN: AI module init failed, AI chat will be unavailable: %v", err)
+		utils.LogWarn("AI", fmt.Sprintf("AI module init failed, AI chat will be unavailable: %v", err))
 	}
 
 	// 7. 启动后台任务
@@ -127,34 +128,32 @@ func run() error {
 
 // loadConfig 加载配置
 func loadConfig() (*config.Config, error) {
-	utils.LogPrintf("[CONFIG] Loading configuration...")
+	utils.LogInfo("CONFIG", "Loading configuration...")
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.LogPrintf("[CONFIG] ERROR: Failed to load config: %v", err)
-		return nil, err
+		return nil, utils.LogError("CONFIG", "loadConfig", err)
 	}
 
 	// 验证关键配置
 	if cfg.Port == "" {
-		utils.LogPrintf("[CONFIG] WARN: Port not configured, using default 8080")
+		utils.LogWarn("CONFIG", "Port not configured, using default 8080")
 		cfg.Port = "8080"
 	}
 
-	utils.LogPrintf("[CONFIG] Configuration loaded: port=%s", cfg.Port)
+	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s", cfg.Port))
 	return cfg, nil
 }
 
 // initDatabase 初始化数据库连接
 func initDatabase(cfg *config.Config) error {
-	utils.LogPrintf("[DATABASE] Initializing database connection...")
+	utils.LogInfo("DATABASE", "Initializing database connection...")
 
 	if err := models.InitDB(cfg); err != nil {
-		utils.LogPrintf("[DATABASE] ERROR: Failed to initialize database: %v", err)
-		return err
+		return utils.LogError("DATABASE", "initDatabase", err)
 	}
 
-	utils.LogPrintf("[DATABASE] Database connection established")
+	utils.LogInfo("DATABASE", "Database connection established")
 	return nil
 }
 
@@ -177,7 +176,7 @@ type Services struct {
 
 // initServices 初始化所有服务
 func initServices(cfg *config.Config) (*Services, error) {
-	utils.LogPrintf("[SERVICES] Initializing services...")
+	utils.LogInfo("SERVICES", "Initializing services...")
 
 	svcs := &Services{}
 
@@ -186,39 +185,39 @@ func initServices(cfg *config.Config) (*Services, error) {
 	if svcs.userRepo == nil {
 		return nil, errors.New("failed to create user repository")
 	}
-	utils.LogPrintf("[SERVICES] UserRepository initialized")
+	utils.LogInfo("SERVICES", "UserRepository initialized")
 
 	// 用户日志仓库
 	svcs.userLogRepo = models.NewUserLogRepository()
-	utils.LogPrintf("[SERVICES] UserLogRepository initialized")
+	utils.LogInfo("SERVICES", "UserLogRepository initialized")
 
 	// Token 服务
 	svcs.tokenService = services.NewTokenService()
 	if svcs.tokenService == nil {
 		return nil, errors.New("failed to create token service")
 	}
-	utils.LogPrintf("[SERVICES] TokenService initialized")
+	utils.LogInfo("SERVICES", "TokenService initialized")
 
 	// Session 服务
 	svcs.sessionService = services.NewSessionService(cfg)
 	if svcs.sessionService == nil {
 		return nil, errors.New("failed to create session service")
 	}
-	utils.LogPrintf("[SERVICES] SessionService initialized")
+	utils.LogInfo("SERVICES", "SessionService initialized")
 
 	// 验证码服务
 	svcs.captchaService = services.NewCaptchaService(cfg)
 	if svcs.captchaService == nil {
 		return nil, errors.New("failed to create captcha service")
 	}
-	utils.LogPrintf("[SERVICES] CaptchaService initialized")
+	utils.LogInfo("SERVICES", "CaptchaService initialized")
 
 	// WebSocket 服务
 	svcs.wsService = services.NewWebSocketService()
 	if svcs.wsService == nil {
 		return nil, errors.New("failed to create websocket service")
 	}
-	utils.LogPrintf("[SERVICES] WebSocketService initialized")
+	utils.LogInfo("SERVICES", "WebSocketService initialized")
 
 	// 用户缓存
 	var err error
@@ -226,39 +225,39 @@ func initServices(cfg *config.Config) (*Services, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user cache: %w", err)
 	}
-	utils.LogPrintf("[SERVICES] UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL)
+	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
 
 	// 邮件服务（非关键服务，失败不阻止启动）
 	svcs.emailService, err = services.NewEmailService(cfg)
 	if err != nil {
-		utils.LogPrintf("[SERVICES] WARN: Email service initialization failed: %v", err)
-		utils.LogPrintf("[SERVICES] WARN: Email functionality will be unavailable")
+		utils.LogWarn("SERVICES", fmt.Sprintf("Email service initialization failed: %v", err))
+		utils.LogWarn("SERVICES", "Email functionality will be unavailable")
 	} else {
 		// 验证 SMTP 连接
 		if err := svcs.emailService.VerifyConnection(); err != nil {
-			utils.LogPrintf("[SERVICES] WARN: SMTP connection verification failed: %v", err)
-			utils.LogPrintf("[SERVICES] WARN: Email delivery may fail, but server will continue")
+			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP connection verification failed: %v", err))
+			utils.LogWarn("SERVICES", "Email delivery may fail, but server will continue")
 		} else {
-			utils.LogPrintf("[SERVICES] EmailService initialized and SMTP verified")
+			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
 		}
 	}
 
 	// R2 存储服务（非关键服务，失败不阻止启动）
 	svcs.r2Service, err = services.NewR2Service()
 	if err != nil {
-		utils.LogPrintf("[SERVICES] WARN: R2 service initialization failed: %v", err)
-		utils.LogPrintf("[SERVICES] WARN: Avatar upload to R2 will be unavailable")
+		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service initialization failed: %v", err))
+		utils.LogWarn("SERVICES", "Avatar upload to R2 will be unavailable")
 	} else if svcs.r2Service != nil {
-		utils.LogPrintf("[SERVICES] R2Service initialized")
+		utils.LogInfo("SERVICES", "R2Service initialized")
 		// 获取 R2Service 内部的 ImgProcessor 引用（用于优雅关闭）
 		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
 	}
 
 	// OAuth 服务
 	svcs.oauthService = services.NewOAuthService()
-	utils.LogPrintf("[SERVICES] OAuthService initialized")
+	utils.LogInfo("SERVICES", "OAuthService initialized")
 
-	utils.LogPrintf("[SERVICES] All services initialized successfully")
+	utils.LogInfo("SERVICES", "All services initialized successfully")
 	return svcs, nil
 }
 
@@ -277,7 +276,7 @@ type Handlers struct {
 
 // initHandlers 初始化所有 Handlers
 func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
-	utils.LogPrintf("[HANDLERS] Initializing handlers...")
+	utils.LogInfo("HANDLERS", "Initializing handlers...")
 
 	hdlrs := &Handlers{}
 	var err error
@@ -295,7 +294,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] AuthHandler initialized")
+	utils.LogInfo("HANDLERS", "AuthHandler initialized")
 
 	// User Handler
 	hdlrs.userHandler, err = handlers.NewUserHandler(
@@ -312,7 +311,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] UserHandler initialized")
+	utils.LogInfo("HANDLERS", "UserHandler initialized")
 
 	// OAuth Handler
 	hdlrs.microsoftHandler, err = oauth.NewMicrosoftHandler(
@@ -325,7 +324,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create microsoft oauth handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] MicrosoftHandler initialized")
+	utils.LogInfo("HANDLERS", "MicrosoftHandler initialized")
 
 	// OAuth Provider Handler
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
@@ -336,7 +335,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.sessionService,
 		cfg.BaseURL,
 	)
-	utils.LogPrintf("[HANDLERS] OAuthProviderHandler initialized")
+	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 
 	// QR Login Handler
 	hdlrs.qrLoginHandler, err = handlers.NewQRLoginHandler(
@@ -347,14 +346,14 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create qr login handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] QRLoginHandler initialized")
+	utils.LogInfo("HANDLERS", "QRLoginHandler initialized")
 
 	// Static Handler
 	hdlrs.staticHandler, err = handlers.NewStaticHandler(cfg, svcs.userCache, svcs.wsService, svcs.captchaService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] StaticHandler initialized")
+	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
 	// Admin Handler
 	adminLogRepo := models.NewAdminLogRepository()
@@ -362,9 +361,9 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}
-	utils.LogPrintf("[HANDLERS] AdminHandler initialized")
+	utils.LogInfo("HANDLERS", "AdminHandler initialized")
 
-	utils.LogPrintf("[HANDLERS] All handlers initialized successfully")
+	utils.LogInfo("HANDLERS", "All handlers initialized successfully")
 	return hdlrs, nil
 }
 
@@ -372,27 +371,27 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 
 // startBackgroundTasks 启动后台任务
 func startBackgroundTasks(_ *Handlers, svcs *Services) {
-	utils.LogPrintf("[TASKS] Starting background tasks...")
+	utils.LogInfo("TASKS", "Starting background tasks...")
 
 	// 启动 OAuth 清理任务
 	oauth.StartCleanup()
-	utils.LogPrintf("[TASKS] OAuth cleanup task started")
+	utils.LogInfo("TASKS", "OAuth cleanup task started")
 
 	// 启动 Token 清理任务
 	go runTokenCleanup(svcs.tokenService)
-	utils.LogPrintf("[TASKS] Token cleanup task started: interval=%v", tokenCleanupInterval)
+	utils.LogInfo("TASKS", fmt.Sprintf("Token cleanup task started: interval=%v", tokenCleanupInterval))
 
 	// 启动用户日志清理任务（每天清理6个月前的日志）
 	go runUserLogCleanup(svcs.userLogRepo)
-	utils.LogPrintf("[TASKS] User log cleanup task started: interval=24h, retention=6 months")
+	utils.LogInfo("TASKS", "User log cleanup task started: interval=24h, retention=6 months")
 
-	utils.LogPrintf("[TASKS] All background tasks started")
+	utils.LogInfo("TASKS", "All background tasks started")
 }
 
 // runTokenCleanup 运行 Token 清理定时任务
 func runTokenCleanup(tokenService *services.TokenService) {
 	if tokenService == nil {
-		utils.LogPrintf("[TASKS] WARN: Token service is nil, cleanup task disabled")
+		utils.LogWarn("TASKS", "Token service is nil, cleanup task disabled")
 		return
 	}
 
@@ -404,7 +403,7 @@ func runTokenCleanup(tokenService *services.TokenService) {
 			// 使用 defer recover 防止 panic 导致任务停止
 			defer func() {
 				if r := recover(); r != nil {
-					utils.LogPrintf("[TASKS] ERROR: Token cleanup panic recovered: %v", r)
+					utils.LogError("TASKS", "runTokenCleanup", fmt.Errorf("panic: %v", r))
 				}
 			}()
 
@@ -420,7 +419,7 @@ func runTokenCleanup(tokenService *services.TokenService) {
 // 每24小时清理一次超过6个月的日志
 func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 	if userLogRepo == nil {
-		utils.LogPrintf("[TASKS] WARN: User log repository is nil, cleanup task disabled")
+		utils.LogWarn("TASKS", "User log repository is nil, cleanup task disabled")
 		return
 	}
 
@@ -428,7 +427,7 @@ func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogPrintf("[TASKS] ERROR: User log cleanup panic recovered: %v", r)
+				utils.LogError("TASKS", "runUserLogCleanup", fmt.Errorf("panic: %v", r))
 			}
 		}()
 
@@ -437,9 +436,9 @@ func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 
 		count, err := userLogRepo.DeleteExpiredLogs(ctx)
 		if err != nil {
-			utils.LogPrintf("[TASKS] ERROR: Initial user log cleanup failed: %v", err)
+			utils.LogError("TASKS", "DeleteExpiredLogs", err, "initial cleanup")
 		} else if count > 0 {
-			utils.LogPrintf("[TASKS] Initial user log cleanup completed: deleted=%d", count)
+			utils.LogInfo("TASKS", fmt.Sprintf("Initial user log cleanup completed: deleted=%d", count))
 		}
 	}()
 
@@ -451,7 +450,7 @@ func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					utils.LogPrintf("[TASKS] ERROR: User log cleanup panic recovered: %v", r)
+					utils.LogError("TASKS", "runUserLogCleanup", fmt.Errorf("panic: %v", r))
 				}
 			}()
 
@@ -460,9 +459,9 @@ func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 
 			count, err := userLogRepo.DeleteExpiredLogs(ctx)
 			if err != nil {
-				utils.LogPrintf("[TASKS] ERROR: User log cleanup failed: %v", err)
+				utils.LogError("TASKS", "DeleteExpiredLogs", err)
 			} else if count > 0 {
-				utils.LogPrintf("[TASKS] User log cleanup completed: deleted=%d", count)
+				utils.LogInfo("TASKS", fmt.Sprintf("User log cleanup completed: deleted=%d", count))
 			}
 		}()
 	}
@@ -472,7 +471,7 @@ func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
 
 // setupRouter 创建并配置路由
 func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engine {
-	utils.LogPrintf("[ROUTER] Setting up routes...")
+	utils.LogInfo("ROUTER", "Setting up routes...")
 
 	// 创建 Gin 引擎
 	r := gin.New()
@@ -495,7 +494,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engin
 	// 配置 404 处理
 	r.NoRoute(handlers.NotFoundHandler)
 
-	utils.LogPrintf("[ROUTER] Routes configured successfully")
+	utils.LogInfo("ROUTER", "Routes configured successfully")
 	return r
 }
 
@@ -513,7 +512,7 @@ func setupMiddleware(r *gin.Engine, _ *config.Config) {
 	// 安全头中间件
 	r.Use(middleware.SecurityHeaders())
 
-	utils.LogPrintf("[MIDDLEWARE] Base middleware configured")
+	utils.LogInfo("MIDDLEWARE", "Base middleware configured")
 }
 
 // setupStaticFiles 配置静态文件服务
@@ -527,7 +526,7 @@ func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 
 	// 使用 Brotli 预压缩中间件服务静态文件
 	r.Use(middleware.PreCompressedStatic("./dist"))
-	utils.LogPrintf("[STATIC] Serving pre-compressed static files from ./dist")
+	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
 }
 
 // setupPageRoutes 配置页面路由
@@ -572,7 +571,7 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 	// 兼容旧路由（301 永久重定向）
 	setupLegacyRedirects(r)
 
-	utils.LogPrintf("[ROUTER] Page routes configured")
+	utils.LogInfo("ROUTER", "Page routes configured")
 }
 
 // setupLegacyRedirects 配置旧路由重定向
@@ -656,7 +655,7 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// AI 聊天 API（单独设置 128KB 限制）
 	setupAIAPI(r)
 
-	utils.LogPrintf("[ROUTER] API routes configured")
+	utils.LogInfo("ROUTER", "API routes configured")
 }
 
 // setupConfigAPI 配置 Config API
@@ -810,7 +809,7 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		}
 	}
 
-	utils.LogPrintf("[ROUTER] Admin API routes configured")
+	utils.LogInfo("ROUTER", "Admin API routes configured")
 }
 
 // setupOAuthProviderAPI 配置 OAuth Provider API
@@ -849,13 +848,13 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 		oauthGroup.POST("/revoke", hdlrs.oauthProviderHandler.Revoke)
 	}
 
-	utils.LogPrintf("[ROUTER] OAuth Provider API routes configured")
+	utils.LogInfo("ROUTER", "OAuth Provider API routes configured")
 }
 
 // setupWebSocketRoutes 配置 WebSocket 路由
 func setupWebSocketRoutes(r *gin.Engine, svcs *Services) {
 	r.GET("/ws/qr-login", svcs.wsService.HandleQRLogin)
-	utils.LogPrintf("[ROUTER] WebSocket routes configured")
+	utils.LogInfo("ROUTER", "WebSocket routes configured")
 }
 
 // ====================  服务器管理 ====================
@@ -874,15 +873,16 @@ func createServer(port string, handler http.Handler) *http.Server {
 // startServer 启动服务器（非阻塞）
 func startServer(srv *http.Server) {
 	go func() {
-		utils.LogPrintf("[SERVER] Starting HTTP server on %s", srv.Addr)
+		utils.LogInfo("SERVER", fmt.Sprintf("Starting HTTP server on %s", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			utils.LogFatalf("[SERVER] FATAL: HTTP server failed: %v", err)
+			utils.LogError("SERVER", "ListenAndServe", err, "HTTP server failed")
+			utils.LogFatalf("HTTP server startup failed")
 		}
 	}()
 
 	// 等待服务器启动
 	time.Sleep(100 * time.Millisecond)
-	utils.LogPrintf("[SERVER] Server is running on http://localhost%s", srv.Addr)
+	utils.LogInfo("SERVER", fmt.Sprintf("Server is running on http://localhost%s", srv.Addr))
 }
 
 // ====================  中间件 ====================
@@ -909,11 +909,11 @@ func loggerMiddleware() gin.HandlerFunc {
 
 		// 根据状态码选择日志级别
 		if status >= 500 {
-			utils.LogPrintf("[HTTP] ERROR: %s %s %d %v", c.Request.Method, path, status, latency)
+			utils.LogError("HTTP", "Request", fmt.Errorf("status %d", status), fmt.Sprintf("%s %s %v", c.Request.Method, path, latency))
 		} else if status >= 400 {
-			utils.LogPrintf("[HTTP] WARN: %s %s %d %v", c.Request.Method, path, status, latency)
+			utils.LogWarn("HTTP", fmt.Sprintf("%s %s %d %v", c.Request.Method, path, status, latency))
 		} else {
-			utils.LogPrintf("[HTTP] %s %s %d %v", c.Request.Method, path, status, latency)
+			utils.LogInfo("HTTP", fmt.Sprintf("%s %s %d %v", c.Request.Method, path, status, latency))
 		}
 	}
 }
@@ -956,7 +956,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 
 	// 等待关闭信号
 	sig := <-quit
-	utils.LogPrintf("[SERVER] Received %s signal, initiating graceful shutdown...", sig)
+	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
 	// 创建关闭超时上下文
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -964,32 +964,32 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 
 	// 1. 关闭 WebSocket 服务（停止接受新连接，关闭现有连接）
 	if svcs.wsService != nil {
-		utils.LogPrintf("[SERVER] Closing WebSocket connections...")
+		utils.LogInfo("SERVER", "Closing WebSocket connections...")
 		svcs.wsService.Shutdown()
-		utils.LogPrintf("[SERVER] WebSocket connections closed")
+		utils.LogInfo("SERVER", "WebSocket connections closed")
 	}
 
 	// 2. 关闭 HTTP 服务器（停止接受新请求，等待现有请求完成）
-	utils.LogPrintf("[SERVER] Shutting down HTTP server...")
+	utils.LogInfo("SERVER", "Shutting down HTTP server...")
 	if err := srv.Shutdown(ctx); err != nil {
-		utils.LogPrintf("[SERVER] ERROR: HTTP server shutdown failed: %v", err)
+		utils.LogError("SERVER", "Shutdown", err, "HTTP server shutdown failed")
 	} else {
-		utils.LogPrintf("[SERVER] HTTP server stopped")
+		utils.LogInfo("SERVER", "HTTP server stopped")
 	}
 
 	// 3. 关闭图片处理器
 	if svcs.imgProcessor != nil {
-		utils.LogPrintf("[SERVER] Shutting down image processor...")
+		utils.LogInfo("SERVER", "Shutting down image processor...")
 		svcs.imgProcessor.Shutdown()
 	}
 
 	// 4. 关闭数据库连接
-	utils.LogPrintf("[SERVER] Closing database connections...")
+	utils.LogInfo("SERVER", "Closing database connections...")
 	models.CloseDB()
-	utils.LogPrintf("[SERVER] Database connections closed")
+	utils.LogInfo("SERVER", "Database connections closed")
 
 	// 5. 同步日志缓冲区
 	utils.SyncLogger()
 
-	utils.LogPrintf("[SERVER] Graceful shutdown completed")
+	utils.LogInfo("SERVER", "Graceful shutdown completed")
 }
