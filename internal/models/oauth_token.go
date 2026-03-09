@@ -187,12 +187,10 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_CODE] ERROR: Failed to create auth code: error=%v", err)
-		return fmt.Errorf("create auth code failed: %w", err)
+		return utils.LogError("OAUTH_CODE", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", code.ClientID, code.UserID))
 	}
 
-	utils.LogPrintf("[OAUTH_CODE] Auth code created: id=%d, client_id=%s, user_id=%d",
-		code.ID, code.ClientID, code.UserID)
+	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code created: id=%d, client_id=%s, user_id=%d", code.ID, code.ClientID, code.UserID))
 	return nil
 }
 
@@ -226,8 +224,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthCodeNotFound
 		}
-		utils.LogPrintf("[OAUTH_CODE] ERROR: FindByCode failed: error=%v", err)
-		return nil, fmt.Errorf("find auth code failed: %w", err)
+		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code=%s", code))
 	}
 
 	return authCode, nil
@@ -250,15 +247,14 @@ func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error 
 	`, id)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_CODE] ERROR: Failed to mark code as used: id=%d, error=%v", id, err)
-		return fmt.Errorf("mark code as used failed: %w", err)
+		return utils.LogError("OAUTH_CODE", "MarkUsed", err, fmt.Sprintf("id=%d", id))
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrOAuthCodeNotFound
 	}
 
-	utils.LogPrintf("[OAUTH_CODE] Auth code marked as used: id=%d", id)
+	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code marked as used: id=%d", id))
 	return nil
 }
 
@@ -279,20 +275,19 @@ func (r *OAuthAuthCodeRepository) DeleteExpired(ctx context.Context) (int64, err
 	`)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_CODE] ERROR: Failed to delete expired codes: error=%v", err)
-		return 0, fmt.Errorf("delete expired codes failed: %w", err)
+		return 0, utils.LogError("OAUTH_CODE", "DeleteExpired", err)
 	}
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogPrintf("[OAUTH_CODE] Deleted %d expired/used auth codes", count)
+		utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Deleted %d expired/used auth codes", count))
 	}
 	return count, nil
 }
 
 func (r *OAuthAuthCodeRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[OAUTH_CODE] ERROR: Database pool is nil")
+		utils.LogError("OAUTH_CODE", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
 	return nil
@@ -326,12 +321,10 @@ func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAcc
 	)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to create access token: error=%v", err)
-		return fmt.Errorf("create access token failed: %w", err)
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", token.ClientID, token.UserID))
 	}
 
-	utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Access token created: id=%d, client_id=%s, user_id=%d",
-		token.ID, token.ClientID, token.UserID)
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token created: id=%d, client_id=%s, user_id=%d", token.ID, token.ClientID, token.UserID))
 	return nil
 }
 
@@ -365,8 +358,7 @@ func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthTokenNotFound
 		}
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: FindByTokenHash failed: error=%v", err)
-		return nil, fmt.Errorf("find access token failed: %w", err)
+		return nil, utils.LogError("OAUTH_ACCESS_TOKEN", "FindByTokenHash", err)
 	}
 
 	return token, nil
@@ -386,11 +378,10 @@ func (r *OAuthAccessTokenRepository) Delete(ctx context.Context, id int64) error
 
 	_, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE id = $1", id)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete access token: id=%d, error=%v", id, err)
-		return fmt.Errorf("delete access token failed: %w", err)
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
 	}
 
-	utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Access token deleted: id=%d", id)
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token deleted: id=%d", id))
 	return nil
 }
 
@@ -408,8 +399,7 @@ func (r *OAuthAccessTokenRepository) DeleteByTokenHash(ctx context.Context, toke
 
 	_, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete access token by hash: error=%v", err)
-		return fmt.Errorf("delete access token failed: %w", err)
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByTokenHash", err)
 	}
 
 	return nil
@@ -434,13 +424,11 @@ func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, 
 	`, userID, clientID)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete tokens by user and client: error=%v", err)
-		return 0, fmt.Errorf("delete access tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Deleted %d access tokens for user_id=%d, client_id=%s",
-		count, userID, clientID)
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_id=%d, client_id=%s", count, userID, clientID))
 	return count, nil
 }
 
@@ -459,12 +447,11 @@ func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userID in
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_id = $1", userID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete tokens by user: error=%v", err)
-		return 0, fmt.Errorf("delete access tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Deleted %d access tokens for user_id=%d", count, userID)
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_id=%d", count, userID))
 	return count, nil
 }
 
@@ -482,13 +469,12 @@ func (r *OAuthAccessTokenRepository) DeleteExpired(ctx context.Context) (int64, 
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE expires_at < NOW()")
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete expired tokens: error=%v", err)
-		return 0, fmt.Errorf("delete expired tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteExpired", err)
 	}
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Deleted %d expired access tokens", count)
+		utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d expired access tokens", count))
 	}
 	return count, nil
 }
@@ -508,18 +494,17 @@ func (r *OAuthAccessTokenRepository) DeleteByClient(ctx context.Context, clientI
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE client_id = $1", clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Failed to delete tokens by client: error=%v", err)
-		return 0, fmt.Errorf("delete access tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_ACCESS_TOKEN] Deleted %d access tokens for client_id=%s", count, clientID)
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for client_id=%s", count, clientID))
 	return count, nil
 }
 
 func (r *OAuthAccessTokenRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[OAUTH_ACCESS_TOKEN] ERROR: Database pool is nil")
+		utils.LogError("OAUTH_ACCESS_TOKEN", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
 	return nil
@@ -558,12 +543,10 @@ func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRe
 	)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to create refresh token: error=%v", err)
-		return fmt.Errorf("create refresh token failed: %w", err)
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", token.ClientID, token.UserID))
 	}
 
-	utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Refresh token created: id=%d, client_id=%s, user_id=%d",
-		token.ID, token.ClientID, token.UserID)
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token created: id=%d, client_id=%s, user_id=%d", token.ID, token.ClientID, token.UserID))
 	return nil
 }
 
@@ -598,8 +581,7 @@ func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, token
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthTokenNotFound
 		}
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: FindByTokenHash failed: error=%v", err)
-		return nil, fmt.Errorf("find refresh token failed: %w", err)
+		return nil, utils.LogError("OAUTH_REFRESH_TOKEN", "FindByTokenHash", err)
 	}
 
 	if accessTokenID.Valid {
@@ -623,11 +605,10 @@ func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) erro
 
 	_, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE id = $1", id)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete refresh token: id=%d, error=%v", id, err)
-		return fmt.Errorf("delete refresh token failed: %w", err)
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
 	}
 
-	utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Refresh token deleted: id=%d", id)
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token deleted: id=%d", id))
 	return nil
 }
 
@@ -645,8 +626,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tok
 
 	_, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete refresh token by hash: error=%v", err)
-		return fmt.Errorf("delete refresh token failed: %w", err)
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByTokenHash", err)
 	}
 
 	return nil
@@ -671,13 +651,11 @@ func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context,
 	`, userID, clientID)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete tokens by user and client: error=%v", err)
-		return 0, fmt.Errorf("delete refresh tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Deleted %d refresh tokens for user_id=%d, client_id=%s",
-		count, userID, clientID)
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_id=%d, client_id=%s", count, userID, clientID))
 	return count, nil
 }
 
@@ -696,12 +674,11 @@ func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userID i
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_id = $1", userID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete tokens by user: error=%v", err)
-		return 0, fmt.Errorf("delete refresh tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Deleted %d refresh tokens for user_id=%d", count, userID)
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_id=%d", count, userID))
 	return count, nil
 }
 
@@ -719,13 +696,12 @@ func (r *OAuthRefreshTokenRepository) DeleteExpired(ctx context.Context) (int64,
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()")
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete expired tokens: error=%v", err)
-		return 0, fmt.Errorf("delete expired tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteExpired", err)
 	}
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Deleted %d expired refresh tokens", count)
+		utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d expired refresh tokens", count))
 	}
 	return count, nil
 }
@@ -745,18 +721,17 @@ func (r *OAuthRefreshTokenRepository) DeleteByClient(ctx context.Context, client
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE client_id = $1", clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Failed to delete tokens by client: error=%v", err)
-		return 0, fmt.Errorf("delete refresh tokens failed: %w", err)
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_REFRESH_TOKEN] Deleted %d refresh tokens for client_id=%s", count, clientID)
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for client_id=%s", count, clientID))
 	return count, nil
 }
 
 func (r *OAuthRefreshTokenRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[OAUTH_REFRESH_TOKEN] ERROR: Database pool is nil")
+		utils.LogError("OAUTH_REFRESH_TOKEN", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
 	return nil
@@ -794,12 +769,10 @@ func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthG
 	)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to create/update grant: error=%v", err)
-		return fmt.Errorf("create/update grant failed: %w", err)
+		return utils.LogError("OAUTH_GRANT", "CreateOrUpdate", err, fmt.Sprintf("user_id=%d, client_id=%s", grant.UserID, grant.ClientID))
 	}
 
-	utils.LogPrintf("[OAUTH_GRANT] Grant created/updated: id=%d, user_id=%d, client_id=%s",
-		grant.ID, grant.UserID, grant.ClientID)
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant created/updated: id=%d, user_id=%d, client_id=%s", grant.ID, grant.UserID, grant.ClientID))
 	return nil
 }
 
@@ -826,8 +799,7 @@ func (r *OAuthGrantRepository) FindByUserID(ctx context.Context, userID int64) (
 	`, userID)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to find grants by user: error=%v", err)
-		return nil, fmt.Errorf("find grants failed: %w", err)
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserID", err, fmt.Sprintf("user_id=%d", userID))
 	}
 	defer rows.Close()
 
@@ -840,7 +812,7 @@ func (r *OAuthGrantRepository) FindByUserID(ctx context.Context, userID int64) (
 			&grant.ClientName, &grant.ClientDescription,
 		)
 		if err != nil {
-			utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to scan grant: error=%v", err)
+			utils.LogError("OAUTH_GRANT", "FindByUserID.Scan", err)
 			continue
 		}
 		grants = append(grants, grant)
@@ -876,8 +848,7 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userID i
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthGrantNotFound
 		}
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: FindByUserAndClient failed: error=%v", err)
-		return nil, fmt.Errorf("find grant failed: %w", err)
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
 	}
 
 	return grant, nil
@@ -901,15 +872,14 @@ func (r *OAuthGrantRepository) Delete(ctx context.Context, userID int64, clientI
 	`, userID, clientID)
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to delete grant: error=%v", err)
-		return fmt.Errorf("delete grant failed: %w", err)
+		return utils.LogError("OAUTH_GRANT", "Delete", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrOAuthGrantNotFound
 	}
 
-	utils.LogPrintf("[OAUTH_GRANT] Grant deleted: user_id=%d, client_id=%s", userID, clientID)
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant deleted: user_id=%d, client_id=%s", userID, clientID))
 	return nil
 }
 
@@ -928,12 +898,11 @@ func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userID int64) (
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_id = $1", userID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to delete grants by user: error=%v", err)
-		return 0, fmt.Errorf("delete grants failed: %w", err)
+		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_GRANT] Deleted %d grants for user_id=%d", count, userID)
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for user_id=%d", count, userID))
 	return count, nil
 }
 
@@ -952,18 +921,17 @@ func (r *OAuthGrantRepository) DeleteByClient(ctx context.Context, clientID stri
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE client_id = $1", clientID)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Failed to delete grants by client: error=%v", err)
-		return 0, fmt.Errorf("delete grants failed: %w", err)
+		return 0, utils.LogError("OAUTH_GRANT", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogPrintf("[OAUTH_GRANT] Deleted %d grants for client_id=%s", count, clientID)
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for client_id=%s", count, clientID))
 	return count, nil
 }
 
 func (r *OAuthGrantRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[OAUTH_GRANT] ERROR: Database pool is nil")
+		utils.LogError("OAUTH_GRANT", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
 	return nil

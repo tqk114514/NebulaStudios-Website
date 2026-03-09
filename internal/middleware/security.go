@@ -174,13 +174,13 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 func StaticCacheHeaders(maxAge string) gin.HandlerFunc {
 	// 参数验证
 	if maxAge == "" {
-		utils.LogPrintf("[SECURITY] WARN: Empty maxAge, using default %s", defaultStaticMaxAge)
+		utils.LogWarn("SECURITY", "Empty maxAge, using default", fmt.Sprintf("default=%s", defaultStaticMaxAge))
 		maxAge = defaultStaticMaxAge
 	}
 
 	// 验证 maxAge 是否为有效数字
 	if !isValidMaxAge(maxAge) {
-		utils.LogPrintf("[SECURITY] WARN: Invalid maxAge '%s', using default %s", maxAge, defaultStaticMaxAge)
+		utils.LogWarn("SECURITY", "Invalid maxAge, using default", fmt.Sprintf("maxAge=%s, default=%s", maxAge, defaultStaticMaxAge))
 		maxAge = defaultStaticMaxAge
 	}
 
@@ -314,11 +314,11 @@ func isValidMaxAge(maxAge string) bool {
 //   - value: 头值
 func AddSecurityHeader(c *gin.Context, key, value string) {
 	if c == nil {
-		utils.LogPrintf("[SECURITY] ERROR: Context is nil")
+		utils.LogError("SECURITY", "AddSecurityHeader", fmt.Errorf("context is nil"), "")
 		return
 	}
 	if key == "" || value == "" {
-		utils.LogPrintf("[SECURITY] WARN: Empty header key or value: key=%s, value=%s", key, value)
+		utils.LogWarn("SECURITY", "Empty header key or value", fmt.Sprintf("key=%s, value=%s", key, value))
 		return
 	}
 	c.Header(key, value)
@@ -343,8 +343,8 @@ func BodySizeLimit(maxSize int64) gin.HandlerFunc {
 
 			// 检查 Content-Length
 			if c.Request.ContentLength > maxSize {
-				utils.LogPrintf("[SECURITY] WARN: Request body too large: path=%s, size=%d, limit=%d",
-					c.Request.URL.Path, c.Request.ContentLength, maxSize)
+				utils.LogWarn("SECURITY", "Request body too large", fmt.Sprintf("path=%s, size=%d, limit=%d",
+					c.Request.URL.Path, c.Request.ContentLength, maxSize))
 				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
 					"success":   false,
 					"errorCode": "REQUEST_TOO_LARGE",

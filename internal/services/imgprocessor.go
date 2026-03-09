@@ -74,14 +74,14 @@ func NewImgProcessor() *ImgProcessor {
 func (p *ImgProcessor) startProcessor() {
 	// 检查嵌入的二进制是否存在
 	if len(imgProcessorBin) == 0 {
-		utils.LogPrintf("[IMG] WARN: Embedded binary not found, using fallback")
+		utils.LogWarn("IMG", "Embedded binary not found, using fallback", "")
 		p.available = false
 		return
 	}
 
 	// 释放二进制文件
 	if err := os.WriteFile(BinaryPath, imgProcessorBin, 0755); err != nil {
-		utils.LogPrintf("[IMG] ERROR: Failed to write binary: %v", err)
+		utils.LogError("IMG", "start", err, "Failed to write binary")
 		p.available = false
 		return
 	}
@@ -92,7 +92,7 @@ func (p *ImgProcessor) startProcessor() {
 	// 启动进程
 	p.cmd = exec.Command(BinaryPath)
 	if err := p.cmd.Start(); err != nil {
-		utils.LogPrintf("[IMG] ERROR: Failed to start processor: %v", err)
+		utils.LogError("IMG", "start", err, "Failed to start processor")
 		p.available = false
 		return
 	}
@@ -102,12 +102,12 @@ func (p *ImgProcessor) startProcessor() {
 		time.Sleep(100 * time.Millisecond)
 		if _, err := os.Stat(SocketPath); err == nil {
 			p.available = true
-			utils.LogPrintf("[IMG] Image processor started (PID: %d)", p.cmd.Process.Pid)
+			utils.LogInfo("IMG", fmt.Sprintf("Image processor started (PID: %d)", p.cmd.Process.Pid))
 			return
 		}
 	}
 
-	utils.LogPrintf("[IMG] WARN: Processor started but socket not ready")
+	utils.LogWarn("IMG", "Processor started but socket not ready", "")
 	p.available = false
 }
 
@@ -116,7 +116,7 @@ func (p *ImgProcessor) Shutdown() {
 	if p.cmd != nil && p.cmd.Process != nil {
 		p.cmd.Process.Kill()
 		p.cmd.Wait()
-		utils.LogPrintf("[IMG] Image processor stopped")
+		utils.LogInfo("IMG", "Image processor stopped")
 	}
 	os.Remove(SocketPath)
 	os.Remove(BinaryPath)
@@ -144,7 +144,7 @@ func (p *ImgProcessor) tryRestart() {
 			p.mu.Unlock()
 		}()
 
-		utils.LogPrintf("[IMG] Attempting to restart processor...")
+		utils.LogInfo("IMG", "Attempting to restart processor...")
 
 		// 先清理旧进程
 		if p.cmd != nil && p.cmd.Process != nil {

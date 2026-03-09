@@ -154,12 +154,12 @@ func NewEmailService(cfg *config.Config) (*EmailService, error) {
 
 	// 验证模板和文案
 	if err := validateTemplateAndTexts(template, texts); err != nil {
-		utils.LogPrintf("[EMAIL] WARN: Template validation warning: %v", err)
+		utils.LogWarn("EMAIL", "Template validation warning", fmt.Sprintf("error=%v", err))
 		// 不返回错误，只记录警告
 	}
 
-	utils.LogPrintf("[EMAIL] Email service initialized: host=%s, port=%d, from=%s",
-		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom)
+	utils.LogInfo("EMAIL", fmt.Sprintf("Email service initialized: host=%s, port=%d, from=%s",
+		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom))
 
 	service := &EmailService{
 		cfg:        cfg,
@@ -186,16 +186,16 @@ func (s *EmailService) VerifyConnection() error {
 
 	client, err := s.createClient()
 	if err != nil {
-		utils.LogPrintf("[EMAIL] ERROR: SMTP connection verification failed: %v", err)
+		utils.LogError("EMAIL", "VerifyConnection", err, "SMTP connection verification failed")
 		return fmt.Errorf("SMTP connection failed: %w", err)
 	}
 	defer func() {
 		if err := client.Close(); err != nil {
-			utils.LogPrintf("[EMAIL] WARN: Failed to close SMTP client: %v", err)
+			utils.LogWarn("EMAIL", "Failed to close SMTP client", "")
 		}
 	}()
 
-	utils.LogPrintf("[EMAIL] SMTP connection verified successfully")
+	utils.LogInfo("EMAIL", "SMTP connection verified successfully")
 	return nil
 }
 
@@ -205,11 +205,11 @@ func (s *EmailService) VerifyConnection() error {
 //   - emailType: 邮件类型（register, reset_password, delete_account 等）
 //   - language: 语言代码（zh-CN, en, ja 等）
 //   - verifyURL: 验证链接
-//   - logContext: 日志上下文（用于错误日志，如 "[AUTH]"）
+//   - logContext: 日志上下文（用于错误日志，如 "AUTH"）
 func (s *EmailService) SendVerificationEmailAsync(to, emailType, language, verifyURL, logContext string) {
 	go func() {
 		if err := s.SendVerificationEmail(to, emailType, language, verifyURL); err != nil {
-			utils.LogPrintf("%s ERROR: Async email send failed: to=%s, type=%s, error=%v", logContext, to, emailType, err)
+			utils.LogError(logContext, "SendVerificationEmailAsync", err, fmt.Sprintf("to=%s, type=%s", to, emailType))
 		}
 	}()
 }
@@ -243,7 +243,7 @@ func (s *EmailService) SendVerificationEmail(to, emailType, language, verifyURL 
 
 	// 验证必要的文案是否存在
 	if err := validateTexts(common, typeTexts); err != nil {
-		utils.LogPrintf("[EMAIL] WARN: Missing texts for type=%s, language=%s: %v", emailType, language, err)
+		utils.LogWarn("EMAIL", "Missing texts, using default language", fmt.Sprintf("type=%s, language=%s", emailType, language))
 		// 使用默认语言重试
 		s.mu.RLock()
 		langTexts = s.texts[defaultLanguage]
@@ -264,7 +264,7 @@ func (s *EmailService) SendVerificationEmail(to, emailType, language, verifyURL 
 	subject := typeTexts["subject"]
 	if subject == "" {
 		subject = "Verification Email"
-		utils.LogPrintf("[EMAIL] WARN: Missing subject for type=%s, using default", emailType)
+		utils.LogWarn("EMAIL", "Missing subject, using default", fmt.Sprintf("type=%s", emailType))
 	}
 
 	// 发送邮件
@@ -300,12 +300,12 @@ func (s *EmailService) getLanguageTexts(language string) map[string]map[string]s
 
 	langTexts, ok := s.texts[language]
 	if !ok {
-		utils.LogPrintf("[EMAIL] WARN: Language not found: %s, using default %s", language, defaultLanguage)
+		utils.LogWarn("EMAIL", "Language not found, using default", fmt.Sprintf("language=%s, default=%s", language, defaultLanguage))
 		langTexts = s.texts[defaultLanguage]
 	}
 
 	if langTexts == nil {
-		utils.LogPrintf("[EMAIL] ERROR: Default language texts not found")
+		utils.LogError("EMAIL", "getTexts", fmt.Errorf("default language texts not found"), "")
 		return make(map[string]map[string]string)
 	}
 
@@ -326,7 +326,7 @@ func (s *EmailService) getTypeTexts(langTexts map[string]map[string]string, emai
 
 	typeTexts, ok := langTexts[emailType]
 	if !ok {
-		utils.LogPrintf("[EMAIL] WARN: Email type not found: %s, using default %s", emailType, defaultEmailType)
+		utils.LogWarn("EMAIL", "Email type not found, using default", fmt.Sprintf("type=%s, default=%s", emailType, defaultEmailType))
 		typeTexts = langTexts[defaultEmailType]
 	}
 
@@ -405,13 +405,13 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 
 	// 设置发件人
 	if err := msg.From(s.cfg.SMTPFrom); err != nil {
-		utils.LogPrintf("[EMAIL] ERROR: Failed to set from address: %v", err)
+		utils.LogError("EMAIL", "send", err, "Failed to set from address")
 		return fmt.Errorf("failed to set from address: %w", err)
 	}
 
 	// 设置收件人
 	if err := msg.To(to); err != nil {
-		utils.LogPrintf("[EMAIL] ERROR: Failed to set to address: %v", err)
+		utils.LogError("EMAIL", "send", err, "Failed to set to address")
 		return fmt.Errorf("failed to set to address: %w", err)
 	}
 
@@ -422,13 +422,13 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 
 	// 发送邮件
 	if err := client.DialAndSend(msg); err != nil {
-		utils.LogPrintf("[EMAIL] ERROR: Failed to send email: to=%s, subject=%s, error=%v", to, subject, err)
+		utils.LogError("EMAIL", "send", err, fmt.Sprintf("Failed to send email: to=%s, subject=%s", to, subject))
 		// 发送失败，重置连接（下次会重新建立）
 		s.resetClient()
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	utils.LogPrintf("[EMAIL] Email sent successfully: to=%s, subject=%s", to, subject)
+	utils.LogInfo("EMAIL", fmt.Sprintf("Email sent successfully: to=%s, subject=%s", to, subject))
 	return nil
 }
 
@@ -463,7 +463,7 @@ func (s *EmailService) createClient() (*mail.Client, error) {
 		tlsPolicy = mail.TLSOpportunistic
 		authType = mail.SMTPAuthPlain
 		useSSL = false
-		utils.LogPrintf("[EMAIL] WARN: Non-standard SMTP port %d, using STARTTLS", s.cfg.SMTPPort)
+		utils.LogWarn("EMAIL", "Non-standard SMTP port, using STARTTLS", fmt.Sprintf("port=%d", s.cfg.SMTPPort))
 	}
 
 	// 构建客户端选项
@@ -484,8 +484,8 @@ func (s *EmailService) createClient() (*mail.Client, error) {
 	// 创建客户端
 	client, err := mail.NewClient(s.cfg.SMTPHost, options...)
 	if err != nil {
-		utils.LogPrintf("[EMAIL] ERROR: Failed to create SMTP client: host=%s, port=%d, error=%v",
-			s.cfg.SMTPHost, s.cfg.SMTPPort, err)
+		utils.LogError("EMAIL", "createClient", err, fmt.Sprintf("Failed to create SMTP client: host=%s, port=%d",
+			s.cfg.SMTPHost, s.cfg.SMTPPort))
 		return nil, fmt.Errorf("%w: %v", ErrEmailClientCreateFailed, err)
 	}
 
@@ -514,7 +514,7 @@ func (s *EmailService) getClient() (*mail.Client, error) {
 
 	s.client = client
 	s.lastUsed = time.Now()
-	utils.LogPrintf("[EMAIL] SMTP connection established (pooled)")
+	utils.LogInfo("EMAIL", "SMTP connection established (pooled)")
 
 	return s.client, nil
 }
@@ -526,10 +526,10 @@ func (s *EmailService) closeClient() {
 
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
-			utils.LogPrintf("[EMAIL] WARN: Failed to close SMTP client: %v", err)
+			utils.LogWarn("EMAIL", "Failed to close SMTP client", "")
 		}
 		s.client = nil
-		utils.LogPrintf("[EMAIL] SMTP connection closed")
+		utils.LogInfo("EMAIL", "SMTP connection closed")
 	}
 }
 
@@ -557,7 +557,7 @@ func (s *EmailService) connectionKeeper() {
 			if s.client != nil && time.Since(s.lastUsed) > connMaxIdleTime {
 				_ = s.client.Close()
 				s.client = nil
-				utils.LogPrintf("[EMAIL] SMTP connection closed due to idle timeout")
+				utils.LogInfo("EMAIL", "SMTP connection closed due to idle timeout")
 			}
 			s.clientMu.Unlock()
 		case <-s.stopKeeper:
@@ -611,7 +611,7 @@ func loadTemplate(path string) (string, error) {
 		return "", fmt.Errorf("%w: template is empty", ErrEmailTemplateNotFound)
 	}
 
-	utils.LogPrintf("[EMAIL] Email template loaded: %s (%d bytes)", path, len(templateBytes))
+	utils.LogInfo("EMAIL", fmt.Sprintf("Email template loaded: %s (%d bytes)", path, len(templateBytes)))
 	return template, nil
 }
 
@@ -634,7 +634,7 @@ func loadTexts(path string) (EmailTexts, error) {
 		return nil, fmt.Errorf("%w: texts is empty", ErrEmailInvalidTexts)
 	}
 
-	utils.LogPrintf("[EMAIL] Email texts loaded: %s (%d languages)", path, len(texts))
+	utils.LogInfo("EMAIL", fmt.Sprintf("Email texts loaded: %s (%d languages)", path, len(texts)))
 	return texts, nil
 }
 

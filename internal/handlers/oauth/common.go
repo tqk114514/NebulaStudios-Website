@@ -243,7 +243,7 @@ func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 func GenerateState() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to generate state: %v", err)
+		utils.LogError("OAUTH", "GenerateState", err, "Failed to generate state")
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
@@ -258,7 +258,7 @@ func GenerateState() (string, error) {
 func GenerateLinkToken() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		utils.LogPrintf("[OAUTH] ERROR: Failed to generate link token: %v", err)
+		utils.LogError("OAUTH", "GenerateLinkToken", err, "Failed to generate link token")
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
@@ -271,7 +271,7 @@ func GenerateLinkToken() (string, error) {
 //   - token: JWT Token
 func SetAuthCookie(c *gin.Context, token string) {
 	if token == "" {
-		utils.LogPrintf("[OAUTH] WARN: Attempted to set empty token cookie")
+		utils.LogWarn("OAUTH", "Attempted to set empty token cookie", "")
 		return
 	}
 	utils.SetTokenCookieGin(c, token)
@@ -308,7 +308,7 @@ func StartCleanup() {
 		ticker := time.NewTicker(CleanupInterval)
 		defer ticker.Stop()
 
-		utils.LogPrintf("[OAUTH] Cleanup task started")
+		utils.LogInfo("OAUTH", "Cleanup task started")
 
 		for range ticker.C {
 			cleanupExpiredData()
@@ -344,6 +344,6 @@ func cleanupExpiredData() {
 
 	// 仅在有清理时记录日志
 	if stateCount > 0 || linkCount > 0 {
-		utils.LogPrintf("[OAUTH] Cleanup completed: states=%d, links=%d", stateCount, linkCount)
+		utils.LogInfo("OAUTH", fmt.Sprintf("Cleanup completed: states=%d, links=%d", stateCount, linkCount))
 	}
 }

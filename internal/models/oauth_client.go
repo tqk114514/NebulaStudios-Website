@@ -245,7 +245,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 		// 无搜索条件
 		err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM oauth_clients").Scan(&total)
 		if err != nil {
-			utils.LogPrintf("[OAUTH_CLIENT] ERROR: Failed to count clients: error=%v", err)
+			utils.LogError("OAUTH_CLIENT", "List", err, "Failed to count clients")
 			return nil, 0, fmt.Errorf("count clients failed: %w", err)
 		}
 
@@ -264,7 +264,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 			WHERE name ILIKE $1 OR description ILIKE $1 OR client_id ILIKE $1
 		`, searchPattern).Scan(&total)
 		if err != nil {
-			utils.LogPrintf("[OAUTH_CLIENT] ERROR: Failed to count clients with search: error=%v", err)
+			utils.LogError("OAUTH_CLIENT", "List", err, "Failed to count clients with search")
 			return nil, 0, fmt.Errorf("count clients failed: %w", err)
 		}
 
@@ -279,7 +279,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 	}
 
 	if err != nil {
-		utils.LogPrintf("[OAUTH_CLIENT] ERROR: Failed to query clients: error=%v", err)
+		utils.LogError("OAUTH_CLIENT", "List", err, "Failed to query clients")
 		return nil, 0, fmt.Errorf("query clients failed: %w", err)
 	}
 	defer rows.Close()
@@ -299,7 +299,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 			&client.CreatedAt, &client.UpdatedAt,
 		)
 		if err != nil {
-			utils.LogPrintf("[OAUTH_CLIENT] ERROR: Failed to scan client: error=%v", err)
+			utils.LogError("OAUTH_CLIENT", "List", err, "Failed to scan client")
 			continue
 		}
 		clients = append(clients, client)
@@ -348,8 +348,8 @@ func (r *OAuthClientRepository) Create(ctx context.Context, client *OAuthClient)
 		return r.handleWriteError(err, "Create", client.ClientID)
 	}
 
-	utils.LogPrintf("[OAUTH_CLIENT] Client created: id=%d, client_id=%s, name=%s",
-		client.ID, client.ClientID, client.Name)
+	utils.LogInfo("OAUTH_CLIENT", fmt.Sprintf("Client created: id=%d, client_id=%s, name=%s",
+		client.ID, client.ClientID, client.Name))
 	return nil
 }
 
@@ -368,7 +368,7 @@ func (r *OAuthClientRepository) Update(ctx context.Context, id int64, updates ma
 	}
 
 	if len(updates) == 0 {
-		utils.LogPrintf("[OAUTH_CLIENT] WARN: Update called with empty updates: id=%d", id)
+		utils.LogWarn("OAUTH_CLIENT", "Update called with empty updates", fmt.Sprintf("id=%d", id))
 		return nil
 	}
 
@@ -397,7 +397,7 @@ func (r *OAuthClientRepository) Update(ctx context.Context, id int64, updates ma
 		return ErrOAuthClientNotFound
 	}
 
-	utils.LogPrintf("[OAUTH_CLIENT] Client updated: id=%d, fields=%d", id, len(updates))
+	utils.LogInfo("OAUTH_CLIENT", fmt.Sprintf("Client updated: id=%d, fields=%d", id, len(updates)))
 	return nil
 }
 
@@ -421,7 +421,7 @@ func (r *OAuthClientRepository) Delete(ctx context.Context, id int64) error {
 
 	result, err := pool.Exec(ctx, "DELETE FROM oauth_clients WHERE id = $1", id)
 	if err != nil {
-		utils.LogPrintf("[OAUTH_CLIENT] ERROR: Failed to delete client: id=%d, error=%v", id, err)
+		utils.LogError("OAUTH_CLIENT", "Delete", err, fmt.Sprintf("Failed to delete client: id=%d", id))
 		return fmt.Errorf("delete client failed: %w", err)
 	}
 
@@ -429,7 +429,7 @@ func (r *OAuthClientRepository) Delete(ctx context.Context, id int64) error {
 		return ErrOAuthClientNotFound
 	}
 
-	utils.LogPrintf("[OAUTH_CLIENT] Client deleted: id=%d", id)
+	utils.LogInfo("OAUTH_CLIENT", fmt.Sprintf("Client deleted: id=%d", id))
 	return nil
 }
 
@@ -438,7 +438,7 @@ func (r *OAuthClientRepository) Delete(ctx context.Context, id int64) error {
 // checkDB 检查数据库连接是否就绪
 func (r *OAuthClientRepository) checkDB() error {
 	if pool == nil {
-		utils.LogPrintf("[OAUTH_CLIENT] ERROR: Database pool is nil")
+		utils.LogError("OAUTH_CLIENT", "checkDB", fmt.Errorf("database pool is nil"), "")
 		return ErrOAuthClientRepoDBNotReady
 	}
 	return nil
@@ -462,7 +462,7 @@ func (r *OAuthClientRepository) handleQueryError(err error, operation string, id
 		return ErrOAuthClientNotFound
 	}
 
-	utils.LogPrintf("[OAUTH_CLIENT] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
+	utils.LogError("OAUTH_CLIENT", operation, err, fmt.Sprintf("%s failed: identifier=%v", operation, identifier))
 	return fmt.Errorf("%s failed: %w", operation, err)
 }
 
@@ -482,7 +482,7 @@ func (r *OAuthClientRepository) handleWriteError(err error, operation string, id
 		return ErrOAuthClientIDExists
 	}
 
-	utils.LogPrintf("[OAUTH_CLIENT] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
+	utils.LogError("OAUTH_CLIENT", operation, err, fmt.Sprintf("%s failed: identifier=%v", operation, identifier))
 	return fmt.Errorf("%s failed: %w", operation, err)
 }
 
@@ -503,7 +503,7 @@ func (r *OAuthClientRepository) buildUpdateQuery(id int64, updates map[string]in
 	for key, value := range updates {
 		// 验证字段是否在白名单中（防止 SQL 注入）
 		if !oauthClientAllowedUpdateFields[key] {
-			utils.LogPrintf("[OAUTH_CLIENT] WARN: Attempted to update disallowed field: %s", key)
+			utils.LogWarn("OAUTH_CLIENT", "Attempted to update disallowed field", fmt.Sprintf("field=%s", key))
 			continue
 		}
 

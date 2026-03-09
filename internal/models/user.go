@@ -28,24 +28,12 @@ import (
 // ====================  错误定义 ====================
 
 var (
-	// ErrUserNotFound 用户未找到
-	ErrUserNotFound = errors.New("USER_NOT_FOUND")
 	// ErrEmailExists 邮箱已存在
 	ErrEmailExists = errors.New("EMAIL_EXISTS")
 	// ErrUsernameExists 用户名已存在
 	ErrUsernameExists = errors.New("USERNAME_EXISTS")
 	// ErrMicrosoftIDExists Microsoft ID 已存在
 	ErrMicrosoftIDExists = errors.New("MICROSOFT_ID_EXISTS")
-	// ErrInvalidUserData 无效的用户数据
-	ErrInvalidUserData = errors.New("INVALID_USER_DATA")
-	// ErrUserRepoDBNotReady 数据库未就绪
-	ErrUserRepoDBNotReady = errors.New("database not ready")
-	// ErrUserRepoNilUser 用户对象为空
-	ErrUserRepoNilUser = errors.New("user object is nil")
-	// ErrUserRepoInvalidID 无效的用户 ID
-	ErrUserRepoInvalidID = errors.New("invalid user ID")
-	// ErrUserRepoEmptyIdentifier 空的查询标识符
-	ErrUserRepoEmptyIdentifier = errors.New("empty identifier")
 )
 
 // ====================  常量定义 ====================
@@ -207,16 +195,16 @@ func (u *User) IsPermanentBan() bool {
 //   - error: 验证失败时返回错误
 func (u *User) Validate() error {
 	if u == nil {
-		return ErrUserRepoNilUser
+		return errors.New("user object is nil")
 	}
 	if u.Username == "" {
-		return fmt.Errorf("%w: username is empty", ErrInvalidUserData)
+		return errors.New("username is empty")
 	}
 	if u.Email == "" {
-		return fmt.Errorf("%w: email is empty", ErrInvalidUserData)
+		return errors.New("email is empty")
 	}
 	if u.Password == "" {
-		return fmt.Errorf("%w: password is empty", ErrInvalidUserData)
+		return errors.New("password is empty")
 	}
 	return nil
 }
@@ -241,14 +229,12 @@ func NewUserRepository() *UserRepository {
 //   - *User: 用户对象
 //   - error: 错误信息
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) {
-	// 参数验证
 	if id <= 0 {
-		return nil, ErrUserRepoInvalidID
+		return nil, errors.New("invalid user ID")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
@@ -266,7 +252,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 	)
 
 	if err != nil {
-		return nil, r.handleQueryError(err, "FindByID", id)
+		return nil, utils.HandleDatabaseError("USER", "FindByID", err, id)
 	}
 
 	return user, nil
@@ -283,14 +269,12 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 //   - *User: 用户对象
 //   - error: 错误信息
 func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier string) (*User, error) {
-	// 参数验证
 	if identifier == "" {
-		return nil, ErrUserRepoEmptyIdentifier
+		return nil, errors.New("empty identifier")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
@@ -309,7 +293,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 	)
 
 	if err != nil {
-		return nil, r.handleQueryError(err, "FindByEmailOrUsername", identifier)
+		return nil, utils.HandleDatabaseError("USER", "FindByEmailOrUsername", err, identifier)
 	}
 
 	return user, nil
@@ -324,14 +308,12 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 //   - *User: 用户对象
 //   - error: 错误信息
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, error) {
-	// 参数验证
 	if email == "" {
-		return nil, ErrUserRepoEmptyIdentifier
+		return nil, errors.New("empty email")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
@@ -349,7 +331,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 	)
 
 	if err != nil {
-		return nil, r.handleQueryError(err, "FindByEmail", email)
+		return nil, utils.HandleDatabaseError("USER", "FindByEmail", err, email)
 	}
 
 	return user, nil
@@ -364,14 +346,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 //   - *User: 用户对象
 //   - error: 错误信息
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*User, error) {
-	// 参数验证
 	if username == "" {
-		return nil, ErrUserRepoEmptyIdentifier
+		return nil, errors.New("empty username")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
@@ -389,7 +369,7 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	)
 
 	if err != nil {
-		return nil, r.handleQueryError(err, "FindByUsername", username)
+		return nil, utils.HandleDatabaseError("USER", "FindByUsername", err, username)
 	}
 
 	return user, nil
@@ -404,14 +384,12 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 //   - *User: 用户对象
 //   - error: 错误信息
 func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*User, error) {
-	// 参数验证
 	if msID == "" {
-		return nil, ErrUserRepoEmptyIdentifier
+		return nil, errors.New("empty microsoft ID")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
@@ -429,7 +407,7 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 	)
 
 	if err != nil {
-		return nil, r.handleQueryError(err, "FindByMicrosoftID", msID)
+		return nil, utils.HandleDatabaseError("USER", "FindByMicrosoftID", err, msID)
 	}
 
 	return user, nil
@@ -445,19 +423,16 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 // 返回：
 //   - error: 错误信息
 func (r *UserRepository) Create(ctx context.Context, user *User) error {
-	// 参数验证
 	if user == nil {
-		return ErrUserRepoNilUser
+		return errors.New("user object is nil")
 	}
 
-	// 验证用户数据
 	if err := user.Validate(); err != nil {
 		return err
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	// 设置默认头像
@@ -483,7 +458,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		return r.handleWriteError(err, "Create", user.Email)
 	}
 
-	utils.LogPrintf("[USER] User created: id=%d, email=%s", user.ID, user.Email)
+	utils.LogInfo("USER", fmt.Sprintf("User created: id=%d, email=%s", user.ID, user.Email))
 	return nil
 }
 
@@ -496,23 +471,21 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 // 返回：
 //   - error: 错误信息
 func (r *UserRepository) Update(ctx context.Context, id int64, updates map[string]interface{}) error {
-	// 参数验证
 	if id <= 0 {
-		return ErrUserRepoInvalidID
+		return errors.New("invalid user ID")
 	}
 
 	if len(updates) == 0 {
-		utils.LogPrintf("[USER] WARN: Update called with empty updates: id=%d", id)
+		utils.LogWarn("USER", fmt.Sprintf("Update called with empty updates: id=%d", id))
 		return nil
 	}
 
 	if len(updates) > maxUpdateFields {
-		return fmt.Errorf("%w: too many update fields", ErrInvalidUserData)
+		return errors.New("too many update fields")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	// 构建动态 SQL（使用白名单验证字段）
@@ -528,10 +501,10 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
+		return utils.HandleDatabaseError("USER", "Update", errors.New("no rows affected"), id)
 	}
 
-	utils.LogPrintf("[USER] User updated: id=%d, fields=%d", id, len(updates))
+	utils.LogInfo("USER", fmt.Sprintf("User updated: id=%d, fields=%d", id, len(updates)))
 	return nil
 }
 
@@ -543,62 +516,28 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 // 返回：
 //   - error: 错误信息
 func (r *UserRepository) Delete(ctx context.Context, id int64) error {
-	// 参数验证
 	if id <= 0 {
-		return ErrUserRepoInvalidID
+		return errors.New("invalid user ID")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	result, err := pool.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to delete user: id=%d, error=%v", id, err)
-		return fmt.Errorf("delete user failed: %w", err)
+		return utils.LogError("USER", "Delete", err, fmt.Sprintf("id=%d", id))
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
+		return utils.HandleDatabaseError("USER", "Delete", errors.New("no rows affected"), id)
 	}
 
-	utils.LogPrintf("[USER] User deleted: id=%d", id)
+	utils.LogInfo("USER", fmt.Sprintf("User deleted: id=%d", id))
 	return nil
 }
 
-// ====================  私有方法 ====================
-
-// checkDB 检查数据库连接是否就绪
-func (r *UserRepository) checkDB() error {
-	if pool == nil {
-		utils.LogPrintf("[USER] ERROR: Database pool is nil")
-		return ErrUserRepoDBNotReady
-	}
-	return nil
-}
-
-// handleQueryError 处理查询错误
-// 参数：
-//   - err: 原始错误
-//   - operation: 操作名称
-//   - identifier: 查询标识符
-//
-// 返回：
-//   - error: 处理后的错误
-func (r *UserRepository) handleQueryError(err error, operation string, identifier interface{}) error {
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrUserNotFound
-	}
-
-	// pgx 使用不同的错误类型，检查错误消息
-	if err.Error() == "no rows in result set" {
-		return ErrUserNotFound
-	}
-
-	utils.LogPrintf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
-	return fmt.Errorf("%s failed: %w", operation, err)
-}
+// ====================  管理后台方法 ====================
 
 // handleWriteError 处理写入错误
 // 参数：
@@ -622,8 +561,8 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 		return ErrMicrosoftIDExists
 	}
 
-	utils.LogPrintf("[USER] ERROR: %s failed: identifier=%v, error=%v", operation, identifier, err)
-	return fmt.Errorf("%s failed: %w", operation, err)
+	// 使用统一的错误日志记录
+	return utils.LogError("USER", operation, err, fmt.Sprintf("identifier=%v", identifier))
 }
 
 // buildUpdateQuery 构建更新 SQL 查询
@@ -643,7 +582,7 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 	for key, value := range updates {
 		// 验证字段是否在白名单中（防止 SQL 注入）
 		if !allowedUpdateFields[key] {
-			utils.LogPrintf("[USER] WARN: Attempted to update disallowed field: %s", key)
+			utils.LogWarn("USER", fmt.Sprintf("Attempted to update disallowed field: %s", key))
 			continue
 		}
 
@@ -653,7 +592,7 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 	}
 
 	if len(setClauses) == 0 {
-		return "", nil, fmt.Errorf("%w: no valid fields to update", ErrInvalidUserData)
+		return "", nil, errors.New("no valid fields to update")
 	}
 
 	// 添加 updated_at
@@ -690,9 +629,8 @@ type UserStats struct {
 //   - int64: 总数
 //   - error: 错误信息
 func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error) {
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, 0, err
+	if pool == nil {
+		return nil, 0, errors.New("database not ready")
 	}
 
 	// 计算偏移量
@@ -706,8 +644,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		// 无搜索条件
 		err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total)
 		if err != nil {
-			utils.LogPrintf("[USER] ERROR: Failed to count users: error=%v", err)
-			return nil, 0, fmt.Errorf("count users failed: %w", err)
+			return nil, 0, utils.LogError("USER", "CountUsers", err)
 		}
 
 		rows, err = pool.Query(ctx, `
@@ -727,8 +664,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			WHERE username ILIKE $1 OR email ILIKE $1
 		`, searchPattern).Scan(&total)
 		if err != nil {
-			utils.LogPrintf("[USER] ERROR: Failed to count users with search: error=%v", err)
-			return nil, 0, fmt.Errorf("count users failed: %w", err)
+			return nil, 0, utils.LogError("USER", "CountUsersWithSearch", err)
 		}
 
 		rows, err = pool.Query(ctx, `
@@ -744,8 +680,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	}
 
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to query users: error=%v", err)
-		return nil, 0, fmt.Errorf("query users failed: %w", err)
+		return nil, 0, utils.LogError("USER", "QueryUsers", err)
 	}
 	defer rows.Close()
 
@@ -765,7 +700,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
-			utils.LogPrintf("[USER] ERROR: Failed to scan user: error=%v", err)
+			utils.LogWarn("USER", fmt.Sprintf("Failed to scan user: %v", err))
 			continue
 		}
 		users = append(users, user)
@@ -782,9 +717,8 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 //   - *UserStats: 统计数据
 //   - error: 错误信息
 func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return nil, err
+	if pool == nil {
+		return nil, errors.New("database not ready")
 	}
 
 	stats := &UserStats{}
@@ -792,8 +726,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	// 总用户数
 	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to count total users: error=%v", err)
-		return nil, fmt.Errorf("count total users failed: %w", err)
+		return nil, utils.LogError("USER", "CountTotalUsers", err)
 	}
 
 	// 今日新增用户
@@ -802,8 +735,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		WHERE created_at >= CURRENT_DATE
 	`).Scan(&stats.TodayNewUsers)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to count today users: error=%v", err)
-		return nil, fmt.Errorf("count today users failed: %w", err)
+		return nil, utils.LogError("USER", "CountTodayUsers", err)
 	}
 
 	// 管理员数量
@@ -811,8 +743,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		SELECT COUNT(*) FROM users WHERE role >= $1
 	`, RoleAdmin).Scan(&stats.AdminCount)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to count admins: error=%v", err)
-		return nil, fmt.Errorf("count admins failed: %w", err)
+		return nil, utils.LogError("USER", "CountAdmins", err)
 	}
 
 	// 微软账户绑定数
@@ -820,8 +751,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		SELECT COUNT(*) FROM users WHERE microsoft_id IS NOT NULL
 	`).Scan(&stats.MicrosoftLinked)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to count microsoft linked: error=%v", err)
-		return nil, fmt.Errorf("count microsoft linked failed: %w", err)
+		return nil, utils.LogError("USER", "CountMicrosoftLinked", err)
 	}
 
 	// 封禁用户数
@@ -829,15 +759,12 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		SELECT COUNT(*) FROM users WHERE is_banned = true
 	`).Scan(&stats.BannedCount)
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to count banned users: error=%v", err)
-		return nil, fmt.Errorf("count banned users failed: %w", err)
+		return nil, utils.LogError("USER", "CountBannedUsers", err)
 	}
 
 	return stats, nil
 }
 
-
-// ====================  封禁管理方法 ====================
 
 // Ban 封禁用户
 // 参数：
@@ -850,17 +777,15 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 // 返回：
 //   - error: 错误信息
 func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason string, unbanAt *time.Time) error {
-	// 参数验证
 	if userID <= 0 {
-		return ErrUserRepoInvalidID
+		return errors.New("invalid user ID")
 	}
 	if adminID <= 0 {
-		return fmt.Errorf("%w: invalid admin ID", ErrInvalidUserData)
+		return errors.New("invalid admin ID")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	// 执行封禁
@@ -876,15 +801,14 @@ func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason 
 	`, reason, adminID, unbanAt, userID)
 
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to ban user: id=%d, error=%v", userID, err)
-		return fmt.Errorf("ban user failed: %w", err)
+		return utils.LogError("USER", "Ban", err, fmt.Sprintf("userID=%d", userID))
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
+		return utils.HandleDatabaseError("USER", "Ban", errors.New("no rows affected"), userID)
 	}
 
-	utils.LogPrintf("[USER] User banned: id=%d, admin_id=%d, reason=%s", userID, adminID, reason)
+	utils.LogInfo("USER", fmt.Sprintf("User banned: id=%d, admin_id=%d, reason=%s", userID, adminID, reason))
 	return nil
 }
 
@@ -896,14 +820,12 @@ func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason 
 // 返回：
 //   - error: 错误信息
 func (r *UserRepository) Unban(ctx context.Context, userID int64) error {
-	// 参数验证
 	if userID <= 0 {
-		return ErrUserRepoInvalidID
+		return errors.New("invalid user ID")
 	}
 
-	// 检查数据库连接
-	if err := r.checkDB(); err != nil {
-		return err
+	if pool == nil {
+		return errors.New("database not ready")
 	}
 
 	// 执行解封
@@ -919,14 +841,13 @@ func (r *UserRepository) Unban(ctx context.Context, userID int64) error {
 	`, userID)
 
 	if err != nil {
-		utils.LogPrintf("[USER] ERROR: Failed to unban user: id=%d, error=%v", userID, err)
-		return fmt.Errorf("unban user failed: %w", err)
+		return utils.LogError("USER", "Unban", err, fmt.Sprintf("userID=%d", userID))
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrUserNotFound
+		return utils.HandleDatabaseError("USER", "Unban", errors.New("no rows affected"), userID)
 	}
 
-	utils.LogPrintf("[USER] User unbanned: id=%d", userID)
+	utils.LogInfo("USER", fmt.Sprintf("User unbanned: id=%d", userID))
 	return nil
 }
