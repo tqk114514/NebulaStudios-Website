@@ -20,10 +20,11 @@
 package middleware
 
 import (
-	"auth-system/internal/utils"
+	"fmt"
 	"net/http"
-
 	"strings"
+
+	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

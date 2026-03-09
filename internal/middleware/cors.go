@@ -16,10 +16,11 @@
 package middleware
 
 import (
-	"auth-system/internal/utils"
-
+	"fmt"
 	"net/http"
 	"strings"
+
+	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -113,12 +114,12 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 
 		// 设置 CORS 响应头
 		setCORSHeaders(c, allowOrigin, config)
+
 		// 处理预检请求（OPTIONS）
 		if c.Request.Method == http.MethodOptions {
 			utils.LogDebug("CORS", fmt.Sprintf("Preflight request: origin=%s, path=%s", origin, c.Request.URL.Path))
 			c.AbortWithStatus(http.StatusNoContent)
 			return
-		}return
 		}
 
 		c.Next()
