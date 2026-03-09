@@ -25,6 +25,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,7 +119,7 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 		return nil, ErrAdminNilLogRepo
 	}
 
-	utils.LogPrintf("[ADMIN] Admin handler initialized")
+	utils.LogInfo("ADMIN", "Admin handler initialized")
 
 	return &AdminHandler{
 		userRepo:     userRepo,
@@ -155,8 +156,7 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 	// 查询用户列表
 	users, total, err := h.userRepo.FindAll(ctx, page, pageSize, search)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get users: error=%v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -203,8 +203,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get user: userID=%d, error=%v", userID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -229,8 +228,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	// 不能修改自己的角色
 	if targetUserID == operatorID {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to modify own role: userID=%d", operatorID)
-		utils.RespondError(c, http.StatusBadRequest, "CANNOT_MODIFY_SELF")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_MODIFY_SELF", "Attempted to modify own role")
 		return
 	}
 
@@ -258,24 +256,19 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
 	// 不能修改超级管理员的角色
 	if targetUser.IsSuperAdmin() {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to modify super admin role: operatorID=%d, targetID=%d",
-			operatorID, targetUserID)
-		utils.RespondError(c, http.StatusForbidden, "CANNOT_MODIFY_SUPER_ADMIN")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_MODIFY_SUPER_ADMIN", "Attempted to modify super admin role")
 		return
 	}
 
 	// 不能将封禁用户设为管理员
 	if req.Role > models.RoleUser && targetUser.CheckBanned() {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to promote banned user: operatorID=%d, targetID=%d",
-			operatorID, targetUserID)
-		utils.RespondError(c, http.StatusBadRequest, "CANNOT_PROMOTE_BANNED_USER")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_PROMOTE_BANNED_USER", "Attempted to promote banned user")
 		return
 	}
 
@@ -284,8 +277,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		"role": req.Role,
 	})
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to update role: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
 		return
 	}
 
@@ -294,12 +286,12 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	// 记录审计日志到数据库
 	if err := h.logRepo.LogSetRole(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Role, req.Role); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log set_role: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log set_role", err.Error())
 	}
 
 	// 记录审计日志到控制台
-	utils.LogPrintf("[ADMIN] Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
-		operatorID, operatorRole, targetUserID, targetUser.Role, req.Role)
+	utils.LogInfo("ADMIN", fmt.Sprintf("Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
+		operatorID, operatorRole, targetUserID, targetUser.Role, req.Role))
 
 	utils.RespondSuccess(c, gin.H{"message": "Role updated"})
 }
@@ -321,8 +313,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	// 不能删除自己
 	if targetUserID == operatorID {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to delete self: userID=%d", operatorID)
-		utils.RespondError(c, http.StatusBadRequest, "CANNOT_DELETE_SELF")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_DELETE_SELF", "Attempted to delete self")
 		return
 	}
 
@@ -336,32 +327,26 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
 	// 不能删除超级管理员
 	if targetUser.IsSuperAdmin() {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to delete super admin: operatorID=%d, targetID=%d",
-			operatorID, targetUserID)
-		utils.RespondError(c, http.StatusForbidden, "CANNOT_DELETE_SUPER_ADMIN")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_DELETE_SUPER_ADMIN", "Attempted to delete super admin")
 		return
 	}
 
 	// 不能删除其他管理员（只有超管能删普通用户）
 	if targetUser.IsAdmin() {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to delete admin: operatorID=%d, targetID=%d",
-			operatorID, targetUserID)
-		utils.RespondError(c, http.StatusForbidden, "CANNOT_DELETE_ADMIN")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_DELETE_ADMIN", "Attempted to delete admin")
 		return
 	}
 
 	// 执行删除
 	err = h.userRepo.Delete(ctx, targetUserID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to delete user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "DELETE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return
 	}
 
@@ -370,12 +355,12 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	// 记录审计日志到数据库
 	if err := h.logRepo.LogDeleteUser(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Email); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log delete_user: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log delete_user", err.Error())
 	}
 
 	// 记录审计日志到控制台
-	utils.LogPrintf("[ADMIN] User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
-		operatorID, targetUserID, targetUser.Username)
+	utils.LogInfo("ADMIN", fmt.Sprintf("User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
+		operatorID, targetUserID, targetUser.Username))
 
 	utils.RespondSuccess(c, gin.H{"message": "User deleted"})
 }
@@ -405,8 +390,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	// 不能封禁自己
 	if targetUserID == operatorID {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to ban self: userID=%d", operatorID)
-		utils.RespondError(c, http.StatusBadRequest, "CANNOT_BAN_SELF")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_BAN_SELF", "Attempted to ban self")
 		return
 	}
 
@@ -433,16 +417,13 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
 	// 不能封禁管理员及以上
 	if targetUser.IsAdmin() {
-		utils.LogPrintf("[ADMIN] WARN: Attempted to ban admin: operatorID=%d, targetID=%d",
-			operatorID, targetUserID)
-		utils.RespondError(c, http.StatusForbidden, "CANNOT_BAN_ADMIN")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_BAN_ADMIN", "Attempted to ban admin")
 		return
 	}
 
@@ -462,8 +443,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	// 执行封禁
 	err = h.userRepo.Ban(ctx, targetUserID, operatorID, req.Reason, unbanAt)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to ban user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "BAN_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "BAN_FAILED", err.Error())
 		return
 	}
 
@@ -472,19 +452,19 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	// 记录审计日志到数据库
 	if err := h.logRepo.LogBanUser(ctx, operatorID, targetUserID, targetUser.Username, req.Reason, unbanAt); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log ban_user: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log ban_user", err.Error())
 	}
 
 	// 记录用户日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogBanned(ctx, targetUserID, req.Reason, unbanAt); err != nil {
-			utils.LogPrintf("[ADMIN] WARN: Failed to log user banned: error=%v", err)
+			utils.LogWarn("ADMIN", "Failed to log user banned", err.Error())
 		}
 	}
 
 	// 记录审计日志到控制台
-	utils.LogPrintf("[ADMIN] User banned: operatorID=%d, targetID=%d, reason=%s, days=%d",
-		operatorID, targetUserID, req.Reason, req.Days)
+	utils.LogInfo("ADMIN", fmt.Sprintf("User banned: operatorID=%d, targetID=%d, reason=%s, days=%d",
+		operatorID, targetUserID, req.Reason, req.Days))
 
 	utils.RespondSuccess(c, gin.H{"message": "User banned"})
 }
@@ -514,8 +494,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get target user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -528,8 +507,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	// 执行解封
 	err = h.userRepo.Unban(ctx, targetUserID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to unban user: userID=%d, error=%v", targetUserID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "UNBAN_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UNBAN_FAILED", err.Error())
 		return
 	}
 
@@ -538,19 +516,19 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 
 	// 记录审计日志到数据库
 	if err := h.logRepo.LogUnbanUser(ctx, operatorID, targetUserID, targetUser.Username); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log unban_user: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log unban_user", err.Error())
 	}
 
 	// 记录用户日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogUnbanned(ctx, targetUserID); err != nil {
-			utils.LogPrintf("[ADMIN] WARN: Failed to log user unbanned: error=%v", err)
+			utils.LogWarn("ADMIN", "Failed to log user unbanned", err.Error())
 		}
 	}
 
 	// 记录审计日志到控制台
-	utils.LogPrintf("[ADMIN] User unbanned: operatorID=%d, targetID=%d",
-		operatorID, targetUserID)
+	utils.LogInfo("ADMIN", fmt.Sprintf("User unbanned: operatorID=%d, targetID=%d",
+		operatorID, targetUserID))
 
 	utils.RespondSuccess(c, gin.H{"message": "User unbanned"})
 }
@@ -567,8 +545,7 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.userRepo.GetStats(ctx)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get stats: error=%v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -609,8 +586,7 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 	// 查询日志列表
 	logs, total, err := h.logRepo.FindAll(ctx, page, pageSize)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get logs: error=%v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -686,8 +662,7 @@ func (h *AdminHandler) GetOAuthClients(c *gin.Context) {
 
 	clients, total, err := h.oauthService.GetClients(ctx, page, pageSize, search)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get OAuth clients: error=%v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
@@ -726,8 +701,7 @@ func (h *AdminHandler) GetOAuthClient(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to get OAuth client: id=%d, error=%v", clientID, err)
-		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "CLIENT_NOT_FOUND", err.Error())
 		return
 	}
 
@@ -748,8 +722,7 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 
 	var req createOAuthClientRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Invalid create OAuth client request: error=%v", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
 
@@ -758,18 +731,17 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 
 	client, clientSecret, err := h.oauthService.CreateClient(ctx, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to create OAuth client: error=%v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "CREATE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "CREATE_FAILED", err.Error())
 		return
 	}
 
 	// 记录审计日志
 	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorID, client.ID, client.ClientID, client.Name); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log create OAuth client: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log create OAuth client", err.Error())
 	}
 
-	utils.LogPrintf("[ADMIN] OAuth client created: operatorID=%d, clientID=%s, name=%s",
-		operatorID, client.ClientID, client.Name)
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client created: operatorID=%d, clientID=%s, name=%s",
+		operatorID, client.ClientID, client.Name))
 
 	utils.RespondSuccess(c, gin.H{
 		"client":        client,
@@ -797,8 +769,7 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 
 	var req updateOAuthClientRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Invalid update OAuth client request: error=%v", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
 
@@ -813,17 +784,16 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 
 	err = h.oauthService.UpdateClient(ctx, clientID, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to update OAuth client: id=%d, error=%v", clientID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "UPDATE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
 		return
 	}
 
 	// 记录审计日志
 	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log update OAuth client: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log update OAuth client", err.Error())
 	}
 
-	utils.LogPrintf("[ADMIN] OAuth client updated: operatorID=%d, clientID=%s", operatorID, client.ClientID)
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client updated: operatorID=%d, clientID=%s", operatorID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client updated"})
 }
@@ -857,18 +827,17 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 
 	err = h.oauthService.DeleteClient(ctx, clientID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to delete OAuth client: id=%d, error=%v", clientID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "DELETE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return
 	}
 
 	// 记录审计日志
 	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log delete OAuth client: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log delete OAuth client", err.Error())
 	}
 
-	utils.LogPrintf("[ADMIN] OAuth client deleted: operatorID=%d, clientID=%s, name=%s",
-		operatorID, client.ClientID, client.Name)
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client deleted: operatorID=%d, clientID=%s, name=%s",
+		operatorID, client.ClientID, client.Name))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client deleted"})
 }
@@ -902,17 +871,16 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 
 	newSecret, err := h.oauthService.RegenerateSecret(ctx, clientID)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to regenerate OAuth client secret: id=%d, error=%v", clientID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "REGENERATE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "REGENERATE_FAILED", err.Error())
 		return
 	}
 
 	// 记录审计日志
 	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log regenerate OAuth client secret: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log regenerate OAuth client secret", err.Error())
 	}
 
-	utils.LogPrintf("[ADMIN] OAuth client secret regenerated: operatorID=%d, clientID=%s", operatorID, client.ClientID)
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client secret regenerated: operatorID=%d, clientID=%s", operatorID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"client_secret": newSecret})
 }
@@ -952,21 +920,20 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 
 	err = h.oauthService.ToggleClient(ctx, clientID, req.Enabled)
 	if err != nil {
-		utils.LogPrintf("[ADMIN] ERROR: Failed to toggle OAuth client: id=%d, error=%v", clientID, err)
-		utils.RespondError(c, http.StatusInternalServerError, "TOGGLE_FAILED")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "TOGGLE_FAILED", err.Error())
 		return
 	}
 
 	// 记录审计日志
 	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
-		utils.LogPrintf("[ADMIN] WARN: Failed to log toggle OAuth client: error=%v", err)
+		utils.LogWarn("ADMIN", "Failed to log toggle OAuth client", err.Error())
 	}
 
 	status := "disabled"
 	if req.Enabled {
 		status = "enabled"
 	}
-	utils.LogPrintf("[ADMIN] OAuth client %s: operatorID=%d, clientID=%s", status, operatorID, client.ClientID)
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client %s: operatorID=%d, clientID=%s", status, operatorID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client " + status})
 }

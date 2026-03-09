@@ -16,7 +16,8 @@
 package middleware
 
 import (
-	"auth-system/internal/utils"
+	"auth-system/internal/utils"
+
 	"net/http"
 	"strings"
 
@@ -112,12 +113,12 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 
 		// 设置 CORS 响应头
 		setCORSHeaders(c, allowOrigin, config)
-
 		// 处理预检请求（OPTIONS）
 		if c.Request.Method == http.MethodOptions {
-			utils.LogPrintf("[CORS] Preflight request: origin=%s, path=%s", origin, c.Request.URL.Path)
+			utils.LogDebug("CORS", fmt.Sprintf("Preflight request: origin=%s, path=%s", origin, c.Request.URL.Path))
 			c.AbortWithStatus(http.StatusNoContent)
 			return
+		}return
 		}
 
 		c.Next()
@@ -158,7 +159,7 @@ func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowA
 	}
 
 	// Origin 不在允许列表中
-	utils.LogPrintf("[CORS] WARN: Origin not allowed: %s", origin)
+	utils.LogWarn("CORS", "Origin not allowed", fmt.Sprintf("origin=%s", origin))
 	return ""
 }
 

@@ -42,7 +42,7 @@ func NewR2Service() (*R2Service, error) {
 	cfg := config.Get()
 
 	if cfg.R2Endpoint == "" || cfg.R2AccessKey == "" || cfg.R2SecretKey == "" || cfg.R2Bucket == "" {
-		utils.LogPrintf("[R2] WARN: R2 not configured, avatar upload will be disabled")
+		utils.LogWarn("R2", "R2 not configured, avatar upload will be disabled", "")
 		return nil, nil
 	}
 
@@ -70,7 +70,7 @@ func NewR2Service() (*R2Service, error) {
 	// 初始化图片处理器
 	imgProcessor := NewImgProcessor()
 
-	utils.LogPrintf("[R2] R2 service initialized: bucket=%s", cfg.R2Bucket)
+	utils.LogInfo("R2", fmt.Sprintf("R2 service initialized: bucket=%s", cfg.R2Bucket))
 
 	return &R2Service{
 		client:       client,
@@ -103,10 +103,10 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 	if s.imgProcessor != nil && s.imgProcessor.IsAvailable() {
 		data, err := s.imgProcessor.ToWebP(imageData)
 		if err != nil {
-			utils.LogPrintf("[R2] WARN: Rust processor failed, falling back to Go: %v", err)
+			utils.LogWarn("R2", "Rust processor failed, falling back to Go", "")
 		} else {
 			webpData = data
-			utils.LogPrintf("[R2] Image processed by Rust")
+			utils.LogInfo("R2", "Image processed by Rust")
 		}
 	}
 
@@ -122,7 +122,7 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 			return "", fmt.Errorf("failed to encode webp: %w", err)
 		}
 		webpData = webpBuf.Bytes()
-		utils.LogPrintf("[R2] Image processed by Go (fallback)")
+		utils.LogInfo("R2", "Image processed by Go (fallback)")
 	}
 
 	// 上传到 R2
@@ -138,7 +138,7 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 	}
 
 	avatarURL := fmt.Sprintf("%s/%s", s.url, key)
-	utils.LogPrintf("[R2] Avatar uploaded: userID=%d, url=%s, size=%d bytes", userID, avatarURL, len(webpData))
+	utils.LogInfo("R2", fmt.Sprintf("Avatar uploaded: userID=%d, url=%s, size=%d bytes", userID, avatarURL, len(webpData)))
 
 	return avatarURL, nil
 }
@@ -165,7 +165,7 @@ func (s *R2Service) DeleteAvatar(ctx context.Context, userID int64) error {
 		return fmt.Errorf("failed to delete from R2: %w", err)
 	}
 
-	utils.LogPrintf("[R2] Avatar deleted: userID=%d", userID)
+	utils.LogInfo("R2", fmt.Sprintf("Avatar deleted: userID=%d", userID))
 	return nil
 }
 

@@ -17,6 +17,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -58,10 +59,9 @@ func loadSystemPrompt() error {
 // 在服务启动时调用
 func InitAI() error {
 	if err := loadSystemPrompt(); err != nil {
-		utils.LogPrintf("[AI] Failed to load system prompt: %v", err)
-		return err
+		return utils.LogError("AI", "InitAI", err, "Failed to load system prompt")
 	}
-	utils.LogPrintf("[AI] System prompt loaded from %s", aiPromptFile)
+	utils.LogInfo("AI", fmt.Sprintf("System prompt loaded from %s", aiPromptFile))
 	return nil
 }
 
@@ -135,30 +135,26 @@ func HandleAIChat(c *gin.Context) {
 	// 1. 解析请求
 	var req aiChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.LogPrintf("[AI] Invalid request format: %v", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.HTTPErrorResponse(c, "AI", http.StatusBadRequest, "INVALID_REQUEST", fmt.Sprintf("Invalid request format: %v", err))
 		return
 	}
 
 	// 2. 验证消息不为空
 	if len(req.Messages) == 0 {
-		utils.LogPrintf("[AI] Empty messages in request")
-		utils.RespondError(c, http.StatusBadRequest, "EMPTY_MESSAGES")
+		utils.HTTPErrorResponse(c, "AI", http.StatusBadRequest, "EMPTY_MESSAGES", "Empty messages in request")
 		return
 	}
 
 	// 3. 检查 AI 配置
 	cfg := config.Get()
 	if cfg.AIAPIKey == "" || cfg.AIBaseURL == "" {
-		utils.LogPrintf("[AI] AI service not configured")
-		utils.RespondError(c, http.StatusServiceUnavailable, "AI_NOT_CONFIGURED")
+		utils.HTTPErrorResponse(c, "AI", http.StatusServiceUnavailable, "AI_NOT_CONFIGURED", "AI service not configured")
 		return
 	}
 
 	// 4. 检查系统提示词是否已加载
 	if systemPrompt == "" {
-		utils.LogPrintf("[AI] System prompt not loaded")
-		utils.RespondError(c, http.StatusServiceUnavailable, "AI_NOT_READY")
+		utils.HTTPErrorResponse(c, "AI", http.StatusServiceUnavailable, "AI_NOT_READY", "System prompt not loaded")
 		return
 	}
 
@@ -173,8 +169,7 @@ func HandleAIChat(c *gin.Context) {
 
 	jsonData, err := json.Marshal(apiReq)
 	if err != nil {
-		utils.LogPrintf("[AI] Failed to marshal request: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "REQUEST_BUILD_FAILED")
+		utils.HTTPErrorResponse(c, "AI", http.StatusInternalServerError, "REQUEST_BUILD_FAILED", fmt.Sprintf("Failed to marshal request: %v", err))
 		return
 	}
 
@@ -182,8 +177,7 @@ func HandleAIChat(c *gin.Context) {
 	client := &http.Client{Timeout: aiRequestTimeout}
 	httpReq, err := http.NewRequest("POST", cfg.AIBaseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		utils.LogPrintf("[AI] Failed to create HTTP request: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "REQUEST_CREATE_FAILED")
+		utils.HTTPErrorResponse(c, "AI", http.StatusInternalServerError, "REQUEST_CREATE_FAILED", fmt.Sprintf("Failed to create HTTP request: %v", err))
 		return
 	}
 
@@ -192,8 +186,7 @@ func HandleAIChat(c *gin.Context) {
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		utils.LogPrintf("[AI] API request failed: %v", err)
-		utils.RespondError(c, http.StatusServiceUnavailable, "AI_SERVICE_UNAVAILABLE")
+		utils.HTTPErrorResponse(c, "AI", http.StatusServiceUnavailable, "AI_SERVICE_UNAVAILABLE", fmt.Sprintf("API request failed: %v", err))
 		return
 	}
 	defer resp.Body.Close()
@@ -201,35 +194,31 @@ func HandleAIChat(c *gin.Context) {
 	// 7. 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		utils.LogPrintf("[AI] Failed to read response: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "RESPONSE_READ_FAILED")
+		utils.HTTPErrorResponse(c, "AI", http.StatusInternalServerError, "RESPONSE_READ_FAILED", fmt.Sprintf("Failed to read response: %v", err))
 		return
 	}
 
 	// 8. 解析响应
 	var apiResp aiAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		utils.LogPrintf("[AI] Failed to parse response: %v", err)
-		utils.RespondError(c, http.StatusInternalServerError, "RESPONSE_PARSE_FAILED")
+		utils.HTTPErrorResponse(c, "AI", http.StatusInternalServerError, "RESPONSE_PARSE_FAILED", fmt.Sprintf("Failed to parse response: %v", err))
 		return
 	}
 
 	// 9. 检查 API 错误
 	if apiResp.Error != nil {
-		utils.LogPrintf("[AI] API returned error: %s", apiResp.Error.Message)
-		utils.RespondError(c, http.StatusServiceUnavailable, "AI_SERVICE_ERROR")
+		utils.HTTPErrorResponse(c, "AI", http.StatusServiceUnavailable, "AI_SERVICE_ERROR", fmt.Sprintf("API returned error: %s", apiResp.Error.Message))
 		return
 	}
 
 	// 10. 检查响应内容
 	if len(apiResp.Choices) == 0 {
-		utils.LogPrintf("[AI] API returned no choices")
-		utils.RespondError(c, http.StatusInternalServerError, "AI_NO_RESPONSE")
+		utils.HTTPErrorResponse(c, "AI", http.StatusInternalServerError, "AI_NO_RESPONSE", "API returned no choices")
 		return
 	}
 
 	// 11. 返回成功响应
-	utils.LogPrintf("[AI] Chat completed successfully")
+	utils.LogInfo("AI", "Chat completed successfully")
 	utils.RespondSuccess(c, gin.H{
 		"content": apiResp.Choices[0].Message.Content,
 	})
