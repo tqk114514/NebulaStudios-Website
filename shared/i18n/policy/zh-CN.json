@@ -1,17 +1,5 @@
 {
   "nav.privacy": "隐私政策",
   "nav.terms": "服务条款",
-  "nav.cookies": "Cookie 政策",
-
-  "ai.title": "AI 助手",
-  "ai.placeholder": "输入您的问题...",
-  "ai.send": "发送",
-  "ai.disclaimer": "AI 回答仅供参考，不构成法律建议。如有疑问请联系我们。",
-  "ai.thinking": "正在思考...",
-  "ai.error": "抱歉，出现了一些问题，请稍后重试。",
-  "ai.welcome": "您好！我是政策助手，可以帮您解答关于隐私政策、服务条款等问题。",
-  "ai.close": "关闭",
-  "ai.countdown.goto": "即将跳转",
-  "ai.countdown.mail": "即将打开邮箱",
-  "ai.countdown.cancel": "取消"
+  "nav.cookies": "Cookie 政策"
 }
