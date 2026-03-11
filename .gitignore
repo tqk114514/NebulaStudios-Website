@@ -39,3 +39,5 @@ img-processor/zig-out/
 img-processor/.zig-cache/
 
 .trae/
+
+TODO.md
