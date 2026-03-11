@@ -436,76 +436,72 @@ body::-webkit-scrollbar {
   color: var(--text-disabled);
 }
 
-/* --- Cookie 同意横幅 --- */
+/* --- Cookie 同意横幅（右下角卡片样式）--- */
 .cookie-consent-banner {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 24px;
+  right: 24px;
+  max-width: 420px;
   background: var(--bg-elevated);
-  border-top: 1px solid var(--border-light);
-  padding: 16px 24px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 20px;
   z-index: 10000;
   backdrop-filter: blur(15px);
-  box-shadow: 0 -4px 20px rgb(var(--black-rgb), 0.3);
-  animation: slideUp 0.3s ease;
+  box-shadow: 0 8px 32px rgb(var(--black-rgb), 0.4);
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@keyframes slideUp {
+@keyframes slideInRight {
   from {
-    transform: translateY(100%);
+    transform: translateX(120%);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
+    transform: translateX(0);
     opacity: 1;
   }
 }
 
 .cookie-consent-banner.cookie-consent-hidden {
-  animation: slideDown 0.3s ease forwards;
+  animation: slideOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@keyframes slideDown {
+@keyframes slideOutRight {
   from {
-    transform: translateY(0);
+    transform: translateX(0);
     opacity: 1;
   }
   to {
-    transform: translateY(100%);
+    transform: translateX(120%);
     opacity: 0;
   }
 }
 
 .cookie-consent-content {
-  max-width: 1200px;
-  margin: 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .cookie-consent-text {
   color: var(--text-muted);
   font-size: 14px;
-  line-height: 1.5;
-  flex: 1;
-  min-width: 280px;
+  line-height: 1.6;
 }
 
 .cookie-consent-buttons {
   display: flex;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 10px;
+  flex-direction: column;
 }
 
 .cookie-consent-buttons .button-primary,
 .cookie-consent-buttons .button-secondary {
-  width: auto;
+  width: 100%;
   margin-top: 0;
-  white-space: nowrap;
+  padding: 10px 16px;
+  font-size: 14px;
 }
 
 .button-primary {
@@ -576,17 +572,22 @@ body::-webkit-scrollbar {
 }
 
 @media (max-width: 600px) {
+  .cookie-consent-banner {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    max-width: none;
+  }
+
   .cookie-consent-content {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
+    gap: 12px;
   }
 
   .cookie-consent-text {
-    min-width: unset;
+    font-size: 13px;
   }
 
   .cookie-consent-buttons {
-    justify-content: center;
+    gap: 8px;
   }
 }
