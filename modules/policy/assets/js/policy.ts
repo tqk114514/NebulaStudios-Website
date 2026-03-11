@@ -5,12 +5,10 @@
  * 功能：
  * - Hash 路由切换政策页面
  * - 动态加载政策内容
- * - AI 聊天助手
  * - 支持扩展新政策类型
  */
 
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
-import { initAIChat, updateAIChatLanguage } from './ai-chat.ts';
 
 // ==================== 类型定义 ====================
 
@@ -251,16 +249,12 @@ async function init(): Promise<void> {
     // 初始化滚动隐藏 header 行为
     initScrollBehavior();
 
-    // 初始化 AI 聊天助手
-    initAIChat();
-
     hidePageLoader();
     updatePageTitle();
     
     initLanguageSwitcher(() => {
       updatePageTitle();
       renderPolicy(currentPolicy);
-      updateAIChatLanguage();
     });
 
   } catch (error) {

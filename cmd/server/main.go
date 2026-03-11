@@ -103,18 +103,13 @@ func run() error {
 		return fmt.Errorf("handlers init failed: %w", err)
 	}
 
-	// 6. 初始化 AI 模块
-	if err := handlers.InitAI(); err != nil {
-		utils.LogWarn("AI", fmt.Sprintf("AI module init failed, AI chat will be unavailable: %v", err))
-	}
-
-	// 7. 启动后台任务
+	// 6. 启动后台任务
 	startBackgroundTasks(hdlrs, svcs)
 
-	// 8. 创建并配置路由
+	// 7. 创建并配置路由
 	router := setupRouter(cfg, hdlrs, svcs)
 
-	// 9. 启动服务器
+	// 8. 启动服务器
 	srv := createServer(cfg.Port, router)
 	startServer(srv)
 
@@ -652,9 +647,6 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// OAuth Provider API
 	setupOAuthProviderAPI(r, hdlrs, svcs)
 
-	// AI 聊天 API（单独设置 128KB 限制）
-	setupAIAPI(r)
-
 	utils.LogInfo("ROUTER", "API routes configured")
 }
 
@@ -752,15 +744,6 @@ func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 			hdlrs.qrLoginHandler.MobileConfirm)
 		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
 		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
-	}
-}
-
-// setupAIAPI 配置 AI 聊天 API
-func setupAIAPI(r *gin.Engine) {
-	aiAPI := r.Group("/api/ai")
-	aiAPI.Use(middleware.AIBodySizeLimit()) // 128KB 限制
-	{
-		aiAPI.POST("/chat", handlers.HandleAIChat)
 	}
 }
 

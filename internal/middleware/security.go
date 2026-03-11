@@ -67,9 +67,6 @@ const (
 
 	// maxBodySizeUpload 上传请求体大小限制（5MB）
 	maxBodySizeUpload = 5 << 20
-
-	// maxBodySizeAI AI 聊天请求体大小限制（128KB）
-	maxBodySizeAI = 128 << 10
 )
 
 // ====================  数据结构 ====================
@@ -377,13 +374,4 @@ func APIBodySizeLimit() gin.HandlerFunc {
 //   - gin.HandlerFunc: Gin 中间件函数
 func UploadBodySizeLimit() gin.HandlerFunc {
 	return BodySizeLimit(maxBodySizeUpload)
-}
-
-// AIBodySizeLimit AI 聊天请求体大小限制（128KB）
-// 适用于 AI 聊天接口，需要更大的限制以支持长对话
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
-func AIBodySizeLimit() gin.HandlerFunc {
-	return BodySizeLimit(maxBodySizeAI)
 }
