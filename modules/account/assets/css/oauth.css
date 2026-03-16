@@ -1,147 +1,136 @@
 /**
- * assets/css/oauth.css
- * OAuth 授权页面样式
+ * modules/account/assets/css/oauth.css
+ * OAuth授权页面专属样式
  */
 
 /* ==================== 应用信息 ==================== */
 
 .oauth-app-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 24px 0;
-  animation: fade-in 0.5s ease;
+  text-align: center;
+  margin: 40px 0;
 }
 
 .oauth-app-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--primary), rgb(var(--primary-rgb), 0.7));
-  color: white;
+  width: 80px;
+  height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 15px rgb(var(--primary-rgb), 0.3);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.oauth-app-icon:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgb(var(--primary-rgb), 0.4);
+  background: var(--line);
+  border: 1px solid var(--dim);
+  color: var(--fg);
+  margin: 0 auto 16px;
 }
 
 .oauth-app-icon svg {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
 }
 
 .oauth-app-name {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  color: var(--fg);
+  margin-bottom: 8px;
 }
 
 .oauth-app-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-align: center;
-  max-width: 280px;
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+  line-height: 1.8;
 }
 
-/* ==================== 当前用户 ==================== */
+/* ==================== 用户信息 ==================== */
 
 .oauth-user-info {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgb(var(--white-rgb), 0.03);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  margin: 16px 0;
-  font-size: 14px;
-  color: var(--text-secondary);
+  gap: 12px;
+  margin-bottom: 32px;
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--mid);
 }
 
 .oauth-user-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: white;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--dim);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--fg);
 }
 
 .oauth-user-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .oauth-user-name {
-  color: var(--text);
-  font-weight: 500;
+  color: var(--fg);
+  font-weight: 400;
 }
 
 /* ==================== 权限列表 ==================== */
 
 .oauth-scopes {
-  margin: 20px 0;
-  text-align: left;
+  margin-bottom: 32px;
 }
 
 .oauth-scopes-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
-  text-align: center;
+  font-size: var(--text-sm);
+  letter-spacing: 0.12em;
+  color: var(--mid);
+  text-transform: uppercase;
+  margin-bottom: 16px;
 }
 
 .oauth-scope-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .oauth-scope-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 12px 16px;
-  background: rgb(var(--white-rgb), 0.02);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.oauth-scope-item:hover {
-  background: rgb(var(--white-rgb), 0.05);
-  border-color: var(--border-hover);
+.oauth-scope-item:first-child {
+  padding-top: 0;
+}
+
+.oauth-scope-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .oauth-scope-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--primary);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mid);
   flex-shrink: 0;
 }
 
 .oauth-scope-icon svg {
-  width: 100%;
-  height: 100%;
+  width: 24px;
+  height: 24px;
 }
 
 .oauth-scope-text {
@@ -149,32 +138,26 @@
 }
 
 .oauth-scope-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 2px;
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--fg);
+  margin-bottom: 4px;
 }
 
 .oauth-scope-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--mid);
+  line-height: 1.6;
 }
 
-/* ==================== 提示文案 ==================== */
+/* ==================== 提示文本 ==================== */
 
 .oauth-notice {
-  font-size: 12px;
-  color: var(--text-disabled);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--mid);
   text-align: center;
-  margin-top: 16px;
-  line-height: 1.5;
-}
-
-/* ==================== 按钮样式 ==================== */
-
-.button-group {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  line-height: 1.6;
   margin-top: 24px;
 }

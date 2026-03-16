@@ -31,6 +31,28 @@ const showAlertWithTranslation = (message: string, title?: string): void => show
 /** 待处理的登录请求 */
 let pendingLogin: PendingLoginData | null = null;
 
+// ==================== 工具函数 ====================
+
+/**
+ * 重置验证码状态
+ */
+function resetCaptchaState(container: HTMLElement | null, card: HTMLElement | null, button: HTMLButtonElement | null): void {
+  pendingLogin = null;
+  clearCaptcha();
+  
+  if (button) {
+    button.disabled = false;
+    button.textContent = t('login.submitButton');
+  }
+  
+  if (container) {
+    container.classList.add('is-hidden');
+    if (card) {
+      delayedExecution(() => adjustCardHeight(card));
+    }
+  }
+}
+
 // ==================== 页面初始化 ====================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -64,18 +86,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // 类型断言：DOM 检查后这些元素确定存在
+    const emailInput = loginEmailInput;
+    const passwordInput = loginPasswordInput;
+    const submitButton = loginButton;
+
     /**
      * 执行登录请求
      */
     async function performLogin(): Promise<void> {
+      if (!pendingLogin) return;
+      
       try {
-        const { email, password } = pendingLogin!;
+        const { email, password } = pendingLogin;
         const token = getCaptchaToken();
         const captchaType = getCaptchaType();
 
         // 禁用按钮，显示加载状态
-        loginButton!.disabled = true;
-        loginButton!.textContent = t('login.loggingIn');
+        submitButton.disabled = true;
+        submitButton.textContent = t('login.loggingIn');
 
         const result = await login(email, password, token || '', captchaType);
 
@@ -90,17 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('[LOGIN] ERROR: Login failed:', (error as Error).message);
         showAlertWithTranslation(t('login.failed'));
       } finally {
-        // 重置状态
-        loginButton!.disabled = false;
-        loginButton!.textContent = t('login.submitButton');
-        pendingLogin = null;
-        clearCaptcha();
-
-        // 隐藏验证容器
-        if (captchaContainer) {
-          captchaContainer.classList.add('is-hidden');
-          if (card) {delayedExecution(() => adjustCardHeight(card));}
-        }
+        resetCaptchaState(captchaContainer, card, submitButton);
       }
     }
 
@@ -111,8 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
 
       try {
-        const email = loginEmailInput!.value.trim();
-        const password = loginPasswordInput!.value;
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
 
         // 表单验证
         const validation = validateLoginForm(email, password);
@@ -128,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await performLogin();
         } else {
           // 禁用登录按钮，显示验证组件
-          loginButton!.disabled = true;
+          submitButton.disabled = true;
 
           if (captchaContainer) {
             captchaContainer.classList.remove('is-hidden');
@@ -140,23 +159,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             () => {
               // 验证失败
               showAlertWithTranslation(t('login.humanVerifyFailed'));
-              pendingLogin = null;
-              loginButton!.disabled = false;
-              clearCaptcha();
-              if (captchaContainer) {
-                captchaContainer.classList.add('is-hidden');
-                if (card) {delayedExecution(() => adjustCardHeight(card));}
-              }
+              resetCaptchaState(captchaContainer, card, submitButton);
             },
             () => {
               // 验证过期
-              pendingLogin = null;
-              loginButton!.disabled = false;
-              clearCaptcha();
-              if (captchaContainer) {
-                captchaContainer.classList.add('is-hidden');
-                if (card) {delayedExecution(() => adjustCardHeight(card));}
-              }
+              resetCaptchaState(captchaContainer, card, submitButton);
             }
           );
         }
@@ -170,8 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('login-form')?.addEventListener('submit', handleLogin);
 
     // 清空输入框（防止浏览器自动填充残留）
-    loginEmailInput.value = '';
-    loginPasswordInput.value = '';
+    emailInput.value = '';
+    passwordInput.value = '';
 
     // 检查 OAuth 错误（从 URL 参数）
     const urlParams = new URLSearchParams(window.location.search);

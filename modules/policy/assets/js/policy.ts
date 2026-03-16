@@ -144,8 +144,6 @@ function renderPolicy(type: PolicyType): void {
     `;
   }
 
-  html += `<footer class="policy-footer">${window.t('footer.copyright')}</footer>`;
-
   // 添加淡入动画
   container.classList.remove('fade-in');
   void (container as HTMLElement).offsetWidth; // 触发 reflow

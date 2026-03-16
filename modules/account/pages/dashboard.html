@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nebula Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;300;700;900&family=Newsreader:ital,opsz,wght@1,6,200;1,6,300&family=Azeret+Mono:wght@200;300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
-  <link rel="stylesheet" href="/account/assets/css/auth.css">
   <link rel="stylesheet" href="/account/assets/css/dashboard.css">
-  <script src="/shared/js/translations.js"></script>
-  <script src="/shared/js/cookie-consent.js"></script>
+  <script type="module" src="/shared/js/translations.js"></script>
+  <script type="module" src="/shared/js/cookie-consent.js"></script>
 </head>
 <body>
   {{HEADER}}
@@ -224,9 +226,9 @@
     </section>
     
     <div class="policy-links">
-      <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
+      <a href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
       <span>|</span>
-      <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
+      <a href="/policy#terms" data-i18n="policy.termsOfService"></a>
     </div>
     <footer class="dashboard-footer" data-i18n="footer.copyright"></footer>
   </main>
@@ -255,8 +257,8 @@
           <p id="confirm-message" class="modal-message"></p>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="confirm-no-btn" class="button-secondary" data-i18n="modal.cancel"></button>
           <button id="confirm-yes-btn" class="button-primary" data-i18n="modal.confirm"></button>
+          <button id="confirm-no-btn" class="button-secondary" data-i18n="modal.cancel"></button>
         </div>
       </div>
     </div>
@@ -291,8 +293,8 @@
           </div>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="avatar-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="avatar-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+          <button id="avatar-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
         </div>
       </div>
     </div>
@@ -313,10 +315,10 @@
             <label for="new-password-input" class="sr-only" data-i18n="dashboard.newPasswordPlaceholder"></label>
             <input type="password" id="new-password-input" data-i18n-placeholder="dashboard.newPasswordPlaceholder" aria-label="New Password" autocomplete="new-password">
             <div class="password-requirements">
-              <div class="req-item" id="pwd-req-length" data-i18n="register.reqLength"></div>
-              <div class="req-item" id="pwd-req-number" data-i18n="register.reqNumber"></div>
-              <div class="req-item" id="pwd-req-special" data-i18n="register.reqSpecial"></div>
-              <div class="req-item" id="pwd-req-case" data-i18n="register.reqCase"></div>
+              <div class="req-item" id="req-length" data-i18n="register.reqLength"></div>
+              <div class="req-item" id="req-number" data-i18n="register.reqNumber"></div>
+              <div class="req-item" id="req-special" data-i18n="register.reqSpecial"></div>
+              <div class="req-item" id="req-case" data-i18n="register.reqCase"></div>
             </div>
           </div>
           <div class="form-group">
@@ -328,8 +330,8 @@
           <div id="change-password-captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="change-password-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="change-password-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+          <button id="change-password-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
         </div>
       </div>
     </div>
@@ -350,8 +352,8 @@
           <div id="change-username-captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="change-username-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="change-username-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm" aria-label="Confirm"></button>
+          <button id="change-username-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
         </div>
       </div>
     </div>
@@ -383,8 +385,8 @@
           </div>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="delete-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="delete-confirm-btn" class="button-primary button-danger" disabled data-i18n="dashboard.confirmDelete" aria-label="Confirm Delete"></button>
+          <button id="delete-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
         </div>
       </div>
     </div>
@@ -435,8 +437,8 @@
           <p class="qr-login-warning" data-i18n="dashboard.qrLoginWarning"></p>
         </div>
         <div class="modal-footer modal-footer-buttons">
-          <button id="qr-login-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
           <button id="qr-login-confirm-btn" class="button-primary" data-i18n="dashboard.confirmLogin" aria-label="Confirm Login"></button>
+          <button id="qr-login-cancel-btn" class="button-secondary" data-i18n="modal.cancel" aria-label="Cancel"></button>
         </div>
       </div>
     </div>

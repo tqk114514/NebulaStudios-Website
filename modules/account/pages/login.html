@@ -4,11 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nebula Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;300;700;900&family=Newsreader:ital,opsz,wght@1,6,200;1,6,300&family=Azeret+Mono:wght@200;300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
-  <link rel="stylesheet" href="/account/assets/css/auth.css">
-  <script src="/shared/js/translations.js"></script>
-  <script src="/shared/js/cookie-consent.js"></script>
+  <link rel="stylesheet" href="/account/assets/css/login.css">
+  <script type="module" src="/shared/js/translations.js"></script>
+  <script type="module" src="/shared/js/cookie-consent.js"></script>
 </head>
 <body>
   {{HEADER}}
@@ -18,58 +21,57 @@
     <div class="loader-spinner"></div>
   </div>
   
-  <div class="content-container">
-    <div class="card">
-      <h1 class="card-title" data-i18n="login.title"></h1>
-      <p class="subtitle" data-i18n="login.subtitle"></p>
-      <form id="login-form">
-        <div class="form-group">
-          <label for="login-email" class="sr-only" data-i18n="login.emailPlaceholder"></label>
-          <input type="text" id="login-email" name="email" placeholder="" data-i18n-placeholder="login.emailPlaceholder" aria-label="Email or Username" autocomplete="username" required>
-        </div>
-        <div class="form-group">
-          <label for="login-password" class="sr-only" data-i18n="login.passwordPlaceholder"></label>
-          <input type="password" id="login-password" name="password" placeholder="" data-i18n-placeholder="login.passwordPlaceholder" aria-label="Password" autocomplete="current-password" required>
-        </div>
-        <button type="submit" class="button-primary" data-i18n="login.submitButton" aria-label="Sign in"></button>
-        <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
-      </form>
-      
-      <div class="oauth-divider">
-        <span data-i18n="login.orContinueWith"></span>
+  <div class="card">
+    <div class="card-num">01</div>
+    <h1 class="card-title" data-i18n="login.title"></h1>
+    <p class="subtitle" data-i18n="login.subtitle"></p>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-email" class="sr-only" data-i18n="login.emailPlaceholder"></label>
+        <input type="text" id="login-email" name="email" placeholder="" data-i18n-placeholder="login.emailPlaceholder" aria-label="Email or Username" autocomplete="username" required>
       </div>
-      
-      <div class="oauth-buttons">
-        <a href="/api/auth/microsoft" class="button-secondary" aria-label="Sign in with Microsoft">
-          <svg viewBox="0 0 21 21" width="20" height="20">
-            <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-            <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-            <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-          </svg>
-          <span data-i18n="login.microsoftLogin"></span>
-        </a>
-        <button type="button" id="qr-login-btn" class="button-secondary is-hidden" aria-label="Scan QR code to sign in">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13 2h-2v2h2v2h-4v-4h2v-2h-2v-2h4v4zm2-2h2v4h-2v-4zm0-2h2v-2h-2v2zm-4 4h2v4h-2v-4z"/>
-          </svg>
-          <span data-i18n="login.qrLogin"></span>
-        </button>
+      <div class="form-group">
+        <label for="login-password" class="sr-only" data-i18n="login.passwordPlaceholder"></label>
+        <input type="password" id="login-password" name="password" placeholder="" data-i18n-placeholder="login.passwordPlaceholder" aria-label="Password" autocomplete="current-password" required>
       </div>
-      
-      <div class="footer-links">
-        <a href="/account/forgot" data-i18n="login.forgotPassword" aria-label="Forgot password"></a>
-        <span>|</span>
-        <a href="/account/register" data-i18n="login.createAccount" aria-label="Create account"></a>
-      </div>
+      <button type="submit" class="button-primary" data-i18n="login.submitButton" aria-label="Sign in"></button>
+      <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
+    </form>
+    
+    <div class="oauth-divider">
+      <span data-i18n="login.orContinueWith"></span>
     </div>
-    <div class="policy-links">
-      <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
+    
+    <div class="oauth-buttons">
+      <a href="/api/auth/microsoft" class="button-secondary" aria-label="Sign in with Microsoft">
+        <svg viewBox="0 0 21 21" width="20" height="20">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        <span data-i18n="login.microsoftLogin"></span>
+      </a>
+      <button type="button" id="qr-login-btn" class="button-secondary is-hidden" aria-label="Scan QR code to sign in">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13 2h-2v2h2v2h-4v-4h2v-2h-2v-2h4v4zm2-2h2v4h-2v-4zm0-2h2v-2h-2v2zm-4 4h2v4h-2v-4z"/>
+        </svg>
+        <span data-i18n="login.qrLogin"></span>
+      </button>
+    </div>
+    
+    <div class="footer-links">
+      <a href="/account/forgot" data-i18n="login.forgotPassword" aria-label="Forgot password"></a>
       <span>|</span>
-      <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
+      <a href="/account/register" data-i18n="login.createAccount" aria-label="Create account"></a>
     </div>
-    <div class="page-footer" data-i18n="footer.copyright"></div>
   </div>
+  <div class="policy-links">
+    <a href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
+    <span>|</span>
+    <a href="/policy#terms" data-i18n="policy.termsOfService"></a>
+  </div>
+  <div class="page-footer" data-i18n="footer.copyright"></div>
 
   <!-- 通用提示弹窗 -->
   <div id="alert-modal" class="modal-overlay is-hidden">
@@ -93,7 +95,7 @@
         <h2 class="modal-title" data-i18n="login.qrLoginTitle"></h2>
         <div class="modal-body">
           <div id="qr-code-container" class="qr-code-container"></div>
-          <!-- 扫描状态图标（默认隐藏�?-->
+          <!-- 扫描状态图标（默认隐藏）-->
           <div id="qr-scanned-icon" class="qr-scanned-icon is-hidden">
             <svg class="icon-check" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
             <svg class="icon-cancel" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>

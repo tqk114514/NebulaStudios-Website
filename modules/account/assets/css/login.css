@@ -1,0 +1,124 @@
+/**
+ * modules/account/assets/css/login.css
+ * 登录页面专属样式
+ */
+
+/* ==================== OAuth 分隔线 ==================== */
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  margin: 32px 0 24px;
+  color: var(--dim);
+  font-size: var(--text-sm);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.oauth-divider span {
+  padding: 0 16px;
+}
+
+/* ==================== OAuth 按钮容器 ==================== */
+
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ==================== 扫码登录弹窗 ==================== */
+
+.qr-login-modal-content {
+  text-align: center;
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: var(--fg);
+  margin: 0 auto 16px;
+  width: fit-content;
+}
+
+.qr-code-container canvas,
+.qr-code-container img {
+  display: block;
+}
+
+.qr-scanned-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 200px;
+  height: 200px;
+  background: var(--fg);
+  margin: 0 auto 16px;
+}
+
+.qr-scanned-icon svg {
+  width: 64px;
+  height: 64px;
+}
+
+.qr-scanned-icon .icon-check {
+  color: var(--success);
+}
+
+.qr-scanned-icon .icon-cancel {
+  display: none;
+  color: var(--danger);
+}
+
+.qr-scanned-icon.is-cancelled .icon-check {
+  display: none;
+}
+
+.qr-scanned-icon.is-cancelled .icon-cancel {
+  display: block;
+}
+
+.qr-login-hint {
+  font-size: var(--text-base);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+}
+
+/* ==================== 登录页底部链接 ==================== */
+
+.card .footer-links {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 1.6em;
+}
+
+.card .footer-links a:first-child {
+  position: absolute;
+  right: 50%;
+  margin-right: 16px;
+}
+
+.card .footer-links a:last-child {
+  position: absolute;
+  left: 50%;
+  margin-left: 16px;
+}
+
+.card .footer-links span {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+}

@@ -149,7 +149,7 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		Outdir:      outdir,
 		Sourcemap:   sourcemap,
 		Target:      api.ES2020,
-		Format:      api.FormatIIFE,
+		Format:      api.FormatESModule,
 		TreeShaking: api.TreeShakingTrue,
 		KeepNames:   *isDev,
 		Write:       true,

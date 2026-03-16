@@ -20,7 +20,7 @@
   "notFound.message": "お探しのページは存在しないか、削除されました",
   "notFound.backToLogin": "ログインに戻る",
 
-  "footer.copyright": "© 2025 Nebula Studios 無断転載禁止",
+  "footer.copyright": "© {year} Nebula Studios 無断転載禁止",
 
   "policy.agreeByRegister": "登録することで、以下に同意したものとみなされます：",
   "policy.privacyPolicy": "プライバシーポリシー",

@@ -4,11 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nebula Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;300;700;900&family=Newsreader:ital,opsz,wght@1,6,200;1,6,300&family=Azeret+Mono:wght@200;300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
-  <link rel="stylesheet" href="/account/assets/css/auth.css">
-  <script src="/shared/js/translations.js"></script>
-  <script src="/shared/js/cookie-consent.js"></script>
+  <script type="module" src="/shared/js/translations.js"></script>
+  <script type="module" src="/shared/js/cookie-consent.js"></script>
 </head>
 <body>
   {{HEADER}}
@@ -18,21 +20,19 @@
     <div class="loader-spinner"></div>
   </div>
   
-  <div class="content-container">
-    <div class="card">
-      <div class="error-icon">404</div>
-      <h1 class="card-title" data-i18n="notFound.title"></h1>
-      <p class="subtitle" data-i18n="notFound.message"></p>
-      
-      <button type="button" id="back-btn" class="button-primary" data-i18n="notFound.backToLogin"></button>
-    </div>
-    <div class="policy-links">
-      <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
-      <span>|</span>
-      <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
-    </div>
-    <div class="page-footer" data-i18n="footer.copyright"></div>
+  <div class="card">
+    <div class="card-num">404</div>
+    <h1 class="card-title" data-i18n="notFound.title"></h1>
+    <p class="subtitle" data-i18n="notFound.message"></p>
+    
+    <button type="button" id="back-btn" class="button-primary" data-i18n="notFound.backToLogin"></button>
   </div>
+  <div class="policy-links">
+    <a href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
+    <span>|</span>
+    <a href="/policy#terms" data-i18n="policy.termsOfService"></a>
+  </div>
+  <div class="page-footer" data-i18n="footer.copyright"></div>
 
   <script type="module" src="/account/assets/js/404.js"></script>
 </body>

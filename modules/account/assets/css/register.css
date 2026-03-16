@@ -1,0 +1,26 @@
+/**
+ * modules/account/assets/css/register.css
+ * 注册页面专属样式
+ */
+
+/* ==================== 政策协议声明 ==================== */
+
+.policy-agree {
+  margin-top: 20px;
+  font-size: var(--text-base);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+  line-height: 1.8;
+  text-align: center;
+}
+
+.policy-agree a {
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.policy-agree a:hover {
+  border-color: var(--fg);
+}

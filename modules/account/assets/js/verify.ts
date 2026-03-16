@@ -16,15 +16,7 @@ import { getUrlParameter } from './lib/utils/url.ts';
 
 type PageState = 'loading' | 'success' | 'error';
 
-/** 验证结果 */
-interface VerifyResult {
-  success: boolean;
-  code?: string;
-  email?: string;
-  errorCode?: string;
-}
-
-/** API 响应 */
+/** API 响应（验证结果） */
 interface VerifyResponse {
   success: boolean;
   code?: string;
@@ -51,7 +43,7 @@ const errorCodeMap: Record<string, string> = {
 /**
  * 验证 token 并获取验证码
  */
-async function verifyToken(token: string): Promise<VerifyResult> {
+async function verifyToken(token: string): Promise<VerifyResponse> {
   try {
     const response = await fetch('/api/auth/verify-token', {
       method: 'POST',
@@ -72,16 +64,12 @@ async function verifyToken(token: string): Promise<VerifyResult> {
   }
 }
 
-// ==================== 全局变量 ====================
-
-let card: HTMLElement | null = null;
-
 // ==================== 状态管理 ====================
 
 /**
  * 切换显示状态（loading/success/error）
  */
-function showState(state: PageState): void {
+function showState(state: PageState, card: HTMLElement | null): void {
   const loadingState = document.getElementById('loading-state');
   const successState = document.getElementById('success-state');
   const errorState = document.getElementById('error-state');
@@ -96,7 +84,7 @@ function showState(state: PageState): void {
 /**
  * 显示错误状态
  */
-function showError(errorCode: string): void {
+function showError(errorCode: string, card: HTMLElement | null): void {
   const translationKey = errorCodeMap[errorCode] || 'verify.errorDefault';
   const errorMessage = window.t ? window.t(translationKey) : translationKey;
 
@@ -105,7 +93,7 @@ function showError(errorCode: string): void {
     errorElement.textContent = errorMessage;
     errorElement.dataset.errorCode = errorCode;
   }
-  showState('error');
+  showState('error', card);
 }
 
 // ==================== 验证码操作 ====================
@@ -139,12 +127,12 @@ function copyCode(): void {
 /**
  * 加载并验证 token，显示验证码
  */
-async function loadVerificationCode(): Promise<void> {
+async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
   try {
     const token = getUrlParameter('token');
 
     if (!token) {
-      showError('NO_TOKEN');
+      showError('NO_TOKEN', card);
       return;
     }
 
@@ -164,7 +152,7 @@ async function loadVerificationCode(): Promise<void> {
         }
       });
 
-      showState('success');
+      showState('success', card);
 
       // 绑定点击复制事件
       const verificationCodeEl = document.getElementById('verification-code');
@@ -172,16 +160,21 @@ async function loadVerificationCode(): Promise<void> {
         verificationCodeEl.addEventListener('click', copyCode);
       }
 
+      const codeHintEl = document.querySelector('.code-hint');
+      if (codeHintEl) {
+        codeHintEl.addEventListener('click', copyCode);
+      }
+
       // 保存邮箱到 sessionStorage（用于后续注册）
       if (result.email) {
         sessionStorage.setItem('verify_email', result.email);
       }
     } else {
-      showError(result.errorCode || 'INVALID_TOKEN');
+      showError(result.errorCode || 'INVALID_TOKEN', card);
     }
   } catch (error) {
     console.error('[VERIFY] ERROR: Load verification code failed:', (error as Error).message);
-    showError('NETWORK_ERROR');
+    showError('NETWORK_ERROR', card);
   }
 }
 
@@ -193,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await waitForTranslations();
     hidePageLoader();
 
-    card = document.querySelector('.card') as HTMLElement | null;
+    const card = document.querySelector('.card') as HTMLElement | null;
 
     // 初始化语言切换器
     initLanguageSwitcher(() => {
@@ -203,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 重新显示错误信息（如果有）
       const errorMessage = document.getElementById('error-message') as HTMLElement | null;
       if (errorMessage && errorMessage.dataset.errorCode) {
-        showError(errorMessage.dataset.errorCode);
+        showError(errorMessage.dataset.errorCode, card);
       }
 
       if (card) {delayedExecution(() => adjustCardHeight(card));}
@@ -225,7 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 加载验证码
-    await loadVerificationCode();
+    await loadVerificationCode(card);
 
     // 调整卡片高度
     if (card) {
@@ -235,6 +228,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (error) {
     console.error('[VERIFY] ERROR: Page initialization failed:', (error as Error).message);
     hidePageLoader();
-    showError('NETWORK_ERROR');
+    showError('NETWORK_ERROR', null);
   }
 });

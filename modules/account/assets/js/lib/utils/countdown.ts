@@ -71,7 +71,7 @@ export function startCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t = window.t,
+    t = window.t || ((key: string) => key),
     onComplete
   } = config;
 
@@ -126,7 +126,7 @@ export function resumeCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t = window.t,
+    t = window.t || ((key: string) => key),
     onComplete
   } = config;
 
@@ -143,35 +143,17 @@ export function resumeCountdown(
     const remaining = Math.ceil((endTime - now) / 1000);
 
     if (remaining > 0) {
-      // 清理同 key 的旧实例
-      clearCountdown(cookieKey);
+      // 直接复用 startCountdown，传入剩余秒数
+      const cleanup = startCountdown(button, {
+        seconds: remaining,
+        cookieKey,
+        completeText,
+        input,
+        t,
+        onComplete
+      });
 
-      button.disabled = true;
-
-      const getCompleteText = (): string => {
-        if (completeText) {return completeText;}
-        return t('register.sendCodeButton');
-      };
-
-      const updateCountdown = (): void => {
-        const now = Date.now();
-        const remaining = Math.ceil((endTime - now) / 1000);
-
-        if (remaining <= 0) {
-          clearCountdown(cookieKey);
-          if (input) {input.disabled = false;}
-          button.textContent = getCompleteText();
-          if (onComplete) {onComplete();}
-        } else {
-          button.textContent = `${remaining}s`;
-        }
-      };
-
-      updateCountdown();
-      const timer = setInterval(updateCountdown, 1000);
-      countdownInstances.set(cookieKey, { timer, cookieKey });
-
-      return { remaining, cleanup: () => clearCountdown(cookieKey) };
+      return { remaining, cleanup };
     } else {
       deleteCookie(cookieKey);
     }
@@ -263,9 +245,9 @@ function updateExpiryDisplay(timerElement: HTMLElement | null, onExpired?: Expir
   const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   timerElement.textContent = timeText;
 
-  timerElement.classList.remove('warning', 'expired');
+  timerElement.classList.remove('is-warning', 'is-expired');
   if (remaining < 60000) {
-    timerElement.classList.add('warning');
+    timerElement.classList.add('is-warning');
   }
 }
 
@@ -318,7 +300,7 @@ export function clearCodeExpiryTimer(timerElement?: HTMLElement | null): void {
 
   if (timerElement) {
     timerElement.textContent = '';
-    timerElement.classList.remove('warning', 'expired', 'verified');
+    timerElement.classList.remove('is-warning', 'is-expired', 'is-verified');
   }
 
   deleteCookie('codeExpiryTime');

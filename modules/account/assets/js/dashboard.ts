@@ -48,6 +48,20 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
+/**
+ * 重置验证码状态
+ */
+function resetCaptchaState(confirmBtn: HTMLButtonElement | null, captchaContainerId: string): void {
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+  }
+  clearCaptcha(captchaContainerId);
+  const captchaContainer = document.getElementById(captchaContainerId);
+  if (captchaContainer) {
+    captchaContainer.classList.add('is-hidden');
+  }
+}
+
 // ==================== 弹窗封装 ====================
 
 /**
@@ -119,7 +133,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   // 重置弹窗状态
   urlInput.value = '';
   urlInput.readOnly = false;
-  urlInput.classList.remove('is-error', 'readonly-placeholder');
+  urlInput.classList.remove('is-error', 'is-readonly');
   errorEl.classList.add('is-hidden');
   errorEl.textContent = '';
   confirmBtn.disabled = true;
@@ -197,7 +211,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     if (urlInput!.readOnly && urlInput!.value === '[Microsoft Avatar]') {
       urlInput!.value = '';
       urlInput!.readOnly = false;
-      urlInput!.classList.remove('readonly-placeholder');
+      urlInput!.classList.remove('is-readonly');
       newPreview!.innerHTML = '';
       newPreview!.classList.remove('is-loaded');
       confirmBtn!.disabled = true;
@@ -213,7 +227,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     // 显示占位符，实际发送 "microsoft" 给后端
     urlInput!.value = '[Microsoft Avatar]';
     urlInput!.readOnly = true;
-    urlInput!.classList.add('readonly-placeholder');
+    urlInput!.classList.add('is-readonly');
 
     // 预览使用实际 URL
     newPreview!.innerHTML = '';
@@ -313,17 +327,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const error = urlParams.get('error');
 
     // 显示绑定结果提示
-    if (success === 'microsoft_linked') {
-      setTimeout(() => showAlert(t('dashboard.linkSuccess')), 100);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (error === 'microsoft_already_linked') {
-      setTimeout(() => showAlert(t('dashboard.microsoftAlreadyLinked')), 100);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (error === 'session_expired') {
-      setTimeout(() => showAlert(t('error.sessionExpired')), 100);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (error === 'user_banned') {
-      setTimeout(() => showAlert(t('error.userBanned')), 100);
+    const messages: Record<string, string> = {
+      'success:microsoft_linked': 'dashboard.linkSuccess',
+      'error:microsoft_already_linked': 'dashboard.microsoftAlreadyLinked',
+      'error:session_expired': 'error.sessionExpired',
+      'error:user_banned': 'error.userBanned'
+    };
+    const key = success ? `success:${success}` : error ? `error:${error}` : '';
+    if (messages[key]) {
+      setTimeout(() => showAlert(t(messages[key])), 100);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
@@ -384,7 +396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           unbanAt.textContent = formatDateTime(user.unban_at);
         } else {
           unbanAt.textContent = t('dashboard.permanentBan');
-          unbanAt.classList.add('permanent');
+          unbanAt.classList.add('is-permanent');
         }
       }
     }
@@ -665,8 +677,7 @@ function showDeleteAccountModal(): void {
     cancelBtnId: 'delete-cancel-btn',
     onCleanup: () => {
       clearCountdown(DELETE_COUNTDOWN_KEY);
-      clearCaptcha('delete-captcha-container');
-      captchaContainer.classList.add('is-hidden');
+      resetCaptchaState(null, 'delete-captcha-container');
       sendCodeBtn.removeEventListener('click', handleSendCodeClick);
       codeInput.removeEventListener('input', updateConfirmState);
       passwordInput.removeEventListener('input', updateConfirmState);
@@ -676,8 +687,7 @@ function showDeleteAccountModal(): void {
   if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
-  clearCaptcha('delete-captcha-container');
-  captchaContainer.classList.add('is-hidden');
+  resetCaptchaState(null, 'delete-captcha-container');
 
   // 重置弹窗状态
   codeInput.value = '';
@@ -756,7 +766,7 @@ function showDeleteAccountModal(): void {
       showAlert(t('error.networkError'));
     }
 
-    clearCaptcha('delete-captcha-container');
+    resetCaptchaState(null, 'delete-captcha-container');
   }
 
   /**
@@ -780,12 +790,12 @@ function showDeleteAccountModal(): void {
           if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
           sendCodeBtn!.disabled = false;
-          clearCaptcha('delete-captcha-container');
+          resetCaptchaState(null, 'delete-captcha-container');
         },
         () => {
           if (controller.isCleanedUp()) { return; }
           sendCodeBtn!.disabled = false;
-          clearCaptcha('delete-captcha-container');
+          resetCaptchaState(null, 'delete-captcha-container');
         },
         'delete-captcha-container'
       );
@@ -873,10 +883,10 @@ function showChangePasswordModal(): void {
   const captchaContainer = document.getElementById('change-password-captcha-container');
 
   // 密码强度指示器
-  const reqLength = document.getElementById('pwd-req-length');
-  const reqNumber = document.getElementById('pwd-req-number');
-  const reqSpecial = document.getElementById('pwd-req-special');
-  const reqCase = document.getElementById('pwd-req-case');
+  const reqLength = document.getElementById('req-length');
+  const reqNumber = document.getElementById('req-number');
+  const reqSpecial = document.getElementById('req-special');
+  const reqCase = document.getElementById('req-case');
 
   if (!currentPasswordInput || !newPasswordInput || !confirmPasswordInput || !confirmBtn || !currentPasswordError || !confirmPasswordError || !captchaContainer) { return; }
 
@@ -886,8 +896,7 @@ function showChangePasswordModal(): void {
     confirmBtnId: 'change-password-confirm-btn',
     cancelBtnId: 'change-password-cancel-btn',
     onCleanup: () => {
-      clearCaptcha('change-password-captcha-container');
-      captchaContainer.classList.add('is-hidden');
+      resetCaptchaState(null, 'change-password-captcha-container');
       currentPasswordInput.removeEventListener('input', handleCurrentInput);
       newPasswordInput.removeEventListener('input', handleNewInput);
       confirmPasswordInput.removeEventListener('input', handleConfirmInput);
@@ -897,8 +906,7 @@ function showChangePasswordModal(): void {
   if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
-  clearCaptcha('change-password-captcha-container');
-  captchaContainer.classList.add('is-hidden');
+  resetCaptchaState(null, 'change-password-captcha-container');
 
   // 重置弹窗状态
   currentPasswordInput.value = '';
@@ -1015,8 +1023,7 @@ function showChangePasswordModal(): void {
       confirmBtn!.disabled = false;
     }
 
-    clearCaptcha('change-password-captcha-container');
-    captchaContainer!.classList.add('is-hidden');
+    resetCaptchaState(confirmBtn, 'change-password-captcha-container');
   }
 
   // 确认修改密码
@@ -1055,15 +1062,11 @@ function showChangePasswordModal(): void {
         () => {
           if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
-          confirmBtn!.disabled = false;
-          clearCaptcha('change-password-captcha-container');
-          captchaContainer!.classList.add('is-hidden');
+          resetCaptchaState(confirmBtn, 'change-password-captcha-container');
         },
         () => {
           if (controller.isCleanedUp()) { return; }
-          confirmBtn!.disabled = false;
-          clearCaptcha('change-password-captcha-container');
-          captchaContainer!.classList.add('is-hidden');
+          resetCaptchaState(confirmBtn, 'change-password-captcha-container');
         },
         'change-password-captcha-container'
       );
@@ -1095,8 +1098,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
     confirmBtnId: 'change-username-confirm-btn',
     cancelBtnId: 'change-username-cancel-btn',
     onCleanup: () => {
-      clearCaptcha('change-username-captcha-container');
-      captchaContainer.classList.add('is-hidden');
+      resetCaptchaState(null, 'change-username-captcha-container');
       usernameInput.removeEventListener('input', handleInput);
     }
   });
@@ -1104,8 +1106,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
   if (!controller.modal) { return; }
 
   // 先清理可能残留的验证组件
-  clearCaptcha('change-username-captcha-container');
-  captchaContainer.classList.add('is-hidden');
+  resetCaptchaState(null, 'change-username-captcha-container');
 
   // 重置弹窗状态
   usernameInput.value = user.username;
@@ -1191,8 +1192,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
       confirmBtn!.disabled = false;
     }
 
-    clearCaptcha('change-username-captcha-container');
-    captchaContainer!.classList.add('is-hidden');
+    resetCaptchaState(confirmBtn, 'change-username-captcha-container');
   }
 
   // 确认修改用户名
@@ -1223,15 +1223,11 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
         () => {
           if (controller.isCleanedUp()) { return; }
           showAlert(t('register.humanVerifyFailed'));
-          confirmBtn!.disabled = false;
-          clearCaptcha('change-username-captcha-container');
-          captchaContainer!.classList.add('is-hidden');
+          resetCaptchaState(confirmBtn, 'change-username-captcha-container');
         },
         () => {
           if (controller.isCleanedUp()) { return; }
-          confirmBtn!.disabled = false;
-          clearCaptcha('change-username-captcha-container');
-          captchaContainer!.classList.add('is-hidden');
+          resetCaptchaState(confirmBtn, 'change-username-captcha-container');
         },
         'change-username-captcha-container'
       );
@@ -1266,8 +1262,8 @@ function showQrScanModal(onClose: () => void): void {
   let canvasCtx: CanvasRenderingContext2D | null = null;
 
   // 检查浏览器是否支持 BarcodeDetector
-  const hasBarcodeDetector = 'BarcodeDetector' in window;
-  const hasJsQR = typeof (window as unknown as { jsQR?: unknown }).jsQR === 'function';
+  const hasBarcodeDetector = typeof window.BarcodeDetector === 'function';
+  const hasJsQR = typeof window.jsQR === 'function';
 
   console.log('[QR-SCAN] BarcodeDetector:', hasBarcodeDetector, 'jsQR:', hasJsQR);
 
@@ -1412,7 +1408,7 @@ function showQrScanModal(onClose: () => void): void {
     detectionStarted = true;
 
     try {
-      const barcodeDetector = new (window as unknown as { BarcodeDetector: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector({ formats: ['qr_code'] });
+      const barcodeDetector = new window.BarcodeDetector!({ formats: ['qr_code'] });
       console.log('[QR-SCAN] Using BarcodeDetector');
 
       const detectFrame = async (): Promise<void> => {
@@ -1480,8 +1476,7 @@ function showQrScanModal(onClose: () => void): void {
       canvasCtx!.drawImage(video!, 0, 0, canvas!.width, canvas!.height);
 
       const imageData = canvasCtx!.getImageData(0, 0, canvas!.width, canvas!.height);
-      const jsQRFunc = (window as unknown as { jsQR: (data: Uint8ClampedArray, width: number, height: number, options?: { inversionAttempts?: string }) => { data: string } | null }).jsQR;
-      const code = jsQRFunc(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      const code = window.jsQR!(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
 
       if (code) {
         console.log('[QR-SCAN] QR detected (jsQR)');

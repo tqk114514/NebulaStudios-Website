@@ -9,7 +9,7 @@
 /**
  * 检查用户是否同意使用 Cookie
  */
-function hasCookieConsent(): boolean {
+export function hasCookieConsent(): boolean {
   const nameEQ = 'cookieConsent=';
   const ca = document.cookie.split(';');
   for (let i = 0; i < ca.length; i++) {

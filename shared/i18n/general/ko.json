@@ -20,7 +20,7 @@
   "notFound.message": "찾으시는 페이지가 존재하지 않거나 삭제되었습니다",
   "notFound.backToLogin": "로그인으로 돌아가기",
 
-  "footer.copyright": "© 2025 Nebula Studios 모든 권리 보유",
+  "footer.copyright": "© {year} Nebula Studios 모든 권리 보유",
 
   "policy.agreeByRegister": "가입하면 다음에 동의하는 것으로 간주됩니다:",
   "policy.privacyPolicy": "개인정보 처리방침",
