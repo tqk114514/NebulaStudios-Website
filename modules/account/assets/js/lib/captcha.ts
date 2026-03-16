@@ -219,6 +219,33 @@ function waitForAPI(timeout: number = 5000): Promise<boolean> {
   });
 }
 
+// ==================== 辅助函数 ====================
+
+/**
+ * 构建验证器回调函数
+ */
+function buildCallbacks(
+  onSuccess?: CaptchaCallback,
+  onError?: CaptchaCallback,
+  onExpired?: CaptchaCallback
+) {
+  return {
+    callback: (token: string) => {
+      captchaToken = token;
+      if (onSuccess) {onSuccess(token);}
+    },
+    'error-callback': () => {
+      console.error('[CAPTCHA] ERROR: Verification failed');
+      if (onError) {onError();}
+    },
+    'expired-callback': () => {
+      console.warn('[CAPTCHA] WARN: Token expired');
+      captchaToken = null;
+      if (onExpired) {onExpired();}
+    }
+  };
+}
+
 // ==================== 组件管理 ====================
 
 /**
@@ -284,23 +311,17 @@ function renderTurnstile(
   onError?: CaptchaCallback,
   onExpired?: CaptchaCallback
 ): string {
-  return window.turnstile!.render(`#${containerId}`, {
+  if (!window.turnstile) {
+    throw new Error('Turnstile API not loaded');
+  }
+
+  const options = buildCallbacks(onSuccess, onError, onExpired);
+
+  return window.turnstile.render(`#${containerId}`, {
     sitekey: siteKey,
     theme: 'dark',
     size: 'normal',
-    callback: (token: string) => {
-      captchaToken = token;
-      if (onSuccess) {onSuccess(token);}
-    },
-    'error-callback': () => {
-      console.error('[CAPTCHA] ERROR: Turnstile verification failed');
-      if (onError) {onError();}
-    },
-    'expired-callback': () => {
-      console.warn('[CAPTCHA] WARN: Token expired');
-      captchaToken = null;
-      if (onExpired) {onExpired();}
-    }
+    ...options
   });
 }
 
@@ -313,22 +334,16 @@ function renderHCaptcha(
   onError?: CaptchaCallback,
   onExpired?: CaptchaCallback
 ): string {
-  return window.hcaptcha!.render(containerId, {
+  if (!window.hcaptcha) {
+    throw new Error('hCaptcha API not loaded');
+  }
+
+  const options = buildCallbacks(onSuccess, onError, onExpired);
+
+  return window.hcaptcha.render(containerId, {
     sitekey: siteKey,
     theme: 'dark',
-    callback: (token: string) => {
-      captchaToken = token;
-      if (onSuccess) {onSuccess(token);}
-    },
-    'error-callback': () => {
-      console.error('[CAPTCHA] ERROR: hCaptcha verification failed');
-      if (onError) {onError();}
-    },
-    'expired-callback': () => {
-      console.warn('[CAPTCHA] WARN: Token expired');
-      captchaToken = null;
-      if (onExpired) {onExpired();}
-    }
+    ...options
   });
 }
 

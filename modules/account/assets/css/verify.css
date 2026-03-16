@@ -1,242 +1,86 @@
-/* verify.css - 验证码页面样式 */
+/**
+ * modules/account/assets/css/verify.css
+ * 验证页面专属样式
+ */
 
-/* 为验证码页面的卡片添加高度过渡动画 */
-.content-container .card {
-  position: relative;
-  overflow: hidden;
-  transition: height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 确保状态容器包含所有内容（包括按钮） */
-#loading-state,
-#success-state,
-#error-state {
-  width: 100%;
-}
-
-.verify-title {
-  color: var(--text);
-  font-size: 28px;
-  margin-bottom: 20px;
-  font-weight: 700;
-  background: linear-gradient(to right, var(--text), var(--gray-100));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: title-fade-in 0.5s ease;
-}
-
-@keyframes title-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.verify-subtitle {
-  color: var(--text-muted);
-  font-size: 15px;
-  margin-bottom: 30px;
-  line-height: 1.6;
-  animation: subtitle-fade-in 0.5s ease 0.1s backwards;
-}
-
-@keyframes subtitle-fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
+/* ==================== 验证码显示 ==================== */
 
 .code-display {
-  padding: 30px 0;
-  margin: 20px 0;
+  margin: 32px 0;
+  text-align: center;
 }
 
-/* 验证码框容器 - Telegram 风格 */
 .code-boxes {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: manipulation;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-/* 单个数字框 */
 .code-box {
-  width: 54px;
-  height: 72px;
+  width: 48px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(var(--white-rgb), 0.03);
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  font-size: 36px;
-  font-weight: 700;
-  color: var(--text-disabled);
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  backdrop-filter: blur(5px);
-  box-shadow: var(--shadow-sm);
+  background: var(--line);
+  border: 1px solid var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 300;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
 }
 
-/* 悬停效果 */
-.code-boxes:hover .code-box {
-  border-color: var(--border-active);
-  background: rgb(var(--white-rgb), 0.08);
-}
-
-/* 激活/填充状态 */
-.code-box.is-filled {
-  border-color: var(--primary);
-  background: rgb(var(--primary-rgb), 0.1);
-  color: var(--text);
-  box-shadow: 0 0 20px rgb(var(--primary-rgb), 0.3);
-  animation: telegram-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Telegram 风格的弹性动画 */
-@keyframes telegram-pop {
-  0% {
-    transform: scale(0.5) translateY(20px);
-    opacity: 0;
-  }
-
-  40% {
-    transform: scale(1.2) translateY(-5px); /* 过冲 */
-    opacity: 0.8;
-  }
-
-  100% {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
-}
-
-/* 当前焦点的框 - 呼吸效果 */
-.code-box.active {
-  border-color: rgb(var(--primary-rgb), 0.6);
-  box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
-  animation: breathe 1.5s ease-in-out infinite;
-}
-
-@keyframes breathe {
-  0% {
-    border-color: rgb(var(--primary-rgb), 0.6);
-    box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
-  }
-
-  50% {
-    border-color: rgb(var(--primary-rgb), 1);
-    box-shadow: 0 0 25px rgb(var(--primary-rgb), 0.4);
-  }
-
-  100% {
-    border-color: rgb(var(--primary-rgb), 0.6);
-    box-shadow: 0 0 15px rgb(var(--primary-rgb), 0.2);
-  }
+.code-box:hover {
+  border-color: var(--mid);
+  background: var(--dim);
 }
 
 .code-hint {
-  color: rgb(var(--white-rgb), 0.5);
-  font-size: 13px;
-  margin-top: 25px;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.18em;
+  color: var(--mid);
+  cursor: pointer;
+  transition: color 0.2s;
+  display: inline-block;
 }
 
-.expire-notice {
-  background: rgb(var(--primary-rgb), 0.1);
-  border: 1px solid rgb(var(--primary-rgb), 0.3);
-  border-radius: 12px;
-  padding: 15px;
-  margin-top: 20px;
-  backdrop-filter: blur(5px);
-  animation: notice-slide-in 0.4s ease;
+.code-hint:hover {
+  color: var(--fg);
 }
 
-@keyframes notice-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* ==================== 过期提示 ==================== */
 
 .expire-text {
-  color: var(--primary);
-  font-size: 14px;
-  margin: 0;
-  font-weight: 500;
+  margin: 24px 0;
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+  line-height: 1.8;
+  text-align: center;
 }
+
+/* ==================== 错误状态 ==================== */
 
 .error-container {
-  background: rgb(var(--danger-rgb), 0.1);
-  border: 1px solid rgb(var(--danger-rgb), 0.3);
-  border-radius: 12px;
-  padding: 30px;
-  animation: error-shake 0.5s ease;
-}
-
-@keyframes error-shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-
-  10% {
-    transform: translateX(-8px);
-  }
-
-  30% {
-    transform: translateX(8px);
-  }
-
-  50% {
-    transform: translateX(-6px);
-  }
-
-  70% {
-    transform: translateX(6px);
-  }
-
-  90% {
-    transform: translateX(-4px);
-  }
+  text-align: center;
+  margin-bottom: 32px;
 }
 
 .error-title {
-  color: var(--danger);
-  font-size: 20px;
-  margin-bottom: 12px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(24px, 3vw, 32px);
+  letter-spacing: -0.02em;
+  color: var(--error);
+  margin-bottom: 16px;
 }
 
 .error-text {
-  color: var(--text-muted);
-  font-size: 15px;
-  margin: 0;
-}
-
-/* 返回按钮使用通用 button-secondary，添加上边距 */
-#success-state .button-secondary,
-#error-state .button-secondary {
-  margin-top: 30px;
+  font-size: var(--text-base);
+  letter-spacing: 0.08em;
+  color: var(--mid);
+  line-height: 1.8;
 }

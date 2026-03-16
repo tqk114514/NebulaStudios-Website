@@ -43,13 +43,33 @@ interface QrLoginOptions {
 /** 登录状态 */
 type LoginStatus = 'pending' | 'scanned' | 'confirmed' | 'cancelled';
 
-// ==================== 回调函数 ====================
+// ==================== 状态管理 ====================
 
-/** 错误提示回调 */
-let showAlertCallback: ShowAlertCallback | null = null;
+/** 模块状态（封装所有模块级变量） */
+const state = {
+  /** 弹窗元素引用 */
+  qrCodeContainer: null as HTMLElement | null,
+  qrScannedIcon: null as HTMLElement | null,
+  qrLoginHint: null as HTMLElement | null,
 
-/** 翻译函数 */
-let translateFn: TranslateFunction = (key) => key;
+  /** 弹窗控制器 */
+  modalController: null as ModalController | null,
+
+  /** 当前 token（用于关闭时删除） */
+  currentToken: null as string | null,
+
+  /** 当前状态 */
+  currentStatus: 'pending' as LoginStatus,
+
+  /** WebSocket 连接 */
+  ws: null as WebSocket | null,
+
+  /** 错误提示回调 */
+  showAlertCallback: null as ShowAlertCallback | null,
+
+  /** 翻译函数 */
+  translateFn: ((key: string) => key) as TranslateFunction
+};
 
 // ==================== 移动端检测 ====================
 
@@ -119,50 +139,36 @@ export function generateQRCode(data: string, container: HTMLElement, size: numbe
 
 // ==================== 弹窗管理 ====================
 
-/** 弹窗元素引用 */
-let qrCodeContainer: HTMLElement | null = null;
-let qrScannedIcon: HTMLElement | null = null;
-let qrLoginHint: HTMLElement | null = null;
-
-/** 弹窗控制器 */
-let modalController: ModalController | null = null;
-
-/** 当前 token（用于关闭时删除） */
-let currentToken: string | null = null;
-
-/** 当前状态 */
-let currentStatus: LoginStatus = 'pending';
-
 /**
  * 初始化扫码登录功能
  */
 export function initQrLogin(button: HTMLElement | null, options: QrLoginOptions = {}): void {
   if (!button) {return;}
 
-  if (options.showAlert) {showAlertCallback = options.showAlert;}
-  if (options.t) {translateFn = options.t;}
+  if (options.showAlert) {state.showAlertCallback = options.showAlert;}
+  if (options.t) {state.translateFn = options.t;}
 
   if (isMobileDevice()) {return;}
 
   button.classList.remove('is-hidden');
 
-  qrCodeContainer = document.getElementById('qr-code-container');
-  qrScannedIcon = document.getElementById('qr-scanned-icon');
-  qrLoginHint = document.getElementById('qr-login-hint');
+  state.qrCodeContainer = document.getElementById('qr-code-container');
+  state.qrScannedIcon = document.getElementById('qr-scanned-icon');
+  state.qrLoginHint = document.getElementById('qr-login-hint');
 
-  if (!qrCodeContainer) {
+  if (!state.qrCodeContainer) {
     console.error('[QR-LOGIN] ERROR: Modal elements not found');
     return;
   }
 
   // 创建弹窗控制器
-  modalController = createModalController({
+  state.modalController = createModalController({
     modalId: 'qr-login-modal',
     cancelBtnId: 'qr-login-close-btn',
     closeOnOverlay: true,
     onCleanup: () => {
       disconnectWebSocket();
-      if (currentStatus !== 'confirmed') {
+      if (state.currentStatus !== 'confirmed') {
         cancelCurrentToken();
       }
       setTimeout(() => resetModalState(), 300);
@@ -176,15 +182,12 @@ export function initQrLogin(button: HTMLElement | null, options: QrLoginOptions 
  * 显示错误提示
  */
 function showError(errorKey: string): void {
-  if (showAlertCallback) {
-    showAlertCallback(translateFn(errorKey));
+  if (state.showAlertCallback) {
+    state.showAlertCallback(state.translateFn(errorKey));
   }
 }
 
 // ==================== WebSocket 管理 ====================
-
-/** WebSocket 连接 */
-let ws: WebSocket | null = null;
 
 /**
  * 连接 WebSocket
@@ -194,13 +197,13 @@ function connectWebSocket(token: string): void {
   const wsUrl = `${protocol}//${window.location.host}/ws/qr-login?token=${encodeURIComponent(token)}`;
 
   try {
-    ws = new WebSocket(wsUrl);
+    state.ws = new WebSocket(wsUrl);
 
-    ws.onopen = (): void => {
+    state.ws.onopen = (): void => {
       console.log('[QR-LOGIN] WebSocket connected');
     };
 
-    ws.onmessage = (event): void => {
+    state.ws.onmessage = (event): void => {
       try {
         const message: WSMessage = JSON.parse(event.data);
         console.log('[QR-LOGIN] WebSocket message:', message.type);
@@ -213,12 +216,12 @@ function connectWebSocket(token: string): void {
       }
     };
 
-    ws.onclose = (): void => {
+    state.ws.onclose = (): void => {
       console.log('[QR-LOGIN] WebSocket disconnected');
-      ws = null;
+      state.ws = null;
     };
 
-    ws.onerror = (error): void => {
+    state.ws.onerror = (error): void => {
       console.error('[QR-LOGIN] WebSocket error:', error);
     };
   } catch (error) {
@@ -230,9 +233,9 @@ function connectWebSocket(token: string): void {
  * 断开 WebSocket
  */
 function disconnectWebSocket(): void {
-  if (ws) {
-    ws.close();
-    ws = null;
+  if (state.ws) {
+    state.ws.close();
+    state.ws = null;
   }
 }
 
@@ -243,7 +246,7 @@ function handleStatusChange(status: string, data: WSMessage = { type: 'status' }
   if (status === 'scanned') {
     setScannedState();
   } else if (status === 'confirmed') {
-    currentStatus = 'confirmed';
+    state.currentStatus = 'confirmed';
 
     if (data.sessionToken) {
       setSessionAndRedirect(data.sessionToken);
@@ -279,27 +282,27 @@ async function setSessionAndRedirect(sessionToken: string): Promise<void> {
  * 显示扫码登录弹窗
  */
 export async function showQrLoginModal(): Promise<void> {
-  if (!modalController || !qrCodeContainer) {return;}
+  if (!state.modalController || !state.qrCodeContainer) {return;}
 
-  qrCodeContainer.innerHTML = '<div class="qr-loading"></div>';
-  modalController.open();
+  state.qrCodeContainer.innerHTML = '<div class="qr-loading"></div>';
+  state.modalController.open();
 
   const result = await fetchLoginToken();
 
   if (result.success && result.token) {
-    currentToken = result.token;
+    state.currentToken = result.token;
     connectWebSocket(result.token);
-    qrCodeContainer.innerHTML = '';
+    state.qrCodeContainer.innerHTML = '';
 
-    const success = generateQRCode(result.token, qrCodeContainer);
+    const success = generateQRCode(result.token, state.qrCodeContainer);
     if (!success) {
-      currentToken = null;
+      state.currentToken = null;
       disconnectWebSocket();
-      modalController.close();
+      state.modalController.close();
       showError('login.qrCodeGenerateFailed');
     }
   } else {
-    modalController.close();
+    state.modalController.close();
 
     if (result.error === 'NETWORK_ERROR') {
       showError('error.networkError');
@@ -313,43 +316,43 @@ export async function showQrLoginModal(): Promise<void> {
  * 取消/删除当前 token
  */
 async function cancelCurrentToken(): Promise<void> {
-  if (!currentToken) {return;}
+  if (!state.currentToken) {return;}
 
   try {
     await fetch('/api/qr-login/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: currentToken })
+      body: JSON.stringify({ token: state.currentToken })
     });
     console.log('[QR-LOGIN] Token cancelled');
   } catch (error) {
     console.error('[QR-LOGIN] ERROR: Failed to cancel token:', (error as Error).message);
   }
 
-  currentToken = null;
+  state.currentToken = null;
 }
 
 /**
  * 关闭扫码登录弹窗
  */
 export function closeQrLoginModal(): void {
-  modalController?.close();
+  state.modalController?.close();
 }
 
 /**
  * 重置弹窗状态
  */
 function resetModalState(): void {
-  currentStatus = 'pending';
+  state.currentStatus = 'pending';
 
-  if (qrCodeContainer) {qrCodeContainer.classList.remove('is-hidden');}
-  if (qrScannedIcon) {
-    qrScannedIcon.classList.add('is-hidden');
-    qrScannedIcon.classList.remove('is-cancelled');
+  if (state.qrCodeContainer) {state.qrCodeContainer.classList.remove('is-hidden');}
+  if (state.qrScannedIcon) {
+    state.qrScannedIcon.classList.add('is-hidden');
+    state.qrScannedIcon.classList.remove('is-cancelled');
   }
 
-  if (qrLoginHint) {
-    qrLoginHint.textContent = translateFn('login.qrLoginHint');
+  if (state.qrLoginHint) {
+    state.qrLoginHint.textContent = state.translateFn('login.qrLoginHint');
   }
 }
 
@@ -357,18 +360,18 @@ function resetModalState(): void {
  * 更新为已扫描状态
  */
 export function setScannedState(): void {
-  if (currentStatus !== 'pending') {return;}
+  if (state.currentStatus !== 'pending') {return;}
 
-  currentStatus = 'scanned';
+  state.currentStatus = 'scanned';
   console.log('[QR-LOGIN] Status changed to scanned');
 
-  if (qrCodeContainer) {qrCodeContainer.classList.add('is-hidden');}
-  if (qrScannedIcon) {
-    qrScannedIcon.classList.remove('is-hidden', 'is-cancelled');
+  if (state.qrCodeContainer) {state.qrCodeContainer.classList.add('is-hidden');}
+  if (state.qrScannedIcon) {
+    state.qrScannedIcon.classList.remove('is-hidden', 'is-cancelled');
   }
 
-  if (qrLoginHint) {
-    qrLoginHint.textContent = translateFn('login.qrWaitingConfirm');
+  if (state.qrLoginHint) {
+    state.qrLoginHint.textContent = state.translateFn('login.qrWaitingConfirm');
   }
 }
 
@@ -376,16 +379,16 @@ export function setScannedState(): void {
  * 更新为已取消状态
  */
 export function setCancelledState(): void {
-  if (currentStatus !== 'scanned') {return;}
+  if (state.currentStatus !== 'scanned') {return;}
 
-  currentStatus = 'cancelled';
+  state.currentStatus = 'cancelled';
   console.log('[QR-LOGIN] Status changed to cancelled');
 
-  if (qrScannedIcon) {
-    qrScannedIcon.classList.add('is-cancelled');
+  if (state.qrScannedIcon) {
+    state.qrScannedIcon.classList.add('is-cancelled');
   }
 
-  if (qrLoginHint) {
-    qrLoginHint.textContent = translateFn('login.qrLoginCancelled');
+  if (state.qrLoginHint) {
+    state.qrLoginHint.textContent = state.translateFn('login.qrLoginCancelled');
   }
 }

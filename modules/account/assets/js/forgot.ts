@@ -24,6 +24,42 @@ const showAlertWithTranslation = (message: string, title?: string): void => show
 /** 当前邮箱 */
 let currentEmail: string | null = null;
 
+// ==================== 错误码映射 ====================
+
+/**
+ * 发送验证码错误码映射
+ */
+const sendCodeErrorMap: Record<string, string> = {
+  'EMAIL_NOT_FOUND': 'forgotPassword.emailNotFound',
+  'CAPTCHA_FAILED': 'register.humanVerifyFailed',
+  'RATE_LIMIT': 'error.rateLimitExceeded',
+  'SEND_FAILED': 'forgotPassword.sendFailed'
+};
+
+/**
+ * 重置密码错误码映射
+ */
+const resetPasswordErrorMap: Record<string, string> = {
+  'INVALID_CODE': 'forgotPassword.invalidCode',
+  'CODE_EXPIRED': 'forgotPassword.codeExpired',
+  'USER_NOT_FOUND': 'forgotPassword.emailNotFound',
+  'RESET_FAILED': 'forgotPassword.resetFailed'
+};
+
+// ==================== 工具函数 ====================
+
+/**
+ * 隐藏验证码容器
+ */
+function hideCaptcha(container: HTMLElement | null, card: HTMLElement | null): void {
+  if (container) {
+    container.classList.add('is-hidden');
+    if (card) {
+      delayedExecution(() => adjustCardHeight(card));
+    }
+  }
+}
+
 // ==================== 页面初始化 ====================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -77,6 +113,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // 类型断言：DOM 检查后这些元素确定存在
+    const formEmailStep = emailStep;
+    const formResetStep = resetStep;
+    const submitEmailBtn = emailSubmitBtn;
+    const submitResetBtn = resetSubmitBtn;
+    const inputEmail = emailInput;
+    const inputCode = codeInput;
+    const inputPassword = passwordInput;
+    const inputPasswordConfirm = passwordConfirmInput;
+
     // 密码强度指示器
     const reqLength = document.getElementById('req-length');
     const reqNumber = document.getElementById('req-number');
@@ -89,12 +135,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      * 更新发送验证码按钮状态
      */
     function updateSendCodeButtonState(): void {
-      const email = emailInput!.value.trim();
+      const email = inputEmail.value.trim();
       const validation = validateEmail(email);
       const wasHidden = emailError?.classList.contains('is-hidden');
 
       if (!validation.valid) {
-        emailSubmitBtn!.disabled = true;
+        submitEmailBtn.disabled = true;
         // 邮箱不在白名单时显示错误
         if (email && validation.errorKey === 'register.emailNotSupported') {
           emailError?.classList.remove('is-hidden');
@@ -106,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (!wasHidden) {delayedExecution(() => adjustCardHeight(card));}
         }
       } else {
-        emailSubmitBtn!.disabled = false;
+        submitEmailBtn.disabled = false;
         if (!emailError?.classList.contains('is-hidden')) {
           emailError?.classList.add('is-hidden');
           delayedExecution(() => adjustCardHeight(card));
@@ -129,10 +175,10 @@ document.addEventListener('DOMContentLoaded', async () => {
      * 切换到重置密码步骤
      */
     function showResetStep(): void {
-      emailStep!.classList.add('is-hidden');
-      resetStep!.classList.remove('is-hidden');
+      formEmailStep.classList.add('is-hidden');
+      formResetStep.classList.remove('is-hidden');
       delayedExecution(() => adjustCardHeight(card));
-      codeInput!.focus();
+      inputCode.focus();
     }
 
     // ==================== 密码验证 ====================
@@ -154,7 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 监听密码输入
     passwordInput.addEventListener('input', () => {
-      updatePasswordRequirements(passwordInput!.value);
+      updatePasswordRequirements(inputPassword.value);
     });
 
     // ==================== 发送验证码 ====================
@@ -163,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      * 发送重置密码验证码
      */
     async function sendResetCode(): Promise<void> {
-      const email = emailInput!.value.trim().toLowerCase();
+      const email = inputEmail.value.trim().toLowerCase();
       const token = getCaptchaToken();
       const captchaType = getCaptchaType();
 
@@ -186,26 +232,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           showResetStep();
         } else {
           // 根据错误码显示对应提示
-          const errorMessages: Record<string, string> = {
-            'EMAIL_NOT_FOUND': 'forgotPassword.emailNotFound',
-            'CAPTCHA_FAILED': 'register.humanVerifyFailed',
-            'RATE_LIMIT': 'error.rateLimitExceeded',
-            'SEND_FAILED': 'forgotPassword.sendFailed'
-          };
-          const errorKey = errorMessages[result.errorCode] || 'forgotPassword.sendFailed';
+          const errorKey = sendCodeErrorMap[result.errorCode] || 'forgotPassword.sendFailed';
           showAlertWithTranslation(t(errorKey));
         }
       } catch {
         showAlertWithTranslation(t('error.networkError'));
       }
 
-      emailSubmitBtn!.disabled = false;
+      submitEmailBtn.disabled = false;
       clearCaptcha();
-
-      if (captchaContainer) {
-        captchaContainer.classList.add('is-hidden');
-        delayedExecution(() => adjustCardHeight(card));
-      }
+      hideCaptcha(captchaContainer, card);
     }
 
     /**
@@ -215,16 +251,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
 
       try {
-        const email = emailInput!.value.trim();
+        const email = inputEmail.value.trim();
         const validation = validateEmail(email);
 
         if (!validation.valid) {
-          showAlertWithTranslation(t(validation.errorKey!));
+          showAlertWithTranslation(t(validation.errorKey || 'register.invalidEmail'));
           return;
         }
 
         // 禁用按钮
-        emailSubmitBtn!.disabled = true;
+        submitEmailBtn.disabled = true;
 
         // 如果未配置验证码，直接发送
         if (!getCaptchaSiteKey()) {
@@ -240,27 +276,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             async () => { await sendResetCode(); },
             () => {
               showAlertWithTranslation(t('register.humanVerifyFailed'));
-              emailSubmitBtn!.disabled = false;
+              submitEmailBtn.disabled = false;
               clearCaptcha();
-              if (captchaContainer) {
-                captchaContainer.classList.add('is-hidden');
-                if (card) {delayedExecution(() => adjustCardHeight(card));}
-              }
+              hideCaptcha(captchaContainer, card);
             },
             () => {
-              emailSubmitBtn!.disabled = false;
+              submitEmailBtn.disabled = false;
               clearCaptcha();
-              if (captchaContainer) {
-                captchaContainer.classList.add('is-hidden');
-                if (card) {delayedExecution(() => adjustCardHeight(card));}
-              }
+              hideCaptcha(captchaContainer, card);
             }
           );
         }
       } catch (error) {
         console.error('[FORGOT-PASSWORD] ERROR: Email submit failed:', (error as Error).message);
         showAlertWithTranslation(t('forgotPassword.sendFailed'));
-        emailSubmitBtn!.disabled = false;
+        submitEmailBtn.disabled = false;
       }
     }
 
@@ -272,9 +302,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function handleResetSubmit(e: Event): Promise<void> {
       e.preventDefault();
 
-      const code = codeInput!.value.trim();
-      const password = passwordInput!.value;
-      const passwordConfirm = passwordConfirmInput!.value;
+      const code = inputCode.value.trim();
+      const password = inputPassword.value;
+      const passwordConfirm = inputPasswordConfirm.value;
 
       // 验证码检查
       if (!code) {
@@ -285,7 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 密码验证
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.valid) {
-        showAlertWithTranslation(t(passwordValidation.errorKey!));
+        showAlertWithTranslation(t(passwordValidation.errorKey || 'register.passwordInvalid'));
         return;
       }
 
@@ -295,8 +325,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      resetSubmitBtn!.disabled = true;
-      resetSubmitBtn!.textContent = t('forgotPassword.resetting');
+      submitResetBtn.disabled = true;
+      submitResetBtn.textContent = t('forgotPassword.resetting');
 
       try {
         const response = await fetch('/api/auth/reset-password', {
@@ -313,28 +343,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '/account/login';
           }, 1500);
         } else {
-          const errorMessages: Record<string, string> = {
-            'INVALID_CODE': 'forgotPassword.invalidCode',
-            'CODE_EXPIRED': 'forgotPassword.codeExpired',
-            'USER_NOT_FOUND': 'forgotPassword.emailNotFound',
-            'RESET_FAILED': 'forgotPassword.resetFailed'
-          };
-          const errorKey = errorMessages[result.errorCode] || 'forgotPassword.resetFailed';
+          const errorKey = resetPasswordErrorMap[result.errorCode] || 'forgotPassword.resetFailed';
           showAlertWithTranslation(t(errorKey));
-          resetSubmitBtn!.disabled = false;
-          resetSubmitBtn!.textContent = t('forgotPassword.resetPassword');
+          submitResetBtn.disabled = false;
+          submitResetBtn.textContent = t('forgotPassword.resetPassword');
         }
       } catch {
         showAlertWithTranslation(t('error.networkError'));
-        resetSubmitBtn!.disabled = false;
-        resetSubmitBtn!.textContent = t('forgotPassword.resetPassword');
+        submitResetBtn.disabled = false;
+        submitResetBtn.textContent = t('forgotPassword.resetPassword');
       }
     }
 
     // ==================== 事件绑定 ====================
 
     // 绑定表单提交事件
-    emailStep.addEventListener('submit', handleEmailSubmit);
+    formEmailStep.addEventListener('submit', handleEmailSubmit);
     resetStep.addEventListener('submit', handleResetSubmit);
 
     // 更新页面标题

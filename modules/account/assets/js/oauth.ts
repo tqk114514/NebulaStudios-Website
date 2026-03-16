@@ -218,7 +218,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const { clientName, clientDescription, scopes, username, userAvatar } = result.data!;
+      // 检查 data 是否存在
+      if (!result.data) {
+        showError('server_error');
+        return;
+      }
+
+      const { clientName, clientDescription, scopes, username, userAvatar } = result.data;
 
       // 显示应用信息
       if (appNameEl) appNameEl.textContent = clientName;
