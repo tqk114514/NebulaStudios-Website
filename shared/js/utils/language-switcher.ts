@@ -7,9 +7,7 @@
  * - 更新页面标题
  */
 
-/**
- * 语言显示名称映射
- */
+/** 语言显示名称映射（方便快速查找） */
 const LANG_NAMES: Record<string, string> = {
   'zh-CN': '简体中文',
   'zh-TW': '繁體中文',
@@ -121,10 +119,7 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
  */
 export function applyTranslations(): boolean {
   if (typeof window.t !== 'function') {
-    console.warn('[I18N] WARN: Translation function not available, retrying...');
-    setTimeout(() => {
-      if (typeof window.t === 'function') {applyTranslations();}
-    }, 100);
+    console.warn('[I18N] WARN: Translation function not available');
     return false;
   }
 
@@ -227,7 +222,8 @@ export function hidePageLoader(delay: number = 500): void {
 }
 
 /**
- * 初始化弹窗翻译
+ * 初始化弹窗翻译（用于动态创建的弹窗）
+ * 注意：静态 HTML 中的弹窗由 applyTranslations() 统一处理
  */
 export function initializeModalTranslations(): void {
   if (!window.t || typeof window.t !== 'function') {

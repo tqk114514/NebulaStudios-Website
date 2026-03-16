@@ -144,7 +144,7 @@ export const showWarning = (msg: string, duration?: number): void => showToast(m
 /**
  * 显示通用提示弹窗
  */
-export function showAlert(message: string, title: string = '', t: TranslateFunction = window.t): void {
+export function showAlert(message: string, title: string = '', t: TranslateFunction = window.t || ((key: string) => key)): void {
   const alertModal = document.getElementById('alert-modal');
   const alertTitle = document.getElementById('alert-title');
   const alertMessage = document.getElementById('alert-message');
@@ -184,7 +184,7 @@ export function closeAlert(): void {
 /**
  * 显示确认弹窗
  */
-export function showConfirm(message: string, title: string | null = null, t: TranslateFunction = window.t): Promise<boolean> {
+export function showConfirm(message: string, title: string | null = null, t: TranslateFunction = window.t || ((key: string) => key)): Promise<boolean> {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirm-modal');
     const titleEl = document.getElementById('confirm-title');
@@ -230,7 +230,7 @@ export function showConfirm(message: string, title: string | null = null, t: Tra
 /**
  * 显示外部链接确认弹窗
  */
-export function showExternalLinkConfirm(url: string, t: TranslateFunction = window.t): void {
+export function showExternalLinkConfirm(url: string, t: TranslateFunction = window.t || ((key: string) => key)): void {
   const modal = document.getElementById('external-link-modal');
 
   if (!modal) {
@@ -247,29 +247,27 @@ export function showExternalLinkConfirm(url: string, t: TranslateFunction = wind
     urlDisplay.href = url;
   }
 
+  // 使用 createModalController 优雅地管理按钮事件
+  const controller = createModalController({
+    modalId: 'external-link-modal',
+    confirmBtnId: 'external-link-confirm',
+    cancelBtnId: 'external-link-cancel',
+    closeOnOverlay: false
+  });
+
   if (confirmBtn) {confirmBtn.textContent = t('modal.externalLink.continue');}
   if (cancelBtn) {cancelBtn.textContent = t('modal.cancel');}
 
-  if (confirmBtn && confirmBtn.parentNode) {
-    const newConfirmBtn = confirmBtn.cloneNode(true) as HTMLElement;
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+  controller.onConfirm(() => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    controller.close();
+  });
 
-    newConfirmBtn.addEventListener('click', () => {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      modal.classList.add('is-hidden');
-    });
-  }
+  controller.onCancel(() => {
+    controller.close();
+  });
 
-  if (cancelBtn && cancelBtn.parentNode) {
-    const newCancelBtn = cancelBtn.cloneNode(true) as HTMLElement;
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-
-    newCancelBtn.addEventListener('click', () => {
-      modal.classList.add('is-hidden');
-    });
-  }
-
-  modal.classList.remove('is-hidden');
+  controller.open();
 }
 
 /**
@@ -325,50 +323,59 @@ export function closeModal(): void {
   document.getElementById('modal-overlay')?.classList.add('is-hidden');
 }
 
+/** 弹窗事件监听是否已初始化 */
+let modalsInitialized = false;
+
 /**
  * 初始化弹窗事件监听
  */
-export function initializeModals(t: TranslateFunction): void {
-  const alertModal = document.getElementById('alert-modal');
-  const alertCloseBtn = document.getElementById('alert-close-btn');
-  const modalOverlay = document.getElementById('modal-overlay');
-  const modalCloseBtn = document.querySelector('#modal-overlay .modal-close');
-  const externalLinkModal = document.getElementById('external-link-modal');
+export function initializeModals(t: TranslateFunction = window.t || ((key: string) => key)): void {
+  // 只在第一次调用时注册事件监听
+  if (!modalsInitialized) {
+    const alertModal = document.getElementById('alert-modal');
+    const alertCloseBtn = document.getElementById('alert-close-btn');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalCloseBtn = document.querySelector('#modal-overlay .modal-close');
+    const externalLinkModal = document.getElementById('external-link-modal');
 
-  alertCloseBtn?.addEventListener('click', closeAlert);
-  modalCloseBtn?.addEventListener('click', closeModal);
+    alertCloseBtn?.addEventListener('click', closeAlert);
+    modalCloseBtn?.addEventListener('click', closeModal);
 
-  alertModal?.addEventListener('click', (e) => {
-    if (e.target === alertModal) {closeAlert();}
-  });
+    alertModal?.addEventListener('click', (e) => {
+      if (e.target === alertModal) {closeAlert();}
+    });
 
-  modalOverlay?.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) {closeModal();}
-  });
+    modalOverlay?.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) {closeModal();}
+    });
 
-  externalLinkModal?.addEventListener('click', (e) => {
-    if (e.target === externalLinkModal) {closeExternalLinkModal();}
-  });
+    externalLinkModal?.addEventListener('click', (e) => {
+      if (e.target === externalLinkModal) {closeExternalLinkModal();}
+    });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (externalLinkModal && !externalLinkModal.classList.contains('is-hidden')) {
-        closeExternalLinkModal();
-      } else if (alertModal && !alertModal.classList.contains('is-hidden')) {
-        closeAlert();
-      } else if (modalOverlay && !modalOverlay.classList.contains('is-hidden')) {
-        closeModal();
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (externalLinkModal && !externalLinkModal.classList.contains('is-hidden')) {
+          closeExternalLinkModal();
+        } else if (alertModal && !alertModal.classList.contains('is-hidden')) {
+          closeAlert();
+        } else if (modalOverlay && !modalOverlay.classList.contains('is-hidden')) {
+          closeModal();
+        }
       }
-    }
-  });
+    });
 
+    modalsInitialized = true;
+  }
+
+  // 每次都更新翻译
   initializeModalTranslations(t);
 }
 
 /**
  * 初始化弹窗翻译
  */
-export function initializeModalTranslations(t: TranslateFunction): void {
+export function initializeModalTranslations(t: TranslateFunction = window.t || ((key: string) => key)): void {
   document.querySelectorAll('.modal-close').forEach(btn => {
     if (btn.hasAttribute('data-i18n')) {
       const key = btn.getAttribute('data-i18n');

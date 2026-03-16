@@ -8,6 +8,22 @@
  * - 提供检查函数供其他模块使用
  */
 
+// Cookie 函数内联（因为此文件单独构建为 IIFE）
+function getCookie(name: string): string | null {
+  const nameEQ = name + '=';
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') {c = c.substring(1, c.length);}
+    if (c.indexOf(nameEQ) === 0) {return c.substring(nameEQ.length, c.length);}
+  }
+  return null;
+}
+
+function deleteCookie(name: string): void {
+  document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
+}
+
 const CONSENT_COOKIE_NAME = 'cookieConsent';
 const CONSENT_EXPIRY_DAYS = 365;
 
@@ -16,21 +32,6 @@ const OPTIONAL_COOKIES = ['selectedLanguage', 'token'];
 export type ConsentType = 'accepted' | 'rejected' | null;
 
 let cachedConsent: ConsentType = null;
-
-function getCookie(name: string): string | null {
-  const nameEQ = name + '=';
-  const ca = document.cookie.split(';');
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i];
-    while (c.charAt(0) === ' ') { c = c.substring(1, c.length); }
-    if (c.indexOf(nameEQ) === 0) { return c.substring(nameEQ.length, c.length); }
-  }
-  return null;
-}
-
-function deleteCookie(name: string): void {
-  document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
-}
 
 function clearOptionalCookies(): void {
   for (const name of OPTIONAL_COOKIES) {
@@ -44,7 +45,7 @@ function setCookie(name: string, value: string, days: number): void {
   const date = new Date();
   date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
   const expires = 'expires=' + date.toUTCString();
-  document.cookie = name + '=' + value + ';' + expires + ';path=/';
+  document.cookie = name + '=' + value + ';' + expires + ';path=/;';
 }
 
 export function getConsent(): ConsentType {
@@ -55,10 +56,11 @@ export function getConsent(): ConsentType {
   const saved = getCookie(CONSENT_COOKIE_NAME);
   if (saved === 'accepted' || saved === 'rejected') {
     cachedConsent = saved;
-    return saved;
+  } else {
+    cachedConsent = null;
   }
 
-  return null;
+  return cachedConsent;
 }
 
 export function isCookieAllowed(): boolean {
@@ -76,8 +78,6 @@ function createBanner(): void {
     return;
   }
 
-  clearOptionalCookies();
-
   const banner = document.createElement('div');
   banner.id = 'cookie-consent-banner';
   banner.className = 'cookie-consent-banner';
@@ -85,8 +85,8 @@ function createBanner(): void {
     <div class="cookie-consent-content">
       <span class="cookie-consent-text" data-i18n="cookieConsent.message"></span>
       <div class="cookie-consent-buttons">
-        <button id="cookie-reject" class="button-secondary" data-i18n="cookieConsent.reject"></button>
         <button id="cookie-accept" class="button-primary" data-i18n="cookieConsent.accept"></button>
+        <button id="cookie-reject" class="button-secondary" data-i18n="cookieConsent.reject"></button>
       </div>
     </div>
   `;
@@ -112,6 +112,7 @@ function createBanner(): void {
 
   document.getElementById('cookie-reject')?.addEventListener('click', () => {
     setConsent('rejected');
+    clearOptionalCookies();
     hideBanner();
   });
 }

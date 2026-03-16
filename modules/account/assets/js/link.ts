@@ -17,6 +17,27 @@ import { getUrlParameter } from './lib/utils/url.ts';
 // 翻译函数
 const t = window.t || ((key: string): string => key);
 
+// ==================== 错误码映射 ====================
+
+/**
+ * 获取待绑定信息错误码映射
+ */
+const pendingLinkErrorMap: Record<string, string> = {
+  'INVALID_TOKEN': 'linkConfirm.invalidLink',
+  'TOKEN_EXPIRED': 'linkConfirm.linkExpired'
+};
+
+/**
+ * 确认绑定错误码映射
+ */
+const confirmLinkErrorMap: Record<string, string> = {
+  'INVALID_TOKEN': 'linkConfirm.invalidLink',
+  'TOKEN_EXPIRED': 'linkConfirm.linkExpired',
+  'MICROSOFT_ALREADY_LINKED': 'dashboard.microsoftAlreadyLinked',
+  'USER_NOT_FOUND': 'error.sessionError',
+  'USER_BANNED': 'linkConfirm.userBanned'
+};
+
 // ==================== 类型定义 ====================
 
 interface PendingLinkResponse {
@@ -92,18 +113,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result: PendingLinkResponse = await response.json();
 
       if (!result.success) {
-        const errorMessages: Record<string, string> = {
-          'INVALID_TOKEN': 'linkConfirm.invalidLink',
-          'TOKEN_EXPIRED': 'linkConfirm.linkExpired'
-        };
-        showAlert(t(errorMessages[result.errorCode || ''] || 'linkConfirm.linkFailed'));
+        showAlert(t(pendingLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed'));
         setTimeout(() => {
           window.location.href = '/account/login';
         }, 2000);
         return;
       }
 
-      const { microsoftName, microsoftAvatar, username, userAvatar } = result.data!;
+      // 检查 data 是否存在
+      if (!result.data) {
+        showAlert(t('linkConfirm.linkFailed'));
+        setTimeout(() => {
+          window.location.href = '/account/login';
+        }, 2000);
+        return;
+      }
+
+      const { microsoftName, microsoftAvatar, username, userAvatar } = result.data;
 
       // 显示账户信息
       if (microsoftNameEl) {microsoftNameEl.textContent = microsoftName || '-';}
@@ -167,14 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '/account/dashboard';
           } else {
             // 显示错误
-            const errorMessages: Record<string, string> = {
-              'INVALID_TOKEN': 'linkConfirm.invalidLink',
-              'TOKEN_EXPIRED': 'linkConfirm.linkExpired',
-              'MICROSOFT_ALREADY_LINKED': 'dashboard.microsoftAlreadyLinked',
-              'USER_NOT_FOUND': 'error.sessionError',
-              'USER_BANNED': 'linkConfirm.userBanned'
-            };
-            const errorKey = errorMessages[result.errorCode || ''] || 'linkConfirm.linkFailed';
+            const errorKey = confirmLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed';
             showAlert(t(errorKey));
             confirmBtn.disabled = false;
           }

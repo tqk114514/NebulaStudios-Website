@@ -20,7 +20,7 @@
   "notFound.message": "您访问的页面不存在或已被移除",
   "notFound.backToLogin": "返回登录",
 
-  "footer.copyright": "© 2025 Nebula Studios 版权所有",
+  "footer.copyright": "© {year} Nebula Studios 版权所有",
 
   "policy.agreeByRegister": "注册即表示您同意我们的",
   "policy.privacyPolicy": "隐私政策",

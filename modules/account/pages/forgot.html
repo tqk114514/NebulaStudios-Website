@@ -4,11 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nebula Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;300;700;900&family=Newsreader:ital,opsz,wght@1,6,200;1,6,300&family=Azeret+Mono:wght@200;300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
-  <link rel="stylesheet" href="/account/assets/css/auth.css">
-  <script src="/shared/js/translations.js"></script>
-  <script src="/shared/js/cookie-consent.js"></script>
+  <script type="module" src="/shared/js/translations.js"></script>
+  <script type="module" src="/shared/js/cookie-consent.js"></script>
 </head>
 <body>
   {{HEADER}}
@@ -18,62 +20,61 @@
     <div class="loader-spinner"></div>
   </div>
   
-  <div class="content-container">
-    <div class="card">
-      <h1 class="card-title" data-i18n="forgotPassword.title"></h1>
-      <p class="subtitle" data-i18n="forgotPassword.subtitle"></p>
-      
-      <!-- 步骤 1: 输入邮箱 -->
-      <form id="email-step" class="step-form">
-        <div class="form-group">
-          <label for="reset-email" class="sr-only" data-i18n="forgotPassword.emailPlaceholder"></label>
-          <input type="email" id="reset-email" name="email" placeholder="" data-i18n-placeholder="forgotPassword.emailPlaceholder" aria-label="Email" autocomplete="email" required>
-          <div id="email-error" class="form-error is-hidden">
-            <span id="email-error-text" data-i18n="register.emailNotSupported"></span>
-            <a href="#" id="show-supported-emails" class="error-link" data-i18n="register.viewSupportedEmails" aria-label="View supported emails"></a>
-          </div>
+  <div class="card">
+    <div class="card-num">03</div>
+    <h1 class="card-title" data-i18n="forgotPassword.title"></h1>
+    <p class="subtitle" data-i18n="forgotPassword.subtitle"></p>
+    
+    <!-- 步骤 1: 输入邮箱 -->
+    <form id="email-step" class="step-form">
+      <div class="form-group">
+        <label for="reset-email" class="sr-only" data-i18n="forgotPassword.emailPlaceholder"></label>
+        <input type="email" id="reset-email" name="email" placeholder="" data-i18n-placeholder="forgotPassword.emailPlaceholder" aria-label="Email" autocomplete="email" required>
+        <div id="email-error" class="form-error is-hidden">
+          <span id="email-error-text" data-i18n="register.emailNotSupported"></span>
+          <a href="#" id="show-supported-emails" class="error-link" data-i18n="register.viewSupportedEmails" aria-label="View supported emails"></a>
         </div>
-        <div class="form-group">
-          <button type="submit" class="button-secondary" data-i18n="forgotPassword.sendCode" aria-label="Send verification code" disabled></button>
-          <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
-        </div>
-      </form>
-
-      
-      <!-- 步骤 2: 输入验证码和新密码 -->
-      <form id="reset-step" class="step-form is-hidden">
-        <div class="form-group">
-          <label for="reset-code" class="sr-only" data-i18n="forgotPassword.codePlaceholder"></label>
-          <input type="text" id="reset-code" name="code" placeholder="" data-i18n-placeholder="forgotPassword.codePlaceholder" aria-label="Verification Code" autocomplete="one-time-code" maxlength="6" required>
-        </div>
-        <div class="form-group">
-          <label for="reset-password" class="sr-only" data-i18n="forgotPassword.newPasswordPlaceholder"></label>
-          <input type="password" id="reset-password" name="password" placeholder="" data-i18n-placeholder="forgotPassword.newPasswordPlaceholder" aria-label="New Password" autocomplete="new-password" required>
-          <div class="password-requirements">
-            <div class="req-item" id="req-length" data-i18n="register.reqLength"></div>
-            <div class="req-item" id="req-number" data-i18n="register.reqNumber"></div>
-            <div class="req-item" id="req-special" data-i18n="register.reqSpecial"></div>
-            <div class="req-item" id="req-case" data-i18n="register.reqCase"></div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="reset-password-confirm" class="sr-only" data-i18n="forgotPassword.confirmPasswordPlaceholder"></label>
-          <input type="password" id="reset-password-confirm" name="passwordConfirm" placeholder="" data-i18n-placeholder="forgotPassword.confirmPasswordPlaceholder" aria-label="Confirm New Password" autocomplete="new-password" required>
-        </div>
-        <button type="submit" class="button-primary" data-i18n="forgotPassword.resetPassword" aria-label="Reset Password"></button>
-      </form>
-      
-      <div class="footer-links">
-        <a href="/account/login" data-i18n="forgotPassword.backToLogin" aria-label="Back to login"></a>
       </div>
+      <div class="form-group">
+        <button type="submit" class="button-secondary" data-i18n="forgotPassword.sendCode" aria-label="Send verification code" disabled></button>
+        <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
+      </div>
+    </form>
+
+    
+    <!-- 步骤 2: 输入验证码和新密码 -->
+    <form id="reset-step" class="step-form is-hidden">
+      <div class="form-group">
+        <label for="reset-code" class="sr-only" data-i18n="forgotPassword.codePlaceholder"></label>
+        <input type="text" id="reset-code" name="code" placeholder="" data-i18n-placeholder="forgotPassword.codePlaceholder" aria-label="Verification Code" autocomplete="one-time-code" maxlength="6" required>
+      </div>
+      <div class="form-group">
+        <label for="reset-password" class="sr-only" data-i18n="forgotPassword.newPasswordPlaceholder"></label>
+        <input type="password" id="reset-password" name="password" placeholder="" data-i18n-placeholder="forgotPassword.newPasswordPlaceholder" aria-label="New Password" autocomplete="new-password" required>
+        <div class="password-requirements">
+          <div class="req-item" id="req-length" data-i18n="register.reqLength"></div>
+          <div class="req-item" id="req-number" data-i18n="register.reqNumber"></div>
+          <div class="req-item" id="req-special" data-i18n="register.reqSpecial"></div>
+          <div class="req-item" id="req-case" data-i18n="register.reqCase"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="reset-password-confirm" class="sr-only" data-i18n="forgotPassword.confirmPasswordPlaceholder"></label>
+        <input type="password" id="reset-password-confirm" name="passwordConfirm" placeholder="" data-i18n-placeholder="forgotPassword.confirmPasswordPlaceholder" aria-label="Confirm New Password" autocomplete="new-password" required>
+      </div>
+      <button type="submit" class="button-primary" data-i18n="forgotPassword.resetPassword" aria-label="Reset Password"></button>
+    </form>
+    
+    <div class="footer-links">
+      <a href="/account/login" data-i18n="forgotPassword.backToLogin" aria-label="Back to login"></a>
     </div>
-    <div class="policy-links">
-      <a href="/policy#privacy" class="text-link" data-i18n="policy.privacyPolicy"></a>
-      <span>|</span>
-      <a href="/policy#terms" class="text-link" data-i18n="policy.termsOfService"></a>
-    </div>
-    <div class="page-footer" data-i18n="footer.copyright"></div>
   </div>
+  <div class="policy-links">
+    <a href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
+    <span>|</span>
+    <a href="/policy#terms" data-i18n="policy.termsOfService"></a>
+  </div>
+  <div class="page-footer" data-i18n="footer.copyright"></div>
 
   <!-- 支持的邮箱弹窗 -->
   <div id="modal-overlay" class="modal-overlay is-hidden">
@@ -109,13 +110,13 @@
       <div class="modal-content">
         <h2 class="modal-title" data-i18n="modal.externalLink.title"></h2>
         <div class="modal-body">
-          <p class="external-link-message" data-i18n="modal.externalLink.message"></p>
+          <p class="modal-message" data-i18n="modal.externalLink.message"></p>
           <a id="external-link-url" class="external-link-url" href="#" target="_blank" rel="noopener noreferrer"></a>
-          <p class="external-link-disclaimer" data-i18n="modal.externalLink.disclaimer"></p>
+          <p class="modal-message" data-i18n="modal.externalLink.disclaimer"></p>
         </div>
-        <div class="modal-footer modal-footer-buttons">
-          <button id="external-link-cancel" class="button-secondary" data-i18n="modal.cancel"></button>
+        <div class="modal-footer button-group">
           <button id="external-link-confirm" class="button-primary" data-i18n="modal.externalLink.continue"></button>
+          <button id="external-link-cancel" class="button-secondary" data-i18n="modal.cancel"></button>
         </div>
       </div>
     </div>
