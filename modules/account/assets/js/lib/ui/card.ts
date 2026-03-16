@@ -148,15 +148,3 @@ export function smoothAdjustHeight(element: HTMLElement, targetHeight: number): 
 export function delayedExecution(callback: () => void): void {
   requestAnimationFrame(() => requestAnimationFrame(callback));
 }
-
-/**
- * 带条件的延迟执行
- */
-export function conditionalDelayedExecution(
-  callback: () => void,
-  condition?: () => boolean
-): void {
-  requestAnimationFrame(() => {
-    if (!condition || condition()) {callback();}
-  });
-}

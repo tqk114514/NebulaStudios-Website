@@ -2,7 +2,7 @@
  * 国际化翻译模块
  *
  * 功能：
- * - 多语言支持（5种语言：简繁英日韩）
+ * - 多语言支持（5 种语言：简繁英日韩）
  * - 所有翻译内嵌（构建时合并）
  * - 页面元素自动翻译（data-i18n 属性）
  * - 语言偏好持久化（Cookie）
@@ -28,17 +28,26 @@ declare const __ALL_TRANSLATIONS__: TranslationsMap | undefined;
 
 // ==================== 数据存储 ====================
 
-/** 翻译数据（构建时注入 __ALL_TRANSLATIONS__，开发时动态加载） */
+/** 翻译数据（构建时注入 __ALL_TRANSLATIONS__） */
 const translations: TranslationsMap = typeof __ALL_TRANSLATIONS__ !== 'undefined' ? __ALL_TRANSLATIONS__ : {};
 
 /** 支持的语言列表（简繁英日韩） */
-const supportedLanguages: LanguageInfo[] = [
+export const supportedLanguages: LanguageInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
   { code: 'zh-TW', label: '繁體中文' },
   { code: 'en', label: 'English' },
   { code: 'ja', label: '日本語' },
   { code: 'ko', label: '한국어' }
 ];
+
+/** 语言显示名称映射（方便快速查找） */
+export const LANG_NAMES: Record<string, string> = {
+  'zh-CN': '简体中文',
+  'zh-TW': '繁體中文',
+  'en': 'English',
+  'ja': '日本語',
+  'ko': '한국어'
+};
 
 /** 有效语言代码列表 */
 const validLanguages = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko'] as const;
@@ -50,8 +59,7 @@ let currentLanguage: string = 'zh-CN';
 // ==================== Cookie 操作 ====================
 
 /**
- * 检查用户是否同意使用 Cookie（通过检查 consent cookie）
- * 注意：此函数仅检查 cookie 存在性，不依赖其他模块
+ * 检查用户是否同意使用 Cookie
  */
 function hasCookieConsent(): boolean {
   const nameEQ = 'cookieConsent=';
@@ -60,8 +68,7 @@ function hasCookieConsent(): boolean {
     let c = ca[i];
     while (c.charAt(0) === ' ') { c = c.substring(1, c.length); }
     if (c.indexOf(nameEQ) === 0) {
-      const value = c.substring(nameEQ.length, c.length);
-      return value === 'accepted';
+      return c.substring(nameEQ.length, c.length) === 'accepted';
     }
   }
   return false;
@@ -71,17 +78,15 @@ function hasCookieConsent(): boolean {
  * 设置 Cookie
  * @param name - Cookie 名称
  * @param value - Cookie 值
- * @param days - 有效天数
- * @param requireConsent - 是否需要用户同意（默认 true，用于语言偏好等可选 cookie）
+ * @param seconds - 过期时间（秒）
  */
-function setCookie(name: string, value: string, days: number = 365, requireConsent: boolean = true): void {
-  // 语言偏好和登录状态保存需要用户同意
-  if (requireConsent && !hasCookieConsent()) {
+function setCookie(name: string, value: string, seconds: number): void {
+  if (!hasCookieConsent()) {
     return;
   }
 
   const date = new Date();
-  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+  date.setTime(date.getTime() + (seconds * 1000));
   const expires = 'expires=' + date.toUTCString();
   document.cookie = name + '=' + value + ';' + expires + ';path=/';
 }
@@ -151,13 +156,9 @@ function getCookie(name: string): string | null {
 
 // ==================== 翻译加载 ====================
 
-/** i18n 模块列表 */
-const i18nModules = ['general', 'account'];
-
 /**
  * 加载翻译数据
  * 生产环境：直接返回内嵌数据
- * 开发环境：异步加载 JSON 文件并合并
  * @param lang - 语言代码
  * @returns 翻译数据
  */
@@ -167,33 +168,12 @@ async function loadTranslation(lang: string): Promise<TranslationData> {
     return translations[lang];
   }
 
-  // 开发环境：从多个子目录异步加载并合并
-  const merged: TranslationData = {};
-
-  for (const module of i18nModules) {
-    try {
-      const response = await fetch(`/shared/i18n/${module}/${lang}.json`);
-      if (!response.ok) {
-        console.warn(`[I18N] WARN: Failed to load ${module}/${lang}.json`);
-        continue;
-      }
-      const data: TranslationData = await response.json();
-      Object.assign(merged, data);
-    } catch (error) {
-      console.warn(`[I18N] WARN: Failed to load ${module}/${lang}.json:`, (error as Error).message);
-    }
+  // 未找到翻译数据时返回空对象
+  console.error('[I18N] ERROR: No translation data loaded for:', lang);
+  if (lang !== 'zh-CN') {
+    return loadTranslation('zh-CN');
   }
-
-  if (Object.keys(merged).length === 0) {
-    console.error('[I18N] ERROR: No translation data loaded for:', lang);
-    if (lang !== 'zh-CN') {
-      return await loadTranslation('zh-CN');
-    }
-    return {};
-  }
-
-  translations[lang] = merged;
-  return merged;
+  return {};
 }
 
 // ==================== 翻译函数 ====================
@@ -212,7 +192,7 @@ function t(key: string): string {
   let text = langData[key] || key;
   // 版权声明年份动态替换
   if (key === 'footer.copyright') {
-    text = text.replace(/20\d{2}/, String(new Date().getFullYear()));
+    text = text.replace('{year}', String(new Date().getFullYear()));
   }
   return text;
 }
@@ -233,7 +213,7 @@ async function switchLanguage(lang: string): Promise<void> {
   // 更新当前语言
   currentLanguage = lang;
   window.currentLanguage = lang;
-  setCookie('selectedLanguage', lang);
+  setCookie('selectedLanguage', lang, 365 * 24 * 60 * 60);
 
   // 更新页面翻译
   updatePageTranslations();

@@ -48,7 +48,7 @@ export async function sendVerificationCode(
     } else {
       return {
         success: false,
-        errorCode: data.errorCode || 'UNKNOWN_ERROR'
+        errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR'
       };
     }
   } catch (error) {
@@ -73,7 +73,7 @@ export async function register(formData: RegisterFormData): Promise<AuthResponse
     if (response.ok && data.success) {
       return { success: true, data: data.data };
     } else {
-      return { success: false, errorCode: data.errorCode || 'UNKNOWN_ERROR' };
+      return { success: false, errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR' };
     }
   } catch (error) {
     console.error('[AUTH] ERROR: Registration failed:', (error as Error).message);
@@ -108,7 +108,7 @@ export async function login(
     if (response.ok && data.success) {
       return { success: true, data: data.data };
     } else {
-      return { success: false, errorCode: data.errorCode || 'UNKNOWN_ERROR' };
+      return { success: false, errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR' };
     }
   } catch (error) {
     console.error('[AUTH] ERROR: Login failed:', (error as Error).message);
@@ -132,7 +132,7 @@ export async function verifySession(): Promise<AuthResponse> {
     if (response.ok && data.success) {
       return { success: true, data: data.data };
     } else {
-      return { success: false, errorCode: data.errorCode || 'INVALID_SESSION' };
+      return { success: false, errorCode: data.success === false ? data.errorCode : 'INVALID_SESSION' };
     }
   } catch (error) {
     console.error('[AUTH] ERROR: Session verification failed:', (error as Error).message);
