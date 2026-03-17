@@ -175,6 +175,7 @@ func initDatabase(cfg *config.Config) error {
 type Services struct {
 	userRepo       *models.UserRepository
 	userLogRepo    *models.UserLogRepository
+	qrLoginRepo    *models.QRLoginRepository
 	tokenService   *services.TokenService
 	sessionService *services.SessionService
 	captchaService *services.CaptchaService
@@ -202,6 +203,10 @@ func initServices(cfg *config.Config) (*Services, error) {
 	// 用户日志仓库
 	svcs.userLogRepo = models.NewUserLogRepository()
 	utils.LogInfo("SERVICES", "UserLogRepository initialized")
+
+	// 扫码登录仓库
+	svcs.qrLoginRepo = models.NewQRLoginRepository()
+	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
 
 	// Token 服务
 	svcs.tokenService = services.NewTokenService()
@@ -353,6 +358,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	hdlrs.qrLoginHandler, err = handlers.NewQRLoginHandler(
 		svcs.sessionService,
 		svcs.wsService,
+		svcs.qrLoginRepo,
 		cfg.QREncryptionKey,
 	)
 	if err != nil {

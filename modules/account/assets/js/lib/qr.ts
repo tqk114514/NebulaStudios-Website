@@ -268,7 +268,7 @@ async function setSessionAndRedirect(sessionToken: string): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ sessionToken })
+      body: JSON.stringify({ sessionToken, token: state.currentToken })
     });
   } catch (e) {
     console.error('[QR-LOGIN] ERROR: Set session failed:', e);
