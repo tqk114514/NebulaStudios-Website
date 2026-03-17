@@ -24,7 +24,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -364,7 +363,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	pcIP := h.getClientIP(c)
 	pcUserAgent := c.GetHeader("User-Agent")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 保存 Token 到数据库
 	qrToken := &models.QRLoginToken{
@@ -449,7 +448,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 删除 Token
 	err = h.qrLoginRepo.Delete(ctx, originalToken)
@@ -504,7 +503,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 验证并一次性消费 Token
 	userID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, originalToken, sessionToken)
@@ -592,7 +591,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 查询 Token 信息
 	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
@@ -706,7 +705,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 查询 Token 信息
 	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
@@ -791,7 +790,7 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 删除 Token
 	err = h.qrLoginRepo.Delete(ctx, originalToken)
