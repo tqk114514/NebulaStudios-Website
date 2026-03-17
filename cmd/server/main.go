@@ -74,6 +74,9 @@ const (
 
 	// 定时任务间隔
 	tokenCleanupInterval = 5 * time.Minute
+
+	// 默认请求体大小限制（1MB）
+	defaultMaxBodySize = 1 << 20
 )
 
 // ====================  主函数 ====================
@@ -512,6 +515,10 @@ func setupMiddleware(r *gin.Engine, _ *config.Config) {
 	// Recovery 中间件（防止 panic 导致服务器崩溃）
 	r.Use(gin.Recovery())
 
+	// 请求体大小限制（必须是第一个中间件，防止 DoS 攻击）
+	// 使用默认 1MB 限制，特定路由可以覆盖
+	r.Use(middleware.BodySizeLimit(defaultMaxBodySize))
+
 	// 自定义日志中间件
 	r.Use(loggerMiddleware())
 
@@ -639,7 +646,7 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	// 健康检查
 	r.GET("/health", hdlrs.staticHandler.GetHealth)
 
-	// API 请求体大小限制（64KB）
+	// API 组（使用更严格的 64KB 请求体限制）
 	apiGroup := r.Group("")
 	apiGroup.Use(middleware.APIBodySizeLimit())
 
