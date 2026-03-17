@@ -21,6 +21,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ====================  临时常量（与 oauth 包保持一致） ====================
+
+const (
+	// StateExpiryDuration 临时定义，与 oauth 包保持一致（10 分钟）
+	StateExpiryDuration = 10 * time.Minute
+)
+
 // ====================  Cookie 名称常量 ====================
 
 const (
@@ -29,6 +36,9 @@ const (
 
 	// LanguageCookieName 语言偏好 Cookie 名称
 	LanguageCookieName = "selectedLanguage"
+
+	// LinkTokenCookieName 微软账户绑定确认 Token Cookie 名称
+	LinkTokenCookieName = "link_token"
 )
 
 // ====================  Cookie 配置常量 ====================
@@ -158,4 +168,63 @@ func ClearTokenCookieGin(c *gin.Context) {
 //   - language: 语言代码
 func SetLanguageCookieGin(c *gin.Context, language string) {
 	SetLanguageCookie(c.Writer, language)
+}
+
+// SetLinkTokenCookie 设置微软账户绑定确认 Token Cookie
+// 参数：
+//   - w: HTTP 响应写入器
+//   - token: Token 值
+func SetLinkTokenCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     LinkTokenCookieName,
+		Value:    token,
+		Path:     DefaultCookiePath,
+		Domain:   DefaultCookieDomain,
+		MaxAge:   int(StateExpiryDuration.Seconds()),
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ClearLinkTokenCookie 清除微软账户绑定确认 Token Cookie
+// 参数：
+//   - w: HTTP 响应写入器
+func ClearLinkTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     LinkTokenCookieName,
+		Value:    "",
+		Path:     DefaultCookiePath,
+		Domain:   DefaultCookieDomain,
+		MaxAge:   -1,
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// GetLinkTokenCookie 从 Gin Context 获取微软账户绑定确认 Token Cookie
+// 参数：
+//   - c: Gin Context
+//
+// 返回：
+//   - string: Token 值（如果存在）
+//   - error: 错误（如果 Cookie 不存在或解析失败）
+func GetLinkTokenCookie(c *gin.Context) (string, error) {
+	return c.Cookie(LinkTokenCookieName)
+}
+
+// SetLinkTokenCookieGin 设置微软账户绑定确认 Token Cookie（GIN 版本）
+// 参数：
+//   - c: Gin Context
+//   - token: Token 值
+func SetLinkTokenCookieGin(c *gin.Context, token string) {
+	SetLinkTokenCookie(c.Writer, token)
+}
+
+// ClearLinkTokenCookieGin 清除微软账户绑定确认 Token Cookie（GIN 版本）
+// 参数：
+//   - c: Gin Context
+func ClearLinkTokenCookieGin(c *gin.Context) {
+	ClearLinkTokenCookie(c.Writer)
 }
