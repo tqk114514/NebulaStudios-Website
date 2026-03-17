@@ -4,7 +4,7 @@
  *
  * 功能：
  * - PostgreSQL 连接池管理
- * - 数据表初始化
+ * - 数据表初始化（从 schema.go）
  * - 索引创建
  * - 连接健康检查
  * - 优雅关闭
@@ -12,6 +12,7 @@
  * 依赖：
  * - github.com/jackc/pgx/v5: PostgreSQL 驱动
  * - Config: 数据库配置
+ * - schema.go: 表结构定义
  */
 
 package models
@@ -258,39 +259,9 @@ func configurePool(poolConfig *pgxpool.Config, cfg *config.Config) {
 // 返回：
 //   - error: 初始化失败时返回错误
 func initTables(ctx context.Context) error {
-	// 创建用户表
-	if err := createUsersTable(ctx); err != nil {
-		return fmt.Errorf("create users table: %w", err)
-	}
-
-	// 创建 tokens 表
-	if err := createTokensTable(ctx); err != nil {
-		return fmt.Errorf("create tokens table: %w", err)
-	}
-
-	// 创建 codes 表
-	if err := createCodesTable(ctx); err != nil {
-		return fmt.Errorf("create codes table: %w", err)
-	}
-
-	// 创建 qr_login_tokens 表
-	if err := createQRLoginTokensTable(ctx); err != nil {
-		return fmt.Errorf("create qr_login_tokens table: %w", err)
-	}
-
-	// 创建 admin_logs 表
-	if err := createAdminLogsTable(ctx); err != nil {
-		return fmt.Errorf("create admin_logs table: %w", err)
-	}
-
-	// 创建 user_logs 表
-	if err := createUserLogsTable(ctx); err != nil {
-		return fmt.Errorf("create user_logs table: %w", err)
-	}
-
-	// 创建 OAuth 相关表
-	if err := createOAuthTables(ctx); err != nil {
-		return fmt.Errorf("create oauth tables: %w", err)
+	// 从 Schema 创建表
+	if err := CreateTablesFromSchema(ctx); err != nil {
+		return fmt.Errorf("create tables from schema: %w", err)
 	}
 
 	// 创建索引
@@ -299,244 +270,13 @@ func initTables(ctx context.Context) error {
 		utils.LogWarn("DATABASE", "Some indexes may not have been created", "")
 	}
 
+	// 执行自动迁移
+	if err := AutoMigrate(ctx); err != nil {
+		utils.LogError("DATABASE", "initTables", err, "Failed to execute auto-migration")
+		return fmt.Errorf("auto-migration failed: %w", err)
+	}
+
 	utils.LogInfo("DATABASE", "Tables initialized successfully")
-	return nil
-}
-
-// createUsersTable 创建用户表
-func createUsersTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			username VARCHAR(50) NOT NULL UNIQUE,
-			email VARCHAR(255) NOT NULL UNIQUE,
-			password VARCHAR(255) NOT NULL,
-			avatar_url TEXT NOT NULL,
-			role INTEGER NOT NULL DEFAULT 0,
-			microsoft_id VARCHAR(255) UNIQUE,
-			microsoft_name VARCHAR(255),
-			microsoft_avatar_url TEXT,
-			microsoft_avatar_hash VARCHAR(64),
-			is_banned BOOLEAN NOT NULL DEFAULT FALSE,
-			ban_reason TEXT,
-			banned_at TIMESTAMPTZ,
-			banned_by BIGINT,
-			unban_at TIMESTAMPTZ,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createUsersTable", err, "Failed to create users table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "Users table ready")
-	return nil
-}
-
-// createTokensTable 创建 tokens 表
-func createTokensTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS tokens (
-			token VARCHAR(64) PRIMARY KEY,
-			email VARCHAR(255) NOT NULL,
-			type VARCHAR(50) DEFAULT 'register',
-			code VARCHAR(10),
-			created_at BIGINT NOT NULL,
-			expire_time BIGINT NOT NULL,
-			used INTEGER DEFAULT 0
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createTokensTable", err, "Failed to create tokens table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "Tokens table ready")
-	return nil
-}
-
-// createCodesTable 创建 codes 表
-func createCodesTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS codes (
-			code VARCHAR(10) PRIMARY KEY,
-			email VARCHAR(255) NOT NULL,
-			type VARCHAR(50) DEFAULT 'register',
-			created_at BIGINT NOT NULL,
-			expire_time BIGINT NOT NULL,
-			attempts INTEGER DEFAULT 0,
-			verified INTEGER DEFAULT 0,
-			verified_at BIGINT
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createCodesTable", err, "Failed to create codes table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "Codes table ready")
-	return nil
-}
-
-// createQRLoginTokensTable 创建 qr_login_tokens 表
-func createQRLoginTokensTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS qr_login_tokens (
-			token VARCHAR(64) PRIMARY KEY,
-			status VARCHAR(20) DEFAULT 'pending',
-			user_id INTEGER,
-			pc_ip VARCHAR(45),
-			pc_user_agent TEXT,
-			created_at BIGINT NOT NULL,
-			expire_time BIGINT NOT NULL,
-			scanned_at BIGINT,
-			confirmed_at BIGINT
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createQRLoginTokensTable", err, "Failed to create qr_login_tokens table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "QR login tokens table ready")
-	return nil
-}
-
-// createAdminLogsTable 创建 admin_logs 表
-func createAdminLogsTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS admin_logs (
-			id SERIAL PRIMARY KEY,
-			admin_id BIGINT NOT NULL,
-			action VARCHAR(50) NOT NULL,
-			target_id BIGINT,
-			details JSONB,
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createAdminLogsTable", err, "Failed to create admin_logs table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "Admin logs table ready")
-	return nil
-}
-
-// createUserLogsTable 创建 user_logs 表
-func createUserLogsTable(ctx context.Context) error {
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS user_logs (
-			id SERIAL PRIMARY KEY,
-			user_id BIGINT NOT NULL,
-			action VARCHAR(50) NOT NULL,
-			details JSONB,
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createUserLogsTable", err, "Failed to create user_logs table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "User logs table ready")
-	return nil
-}
-
-// createOAuthTables 创建 OAuth 相关表
-// 包含：oauth_clients, oauth_auth_codes, oauth_access_tokens, oauth_refresh_tokens, oauth_grants
-func createOAuthTables(ctx context.Context) error {
-	// 创建 OAuth 客户端表
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS oauth_clients (
-			id BIGSERIAL PRIMARY KEY,
-			client_id VARCHAR(64) UNIQUE NOT NULL,
-			client_secret_hash VARCHAR(255) NOT NULL,
-			name VARCHAR(100) NOT NULL,
-			description TEXT,
-			redirect_uri TEXT NOT NULL,
-			is_enabled BOOLEAN DEFAULT true,
-			created_at TIMESTAMPTZ DEFAULT NOW(),
-			updated_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createOAuthTables", err, "Failed to create oauth_clients table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "OAuth clients table ready")
-
-	// 创建授权码表
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS oauth_auth_codes (
-			id BIGSERIAL PRIMARY KEY,
-			code VARCHAR(64) UNIQUE NOT NULL,
-			client_id VARCHAR(64) NOT NULL,
-			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			redirect_uri TEXT NOT NULL,
-			scope VARCHAR(255) NOT NULL,
-			expires_at TIMESTAMPTZ NOT NULL,
-			used BOOLEAN DEFAULT false,
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createOAuthTables", err, "Failed to create oauth_auth_codes table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "OAuth auth codes table ready")
-
-	// 创建 Access Token 表
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS oauth_access_tokens (
-			id BIGSERIAL PRIMARY KEY,
-			token_hash VARCHAR(64) UNIQUE NOT NULL,
-			client_id VARCHAR(64) NOT NULL,
-			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			scope VARCHAR(255) NOT NULL,
-			expires_at TIMESTAMPTZ NOT NULL,
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createOAuthTables", err, "Failed to create oauth_access_tokens table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "OAuth access tokens table ready")
-
-	// 创建 Refresh Token 表
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
-			id BIGSERIAL PRIMARY KEY,
-			token_hash VARCHAR(64) UNIQUE NOT NULL,
-			client_id VARCHAR(64) NOT NULL,
-			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			scope VARCHAR(255) NOT NULL,
-			expires_at TIMESTAMPTZ NOT NULL,
-			access_token_id BIGINT REFERENCES oauth_access_tokens(id) ON DELETE SET NULL,
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createOAuthTables", err, "Failed to create oauth_refresh_tokens table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "OAuth refresh tokens table ready")
-
-	// 创建用户授权记录表
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS oauth_grants (
-			id BIGSERIAL PRIMARY KEY,
-			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			client_id VARCHAR(64) NOT NULL,
-			scope VARCHAR(255) NOT NULL,
-			created_at TIMESTAMPTZ DEFAULT NOW(),
-			updated_at TIMESTAMPTZ DEFAULT NOW(),
-			UNIQUE(user_id, client_id)
-		)
-	`)
-	if err != nil {
-		utils.LogError("DATABASE", "createOAuthTables", err, "Failed to create oauth_grants table")
-		return err
-	}
-	utils.LogInfo("DATABASE", "OAuth grants table ready")
-
 	return nil
 }
 

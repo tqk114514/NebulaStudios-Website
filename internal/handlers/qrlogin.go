@@ -112,6 +112,7 @@ const (
 type QRLoginHandler struct {
 	sessionService *services.SessionService   // Session 服务
 	wsService      *services.WebSocketService // WebSocket 服务
+	qrLoginRepo    *models.QRLoginRepository  // 扫码登录仓库
 	encryptKey     []byte                     // AES-256-GCM 加密密钥
 	isConfigured   bool                       // 是否已配置（加密密钥有效）
 }
@@ -123,6 +124,7 @@ type QRLoginHandler struct {
 // 参数：
 //   - sessionService: Session 服务（必需）
 //   - wsService: WebSocket 服务（必需）
+//   - qrLoginRepo: 扫码登录仓库（必需）
 //   - encryptKey: AES-256-GCM 加密密钥（必需，用于加密 Token）
 //
 // 返回：
@@ -131,6 +133,7 @@ type QRLoginHandler struct {
 func NewQRLoginHandler(
 	sessionService *services.SessionService,
 	wsService *services.WebSocketService,
+	qrLoginRepo *models.QRLoginRepository,
 	encryptKey string,
 ) (*QRLoginHandler, error) {
 	// 参数验证
@@ -139,6 +142,9 @@ func NewQRLoginHandler(
 	}
 	if wsService == nil {
 		return nil, errors.New("wsService is required")
+	}
+	if qrLoginRepo == nil {
+		return nil, errors.New("qrLoginRepo is required")
 	}
 
 	// 检查加密密钥
@@ -163,6 +169,7 @@ func NewQRLoginHandler(
 	return &QRLoginHandler{
 		sessionService: sessionService,
 		wsService:      wsService,
+		qrLoginRepo:    qrLoginRepo,
 		encryptKey:     derivedKey,
 		isConfigured:   isConfigured,
 	}, nil
@@ -357,21 +364,19 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	pcIP := h.getClientIP(c)
 	pcUserAgent := c.GetHeader("User-Agent")
 
-	// 获取数据库连接池
-	pool := models.GetPool()
-	if pool == nil {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED", "Database pool is nil")
-		return
-	}
-
 	ctx := context.Background()
 
 	// 保存 Token 到数据库
-	_, err = pool.Exec(ctx, `
-		INSERT INTO qr_login_tokens (token, status, pc_ip, pc_user_agent, created_at, expire_time)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, token, QRStatusPending, pcIP, pcUserAgent, now, expireTime)
+	qrToken := &models.QRLoginToken{
+		Token:       token,
+		Status:      QRStatusPending,
+		PcIP:        pcIP,
+		PcUserAgent: pcUserAgent,
+		CreatedAt:   now,
+		ExpireTime:  expireTime,
+	}
 
+	err = h.qrLoginRepo.Create(ctx, qrToken)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to save token to database")
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
@@ -386,7 +391,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to marshal payload")
 		// 清理已创建的 Token
-		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
+		_ = h.qrLoginRepo.Delete(ctx, token)
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -395,7 +400,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to encrypt token")
 		// 清理已创建的 Token
-		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
+		_ = h.qrLoginRepo.Delete(ctx, token)
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -444,18 +449,10 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 		return
 	}
 
-	// 获取数据库连接池
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogWarn("QR-LOGIN", "Database pool is nil in Cancel", "")
-		utils.RespondSuccess(c, gin.H{})
-		return
-	}
-
 	ctx := context.Background()
 
 	// 删除 Token
-	_, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+	err = h.qrLoginRepo.Delete(ctx, originalToken)
 	if err != nil {
 		utils.LogWarn("QR-LOGIN", "Failed to delete token in Cancel", "")
 	} else {
@@ -470,16 +467,22 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 //
 // 请求体：
 //   - sessionToken: 会话 Token
+//   - token: 加密的 QR Token
 //
 // 响应：
 //   - success: 是否成功
 //
 // 错误码：
 //   - MISSING_TOKEN: 缺少 Token
+//   - INVALID_TOKEN: Token 无效
+//   - TOKEN_NOT_FOUND: Token 不存在
+//   - TOKEN_EXPIRED: Token 已过期
+//   - TOKEN_ALREADY_USED: Token 已被使用
 //   - INVALID_SESSION: 会话无效
 func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	var req struct {
 		SessionToken string `json:"sessionToken"`
+		Token        string `json:"token"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -488,8 +491,37 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	}
 
 	sessionToken := strings.TrimSpace(req.SessionToken)
-	if sessionToken == "" {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Empty session token in SetSession")
+	encryptedToken := strings.TrimSpace(req.Token)
+	if sessionToken == "" || encryptedToken == "" {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Empty session token or QR token in SetSession")
+		return
+	}
+
+	// 解密获取原始 QR Token
+	originalToken, err := h.decryptToken(encryptedToken)
+	if err != nil {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_TOKEN", "Failed to decrypt token in SetSession")
+		return
+	}
+
+	ctx := context.Background()
+
+	// 验证并一次性消费 Token
+	userID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, originalToken, sessionToken)
+	if err != nil {
+		errStr := err.Error()
+		switch {
+		case strings.Contains(errStr, "TOKEN_EXPIRED"):
+			utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		case strings.Contains(errStr, "invalid token status"):
+			utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", errStr)
+		case strings.Contains(errStr, "INVALID_SESSION"):
+			utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid session token in SetSession")
+		case strings.Contains(errStr, "INVALID_USER"):
+			utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid user in SetSession")
+		default:
+			utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_NOT_FOUND", "Token not found or invalid in SetSession")
+		}
 		return
 	}
 
@@ -500,7 +532,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	if claims == nil || claims.UserID <= 0 {
+	if claims == nil || claims.UserID <= 0 || claims.UserID != userID {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid claims in SetSession")
 		return
 	}
@@ -560,56 +592,36 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 		return
 	}
 
-	// 获取数据库连接池
-	pool := models.GetPool()
-	if pool == nil {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INVALID_TOKEN", "Database pool is nil in Scan")
-		return
-	}
-
 	ctx := context.Background()
 
 	// 查询 Token 信息
-	var status string
-	var expireTime int64
-	var pcIP, pcUserAgent string
-
-	err = pool.QueryRow(ctx, `
-		SELECT status, expire_time, pc_ip, pc_user_agent 
-		FROM qr_login_tokens 
-		WHERE token = $1
-	`, originalToken).Scan(&status, &expireTime, &pcIP, &pcUserAgent)
-
+	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_NOT_FOUND", "Token not found in Scan")
 		return
 	}
 
 	// 检查是否过期
-	if time.Now().UnixMilli() > expireTime {
+	if time.Now().UnixMilli() > qrToken.ExpireTime {
 		utils.LogWarn("QR-LOGIN", "Token expired in Scan", fmt.Sprintf("token=%s", originalToken[:8]+"..."))
 		// 删除过期 Token
-		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+		_ = h.qrLoginRepo.Delete(ctx, originalToken)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
 
 	// 检查状态
-	if status != QRStatusPending {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Token already used in Scan: status=%s", status))
+	if qrToken.Status != QRStatusPending {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Token already used in Scan: status=%s", qrToken.Status))
 		return
 	}
 
 	// 解析设备信息
-	browser, os := parseUserAgent(pcUserAgent)
+	browser, os := parseUserAgent(qrToken.PcUserAgent)
 
 	// 更新状态为已扫描
-	_, err = pool.Exec(ctx, `
-		UPDATE qr_login_tokens 
-		SET status = $1, scanned_at = $2 
-		WHERE token = $3
-	`, QRStatusScanned, time.Now().UnixMilli(), originalToken)
-
+	now := time.Now().UnixMilli()
+	err = h.qrLoginRepo.UpdateStatus(ctx, originalToken, QRStatusScanned, &now)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Scan", err, "Failed to update token status in Scan")
 		// 继续处理，不影响用户体验
@@ -618,11 +630,11 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	// 通知 PC 端
 	h.notifyStatusChange(encryptedToken, "scanned", nil)
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Token scanned: pcIP=%s, browser=%s, os=%s", pcIP, browser, os))
+	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Token scanned: pcIP=%s, browser=%s, os=%s", qrToken.PcIP, browser, os))
 
 	utils.RespondSuccess(c, gin.H{
 		"pcInfo": gin.H{
-			"ip":      pcIP,
+			"ip":      qrToken.PcIP,
 			"browser": browser,
 			"os":      os,
 		},
@@ -693,54 +705,27 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	// 获取数据库连接池
-	pool := models.GetPool()
-	if pool == nil {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INVALID_TOKEN", "Database pool is nil in MobileConfirm")
-		return
-	}
-
 	ctx := context.Background()
 
 	// 查询 Token 信息
-	var status string
-	var expireTime int64
-
-	err = pool.QueryRow(ctx, `
-		SELECT status, expire_time 
-		FROM qr_login_tokens 
-		WHERE token = $1
-	`, originalToken).Scan(&status, &expireTime)
-
+	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_NOT_FOUND", "Token not found in MobileConfirm")
 		return
 	}
 
 	// 检查是否过期
-	if time.Now().UnixMilli() > expireTime {
+	if time.Now().UnixMilli() > qrToken.ExpireTime {
 		utils.LogWarn("QR-LOGIN", "Token expired in MobileConfirm", "")
-		_, _ = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+		_ = h.qrLoginRepo.Delete(ctx, originalToken)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
 
 	// 检查状态（必须是已扫描状态）
-	if status != QRStatusScanned {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Invalid token status in MobileConfirm: status=%s", status))
+	if qrToken.Status != QRStatusScanned {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Invalid token status in MobileConfirm: status=%s", qrToken.Status))
 		return
-	}
-
-	// 更新状态为已确认
-	_, err = pool.Exec(ctx, `
-		UPDATE qr_login_tokens 
-		SET status = $1, user_id = $2, confirmed_at = $3 
-		WHERE token = $4
-	`, QRStatusConfirmed, userID, time.Now().UnixMilli(), originalToken)
-
-	if err != nil {
-		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
-		// 继续处理
 	}
 
 	// 为 PC 端创建会话
@@ -751,15 +736,19 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	// 通知 PC 端
+	// 更新状态为已确认，同时保存 pc_session_token
+	err = h.qrLoginRepo.ConfirmLogin(ctx, originalToken, userID, pcSessionToken)
+	if err != nil {
+		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
+		// 继续处理
+	}
+
+	// 通知 PC 端，发送 session token
 	h.notifyStatusChange(encryptedToken, "confirmed", map[string]string{
 		"sessionToken": pcSessionToken,
 	})
 
-	// 删除已使用的 Token
-	if _, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken); err != nil {
-		utils.LogWarn("QR-LOGIN", "Failed to delete token after confirm", "")
-	}
+	// 注意：不立即删除 Token，让 SetSession 一次性消费后再删除
 
 	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Mobile confirmed login: userID=%d", userID))
 	utils.RespondSuccess(c, gin.H{})
@@ -800,20 +789,10 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 		return
 	}
 
-	// 获取数据库连接池
-	pool := models.GetPool()
-	if pool == nil {
-		utils.LogWarn("QR-LOGIN", "Database pool is nil in MobileCancel", "")
-		// 仍然通知 PC 端
-		h.notifyStatusChange(encryptedToken, "cancelled", nil)
-		utils.RespondSuccess(c, gin.H{})
-		return
-	}
-
 	ctx := context.Background()
 
 	// 删除 Token
-	_, err = pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", originalToken)
+	err = h.qrLoginRepo.Delete(ctx, originalToken)
 	if err != nil {
 		utils.LogWarn("QR-LOGIN", "Failed to delete token in MobileCancel", "")
 	}
