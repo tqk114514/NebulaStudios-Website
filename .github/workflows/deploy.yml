@@ -28,9 +28,7 @@ jobs:
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-          cache: true
-          cache-dependency-path: go.sum
+          go-version: '1.25.5'
 
       - name: 下载依赖
         run: go mod download
@@ -72,7 +70,7 @@ jobs:
           WEBHOOK_URL="https://linux-webhook.nebulastudios.dpdns.org"
           
           # 触发部署，获取部署 ID
-          echo "🚀 触发部署..."
+          echo "触发部署"
           RESPONSE=$(curl -s -X POST "$WEBHOOK_URL/deploy" \
             -H "Content-Type: application/json" \
             -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
@@ -81,11 +79,11 @@ jobs:
           DEPLOY_ID=$(echo "$RESPONSE" | grep -o '"deployId":"[^"]*"' | cut -d'"' -f4)
           
           if [ -z "$DEPLOY_ID" ]; then
-            echo "❌ 触发部署失败: $RESPONSE"
+            echo "触发部署失败: $RESPONSE"
             exit 1
           fi
           
-          echo "📋 部署 ID: $DEPLOY_ID"
+          echo "部署 ID: $DEPLOY_ID"
           
           # 轮询状态，最多等待 2 分钟
           for i in $(seq 1 24); do
@@ -93,16 +91,16 @@ jobs:
             STATUS_RESPONSE=$(curl -s "$WEBHOOK_URL/deploy/$DEPLOY_ID")
             STATUS=$(echo "$STATUS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
             
-            echo "⏳ [$i/24] 状态: $STATUS"
+            echo "[$i/24] 状态: $STATUS"
             
             if [ "$STATUS" = "success" ]; then
-              echo "✅ 部署成功！"
+              echo "部署成功"
               exit 0
             elif [ "$STATUS" = "failed" ]; then
-              echo "❌ 部署失败: $STATUS_RESPONSE"
+              echo "部署失败: $STATUS_RESPONSE"
               exit 1
             fi
           done
           
-          echo "⏰ 部署超时"
+          echo "部署超时"
           exit 1
