@@ -526,7 +526,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	_, err := h.tokenService.VerifyCode(ctx, code, emailResult.Value, "")
+	tokenType := services.TokenTypeRegister
+	_, err := h.tokenService.VerifyCode(ctx, code, emailResult.Value, tokenType)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Registration code verification failed: email=%s", emailResult.Value))
 		return
@@ -945,7 +946,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// 验证验证码
-	_, err := h.tokenService.VerifyCode(ctx, code, normalizedEmail, services.TokenTypeResetPassword)
+	tokenType := services.TokenTypeResetPassword
+	_, err := h.tokenService.VerifyCode(ctx, code, normalizedEmail, tokenType)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Reset code verification failed: email=%s", normalizedEmail))
 		return
@@ -979,7 +981,6 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	// 清除验证码（忽略错误）
-	tokenType := services.TokenTypeResetPassword
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
 
 	// 使缓存失效（密码已更改）
