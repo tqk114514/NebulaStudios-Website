@@ -103,8 +103,14 @@ type dataExportToken struct {
 
 // dataExportTokens 数据导出 Token 存储（内存）
 var (
-	dataExportTokens   = make(map[string]*dataExportToken)
-	dataExportTokensMu sync.RWMutex
+	dataExportTokens      = make(map[string]*dataExportToken)
+	dataExportTokensMu    sync.RWMutex
+	dataExportCleanupOnce sync.Once
+)
+
+const (
+	// DataExportCleanupInterval 数据导出 Token 清理任务间隔
+	DataExportCleanupInterval = 5 * time.Minute
 )
 
 // ====================  构造函数 ====================
@@ -157,6 +163,8 @@ func NewUserHandler(
 
 	utils.LogInfo("USER", "Handler initialized successfully")
 
+	StartDataExportCleanup()
+
 	return &UserHandler{
 		userRepo:       userRepo,
 		userLogRepo:    userLogRepo,
@@ -168,6 +176,25 @@ func NewUserHandler(
 		oauthService:   oauthService,
 		baseURL:        baseURL,
 	}, nil
+}
+
+// ====================  清理任务 ====================
+
+// StartDataExportCleanup 启动数据导出 Token 清理任务
+// 定期清理过期的导出 Token
+func StartDataExportCleanup() {
+	dataExportCleanupOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(DataExportCleanupInterval)
+			defer ticker.Stop()
+
+			utils.LogInfo("USER", "Data export cleanup task started")
+
+			for range ticker.C {
+				CleanupExpiredExportTokens()
+			}
+		}()
+	})
 }
 
 // ====================  公开方法 ====================
@@ -780,9 +807,15 @@ func CleanupExpiredExportTokens() {
 	defer dataExportTokensMu.Unlock()
 
 	now := time.Now()
+	count := 0
 	for token, data := range dataExportTokens {
 		if now.After(data.ExpiresAt) {
 			delete(dataExportTokens, token)
+			count++
 		}
+	}
+
+	if count > 0 {
+		utils.LogInfo("USER", fmt.Sprintf("Cleanup completed: expired export tokens=%d", count))
 	}
 }
