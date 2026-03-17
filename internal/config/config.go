@@ -62,6 +62,8 @@ type Config struct {
 	// JWT 配置
 	JWTSecret    string        // JWT 签名密钥（必需）
 	JWTExpiresIn time.Duration // JWT 过期时间，默认 60 天
+	JWTIssuer    string        // JWT 签发者（iss）
+	JWTAudience  string        // JWT 受众（aud）
 
 	// SMTP 配置
 	SMTPHost     string // SMTP 服务器地址
@@ -175,6 +177,8 @@ func loadConfig() error {
 
 	// 加载 JWT 配置
 	newCfg.JWTSecret = getEnv("JWT_SECRET", "")
+	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "auth-system")
+	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "auth-system-users")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
 	if err != nil {
 		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid JWT_EXPIRES_IN, using default (60 days): %v", err))
