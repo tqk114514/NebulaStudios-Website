@@ -733,7 +733,6 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 		"user_info": gin.H{
 			"username":         user.Username,
 			"email":            user.Email,
-			"password_hash":    user.Password,
 			"avatar_url":       user.AvatarURL,
 			"microsoft_id":     user.MicrosoftID,
 			"microsoft_name":   user.MicrosoftName,
