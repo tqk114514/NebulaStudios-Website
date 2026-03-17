@@ -133,7 +133,7 @@ func NewAuthHandler(
 		userRepo:       userRepo,
 		userLogRepo:    userLogRepo,
 		tokenService:   tokenService,
-		sessionService:   sessionService,
+		sessionService: sessionService,
 		emailService:   emailService,
 		captchaService: captchaService,
 		userCache:      userCache,
@@ -828,7 +828,6 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // 错误码：
 //   - MISSING_PARAMETERS: 缺少参数
 //   - CAPTCHA_FAILED: 验证码验证失败
-//   - EMAIL_NOT_FOUND: 邮箱未注册
 //   - RATE_LIMIT: 发送频率超限
 //   - TOKEN_CREATE_FAILED: Token 创建失败
 //   - SEND_FAILED: 邮件发送失败
@@ -863,13 +862,6 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// 检查邮箱是否存在
-	_, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
-	if err != nil {
-		utils.HTTPDatabaseError(c, "AUTH", err, "EMAIL_NOT_FOUND")
-		return
-	}
-
 	// 邮件发送频率限制
 	if !middleware.EmailLimiter.Allow(normalizedEmail) {
 		waitTime := middleware.EmailLimiter.GetWaitTime(normalizedEmail)
@@ -877,24 +869,36 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 		return
 	}
 
-	// 生成 Token
-	token, _, err := h.tokenService.CreateToken(ctx, normalizedEmail, services.TokenTypeResetPassword)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_CREATE_FAILED", fmt.Sprintf("Token creation failed for reset: email=%s", normalizedEmail))
-		return
-	}
-
-	// 构建验证 URL
-	verifyURL := h.baseURL + "/account/verify?token=" + token
-	language := h.getLanguage(req.Language)
+	// 检查邮箱是否存在（不返回错误，仅用于决定是否发送邮件）
+	_, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
+	emailExists := err == nil
 
 	// 计算过期时间
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
 
-	// 异步发送邮件（不阻塞用户请求）
-	h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")
+	// 只有邮箱存在时才发送邮件
+	if emailExists {
+		// 生成 Token
+		token, _, err := h.tokenService.CreateToken(ctx, normalizedEmail, services.TokenTypeResetPassword)
+		if err != nil {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_CREATE_FAILED", fmt.Sprintf("Token creation failed for reset: email=%s", normalizedEmail))
+			return
+		}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Reset password code sent (async): email=%s", normalizedEmail))
+		// 构建验证 URL
+		verifyURL := h.baseURL + "/account/verify?token=" + token
+		language := h.getLanguage(req.Language)
+
+		// 异步发送邮件（不阻塞用户请求）
+		h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")
+
+		utils.LogInfo("AUTH", fmt.Sprintf("Reset password code sent (async): email=%s", normalizedEmail))
+	} else {
+		// 邮箱不存在，记录日志但返回相同的成功响应（防止用户枚举）
+		utils.LogInfo("AUTH", fmt.Sprintf("Reset password requested for non-existent email: email=%s", normalizedEmail))
+	}
+
+	// 无论邮箱是否存在，都返回相同的成功响应
 	utils.RespondSuccess(c, gin.H{"expireTime": expireTime})
 }
 
