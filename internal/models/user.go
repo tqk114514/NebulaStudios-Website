@@ -610,11 +610,10 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 
 // UserStats 用户统计数据
 type UserStats struct {
-	TotalUsers      int64 `json:"totalUsers"`
-	TodayNewUsers   int64 `json:"todayNewUsers"`
-	AdminCount      int64 `json:"adminCount"`
-	MicrosoftLinked int64 `json:"microsoftLinked"`
-	BannedCount     int64 `json:"bannedCount"`
+	TotalUsers    int64 `json:"totalUsers"`
+	TodayNewUsers int64 `json:"todayNewUsers"`
+	AdminCount    int64 `json:"adminCount"`
+	BannedCount   int64 `json:"bannedCount"`
 }
 
 // FindAll 查询用户列表（分页、搜索）
@@ -744,14 +743,6 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	`, RoleAdmin).Scan(&stats.AdminCount)
 	if err != nil {
 		return nil, utils.LogError("USER", "CountAdmins", err)
-	}
-
-	// 微软账户绑定数
-	err = pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM users WHERE microsoft_id IS NOT NULL
-	`).Scan(&stats.MicrosoftLinked)
-	if err != nil {
-		return nil, utils.LogError("USER", "CountMicrosoftLinked", err)
 	}
 
 	// 封禁用户数
