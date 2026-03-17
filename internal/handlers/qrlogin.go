@@ -610,21 +610,22 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 		return
 	}
 
-	// 检查状态
-	if qrToken.Status != QRStatusPending {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Token already used in Scan: status=%s", qrToken.Status))
-		return
-	}
-
 	// 解析设备信息
 	browser, os := parseUserAgent(qrToken.PcUserAgent)
 
-	// 更新状态为已扫描
+	// 原子更新状态为已扫描（带条件更新，防止竞态条件）
 	now := time.Now().UnixMilli()
-	err = h.qrLoginRepo.UpdateStatus(ctx, originalToken, QRStatusScanned, &now)
+	success, err := h.qrLoginRepo.UpdateStatusWithCondition(ctx, originalToken, QRStatusPending, QRStatusScanned, &now)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Scan", err, "Failed to update token status in Scan")
-		// 继续处理，不影响用户体验
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
+		return
+	}
+
+	// 如果更新失败，说明状态已经不是 pending 了
+	if !success {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", "Token already used in Scan")
+		return
 	}
 
 	// 通知 PC 端
@@ -722,12 +723,6 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	// 检查状态（必须是已扫描状态）
-	if qrToken.Status != QRStatusScanned {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", fmt.Sprintf("Invalid token status in MobileConfirm: status=%s", qrToken.Status))
-		return
-	}
-
 	// 为 PC 端创建会话
 	pcSessionToken, err := h.sessionService.GenerateToken(userID)
 	if err != nil {
@@ -736,11 +731,18 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	// 更新状态为已确认，同时保存 pc_session_token
-	err = h.qrLoginRepo.ConfirmLogin(ctx, originalToken, userID, pcSessionToken)
+	// 原子更新状态为已确认（带条件更新，防止竞态条件）
+	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, originalToken, userID, pcSessionToken)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
-		// 继续处理
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
+		return
+	}
+
+	// 如果更新失败，说明状态已经不是 scanned 了
+	if !success {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_ALREADY_USED", "Invalid token status in MobileConfirm")
+		return
 	}
 
 	// 通知 PC 端，发送 session token
