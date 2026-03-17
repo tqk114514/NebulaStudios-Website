@@ -545,7 +545,14 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
+		// 优先获取 Cloudflare 传递的真实 IP
+		ip := c.GetHeader("CF-Connecting-IP")
+		if ip == "" {
+			ip = c.GetHeader("X-Forwarded-For")
+		}
+		if ip == "" {
+			ip = c.ClientIP()
+		}
 
 		// 检查是否允许请求
 		if !limiter.Allow(ip) {
