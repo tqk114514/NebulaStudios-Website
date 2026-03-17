@@ -52,6 +52,9 @@ type Config struct {
 	Port    string // 服务端口，默认 3000
 	BaseURL string // 基础 URL（用于重定向等）
 
+	// CORS 配置
+	CORSAllowOrigins string // 允许的跨域来源，逗号分隔
+
 	// 数据库配置
 	DatabaseURL string // PostgreSQL 连接字符串
 	DBMaxConns  int    // 最大连接数，默认 10
@@ -115,8 +118,8 @@ var (
 // 返回：
 //   - *Config: 配置实例
 //   - error: 错误信息
-//     - ErrMissingRequired: 缺少必需的配置项（仅生产环境）
-//     - ErrInvalidValue: 配置值无效
+//   - ErrMissingRequired: 缺少必需的配置项（仅生产环境）
+//   - ErrInvalidValue: 配置值无效
 //
 // 注意：
 //   - .env 文件不存在时会记录警告但不会返回错误
@@ -160,6 +163,7 @@ func loadConfig() error {
 	// 加载服务器配置
 	newCfg.Port = getEnv("PORT", "3000")
 	newCfg.BaseURL = getEnv("BASE_URL", "http://localhost:3000")
+	newCfg.CORSAllowOrigins = getEnv("CORS_ALLOW_ORIGINS", "")
 
 	// 加载数据库配置
 	newCfg.DatabaseURL = getEnv("DATABASE_URL", "")

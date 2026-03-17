@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strings"
 
+	"auth-system/internal/config"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -62,19 +63,42 @@ type CORSConfig struct {
 // ====================  公开函数 ====================
 
 // CORS 跨域中间件（使用默认配置）
-// 允许所有来源，支持 credentials
+// 从配置读取允许的来源，支持 credentials
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
 func CORS() gin.HandlerFunc {
+	cfg := config.Get()
+	allowOrigins := parseAllowOrigins(cfg.CORSAllowOrigins)
+
 	return CORSWithConfig(CORSConfig{
-		AllowOrigins:     nil, // 允许所有来源
+		AllowOrigins:     allowOrigins,
 		AllowCredentials: true,
 		AllowMethods:     corsAllowMethods,
 		AllowHeaders:     corsAllowHeaders,
 		ExposeHeaders:    corsExposeHeaders,
 		MaxAge:           corsMaxAge,
 	})
+}
+
+// parseAllowOrigins 解析逗号分隔的允许来源列表
+// 参数：
+//   - originsStr: 逗号分隔的来源字符串
+//
+// 返回：
+//   - []string: 解析后的来源列表
+func parseAllowOrigins(originsStr string) []string {
+	if originsStr == "" {
+		return nil
+	}
+	var origins []string
+	for _, origin := range strings.Split(originsStr, ",") {
+		origin = strings.TrimSpace(origin)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }
 
 // CORSWithConfig 使用自定义配置的跨域中间件
@@ -110,7 +134,7 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 		origin := c.GetHeader("Origin")
 
 		// 确定响应的 Allow-Origin
-		allowOrigin := determineAllowOrigin(origin, allowOriginsMap, allowAllOrigins)
+		allowOrigin := determineAllowOrigin(origin, allowOriginsMap, allowAllOrigins, config.AllowCredentials)
 
 		// 设置 CORS 响应头
 		setCORSHeaders(c, allowOrigin, config)
@@ -133,25 +157,33 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 //   - origin: 请求的 Origin 头
 //   - allowOriginsMap: 允许的来源映射
 //   - allowAllOrigins: 是否允许所有来源
+//   - allowCredentials: 是否允许凭证
 //
 // 返回：
 //   - string: 响应的 Allow-Origin 值
-func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowAllOrigins bool) string {
+func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowAllOrigins bool, allowCredentials bool) string {
 	// 如果没有 Origin 头（同源请求或非浏览器请求）
 	if origin == "" {
-		// 当允许所有来源时，返回 "*"
-		// 注意：如果 AllowCredentials 为 true，这可能导致问题
-		// 但同源请求通常不需要 CORS 头
-		if allowAllOrigins {
-			return "*"
-		}
+		// 安全起见，不设置 Allow-Origin 头
 		return ""
 	}
 
-	// 如果允许所有来源，返回请求的 Origin
-	// 这样可以支持 credentials（不能用 "*"）
-	if allowAllOrigins {
-		return origin
+	// 安全检查：如果允许凭证，则绝对不能允许所有来源
+	// 这是 CORS 凭证泄露漏洞的关键防护
+	if allowCredentials && allowAllOrigins {
+		utils.LogWarn("CORS", "Security warning: AllowCredentials=true but no origin whitelist configured", "CORS requests will be blocked")
+		return ""
+	}
+
+	// 如果允许所有来源且不允许凭证，返回 "*"
+	if allowAllOrigins && !allowCredentials {
+		return "*"
+	}
+
+	// 如果允许所有来源且允许凭证（理论上不会到达这里，但作为后备）
+	if allowAllOrigins && allowCredentials {
+		utils.LogWarn("CORS", "Insecure configuration: AllowCredentials=true with allowAllOrigins", "Blocking CORS request")
+		return ""
 	}
 
 	// 检查 Origin 是否在允许列表中
