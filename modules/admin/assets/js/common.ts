@@ -31,7 +31,7 @@ export interface StatsResponse {
   totalUsers: number;
   todayNewUsers: number;
   adminCount: number;
-  microsoftLinked: number;
+  bannedCount: number;
 }
 
 export interface UserListResponse {

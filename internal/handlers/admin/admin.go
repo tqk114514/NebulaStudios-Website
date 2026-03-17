@@ -85,10 +85,10 @@ type userListResponse struct {
 
 // statsResponse 统计响应
 type statsResponse struct {
-	TotalUsers      int64 `json:"totalUsers"`
-	TodayNewUsers   int64 `json:"todayNewUsers"`
-	AdminCount      int64 `json:"adminCount"`
-	MicrosoftLinked int64 `json:"microsoftLinked"`
+	TotalUsers    int64 `json:"totalUsers"`
+	TodayNewUsers int64 `json:"todayNewUsers"`
+	AdminCount    int64 `json:"adminCount"`
+	BannedCount   int64 `json:"bannedCount"`
 }
 
 // setRoleRequest 设置角色请求
