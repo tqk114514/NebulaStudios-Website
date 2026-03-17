@@ -27,7 +27,7 @@ function deleteCookie(name: string): void {
 const CONSENT_COOKIE_NAME = 'cookieConsent';
 const CONSENT_EXPIRY_DAYS = 365;
 
-const OPTIONAL_COOKIES = ['selectedLanguage', 'token'];
+const OPTIONAL_COOKIES = ['selectedLanguage'];
 
 export type ConsentType = 'accepted' | 'rejected' | null;
 

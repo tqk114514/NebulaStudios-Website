@@ -90,18 +90,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 更新页面标题
     updatePageTitle();
 
-    // 获取 URL 参数
-    const token = getUrlParameter('token');
-
-    // 如果缺少 token，显示错误并返回
-    if (!token) {
-      showAlert(t('linkConfirm.invalidLink'));
-      setTimeout(() => {
-        window.location.href = '/account/login';
-      }, 2000);
-      return;
-    }
-
     // 获取待绑定信息
     const microsoftNameEl = document.getElementById('microsoft-name');
     const microsoftAvatarEl = document.getElementById('microsoft-avatar');
@@ -109,7 +97,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userAvatarEl = document.getElementById('user-avatar');
 
     try {
-      const response = await fetch(`/api/auth/microsoft/pending-link?token=${token}`);
+      const response = await fetch('/api/auth/microsoft/pending-link', {
+        credentials: 'include'
+      });
       const result: PendingLinkResponse = await response.json();
 
       if (!result.success) {
@@ -182,8 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const response = await fetch('/api/auth/microsoft/confirm-link', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ token })
+            credentials: 'include'
           });
 
           const result: ConfirmLinkResponse = await response.json();

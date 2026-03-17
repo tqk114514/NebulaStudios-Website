@@ -492,7 +492,9 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 			})
 
 			utils.LogInfo("OAUTH-MS", fmt.Sprintf("Found existing user with same email, redirecting to confirm: email=%s, userID=%d", email, existingUser.ID))
-			c.Redirect(http.StatusFound, h.baseURL+"/account/link?token="+linkToken)
+			// 使用 HttpOnly Cookie 传递 token，避免在 URL 中暴露
+			utils.SetLinkTokenCookieGin(c, linkToken)
+			c.Redirect(http.StatusFound, h.baseURL+"/account/link")
 			return
 		}
 	}
@@ -650,9 +652,6 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 // GetPendingLinkInfo 获取待绑定信息
 // GET /api/auth/microsoft/pending-link
 //
-// 查询参数：
-//   - token: 绑定 Token（必需）
-//
 // 响应：
 //   - success: 是否成功
 //   - data: 绑定信息（microsoftName, microsoftAvatar, username, userAvatar）
@@ -662,8 +661,9 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 //   - TOKEN_EXPIRED: Token 已过期
 //   - USER_NOT_FOUND: 用户不存在
 func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
-	token := strings.TrimSpace(c.Query("token"))
-	if token == "" {
+	token, err := utils.GetLinkTokenCookie(c)
+	token = strings.TrimSpace(token)
+	if err != nil || token == "" {
 		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusBadRequest, "INVALID_TOKEN", "Empty token in GetPendingLinkInfo")
 		return
 	}
@@ -722,9 +722,6 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 // ConfirmLink 确认绑定
 // POST /api/auth/microsoft/confirm-link
 //
-// 请求体：
-//   - token: 绑定 Token（必需）
-//
 // 响应：
 //   - success: 是否成功
 //
@@ -736,17 +733,9 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 //   - LINK_FAILED: 绑定失败
 //   - TOKEN_GENERATION_FAILED: Token 生成失败
 func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
-	var req struct {
-		Token string `json:"token"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusBadRequest, "INVALID_TOKEN", "Invalid request body for ConfirmLink")
-		return
-	}
-
-	token := strings.TrimSpace(req.Token)
-	if token == "" {
+	token, err := utils.GetLinkTokenCookie(c)
+	token = strings.TrimSpace(token)
+	if err != nil || token == "" {
 		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusBadRequest, "INVALID_TOKEN", "Empty token in ConfirmLink")
 		return
 	}
@@ -849,6 +838,9 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	// 设置认证 Cookie
 	SetAuthCookie(c, jwtToken)
+
+	// 清除 linkToken Cookie
+	utils.ClearLinkTokenCookieGin(c)
 
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID))
 	utils.RespondSuccess(c, gin.H{})
