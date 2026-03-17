@@ -14,7 +14,7 @@ import { fetchApi, StatsResponse } from './common';
 const statTotalUsers = document.getElementById('stat-total-users') as HTMLElement;
 const statTodayUsers = document.getElementById('stat-today-users') as HTMLElement;
 const statAdminCount = document.getElementById('stat-admin-count') as HTMLElement;
-const statMicrosoftLinked = document.getElementById('stat-microsoft-linked') as HTMLElement;
+const statBannedCount = document.getElementById('stat-banned-count') as HTMLElement;
 
 // ==================== API ====================
 
@@ -31,6 +31,6 @@ export async function loadStats(): Promise<void> {
     statTotalUsers.textContent = String(stats.totalUsers);
     statTodayUsers.textContent = String(stats.todayNewUsers);
     statAdminCount.textContent = String(stats.adminCount);
-    statMicrosoftLinked.textContent = String(stats.microsoftLinked);
+    statBannedCount.textContent = String(stats.bannedCount);
   }
 }
