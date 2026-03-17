@@ -767,7 +767,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 
 	// 设置响应头，触发下载
 	filename := fmt.Sprintf("nebula_account_data_%d_%s.txt", userID, time.Now().Format("20060102_150405"))
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", finalData)
 
