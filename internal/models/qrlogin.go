@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ====================  常量定义 ====================
@@ -40,16 +42,16 @@ const (
 
 // QRLoginToken 扫码登录 Token 模型
 type QRLoginToken struct {
-	Token           string         `json:"token"`
-	Status          string         `json:"status"`
-	UserID          sql.NullInt64  `json:"user_id"`
-	PcIP            string         `json:"pc_ip"`
-	PcUserAgent     string         `json:"pc_user_agent"`
-	PcSessionToken  sql.NullString `json:"pc_session_token"`
-	CreatedAt       int64          `json:"created_at"`
-	ScannedAt       sql.NullInt64  `json:"scanned_at"`
-	ConfirmedAt     sql.NullInt64  `json:"confirmed_at"`
-	ExpireTime      int64          `json:"expire_time"`
+	Token          string         `json:"token"`
+	Status         string         `json:"status"`
+	UserID         sql.NullInt64  `json:"user_id"`
+	PcIP           string         `json:"pc_ip"`
+	PcUserAgent    string         `json:"pc_user_agent"`
+	PcSessionToken sql.NullString `json:"pc_session_token"`
+	CreatedAt      int64          `json:"created_at"`
+	ScannedAt      sql.NullInt64  `json:"scanned_at"`
+	ConfirmedAt    sql.NullInt64  `json:"confirmed_at"`
+	ExpireTime     int64          `json:"expire_time"`
 }
 
 // QRLoginRepository 扫码登录仓库
@@ -175,6 +177,57 @@ func (r *QRLoginRepository) UpdateStatus(ctx context.Context, token, status stri
 	return nil
 }
 
+// UpdateStatusWithCondition 带条件原子更新 Token 状态
+// 参数：
+//   - ctx: 上下文
+//   - token: Token
+//   - fromStatus: 源状态（条件）
+//   - toStatus: 目标状态
+//   - scannedAt: 扫描时间（可选）
+//
+// 返回：
+//   - bool: 是否更新成功（affected rows > 0）
+//   - error: 错误信息
+func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token, fromStatus, toStatus string, scannedAt *int64) (bool, error) {
+	if token == "" || fromStatus == "" || toStatus == "" {
+		return false, errors.New("invalid parameters")
+	}
+
+	if pool == nil {
+		return false, errors.New("database not ready")
+	}
+
+	var commandTag pgconn.CommandTag
+	var err error
+
+	if scannedAt != nil {
+		commandTag, err = pool.Exec(ctx, `
+			UPDATE qr_login_tokens 
+			SET status = $1, scanned_at = $2 
+			WHERE token = $3 AND status = $4
+		`, toStatus, *scannedAt, token, fromStatus)
+	} else {
+		commandTag, err = pool.Exec(ctx, `
+			UPDATE qr_login_tokens 
+			SET status = $1 
+			WHERE token = $2 AND status = $3
+		`, toStatus, token, fromStatus)
+	}
+
+	if err != nil {
+		return false, utils.LogError("QRLOGIN", "UpdateStatusWithCondition", err, fmt.Sprintf("token=%s", token[:8]+"..."))
+	}
+
+	rowsAffected := commandTag.RowsAffected()
+	success := rowsAffected > 0
+
+	if success {
+		utils.LogInfo("QRLOGIN", fmt.Sprintf("Token status atomically updated: %s -> %s", fromStatus, toStatus))
+	}
+
+	return success, nil
+}
+
 // ConfirmLogin 确认登录（更新状态、user_id、confirmed_at 和 pc_session_token）
 // 参数：
 //   - ctx: 上下文
@@ -205,6 +258,45 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, user
 
 	utils.LogInfo("QRLOGIN", fmt.Sprintf("Login confirmed: userID=%d", userID))
 	return nil
+}
+
+// ConfirmLoginWithCondition 带条件原子确认登录
+// 参数：
+//   - ctx: 上下文
+//   - token: Token
+//   - userID: 用户 ID
+//   - pcSessionToken: PC 会话 Token
+//
+// 返回：
+//   - bool: 是否更新成功
+//   - error: 错误信息
+func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token string, userID int64, pcSessionToken string) (bool, error) {
+	if token == "" || userID <= 0 || pcSessionToken == "" {
+		return false, errors.New("invalid parameters")
+	}
+
+	if pool == nil {
+		return false, errors.New("database not ready")
+	}
+
+	commandTag, err := pool.Exec(ctx, `
+		UPDATE qr_login_tokens 
+		SET status = $1, user_id = $2, confirmed_at = $3, pc_session_token = $4
+		WHERE token = $5 AND status = $6
+	`, QRStatusConfirmed, userID, time.Now().UnixMilli(), pcSessionToken, token, QRStatusScanned)
+
+	if err != nil {
+		return false, utils.LogError("QRLOGIN", "ConfirmLoginWithCondition", err, fmt.Sprintf("token=%s", token[:8]+"..."))
+	}
+
+	rowsAffected := commandTag.RowsAffected()
+	success := rowsAffected > 0
+
+	if success {
+		utils.LogInfo("QRLOGIN", fmt.Sprintf("Login atomically confirmed: userID=%d", userID))
+	}
+
+	return success, nil
 }
 
 // Delete 删除 Token
