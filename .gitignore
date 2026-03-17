@@ -27,6 +27,7 @@ package-lock.json
 Thumbs.db
 TODO.md
 参考/
+linux.md
 
 # Rust
 img-processor/target/
