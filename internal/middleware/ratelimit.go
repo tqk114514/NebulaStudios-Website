@@ -545,6 +545,12 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
+		// 跳过 CORS 预检请求（OPTIONS）的限流
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
 		// 优先获取 Cloudflare 传递的真实 IP
 		ip := c.GetHeader("CF-Connecting-IP")
 		if ip == "" {
