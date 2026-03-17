@@ -84,6 +84,8 @@ type Claims struct {
 type SessionService struct {
 	jwtSecret    []byte
 	jwtExpiresIn time.Duration
+	jwtIssuer    string
+	jwtAudience  string
 }
 
 // ====================  构造函数 ====================
@@ -101,6 +103,8 @@ func NewSessionService(cfg *config.Config) *SessionService {
 		return &SessionService{
 			jwtSecret:    []byte("default-secret-please-change-in-production"),
 			jwtExpiresIn: defaultJWTExpiry,
+			jwtIssuer:    "auth-system",
+			jwtAudience:  "auth-system-users",
 		}
 	}
 
@@ -126,11 +130,23 @@ func NewSessionService(cfg *config.Config) *SessionService {
 		expiry = maxJWTExpiry
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v", expiry))
+	// 读取 iss/aud
+	issuer := cfg.JWTIssuer
+	if issuer == "" {
+		issuer = "auth-system"
+	}
+	audience := cfg.JWTAudience
+	if audience == "" {
+		audience = "auth-system-users"
+	}
+
+	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v, issuer=%s, audience=%s", expiry, issuer, audience))
 
 	return &SessionService{
 		jwtSecret:    []byte(secret),
 		jwtExpiresIn: expiry,
+		jwtIssuer:    issuer,
+		jwtAudience:  audience,
 	}
 }
 
@@ -195,6 +211,8 @@ func (s *SessionService) GenerateToken(userID int64) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiresIn)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
+			Issuer:    s.jwtIssuer,
+			Audience:  jwt.ClaimStrings{s.jwtAudience},
 		},
 	}
 
@@ -353,6 +371,25 @@ func (s *SessionService) validateClaims(claims *Claims) error {
 	// 验证过期时间
 	if claims.ExpiresAt == nil {
 		utils.LogWarn("SESSION", "Token has no expiry time", "")
+		return ErrInvalidTokenSession
+	}
+
+	// 验证签发者（iss）
+	if claims.Issuer != s.jwtIssuer {
+		utils.LogWarn("SESSION", "Invalid token issuer", fmt.Sprintf("expected=%s, got=%s", s.jwtIssuer, claims.Issuer))
+		return ErrInvalidTokenSession
+	}
+
+	// 验证受众（aud）
+	audienceValid := false
+	for _, aud := range claims.Audience {
+		if aud == s.jwtAudience {
+			audienceValid = true
+			break
+		}
+	}
+	if !audienceValid {
+		utils.LogWarn("SESSION", "Invalid token audience", fmt.Sprintf("expected=%s, got=%v", s.jwtAudience, claims.Audience))
 		return ErrInvalidTokenSession
 	}
 
