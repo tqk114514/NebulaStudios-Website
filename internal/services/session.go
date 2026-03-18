@@ -91,63 +91,21 @@ type SessionService struct {
 // ====================  构造函数 ====================
 
 // NewSessionService 创建 Session 服务
+// 使用带验证的构造函数，确保配置有效
+//
 // 参数：
 //   - cfg: 应用配置
 //
 // 返回：
 //   - *SessionService: Session 服务实例
 func NewSessionService(cfg *config.Config) *SessionService {
-	// 参数验证
-	if cfg == nil {
-		utils.LogError("SESSION", "NewSessionService", fmt.Errorf("config is nil"), "Using default config")
-		return &SessionService{
-			jwtSecret:    []byte("default-secret-please-change-in-production"),
-			jwtExpiresIn: defaultJWTExpiry,
-			jwtIssuer:    "auth-system",
-			jwtAudience:  "auth-system-users",
-		}
+	svc, err := NewSessionServiceWithValidation(cfg)
+	if err != nil {
+		utils.LogError("SESSION", "NewSessionService", err, "FATAL: Invalid JWT configuration - "+err.Error())
+		utils.LogError("SESSION", "NewSessionService", nil, "Please configure a secure JWT_SECRET in your environment")
+		panic("session service initialization failed: " + err.Error())
 	}
-
-	// 验证 JWT 密钥
-	secret := cfg.JWTSecret
-	if secret == "" {
-		utils.LogWarn("SESSION", "JWT secret is empty, using default", "")
-		secret = "default-secret-please-change-in-production"
-	} else if len(secret) < minSecretLength {
-		utils.LogWarn("SESSION", "JWT secret is too short, recommended minimum is 32", fmt.Sprintf("length=%d", len(secret)))
-	}
-
-	// 验证过期时间
-	expiry := cfg.JWTExpiresIn
-	if expiry <= 0 {
-		utils.LogWarn("SESSION", "Invalid JWT expiry, using default", fmt.Sprintf("expiry=%v, default=%v", expiry, defaultJWTExpiry))
-		expiry = defaultJWTExpiry
-	} else if expiry < minJWTExpiry {
-		utils.LogWarn("SESSION", "JWT expiry is too short, using minimum", fmt.Sprintf("expiry=%v, min=%v", expiry, minJWTExpiry))
-		expiry = minJWTExpiry
-	} else if expiry > maxJWTExpiry {
-		utils.LogWarn("SESSION", "JWT expiry is too long, using maximum", fmt.Sprintf("expiry=%v, max=%v", expiry, maxJWTExpiry))
-		expiry = maxJWTExpiry
-	}
-
-	// 读取 iss/aud
-	issuer := cfg.JWTIssuer
-	if issuer == "" {
-		issuer = "auth-system"
-	}
-	audience := cfg.JWTAudience
-	if audience == "" {
-		audience = "auth-system-users"
-	}
-
-	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v, issuer=%s, audience=%s", expiry, issuer, audience))
-
-	return &SessionService{
-		jwtSecret:    []byte(secret),
-		jwtExpiresIn: expiry,
-		jwtIssuer:    issuer,
-		jwtAudience:  audience,
-	}
+	return svc
 }
 
 // NewSessionServiceWithValidation 创建 Session 服务（带验证）
@@ -173,7 +131,40 @@ func NewSessionServiceWithValidation(cfg *config.Config) (*SessionService, error
 		return nil, ErrSessionInvalidExpiry
 	}
 
-	return NewSessionService(cfg), nil
+	// 验证密钥长度
+	if len(cfg.JWTSecret) < minSecretLength {
+		utils.LogWarn("SESSION", "JWT secret is shorter than recommended minimum", fmt.Sprintf("length=%d, recommended=%d", len(cfg.JWTSecret), minSecretLength))
+	}
+
+	// 读取 iss/aud（允许空，使用默认值）
+	issuer := cfg.JWTIssuer
+	if issuer == "" {
+		issuer = "auth-system"
+	}
+	audience := cfg.JWTAudience
+	if audience == "" {
+		audience = "auth-system-users"
+	}
+
+	// 限制过期时间范围
+	expiry := cfg.JWTExpiresIn
+	if expiry < minJWTExpiry {
+		expiry = minJWTExpiry
+		utils.LogWarn("SESSION", "JWT expiry adjusted to minimum", fmt.Sprintf("newExpiry=%v", expiry))
+	}
+	if expiry > maxJWTExpiry {
+		expiry = maxJWTExpiry
+		utils.LogWarn("SESSION", "JWT expiry adjusted to maximum", fmt.Sprintf("newExpiry=%v", expiry))
+	}
+
+	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v, issuer=%s, audience=%s", expiry, issuer, audience))
+
+	return &SessionService{
+		jwtSecret:    []byte(cfg.JWTSecret),
+		jwtExpiresIn: expiry,
+		jwtIssuer:    issuer,
+		jwtAudience:  audience,
+	}, nil
 }
 
 // ====================  公开方法 ====================

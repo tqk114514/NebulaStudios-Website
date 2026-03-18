@@ -84,6 +84,7 @@ func CORS() gin.HandlerFunc {
 	if corsConfig.AllowCredentials && len(corsConfig.AllowOrigins) == 0 {
 		utils.LogError("CORS", "CORS", nil, "FATAL: CORS_ALLOW_ORIGINS is empty but AllowCredentials=true. This is insecure.")
 		utils.LogError("CORS", "CORS", nil, "Please configure a comma-separated list of allowed origins in CORS_ALLOW_ORIGINS.")
+		panic("CORS configuration error: CORS_ALLOW_ORIGINS must be configured when credentials are enabled")
 	}
 
 	return CORSWithConfig(corsConfig)
@@ -141,6 +142,7 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 	if config.AllowCredentials && allowAllOrigins {
 		utils.LogError("CORS", "CORSWithConfig", nil, "FATAL: CORS configuration is insecure - AllowCredentials=true but no origin whitelist.")
 		utils.LogError("CORS", "CORSWithConfig", nil, "CORS requests will be blocked until a proper origin whitelist is configured.")
+		panic("CORS configuration error: origin whitelist required when credentials are enabled")
 	}
 
 	return func(c *gin.Context) {
