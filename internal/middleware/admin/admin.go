@@ -37,15 +37,6 @@ const (
 
 	// adminCheckTimeout 管理员检查超时时间
 	adminCheckTimeout = 5 * time.Second
-
-	// authHeaderPrefix Authorization Header 前缀
-	authHeaderPrefix = "Bearer "
-
-	// authHeaderPrefixLen Authorization Header 前缀长度
-	authHeaderPrefixLen = 7
-
-	// tokenCookieName Token Cookie 名称
-	tokenCookieName = utils.TokenCookieName
 )
 
 // ====================  公开函数 ====================
@@ -261,7 +252,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 
 	return func(c *gin.Context) {
 		// 提取 Token
-		token := extractToken(c)
+		token := middleware.ExtractToken(c)
 		if token == "" {
 			// 未登录，伪装成 404（隐藏后台入口）
 			utils.LogDebug("ADMIN-MW", "Admin page access without token, showing 404")
@@ -309,26 +300,4 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		c.Set(ContextKeyUserRole, user.Role)
 		c.Next()
 	}
-}
-
-// extractToken 从请求中提取 Token
-// 优先从 Authorization Header 获取，其次从 Cookie 获取
-func extractToken(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-
-	// 优先从 Authorization Header 获取
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) > authHeaderPrefixLen && authHeader[:authHeaderPrefixLen] == authHeaderPrefix {
-		return authHeader[authHeaderPrefixLen:]
-	}
-
-	// 其次从 Cookie 获取
-	token, err := c.Cookie(tokenCookieName)
-	if err != nil {
-		return ""
-	}
-
-	return token
 }

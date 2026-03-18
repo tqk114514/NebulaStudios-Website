@@ -709,17 +709,17 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		// 修改密码需要封禁检查
 		authAPI.POST("/change-password",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.authHandler.ChangePassword)
 
 		// 账户删除（需要封禁检查）
 		authAPI.POST("/send-delete-code",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.userHandler.SendDeleteCode)
 		authAPI.POST("/delete-account",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.userHandler.DeleteAccount)
 
 		// Microsoft OAuth
@@ -728,7 +728,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		// 解绑微软账户需要封禁检查
 		authAPI.POST("/microsoft/unlink",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
 		// 确认绑定微软账户（用户未登录状态，通过 pending link token 验证）
@@ -741,7 +741,7 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	userAPI := r.Group("/api/user")
 	userAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
 	// 封禁检查：被封禁用户无法调用这些 API
-	userAPI.Use(middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo))
+	userAPI.Use(middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService))
 	{
 		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
@@ -767,7 +767,7 @@ func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		// 移动端确认登录需要封禁检查（被封禁用户不能授权其他设备登录）
 		qrAPI.POST("/mobile-confirm",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.qrLoginHandler.MobileConfirm)
 		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
 		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
@@ -833,17 +833,17 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 		// POST: 处理授权决定
 		oauthGroup.GET("/authorize",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.oauthProviderHandler.Authorize)
 		oauthGroup.POST("/authorize",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.oauthProviderHandler.AuthorizePost)
 
 		// 授权信息 API - 供授权页面获取应用和用户信息
 		oauthGroup.GET("/authorize/info",
 			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo),
+			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
 			hdlrs.oauthProviderHandler.AuthorizeInfo)
 
 		// Token 端点 - 需要限流（防止暴力破解）

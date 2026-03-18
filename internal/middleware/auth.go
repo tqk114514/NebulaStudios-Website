@@ -72,7 +72,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		// 提取 Token
-		token := extractToken(c)
+		token := ExtractToken(c)
 		if token == "" {
 			// Token 未找到是预期内的业务情况，使用 DEBUG 级别避免日志洪水
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token not found: ip=%s", c.ClientIP()))
@@ -129,7 +129,7 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 
 	return func(c *gin.Context) {
 		// 提取 Token
-		token := extractToken(c)
+		token := ExtractToken(c)
 		if token == "" {
 			// 可选认证，没有 Token 直接继续
 			c.Next()
@@ -205,9 +205,9 @@ func IsAuthenticated(c *gin.Context) bool {
 	return ok
 }
 
-// ====================  私有函数 ====================
+// ====================  公开函数 ====================
 
-// extractToken 从请求中提取 Token
+// ExtractToken 从请求中提取 Token
 // 优先从 Authorization Header 获取，其次从 Cookie 获取
 //
 // 参数：
@@ -215,7 +215,7 @@ func IsAuthenticated(c *gin.Context) bool {
 //
 // 返回：
 //   - string: Token 字符串，未找到返回空字符串
-func extractToken(c *gin.Context) string {
+func ExtractToken(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
@@ -286,7 +286,7 @@ func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFun
 
 	return func(c *gin.Context) {
 		// 提取 Token
-		token := extractToken(c)
+		token := ExtractToken(c)
 		if token == "" {
 			// 没有 Token，是访客，继续
 			c.Next()

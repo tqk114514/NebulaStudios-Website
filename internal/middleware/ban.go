@@ -6,10 +6,12 @@
  * - 检查用户是否被封禁
  * - 被封禁用户无法调用受保护的 API
  * - 自动检查解封时间
+ * - 独立工作，不依赖其他中间件执行顺序
  *
  * 依赖：
  * - UserCache: 用户缓存
  * - UserRepository: 用户数据访问
+ * - SessionService: 会话验证服务
  */
 
 package middleware
@@ -22,6 +24,7 @@ import (
 
 	"auth-system/internal/cache"
 	"auth-system/internal/models"
+	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -38,14 +41,16 @@ const (
 
 // BanCheckMiddleware 封禁检查中间件
 // 检查当前登录用户是否被封禁，被封禁则拒绝请求
+// 独立工作，不依赖 AuthMiddleware 执行顺序
 //
 // 参数：
 //   - userCache: 用户缓存
 //   - userRepo: 用户数据仓库（缓存未命中时回源）
+//   - sessionService: 会话服务，用于验证 Token
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserRepository) gin.HandlerFunc {
+func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserRepository, sessionService *services.SessionService) gin.HandlerFunc {
 	if userCache == nil || userRepo == nil {
 		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"), "")
 		return func(c *gin.Context) {
@@ -56,12 +61,35 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 			c.Abort()
 		}
 	}
+	if sessionService == nil {
+		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("sessionService is nil"), "")
+		return func(c *gin.Context) {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success":   false,
+				"errorCode": "INTERNAL_ERROR",
+			})
+			c.Abort()
+		}
+	}
 
 	return func(c *gin.Context) {
-		// 获取用户 ID
+		// 第一步：尝试从 Context 获取用户 ID（如果 AuthMiddleware 已执行）
 		userID, ok := GetUserID(c)
+
+		// 第二步：如果 Context 中没有用户 ID，自己提取并验证 Token
 		if !ok {
-			// 未登录，跳过封禁检查（由 AuthMiddleware 处理）
+			token := ExtractToken(c)
+			if token != "" {
+				claims, err := sessionService.VerifyToken(token)
+				if err == nil && claims != nil && claims.UserID > 0 {
+					userID = claims.UserID
+					ok = true
+				}
+			}
+		}
+
+		// 如果还是没有用户 ID，未登录，跳过封禁检查
+		if !ok {
 			c.Next()
 			return
 		}
