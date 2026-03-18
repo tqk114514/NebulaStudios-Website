@@ -86,6 +86,12 @@ const (
 
 	// ActionLink 绑定操作
 	ActionLink = "link"
+
+	// maxStatesCapacity states map 最大容量，防止内存耗尽
+	maxStatesCapacity = 10000
+
+	// maxPendingLinksCapacity pendingLinks map 最大容量
+	maxPendingLinksCapacity = 5000
 )
 
 // ====================  数据结构 ====================
@@ -116,24 +122,34 @@ type PendingLink struct {
 // 1. 服务重启会丢失所有数据（正在进行的 OAuth 流程会失败）
 // 2. 多实例部署时无法共享状态（需要 sticky session 或改用 Redis）
 // 当前适用于单实例部署场景，如需多实例部署请改用 Redis 存储
+// 存储带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
 var (
 	states       = make(map[string]*State)       // OAuth state 存储
 	pendingLinks = make(map[string]*PendingLink) // 待绑定数据存储
 	stateMu      sync.RWMutex                    // state 读写锁
 	linkMu       sync.RWMutex                    // pendingLinks 读写锁
+	stateOrder   []string                        // state 插入顺序（用于 FIFO）
+	pendingOrder []string                        // pendingLink 插入顺序（用于 FIFO）
 )
 
 // ====================  State 管理 ====================
 
 // SaveState 保存 OAuth state
+// 达到容量上限时按 FIFO 淘汰旧条目
 //
 // 参数：
 //   - state: state 字符串
 //   - data: state 数据
 func SaveState(state string, data *State) {
 	stateMu.Lock()
+	defer stateMu.Unlock()
+
+	if len(states) >= maxStatesCapacity {
+		fifoEvictLocked(&states, &stateOrder, maxStatesCapacity/10)
+	}
+
 	states[state] = data
-	stateMu.Unlock()
+	stateOrder = append(stateOrder, state)
 }
 
 // GetState 获取 OAuth state
@@ -157,8 +173,9 @@ func GetState(state string) (*State, bool) {
 //   - state: state 字符串
 func DeleteState(state string) {
 	stateMu.Lock()
+	defer stateMu.Unlock()
 	delete(states, state)
-	stateMu.Unlock()
+	removeFromOrder(&stateOrder, state)
 }
 
 // GetAndDeleteState 获取并删除 OAuth state（原子操作）
@@ -172,25 +189,33 @@ func DeleteState(state string) {
 //   - bool: 是否存在
 func GetAndDeleteState(state string) (*State, bool) {
 	stateMu.Lock()
+	defer stateMu.Unlock()
 	data, exists := states[state]
 	if exists {
 		delete(states, state)
+		removeFromOrder(&stateOrder, state)
 	}
-	stateMu.Unlock()
 	return data, exists
 }
 
 // ====================  PendingLink 管理 ====================
 
 // SavePendingLink 保存待绑定数据
+// 达到容量上限时按 FIFO 淘汰旧条目
 //
 // 参数：
 //   - token: 绑定 token
 //   - data: 待绑定数据
 func SavePendingLink(token string, data *PendingLink) {
 	linkMu.Lock()
+	defer linkMu.Unlock()
+
+	if len(pendingLinks) >= maxPendingLinksCapacity {
+		fifoEvictLocked(&pendingLinks, &pendingOrder, maxPendingLinksCapacity/10)
+	}
+
 	pendingLinks[token] = data
-	linkMu.Unlock()
+	pendingOrder = append(pendingOrder, token)
 }
 
 // GetPendingLink 获取待绑定数据
@@ -214,8 +239,9 @@ func GetPendingLink(token string) (*PendingLink, bool) {
 //   - token: 绑定 token
 func DeletePendingLink(token string) {
 	linkMu.Lock()
+	defer linkMu.Unlock()
 	delete(pendingLinks, token)
-	linkMu.Unlock()
+	removeFromOrder(&pendingOrder, token)
 }
 
 // GetAndDeletePendingLink 获取并删除待绑定数据（原子操作）
@@ -228,11 +254,12 @@ func DeletePendingLink(token string) {
 //   - bool: 是否存在
 func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 	linkMu.Lock()
+	defer linkMu.Unlock()
 	data, exists := pendingLinks[token]
 	if exists {
 		delete(pendingLinks, token)
+		removeFromOrder(&pendingOrder, token)
 	}
-	linkMu.Unlock()
 	return data, exists
 }
 
@@ -354,28 +381,67 @@ func cleanupExpiredData() {
 	stateCount := 0
 	linkCount := 0
 
-	// 清理过期的 OAuth state
 	stateMu.Lock()
 	for state, data := range states {
 		if data == nil || now-data.Timestamp > StateExpiryMS {
 			delete(states, state)
+			removeFromOrder(&stateOrder, state)
 			stateCount++
 		}
 	}
 	stateMu.Unlock()
 
-	// 清理过期的待绑定数据
 	linkMu.Lock()
 	for token, data := range pendingLinks {
 		if data == nil || now-data.Timestamp > StateExpiryMS {
 			delete(pendingLinks, token)
+			removeFromOrder(&pendingOrder, token)
 			linkCount++
 		}
 	}
 	linkMu.Unlock()
 
-	// 仅在有清理时记录日志
 	if stateCount > 0 || linkCount > 0 {
 		utils.LogInfo("OAUTH", fmt.Sprintf("Cleanup completed: states=%d, links=%d", stateCount, linkCount))
+	}
+}
+
+// fifoEvictLocked 按 FIFO 原则淘汰旧条目（持有锁的情况下调用）
+// 参数：
+//   - data: map 指针
+//   - order: 顺序切片指针
+//   - count: 淘汰数量
+func fifoEvictLocked(data interface{}, order *[]string, count int) {
+	if count <= 0 {
+		return
+	}
+
+	switch m := data.(type) {
+	case *map[string]*State:
+		orderSlice := *order
+		for i := 0; i < count && i < len(orderSlice); i++ {
+			delete(*m, orderSlice[i])
+		}
+		*order = orderSlice[count:]
+	case *map[string]*PendingLink:
+		orderSlice := *order
+		for i := 0; i < count && i < len(orderSlice); i++ {
+			delete(*m, orderSlice[i])
+		}
+		*order = orderSlice[count:]
+	}
+}
+
+// removeFromOrder 从顺序切片中移除元素
+// 参数：
+//   - order: 顺序切片指针
+//   - item: 要移除的元素
+func removeFromOrder(order *[]string, item string) {
+	slice := *order
+	for i, v := range slice {
+		if v == item {
+			*order = append(slice[:i], slice[i+1:]...)
+			return
+		}
 	}
 }
