@@ -123,13 +123,16 @@ type PendingLink struct {
 // 2. 多实例部署时无法共享状态（需要 sticky session 或改用 Redis）
 // 当前适用于单实例部署场景，如需多实例部署请改用 Redis 存储
 // 存储带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
+// FIFO 使用自增计数器实现，插入时赋值，淘汰时找最小值
 var (
-	states       = make(map[string]*State)       // OAuth state 存储
-	pendingLinks = make(map[string]*PendingLink) // 待绑定数据存储
-	stateMu      sync.RWMutex                    // state 读写锁
-	linkMu       sync.RWMutex                    // pendingLinks 读写锁
-	stateOrder   []string                        // state 插入顺序（用于 FIFO）
-	pendingOrder []string                        // pendingLink 插入顺序（用于 FIFO）
+	states         = make(map[string]*State)       // OAuth state 存储
+	pendingLinks   = make(map[string]*PendingLink) // 待绑定数据存储
+	stateMu        sync.RWMutex                    // state 读写锁
+	linkMu         sync.RWMutex                    // pendingLinks 读写锁
+	stateIndex     = make(map[string]int64)        // state 插入序号（用于 FIFO）
+	pendingIndex   = make(map[string]int64)        // pendingLink 插入序号（用于 FIFO）
+	stateCounter   int64                           // state 自增计数器
+	pendingCounter int64                           // pendingLink 自增计数器
 )
 
 // ====================  State 管理 ====================
@@ -145,11 +148,12 @@ func SaveState(state string, data *State) {
 	defer stateMu.Unlock()
 
 	if len(states) >= maxStatesCapacity {
-		fifoEvictLocked(&states, &stateOrder, maxStatesCapacity/10)
+		fifoEvictLocked(states, stateIndex, &stateCounter, maxStatesCapacity/10)
 	}
 
+	stateCounter++
 	states[state] = data
-	stateOrder = append(stateOrder, state)
+	stateIndex[state] = stateCounter
 }
 
 // GetState 获取 OAuth state
@@ -175,7 +179,7 @@ func DeleteState(state string) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
 	delete(states, state)
-	removeFromOrder(&stateOrder, state)
+	delete(stateIndex, state)
 }
 
 // GetAndDeleteState 获取并删除 OAuth state（原子操作）
@@ -193,7 +197,7 @@ func GetAndDeleteState(state string) (*State, bool) {
 	data, exists := states[state]
 	if exists {
 		delete(states, state)
-		removeFromOrder(&stateOrder, state)
+		delete(stateIndex, state)
 	}
 	return data, exists
 }
@@ -211,11 +215,12 @@ func SavePendingLink(token string, data *PendingLink) {
 	defer linkMu.Unlock()
 
 	if len(pendingLinks) >= maxPendingLinksCapacity {
-		fifoEvictLocked(&pendingLinks, &pendingOrder, maxPendingLinksCapacity/10)
+		fifoEvictLocked(pendingLinks, pendingIndex, &pendingCounter, maxPendingLinksCapacity/10)
 	}
 
+	pendingCounter++
 	pendingLinks[token] = data
-	pendingOrder = append(pendingOrder, token)
+	pendingIndex[token] = pendingCounter
 }
 
 // GetPendingLink 获取待绑定数据
@@ -241,7 +246,7 @@ func DeletePendingLink(token string) {
 	linkMu.Lock()
 	defer linkMu.Unlock()
 	delete(pendingLinks, token)
-	removeFromOrder(&pendingOrder, token)
+	delete(pendingIndex, token)
 }
 
 // GetAndDeletePendingLink 获取并删除待绑定数据（原子操作）
@@ -258,7 +263,7 @@ func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 	data, exists := pendingLinks[token]
 	if exists {
 		delete(pendingLinks, token)
-		removeFromOrder(&pendingOrder, token)
+		delete(pendingIndex, token)
 	}
 	return data, exists
 }
@@ -385,7 +390,7 @@ func cleanupExpiredData() {
 	for state, data := range states {
 		if data == nil || now-data.Timestamp > StateExpiryMS {
 			delete(states, state)
-			removeFromOrder(&stateOrder, state)
+			delete(stateIndex, state)
 			stateCount++
 		}
 	}
@@ -395,7 +400,7 @@ func cleanupExpiredData() {
 	for token, data := range pendingLinks {
 		if data == nil || now-data.Timestamp > StateExpiryMS {
 			delete(pendingLinks, token)
-			removeFromOrder(&pendingOrder, token)
+			delete(pendingIndex, token)
 			linkCount++
 		}
 	}
@@ -406,42 +411,89 @@ func cleanupExpiredData() {
 	}
 }
 
-// fifoEvictLocked 按 FIFO 原则淘汰旧条目（持有锁的情况下调用）
+// fifoEvictLocked 按 FIFO 原则淘汰最旧的 N 个条目（持有锁的情况下调用）
+// 通过找最小计数器值确定最旧的条目
+//
 // 参数：
-//   - data: map 指针
-//   - order: 顺序切片指针
+//   - dataMap: 数据 map
+//   - indexMap: 序号 map
+//   - counter: 当前计数器指针
 //   - count: 淘汰数量
-func fifoEvictLocked(data interface{}, order *[]string, count int) {
+func fifoEvictLocked(dataMap interface{}, indexMap map[string]int64, counter *int64, count int) {
 	if count <= 0 {
 		return
 	}
 
-	switch m := data.(type) {
-	case *map[string]*State:
-		orderSlice := *order
-		for i := 0; i < count && i < len(orderSlice); i++ {
-			delete(*m, orderSlice[i])
+	switch m := dataMap.(type) {
+	case map[string]*State:
+		toEvict := findOldestKeys(indexMap, count)
+		for _, key := range toEvict {
+			delete(m, key)
+			delete(indexMap, key)
 		}
-		*order = orderSlice[count:]
-	case *map[string]*PendingLink:
-		orderSlice := *order
-		for i := 0; i < count && i < len(orderSlice); i++ {
-			delete(*m, orderSlice[i])
+	case map[string]*PendingLink:
+		toEvict := findOldestKeys(indexMap, count)
+		for _, key := range toEvict {
+			delete(m, key)
+			delete(indexMap, key)
 		}
-		*order = orderSlice[count:]
 	}
 }
 
-// removeFromOrder 从顺序切片中移除元素
-// 参数：
-//   - order: 顺序切片指针
-//   - item: 要移除的元素
-func removeFromOrder(order *[]string, item string) {
-	slice := *order
-	for i, v := range slice {
-		if v == item {
-			*order = append(slice[:i], slice[i+1:]...)
-			return
+// findOldestKeys 找出序号最小的 N 个 key
+func findOldestKeys(indexMap map[string]int64, count int) []string {
+	if len(indexMap) <= count {
+		keys := make([]string, 0, len(indexMap))
+		for k := range indexMap {
+			keys = append(keys, k)
 		}
+		return keys
+	}
+
+	heap := make([]fifoKv, 0, count)
+
+	for k, v := range indexMap {
+		if len(heap) < count {
+			heap = append(heap, fifoKv{k, v})
+			if len(heap) == count {
+				buildFifoMinHeap(heap)
+			}
+		} else if v < heap[0].value {
+			heap[0] = fifoKv{k, v}
+			fifoHeapify(heap, 0)
+		}
+	}
+
+	result := make([]string, count)
+	for i := range heap {
+		result[i] = heap[i].key
+	}
+	return result
+}
+
+type fifoKv struct {
+	key   string
+	value int64
+}
+
+func buildFifoMinHeap(h []fifoKv) {
+	for i := len(h)/2 - 1; i >= 0; i-- {
+		fifoHeapify(h, i)
+	}
+}
+
+func fifoHeapify(h []fifoKv, i int) {
+	min := i
+	left := 2*i + 1
+	right := 2*i + 2
+	if left < len(h) && h[left].value < h[min].value {
+		min = left
+	}
+	if right < len(h) && h[right].value < h[min].value {
+		min = right
+	}
+	if min != i {
+		h[i], h[min] = h[min], h[i]
+		fifoHeapify(h, min)
 	}
 }
