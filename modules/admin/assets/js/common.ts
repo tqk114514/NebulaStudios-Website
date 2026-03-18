@@ -106,23 +106,23 @@ export const ACTION_NAMES: Record<string, string> = {
 
 // ==================== DOM 元素 ====================
 
-export const toastContainer = document.getElementById('toast-container') as HTMLElement;
-export const userModal = document.getElementById('user-modal') as HTMLElement;
-export const userModalBody = document.getElementById('user-modal-body') as HTMLElement;
-export const userModalFooter = document.getElementById('user-modal-footer') as HTMLElement;
-export const confirmModal = document.getElementById('confirm-modal') as HTMLElement;
-export const confirmTitle = document.getElementById('confirm-title') as HTMLElement;
-export const confirmMessage = document.getElementById('confirm-message') as HTMLElement;
-export const confirmCancel = document.getElementById('confirm-cancel') as HTMLButtonElement;
-export const confirmOk = document.getElementById('confirm-ok') as HTMLButtonElement;
-export const banModal = document.getElementById('ban-modal') as HTMLElement;
-export const banReason = document.getElementById('ban-reason') as HTMLSelectElement;
-export const banCustomReasonGroup = document.getElementById('ban-custom-reason-group') as HTMLElement;
-export const banCustomReason = document.getElementById('ban-custom-reason') as HTMLInputElement;
-export const banDuration = document.getElementById('ban-duration') as HTMLSelectElement;
-export const banCancel = document.getElementById('ban-cancel') as HTMLButtonElement;
-export const banConfirm = document.getElementById('ban-confirm') as HTMLButtonElement;
-export const banModalClose = document.getElementById('ban-modal-close') as HTMLButtonElement;
+export const toastContainer = document.getElementById('toast-container') as HTMLElement | null;
+export const userModal = document.getElementById('user-modal') as HTMLElement | null;
+export const userModalBody = document.getElementById('user-modal-body') as HTMLElement | null;
+export const userModalFooter = document.getElementById('user-modal-footer') as HTMLElement | null;
+export const confirmModal = document.getElementById('confirm-modal') as HTMLElement | null;
+export const confirmTitle = document.getElementById('confirm-title') as HTMLElement | null;
+export const confirmMessage = document.getElementById('confirm-message') as HTMLElement | null;
+export const confirmCancel = document.getElementById('confirm-cancel') as HTMLButtonElement | null;
+export const confirmOk = document.getElementById('confirm-ok') as HTMLButtonElement | null;
+export const banModal = document.getElementById('ban-modal') as HTMLElement | null;
+export const banReason = document.getElementById('ban-reason') as HTMLSelectElement | null;
+export const banCustomReasonGroup = document.getElementById('ban-custom-reason-group') as HTMLElement | null;
+export const banCustomReason = document.getElementById('ban-custom-reason') as HTMLInputElement | null;
+export const banDuration = document.getElementById('ban-duration') as HTMLSelectElement | null;
+export const banCancel = document.getElementById('ban-cancel') as HTMLButtonElement | null;
+export const banConfirm = document.getElementById('ban-confirm') as HTMLButtonElement | null;
+export const banModalClose = document.getElementById('ban-modal-close') as HTMLButtonElement | null;
 
 // ==================== API 函数 ====================
 
@@ -167,6 +167,13 @@ export async function logout(): Promise<void> {
 // ==================== UI 函数 ====================
 
 export function showToast(message: string, type: 'success' | 'error' | 'warning' = 'success'): void {
+  console.log('[ADMIN][COMMON] showToast called:', { message, type });
+  
+  if (!toastContainer) {
+    console.error('[ADMIN][COMMON] toastContainer not found');
+    return;
+  }
+  
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.textContent = message;
@@ -178,26 +185,50 @@ export function showToast(message: string, type: 'success' | 'error' | 'warning'
   }, 3000);
 }
 
-export function showModal(modal: HTMLElement): void {
+export function showModal(modal: HTMLElement | null): void {
+  console.log('[ADMIN][COMMON] showModal called');
+  
+  if (!modal) {
+    console.error('[ADMIN][COMMON] showModal: modal is null');
+    return;
+  }
   modal.classList.remove('is-hidden');
 }
 
-export function hideModal(modal: HTMLElement): void {
+export function hideModal(modal: HTMLElement | null): void {
+  console.log('[ADMIN][COMMON] hideModal called');
+  
+  if (!modal) {
+    console.error('[ADMIN][COMMON] hideModal: modal is null');
+    return;
+  }
   modal.classList.add('is-hidden');
 }
 
 export function showConfirm(title: string, message: string, onConfirm: () => void): void {
-  confirmTitle.textContent = title;
-  confirmMessage.textContent = message;
-  showModal(confirmModal);
+  console.log('[ADMIN][COMMON] showConfirm called');
+  
+  const localConfirmTitle = confirmTitle;
+  const localConfirmMessage = confirmMessage;
+  const localConfirmModal = confirmModal;
+  const localConfirmOk = confirmOk;
+  
+  if (!localConfirmTitle || !localConfirmMessage || !localConfirmModal || !localConfirmOk) {
+    console.error('[ADMIN][COMMON] showConfirm: required elements not found');
+    return;
+  }
+  
+  localConfirmTitle.textContent = title;
+  localConfirmMessage.textContent = message;
+  showModal(localConfirmModal);
 
   const handleConfirm = (): void => {
-    hideModal(confirmModal);
-    confirmOk.removeEventListener('click', handleConfirm);
+    hideModal(localConfirmModal);
+    localConfirmOk.removeEventListener('click', handleConfirm);
     onConfirm();
   };
 
-  confirmOk.addEventListener('click', handleConfirm);
+  localConfirmOk.addEventListener('click', handleConfirm);
 }
 
 // ==================== 格式化函数 ====================
