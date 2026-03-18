@@ -71,14 +71,22 @@ func CORS() gin.HandlerFunc {
 	cfg := config.Get()
 	allowOrigins := parseAllowOrigins(cfg.CORSAllowOrigins)
 
-	return CORSWithConfig(CORSConfig{
+	corsConfig := CORSConfig{
 		AllowOrigins:     allowOrigins,
 		AllowCredentials: true,
 		AllowMethods:     corsAllowMethods,
 		AllowHeaders:     corsAllowHeaders,
 		ExposeHeaders:    corsExposeHeaders,
 		MaxAge:           corsMaxAge,
-	})
+	}
+
+	// 启动时安全检查：当 AllowCredentials=true 时必须配置白名单
+	if corsConfig.AllowCredentials && len(corsConfig.AllowOrigins) == 0 {
+		utils.LogError("CORS", "CORS", nil, "FATAL: CORS_ALLOW_ORIGINS is empty but AllowCredentials=true. This is insecure.")
+		utils.LogError("CORS", "CORS", nil, "Please configure a comma-separated list of allowed origins in CORS_ALLOW_ORIGINS.")
+	}
+
+	return CORSWithConfig(corsConfig)
 }
 
 // parseAllowOrigins 解析逗号分隔的允许来源列表
@@ -129,6 +137,12 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 	}
 	allowAllOrigins := len(allowOriginsMap) == 0
 
+	// 启动时安全检查：强制要求当 AllowCredentials=true 时必须配置白名单
+	if config.AllowCredentials && allowAllOrigins {
+		utils.LogError("CORS", "CORSWithConfig", nil, "FATAL: CORS configuration is insecure - AllowCredentials=true but no origin whitelist.")
+		utils.LogError("CORS", "CORSWithConfig", nil, "CORS requests will be blocked until a proper origin whitelist is configured.")
+	}
+
 	return func(c *gin.Context) {
 		// 获取请求的 Origin
 		origin := c.GetHeader("Origin")
@@ -164,26 +178,20 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowAllOrigins bool, allowCredentials bool) string {
 	// 如果没有 Origin 头（同源请求或非浏览器请求）
 	if origin == "" {
-		// 安全起见，不设置 Allow-Origin 头
 		return ""
 	}
 
 	// 安全检查：如果允许凭证，则绝对不能允许所有来源
 	// 这是 CORS 凭证泄露漏洞的关键防护
 	if allowCredentials && allowAllOrigins {
-		utils.LogWarn("CORS", "Security warning: AllowCredentials=true but no origin whitelist configured", "CORS requests will be blocked")
+		utils.LogError("CORS", "determineAllowOrigin", nil, "BLOCKED: CORS request blocked - AllowCredentials=true but no origin whitelist")
+		utils.LogError("CORS", "determineAllowOrigin", nil, fmt.Sprintf("Origin: %s", origin))
 		return ""
 	}
 
 	// 如果允许所有来源且不允许凭证，返回 "*"
 	if allowAllOrigins && !allowCredentials {
 		return "*"
-	}
-
-	// 如果允许所有来源且允许凭证（理论上不会到达这里，但作为后备）
-	if allowAllOrigins && allowCredentials {
-		utils.LogWarn("CORS", "Insecure configuration: AllowCredentials=true with allowAllOrigins", "Blocking CORS request")
-		return ""
 	}
 
 	// 检查 Origin 是否在允许列表中
