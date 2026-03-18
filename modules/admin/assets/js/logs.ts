@@ -24,8 +24,8 @@ let currentPage = 1;
 
 // ==================== DOM 元素 ====================
 
-const logsTableBody = document.getElementById('logs-table-body') as HTMLTableSectionElement;
-const logsPagination = document.getElementById('logs-pagination') as HTMLElement;
+const logsTableBody = document.getElementById('logs-table-body') as HTMLTableSectionElement | null;
+const logsPagination = document.getElementById('logs-pagination') as HTMLElement | null;
 
 // ==================== API ====================
 
@@ -95,7 +95,12 @@ function renderLogRow(log: AdminLog): string {
  * 加载日志列表
  */
 export async function loadLogs(): Promise<void> {
-  if (!logsTableBody) return;
+  console.log('[ADMIN][LOGS] loadLogs called');
+  
+  if (!logsTableBody) {
+    console.error('[ADMIN][LOGS] logsTableBody element not found');
+    return;
+  }
 
   logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
 
@@ -103,7 +108,9 @@ export async function loadLogs(): Promise<void> {
 
   if (data === 'forbidden') {
     logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">无权限查看</td></tr>';
-    logsPagination.innerHTML = '';
+    if (logsPagination) {
+      logsPagination.innerHTML = '';
+    }
     return;
   }
 
@@ -114,7 +121,9 @@ export async function loadLogs(): Promise<void> {
 
   if (data.logs.length === 0) {
     logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无日志</td></tr>';
-    logsPagination.innerHTML = '';
+    if (logsPagination) {
+      logsPagination.innerHTML = '';
+    }
     return;
   }
 
