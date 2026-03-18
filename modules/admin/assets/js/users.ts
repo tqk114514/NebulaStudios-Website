@@ -66,10 +66,10 @@ function setCacheUser(userId: number, cached: CachedUser): void {
 
 // ==================== DOM 元素 ====================
 
-const userSearch = document.getElementById('user-search') as HTMLInputElement;
-const searchBtn = document.getElementById('search-btn') as HTMLButtonElement;
-const usersTableBody = document.getElementById('users-table-body') as HTMLTableSectionElement;
-const pagination = document.getElementById('pagination') as HTMLElement;
+const userSearch = document.getElementById('user-search') as HTMLInputElement | null;
+const searchBtn = document.getElementById('search-btn') as HTMLButtonElement | null;
+const usersTableBody = document.getElementById('users-table-body') as HTMLTableSectionElement | null;
+const pagination = document.getElementById('pagination') as HTMLElement | null;
 
 // ==================== API ====================
 
@@ -155,6 +155,11 @@ function bindUserRowEvents(row: HTMLTableRowElement): void {
  * @param userId - 用户 ID
  */
 async function updateUserRow(userId: number): Promise<void> {
+  if (!usersTableBody) {
+    console.error('[ADMIN][USERS] usersTableBody element not found in updateUserRow');
+    return;
+  }
+  
   const oldRow = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
   if (!oldRow) return;
 
@@ -181,6 +186,11 @@ async function updateUserRow(userId: number): Promise<void> {
  * @param userId - 用户 ID
  */
 function removeUserRow(userId: number): void {
+  if (!usersTableBody) {
+    console.error('[ADMIN][USERS] usersTableBody element not found in removeUserRow');
+    return;
+  }
+  
   const row = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
   if (!row) return;
 
@@ -202,6 +212,13 @@ function removeUserRow(userId: number): void {
 }
 
 export async function loadUsers(): Promise<void> {
+  console.log('[ADMIN][USERS] loadUsers called');
+  
+  if (!usersTableBody) {
+    console.error('[ADMIN][USERS] usersTableBody element not found');
+    return;
+  }
+  
   usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
 
   const data = await getUsers(currentPage, currentSearch);
@@ -212,7 +229,9 @@ export async function loadUsers(): Promise<void> {
 
   if (data.users.length === 0) {
     usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
-    pagination.innerHTML = '';
+    if (pagination) {
+      pagination.innerHTML = '';
+    }
     return;
   }
 
@@ -225,15 +244,17 @@ export async function loadUsers(): Promise<void> {
     bindUserRowEvents(row as HTMLTableRowElement);
   });
 
-  renderPagination({
-    container: pagination,
-    current: data.page,
-    total: data.totalPages,
-    onPageChange: (page) => {
-      currentPage = page;
-      loadUsers();
-    }
-  });
+  if (pagination) {
+    renderPagination({
+      container: pagination,
+      current: data.page,
+      total: data.totalPages,
+      onPageChange: (page) => {
+        currentPage = page;
+        loadUsers();
+      }
+    });
+  }
 }
 
 // ==================== 用户详情 ====================
@@ -285,6 +306,13 @@ function checkUserBanned(user: UserPublic): boolean {
  * @param isRefreshing - 是否正在刷新数据（可选）
  */
 function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshing?: boolean): void {
+  console.log('[ADMIN][USERS] renderUserDetailContent called');
+  
+  if (!userModalBody) {
+    console.error('[ADMIN][USERS] userModalBody not found');
+    return;
+  }
+  
   const isBanned = checkUserBanned(user);
   const banStatusHtml = isBanned ? `
     <div class="user-detail-row user-detail-banned">
@@ -348,6 +376,13 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
  * @param user - 用户数据
  */
 function bindUserDetailButtons(user: UserPublic): void {
+  console.log('[ADMIN][USERS] bindUserDetailButtons called');
+  
+  if (!userModalFooter) {
+    console.error('[ADMIN][USERS] userModalFooter not found');
+    return;
+  }
+  
   let footerHtml = '<button class="btn btn-secondary" id="close-user-modal">关闭</button>';
 
   const isBanned = checkUserBanned(user);
@@ -448,14 +483,27 @@ let currentBanUser: UserPublic | null = null;
  * 显示封禁用户弹窗
  */
 function showBanModal(user: UserPublic): void {
+  console.log('[ADMIN][USERS] showBanModal called');
+  
+  const localBanReason = banReason;
+  const localBanCustomReason = banCustomReason;
+  const localBanCustomReasonGroup = banCustomReasonGroup;
+  const localBanDuration = banDuration;
+  const localBanConfirm = banConfirm;
+  
+  if (!localBanReason || !localBanCustomReason || !localBanCustomReasonGroup || !localBanDuration || !localBanConfirm) {
+    console.error('[ADMIN][USERS] Ban modal elements not found');
+    return;
+  }
+  
   currentBanUser = user;
   
   // 重置表单
-  banReason.value = '';
-  banCustomReason.value = '';
-  banCustomReasonGroup.style.display = 'none';
-  banDuration.value = '7';
-  banConfirm.disabled = true;
+  localBanReason.value = '';
+  localBanCustomReason.value = '';
+  localBanCustomReasonGroup.style.display = 'none';
+  localBanDuration.value = '7';
+  localBanConfirm.disabled = true;
 
   showModal(banModal);
 }
@@ -464,47 +512,63 @@ function showBanModal(user: UserPublic): void {
  * 初始化封禁弹窗事件
  */
 function initBanModal(): void {
+  console.log('[ADMIN][USERS] initBanModal called');
+  
+  const localBanReason = banReason;
+  const localBanCustomReasonGroup = banCustomReasonGroup;
+  const localBanCustomReason = banCustomReason;
+  const localBanConfirm = banConfirm;
+  const localBanCancel = banCancel;
+  const localBanModalClose = banModalClose;
+  const localBanDuration = banDuration;
+  
+  // 检查必要元素是否存在
+  if (!localBanReason || !localBanCustomReasonGroup || !localBanCustomReason || !localBanConfirm || !localBanCancel || !localBanModalClose || !localBanDuration) {
+    console.warn('[ADMIN][USERS] Ban modal elements not all found, skipping ban modal init');
+    return;
+  }
+  
   // 封禁原因选择
-  banReason.addEventListener('change', () => {
-    if (banReason.value === '其他') {
-      banCustomReasonGroup.style.display = 'block';
-      banConfirm.disabled = !banCustomReason.value.trim();
+  localBanReason.addEventListener('change', () => {
+    if (localBanReason.value === '其他') {
+      localBanCustomReasonGroup.style.display = 'block';
+      localBanConfirm.disabled = !localBanCustomReason.value.trim();
     } else {
-      banCustomReasonGroup.style.display = 'none';
-      banConfirm.disabled = !banReason.value;
+      localBanCustomReasonGroup.style.display = 'none';
+      localBanConfirm.disabled = !localBanReason.value;
     }
   });
 
   // 自定义原因输入
-  banCustomReason.addEventListener('input', () => {
-    banConfirm.disabled = !banCustomReason.value.trim();
+  localBanCustomReason.addEventListener('input', () => {
+    localBanConfirm.disabled = !localBanCustomReason.value.trim();
   });
 
   // 取消按钮
-  banCancel.addEventListener('click', () => {
+  localBanCancel.addEventListener('click', () => {
     hideModal(banModal);
     currentBanUser = null;
   });
 
   // 关闭按钮
-  banModalClose.addEventListener('click', () => {
+  localBanModalClose.addEventListener('click', () => {
     hideModal(banModal);
     currentBanUser = null;
   });
 
   // 确认封禁
-  banConfirm.addEventListener('click', async () => {
+  localBanConfirm.addEventListener('click', async () => {
     if (!currentBanUser) return;
 
-    const reason = banReason.value === '其他' ? banCustomReason.value.trim() : banReason.value;
-    const days = parseInt(banDuration.value, 10);
+    const reason = localBanReason.value === '其他' ? localBanCustomReason.value.trim() : localBanReason.value;
+    const days = parseInt(localBanDuration.value, 10);
 
     if (!reason) {
       showToast('请选择或输入封禁原因', 'error');
       return;
     }
 
-    banConfirm.disabled = true;
+    localBanConfirm.disabled = true;
 
     const success = await banUser(currentBanUser.id, reason, days);
     if (success) {
@@ -515,7 +579,7 @@ function initBanModal(): void {
       currentBanUser = null;
     } else {
       showToast('封禁失败', 'error');
-      banConfirm.disabled = false;
+      localBanConfirm.disabled = false;
     }
   });
 }
@@ -525,6 +589,13 @@ function initBanModal(): void {
  * @param userId - 用户 ID
  */
 async function showUserDetail(userId: number): Promise<void> {
+  console.log('[ADMIN][USERS] showUserDetail called');
+  
+  if (!userModal || !userModalBody || !userModalFooter) {
+    console.error('[ADMIN][USERS] User modal elements not found');
+    return;
+  }
+  
   const cached = usersCache.get(userId);
   
   if (cached) {
@@ -541,7 +612,7 @@ async function showUserDetail(userId: number): Promise<void> {
       const newCachedAt = Date.now();
       setCacheUser(userId, { user: freshUser, cachedAt: newCachedAt });
       
-      if (!userModal.classList.contains('is-hidden')) {
+      if (userModal && !userModal.classList.contains('is-hidden')) {
         renderUserDetailContent(freshUser, newCachedAt, false);
         bindUserDetailButtons(freshUser);
       }
@@ -576,19 +647,25 @@ export function setCurrentUserRole(role: number): void {
 }
 
 export function initUsersPage(): void {
-  searchBtn.addEventListener('click', () => {
-    currentSearch = userSearch.value.trim();
-    currentPage = 1;
-    loadUsers();
-  });
-
-  userSearch.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
+  console.log('[ADMIN][USERS] initUsersPage called');
+  
+  if (searchBtn && userSearch) {
+    searchBtn.addEventListener('click', () => {
       currentSearch = userSearch.value.trim();
       currentPage = 1;
       loadUsers();
-    }
-  });
+    });
+
+    userSearch.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        currentSearch = userSearch.value.trim();
+        currentPage = 1;
+        loadUsers();
+      }
+    });
+  } else {
+    console.warn('[ADMIN][USERS] search elements not found, skipping search initialization');
+  }
 
   // 初始化封禁弹窗
   initBanModal();

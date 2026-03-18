@@ -63,34 +63,34 @@ let editingClientId: number | null = null;
 
 // ==================== DOM 元素 ====================
 
-const oauthSearch = document.getElementById('oauth-search') as HTMLInputElement;
-const oauthSearchBtn = document.getElementById('oauth-search-btn') as HTMLButtonElement;
-const createOAuthBtn = document.getElementById('create-oauth-btn') as HTMLButtonElement;
-const oauthTableBody = document.getElementById('oauth-table-body') as HTMLTableSectionElement;
-const oauthPagination = document.getElementById('oauth-pagination') as HTMLElement;
+const oauthSearch = document.getElementById('oauth-search') as HTMLInputElement | null;
+const oauthSearchBtn = document.getElementById('oauth-search-btn') as HTMLButtonElement | null;
+const createOAuthBtn = document.getElementById('create-oauth-btn') as HTMLButtonElement | null;
+const oauthTableBody = document.getElementById('oauth-table-body') as HTMLTableSectionElement | null;
+const oauthPagination = document.getElementById('oauth-pagination') as HTMLElement | null;
 
 // 弹窗元素
-const oauthModal = document.getElementById('oauth-modal') as HTMLElement;
-const oauthModalTitle = document.getElementById('oauth-modal-title') as HTMLElement;
-const oauthModalBody = document.getElementById('oauth-modal-body') as HTMLElement;
-const oauthModalFooter = document.getElementById('oauth-modal-footer') as HTMLElement;
-const oauthModalClose = document.getElementById('oauth-modal-close') as HTMLButtonElement;
+const oauthModal = document.getElementById('oauth-modal') as HTMLElement | null;
+const oauthModalTitle = document.getElementById('oauth-modal-title') as HTMLElement | null;
+const oauthModalBody = document.getElementById('oauth-modal-body') as HTMLElement | null;
+const oauthModalFooter = document.getElementById('oauth-modal-footer') as HTMLElement | null;
+const oauthModalClose = document.getElementById('oauth-modal-close') as HTMLButtonElement | null;
 
-const oauthFormModal = document.getElementById('oauth-form-modal') as HTMLElement;
-const oauthFormTitle = document.getElementById('oauth-form-title') as HTMLElement;
-const oauthForm = document.getElementById('oauth-form') as HTMLFormElement;
-const oauthNameInput = document.getElementById('oauth-name') as HTMLInputElement;
-const oauthDescInput = document.getElementById('oauth-description') as HTMLTextAreaElement;
-const oauthRedirectInput = document.getElementById('oauth-redirect-uri') as HTMLInputElement;
-const oauthFormCancel = document.getElementById('oauth-form-cancel') as HTMLButtonElement;
-const oauthFormSubmit = document.getElementById('oauth-form-submit') as HTMLButtonElement;
-const oauthFormClose = document.getElementById('oauth-form-close') as HTMLButtonElement;
+const oauthFormModal = document.getElementById('oauth-form-modal') as HTMLElement | null;
+const oauthFormTitle = document.getElementById('oauth-form-title') as HTMLElement | null;
+const oauthForm = document.getElementById('oauth-form') as HTMLFormElement | null;
+const oauthNameInput = document.getElementById('oauth-name') as HTMLInputElement | null;
+const oauthDescInput = document.getElementById('oauth-description') as HTMLTextAreaElement | null;
+const oauthRedirectInput = document.getElementById('oauth-redirect-uri') as HTMLInputElement | null;
+const oauthFormCancel = document.getElementById('oauth-form-cancel') as HTMLButtonElement | null;
+const oauthFormSubmit = document.getElementById('oauth-form-submit') as HTMLButtonElement | null;
+const oauthFormClose = document.getElementById('oauth-form-close') as HTMLButtonElement | null;
 
-const oauthSecretModal = document.getElementById('oauth-secret-modal') as HTMLElement;
-const oauthSecretValue = document.getElementById('oauth-secret-value') as HTMLElement;
-const copySecretBtn = document.getElementById('copy-secret-btn') as HTMLButtonElement;
-const oauthSecretOk = document.getElementById('oauth-secret-ok') as HTMLButtonElement;
-const oauthSecretClose = document.getElementById('oauth-secret-close') as HTMLButtonElement;
+const oauthSecretModal = document.getElementById('oauth-secret-modal') as HTMLElement | null;
+const oauthSecretValue = document.getElementById('oauth-secret-value') as HTMLElement | null;
+const copySecretBtn = document.getElementById('copy-secret-btn') as HTMLButtonElement | null;
+const oauthSecretOk = document.getElementById('oauth-secret-ok') as HTMLButtonElement | null;
+const oauthSecretClose = document.getElementById('oauth-secret-close') as HTMLButtonElement | null;
 
 // ==================== API ====================
 
@@ -210,35 +210,49 @@ function bindClientRowEvents(row: HTMLTableRowElement): void {
  * 加载客户端列表
  */
 export async function loadOAuthClients(): Promise<void> {
-  oauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
+  console.log('[ADMIN][OAUTH] loadOAuthClients called');
+  
+  const localOauthTableBody = oauthTableBody;
+  const localOauthPagination = oauthPagination;
+  
+  if (!localOauthTableBody) {
+    console.error('[ADMIN][OAUTH] oauthTableBody element not found');
+    return;
+  }
+  
+  localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
 
   const data = await getClients(currentPage, currentSearch);
   if (!data) {
-    oauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
+    localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
     return;
   }
 
   if (data.clients.length === 0) {
-    oauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
-    oauthPagination.innerHTML = '';
+    localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
+    if (localOauthPagination) {
+      localOauthPagination.innerHTML = '';
+    }
     return;
   }
 
-  oauthTableBody.innerHTML = data.clients.map(client => renderClientRow(client)).join('');
+  localOauthTableBody.innerHTML = data.clients.map(client => renderClientRow(client)).join('');
 
-  oauthTableBody.querySelectorAll('tr[data-client-id]').forEach(row => {
+  localOauthTableBody.querySelectorAll('tr[data-client-id]').forEach(row => {
     bindClientRowEvents(row as HTMLTableRowElement);
   });
 
-  renderPagination({
-    container: oauthPagination,
-    current: data.page,
-    total: data.totalPages,
-    onPageChange: (page) => {
-      currentPage = page;
-      loadOAuthClients();
-    }
-  });
+  if (localOauthPagination) {
+    renderPagination({
+      container: localOauthPagination,
+      current: data.page,
+      total: data.totalPages,
+      onPageChange: (page) => {
+        currentPage = page;
+        loadOAuthClients();
+      }
+    });
+  }
 }
 
 // ==================== 客户端详情 ====================
@@ -247,15 +261,27 @@ export async function loadOAuthClients(): Promise<void> {
  * 显示客户端详情弹窗
  */
 async function showClientDetail(clientId: number): Promise<void> {
-  oauthModalTitle.textContent = '应用详情';
-  oauthModalBody.innerHTML = '<div class="loading-cell">加载中...</div>';
-  oauthModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-oauth-modal">关闭</button>';
-  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(oauthModal));
-  showModal(oauthModal);
+  console.log('[ADMIN][OAUTH] showClientDetail called');
+  
+  const localOauthModalTitle = oauthModalTitle;
+  const localOauthModalBody = oauthModalBody;
+  const localOauthModalFooter = oauthModalFooter;
+  const localOauthModal = oauthModal;
+  
+  if (!localOauthModalTitle || !localOauthModalBody || !localOauthModalFooter || !localOauthModal) {
+    console.error('[ADMIN][OAUTH] Modal elements not found');
+    return;
+  }
+  
+  localOauthModalTitle.textContent = '应用详情';
+  localOauthModalBody.innerHTML = '<div class="loading-cell">加载中...</div>';
+  localOauthModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-oauth-modal">关闭</button>';
+  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(localOauthModal));
+  showModal(localOauthModal);
 
   const client = await getClient(clientId);
   if (!client) {
-    hideModal(oauthModal);
+    hideModal(localOauthModal);
     showToast('获取应用信息失败', 'error');
     return;
   }
@@ -267,10 +293,19 @@ async function showClientDetail(clientId: number): Promise<void> {
  * 渲染客户端详情
  */
 function renderClientDetail(client: OAuthClient): void {
+  const localOauthModalBody = oauthModalBody;
+  const localOauthModalFooter = oauthModalFooter;
+  const localOauthModal = oauthModal;
+  
+  if (!localOauthModalBody || !localOauthModalFooter || !localOauthModal) {
+    console.error('[ADMIN][OAUTH] Modal elements not found for renderClientDetail');
+    return;
+  }
+  
   const statusClass = client.is_enabled ? 'enabled' : 'disabled';
   const statusText = client.is_enabled ? '已启用' : '已禁用';
 
-  oauthModalBody.innerHTML = `
+  localOauthModalBody.innerHTML = `
     <div class="oauth-detail">
       <div class="oauth-detail-row">
         <span class="oauth-detail-label">应用名称</span>
@@ -303,17 +338,17 @@ function renderClientDetail(client: OAuthClient): void {
     </div>
   `;
 
-  oauthModalFooter.innerHTML = `
+  localOauthModalFooter.innerHTML = `
     <button class="btn btn-secondary" id="close-oauth-modal">关闭</button>
     <button class="btn btn-secondary" id="edit-oauth-btn" data-client-id="${client.id}">编辑</button>
     <button class="btn btn-warning" id="regenerate-secret-btn" data-client-id="${client.id}">重新生成密钥</button>
     <button class="btn btn-danger" id="delete-oauth-btn" data-client-id="${client.id}">删除</button>
   `;
 
-  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(oauthModal));
+  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(localOauthModal));
 
   document.getElementById('edit-oauth-btn')?.addEventListener('click', () => {
-    hideModal(oauthModal);
+    hideModal(localOauthModal);
     showEditForm(client);
   });
 
@@ -321,7 +356,7 @@ function renderClientDetail(client: OAuthClient): void {
     showConfirm('确认操作', '重新生成密钥后，使用旧密钥的应用将无法正常工作。确定要继续吗？', async () => {
       const newSecret = await regenerateSecret(client.id);
       if (newSecret) {
-        hideModal(oauthModal);
+        hideModal(localOauthModal);
         showSecretModal(newSecret);
         showToast('密钥已重新生成', 'success');
       } else {
@@ -335,7 +370,7 @@ function renderClientDetail(client: OAuthClient): void {
       const success = await deleteClient(client.id);
       if (success) {
         showToast('应用已删除', 'success');
-        hideModal(oauthModal);
+        hideModal(localOauthModal);
         loadOAuthClients();
       } else {
         showToast('删除失败', 'error');
@@ -351,33 +386,71 @@ function renderClientDetail(client: OAuthClient): void {
  * 显示创建表单
  */
 function showCreateForm(): void {
+  console.log('[ADMIN][OAUTH] showCreateForm called');
+  
+  const localOauthFormTitle = oauthFormTitle;
+  const localOauthFormSubmit = oauthFormSubmit;
+  const localOauthForm = oauthForm;
+  const localOauthFormModal = oauthFormModal;
+  
+  if (!localOauthFormTitle || !localOauthFormSubmit || !localOauthForm || !localOauthFormModal) {
+    console.error('[ADMIN][OAUTH] Form elements not found for showCreateForm');
+    return;
+  }
+  
   editingClientId = null;
-  oauthFormTitle.textContent = '创建应用';
-  oauthFormSubmit.textContent = '创建';
-  oauthForm.reset();
-  showModal(oauthFormModal);
+  localOauthFormTitle.textContent = '创建应用';
+  localOauthFormSubmit.textContent = '创建';
+  localOauthForm.reset();
+  showModal(localOauthFormModal);
 }
 
 /**
  * 显示编辑表单
  */
 function showEditForm(client: OAuthClient): void {
+  console.log('[ADMIN][OAUTH] showEditForm called');
+  
+  const localOauthFormTitle = oauthFormTitle;
+  const localOauthFormSubmit = oauthFormSubmit;
+  const localOauthNameInput = oauthNameInput;
+  const localOauthDescInput = oauthDescInput;
+  const localOauthRedirectInput = oauthRedirectInput;
+  const localOauthFormModal = oauthFormModal;
+  
+  if (!localOauthFormTitle || !localOauthFormSubmit || !localOauthNameInput || !localOauthDescInput || !localOauthRedirectInput || !localOauthFormModal) {
+    console.error('[ADMIN][OAUTH] Form elements not found for showEditForm');
+    return;
+  }
+  
   editingClientId = client.id;
-  oauthFormTitle.textContent = '编辑应用';
-  oauthFormSubmit.textContent = '保存';
-  oauthNameInput.value = client.name;
-  oauthDescInput.value = client.description || '';
-  oauthRedirectInput.value = client.redirect_uri;
-  showModal(oauthFormModal);
+  localOauthFormTitle.textContent = '编辑应用';
+  localOauthFormSubmit.textContent = '保存';
+  localOauthNameInput.value = client.name;
+  localOauthDescInput.value = client.description || '';
+  localOauthRedirectInput.value = client.redirect_uri;
+  showModal(localOauthFormModal);
 }
 
 /**
  * 处理表单提交
  */
 async function handleFormSubmit(): Promise<void> {
-  const name = oauthNameInput.value.trim();
-  const description = oauthDescInput.value.trim();
-  const redirectUri = oauthRedirectInput.value.trim();
+  console.log('[ADMIN][OAUTH] handleFormSubmit called');
+  
+  const localOauthNameInput = oauthNameInput;
+  const localOauthDescInput = oauthDescInput;
+  const localOauthRedirectInput = oauthRedirectInput;
+  const localOauthFormSubmit = oauthFormSubmit;
+  
+  if (!localOauthNameInput || !localOauthDescInput || !localOauthRedirectInput || !localOauthFormSubmit) {
+    console.error('[ADMIN][OAUTH] Form elements not found for handleFormSubmit');
+    return;
+  }
+  
+  const name = localOauthNameInput.value.trim();
+  const description = localOauthDescInput.value.trim();
+  const redirectUri = localOauthRedirectInput.value.trim();
 
   if (!name) {
     showToast('请输入应用名称', 'error');
@@ -397,7 +470,7 @@ async function handleFormSubmit(): Promise<void> {
     return;
   }
 
-  oauthFormSubmit.disabled = true;
+  localOauthFormSubmit.disabled = true;
 
   if (editingClientId) {
     // 编辑模式
@@ -422,7 +495,7 @@ async function handleFormSubmit(): Promise<void> {
     }
   }
 
-  oauthFormSubmit.disabled = false;
+  localOauthFormSubmit.disabled = false;
 }
 
 // ==================== 密钥显示弹窗 ====================
@@ -431,15 +504,34 @@ async function handleFormSubmit(): Promise<void> {
  * 显示密钥弹窗
  */
 function showSecretModal(secret: string): void {
-  oauthSecretValue.textContent = secret;
-  showModal(oauthSecretModal);
+  console.log('[ADMIN][OAUTH] showSecretModal called');
+  
+  const localOauthSecretValue = oauthSecretValue;
+  const localOauthSecretModal = oauthSecretModal;
+  
+  if (!localOauthSecretValue || !localOauthSecretModal) {
+    console.error('[ADMIN][OAUTH] Secret modal elements not found');
+    return;
+  }
+  
+  localOauthSecretValue.textContent = secret;
+  showModal(localOauthSecretModal);
 }
 
 /**
  * 复制密钥到剪贴板
  */
 async function copySecret(): Promise<void> {
-  const secret = oauthSecretValue.textContent || '';
+  console.log('[ADMIN][OAUTH] copySecret called');
+  
+  const localOauthSecretValue = oauthSecretValue;
+  
+  if (!localOauthSecretValue) {
+    console.error('[ADMIN][OAUTH] oauthSecretValue element not found');
+    return;
+  }
+  
+  const secret = localOauthSecretValue.textContent || '';
   try {
     await navigator.clipboard.writeText(secret);
     showToast('已复制到剪贴板', 'success');
@@ -463,49 +555,76 @@ async function copySecret(): Promise<void> {
  * 初始化 OAuth 管理页面
  */
 export function initOAuthPage(): void {
+  console.log('[ADMIN][OAUTH] initOAuthPage called');
+  
+  const localOauthSearchBtn = oauthSearchBtn;
+  const localOauthSearch = oauthSearch;
+  const localCreateOAuthBtn = createOAuthBtn;
+  const localOauthModalClose = oauthModalClose;
+  const localOauthModal = oauthModal;
+  const localOauthFormClose = oauthFormClose;
+  const localOauthFormCancel = oauthFormCancel;
+  const localOauthFormModal = oauthFormModal;
+  const localOauthForm = oauthForm;
+  const localOauthFormSubmit = oauthFormSubmit;
+  const localOauthSecretClose = oauthSecretClose;
+  const localOauthSecretOk = oauthSecretOk;
+  const localCopySecretBtn = copySecretBtn;
+  const localOauthSecretModal = oauthSecretModal;
+  
   // 搜索
-  oauthSearchBtn.addEventListener('click', () => {
-    currentSearch = oauthSearch.value.trim();
-    currentPage = 1;
-    loadOAuthClients();
-  });
-
-  oauthSearch.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      currentSearch = oauthSearch.value.trim();
+  if (localOauthSearchBtn && localOauthSearch) {
+    localOauthSearchBtn.addEventListener('click', () => {
+      currentSearch = localOauthSearch.value.trim();
       currentPage = 1;
       loadOAuthClients();
-    }
-  });
+    });
+
+    localOauthSearch.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        currentSearch = localOauthSearch.value.trim();
+        currentPage = 1;
+        loadOAuthClients();
+      }
+    });
+  }
 
   // 创建按钮
-  createOAuthBtn.addEventListener('click', showCreateForm);
+  if (localCreateOAuthBtn) {
+    localCreateOAuthBtn.addEventListener('click', showCreateForm);
+  }
 
   // 详情弹窗关闭
-  oauthModalClose.addEventListener('click', () => hideModal(oauthModal));
-  oauthModal.addEventListener('click', (e) => {
-    if (e.target === oauthModal) hideModal(oauthModal);
-  });
+  if (localOauthModalClose && localOauthModal) {
+    localOauthModalClose.addEventListener('click', () => hideModal(localOauthModal));
+    localOauthModal.addEventListener('click', (e) => {
+      if (e.target === localOauthModal) hideModal(localOauthModal);
+    });
+  }
 
   // 表单弹窗
-  oauthFormClose.addEventListener('click', () => hideModal(oauthFormModal));
-  oauthFormCancel.addEventListener('click', () => hideModal(oauthFormModal));
-  oauthFormModal.addEventListener('click', (e) => {
-    if (e.target === oauthFormModal) hideModal(oauthFormModal);
-  });
+  if (localOauthFormClose && localOauthFormCancel && localOauthFormModal && localOauthForm && localOauthFormSubmit) {
+    localOauthFormClose.addEventListener('click', () => hideModal(localOauthFormModal));
+    localOauthFormCancel.addEventListener('click', () => hideModal(localOauthFormModal));
+    localOauthFormModal.addEventListener('click', (e) => {
+      if (e.target === localOauthFormModal) hideModal(localOauthFormModal);
+    });
 
-  oauthForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    handleFormSubmit();
-  });
+    localOauthForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleFormSubmit();
+    });
 
-  oauthFormSubmit.addEventListener('click', (e) => {
-    e.preventDefault();
-    handleFormSubmit();
-  });
+    localOauthFormSubmit.addEventListener('click', (e) => {
+      e.preventDefault();
+      handleFormSubmit();
+    });
+  }
 
   // 密钥弹窗
-  oauthSecretClose.addEventListener('click', () => hideModal(oauthSecretModal));
-  oauthSecretOk.addEventListener('click', () => hideModal(oauthSecretModal));
-  copySecretBtn.addEventListener('click', copySecret);
+  if (localOauthSecretClose && localOauthSecretOk && localCopySecretBtn && localOauthSecretModal) {
+    localOauthSecretClose.addEventListener('click', () => hideModal(localOauthSecretModal));
+    localOauthSecretOk.addEventListener('click', () => hideModal(localOauthSecretModal));
+    localCopySecretBtn.addEventListener('click', copySecret);
+  }
 }
