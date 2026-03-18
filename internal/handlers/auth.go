@@ -375,17 +375,19 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 // 请求体：
 //   - code: 验证码（必需）
 //   - email: 邮箱地址（必需）
+//   - tokenType: 验证码类型（必需，如 register, reset_password, change_password, delete_account）
 //
 // 响应：
 //   - success: 是否成功
 //
 // 错误码：
 //   - MISSING_PARAMETERS: 缺少参数
-//   - CODE_INVALID / CODE_EXPIRED: 验证码验证失败
+//   - CODE_INVALID / CODE_EXPIRED / TYPE_MISMATCH: 验证码验证失败
 func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	var req struct {
-		Code  string `json:"code"`
-		Email string `json:"email"`
+		Code      string `json:"code"`
+		Email     string `json:"email"`
+		TokenType string `json:"tokenType"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -396,20 +398,21 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	// 参数验证
 	code := strings.TrimSpace(req.Code)
 	email := strings.TrimSpace(req.Email)
+	tokenType := strings.TrimSpace(req.TokenType)
 
-	if code == "" || email == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in VerifyCode: code=%v, email=%v", code != "", email != ""))
+	if code == "" || email == "" || tokenType == "" {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in VerifyCode: code=%v, email=%v, tokenType=%v", code != "", email != "", tokenType != ""))
 		return
 	}
 
 	ctx := c.Request.Context()
-	_, err := h.tokenService.VerifyCode(ctx, code, email, "")
+	_, err := h.tokenService.VerifyCode(ctx, code, email, tokenType)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Code verification failed: email=%s", email))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Code verification failed: email=%s, tokenType=%s", email, tokenType))
 		return
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Code verified successfully: email=%s", email))
+	utils.LogInfo("AUTH", fmt.Sprintf("Code verified successfully: email=%s, tokenType=%s", email, tokenType))
 	utils.RespondSuccess(c, gin.H{})
 }
 
