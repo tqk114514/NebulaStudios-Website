@@ -22,12 +22,14 @@
 package services
 
 import (
+	"auth-system/internal/config"
 	"auth-system/internal/utils"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,9 +95,27 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  readBufferSize,
 	WriteBufferSize: writeBufferSize,
 	CheckOrigin: func(r *http.Request) bool {
-		// 生产环境应该检查 Origin
-		// 这里允许所有来源，因为有其他安全措施
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+
+		cfg := config.Get()
+		if cfg.CORSAllowOrigins == "" {
+			utils.LogError("WS", "CheckOrigin", nil, "WebSocket origin check failed - CORS_ALLOW_ORIGINS is not configured, rejecting all origins")
+			return false
+		}
+
+		allowedOrigins := strings.Split(cfg.CORSAllowOrigins, ",")
+		for _, allowed := range allowedOrigins {
+			allowed = strings.TrimSpace(allowed)
+			if allowed == origin {
+				return true
+			}
+		}
+
+		utils.LogWarn("WS", "WebSocket origin rejected", fmt.Sprintf("origin=%s", origin))
+		return false
 	},
 	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 		utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
@@ -122,12 +142,12 @@ type wsClientShard struct {
 
 // WebSocketService 分片 WebSocket 服务
 type WebSocketService struct {
-	shards    [wsShardCount]*wsClientShard
-	connCount int32
-	shutdown  chan struct{}
-	wg        sync.WaitGroup
+	shards     [wsShardCount]*wsClientShard
+	connCount  int32
+	shutdown   chan struct{}
+	wg         sync.WaitGroup
 	isShutdown bool
-	mu        sync.RWMutex
+	mu         sync.RWMutex
 }
 
 // WSMessage WebSocket 消息
