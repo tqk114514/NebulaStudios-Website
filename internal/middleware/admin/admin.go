@@ -68,10 +68,13 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
+		// 获取客户端 IP
+		clientIP := utils.GetClientIP(c)
+
 		// 获取用户 ID（由 AuthMiddleware 设置）
 		userID, ok := middleware.GetUserID(c)
 		if !ok {
-			utils.LogWarn("ADMIN-MW", "AdminMiddleware called without valid userID", "")
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -82,20 +85,20 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
-			utils.LogError("ADMIN-MW", "AdminMiddleware", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
+			utils.LogError("ADMIN-MW", "AdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogWarn("ADMIN-MW", "User not found in AdminMiddleware", fmt.Sprintf("userID=%d", userID))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		// 检查管理员权限
 		if !user.IsAdmin() {
-			utils.LogWarn("ADMIN-MW", "Access denied - not admin", fmt.Sprintf("userID=%d, role=%d", userID, user.Role))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -133,10 +136,13 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
+		// 获取客户端 IP
+		clientIP := utils.GetClientIP(c)
+
 		// 获取用户 ID（由 AuthMiddleware 设置）
 		userID, ok := middleware.GetUserID(c)
 		if !ok {
-			utils.LogWarn("ADMIN-MW", "SuperAdminMiddleware called without valid userID", "")
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -147,20 +153,20 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
-			utils.LogError("ADMIN-MW", "SuperAdminMiddleware", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
+			utils.LogError("ADMIN-MW", "SuperAdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogWarn("ADMIN-MW", "User not found in SuperAdminMiddleware", fmt.Sprintf("userID=%d", userID))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		// 检查超级管理员权限
 		if !user.IsSuperAdmin() {
-			utils.LogWarn("ADMIN-MW", "Access denied - not super admin", fmt.Sprintf("userID=%d, role=%d", userID, user.Role))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -251,6 +257,9 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 	}
 
 	return func(c *gin.Context) {
+		// 获取客户端 IP
+		clientIP := utils.GetClientIP(c)
+
 		// 提取 Token
 		token := middleware.ExtractToken(c)
 		if token == "" {
@@ -280,7 +289,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil || user == nil {
 			// 用户不存在，伪装成 404
-			utils.LogWarn("ADMIN-MW", "User not found for admin page", fmt.Sprintf("userID=%d", userID))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -289,7 +298,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 		// 检查管理员权限
 		if !user.IsAdmin() {
 			// 非管理员，伪装成 404（不暴露后台存在）
-			utils.LogWarn("ADMIN-MW", "Non-admin tried to access admin page", fmt.Sprintf("userID=%d, role=%d", userID, user.Role))
+			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return

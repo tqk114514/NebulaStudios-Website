@@ -217,7 +217,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	}
 
 	// 验证码验证
-	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
+	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, utils.GetClientIP(c)); err != nil {
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for username change: userID=%d", userID))
 		return
 	}
@@ -354,7 +354,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	}
 
 	// 验证码验证
-	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, c.ClientIP()); err != nil {
+	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, utils.GetClientIP(c)); err != nil {
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for delete code: userID=%d", userID))
 		return
 	}
