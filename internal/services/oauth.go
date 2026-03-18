@@ -17,15 +17,14 @@
  * - Refresh Token: 30 天
  *
  * 安全设计：
- * - client_secret 使用 bcrypt 哈希存储
+ * - client_secret 使用 Argon2id 哈希存储（通过 utils.HashPassword）
  * - Access Token 和 Refresh Token 使用 SHA-256 哈希存储
  * - Authorization Code 单次使用
  * - redirect_uri 必须精确匹配
  *
  * 依赖：
  * - internal/models: OAuth 模型
- * - internal/utils: 安全工具函数
- * - golang.org/x/crypto/bcrypt: 密码哈希
+ * - internal/utils: 安全工具函数（HashPassword, VerifyPassword）
  */
 
 package services
@@ -40,18 +39,16 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ====================  错误定义 ====================
 
 var (
 	// 客户端错误
-	ErrOAuthInvalidClient    = errors.New("OAUTH_INVALID_CLIENT")
-	ErrOAuthInvalidSecret    = errors.New("OAUTH_INVALID_SECRET")
-	ErrOAuthClientDisabled   = errors.New("OAUTH_CLIENT_DISABLED")
-	ErrOAuthInvalidRedirect  = errors.New("OAUTH_INVALID_REDIRECT_URI")
+	ErrOAuthInvalidClient   = errors.New("OAUTH_INVALID_CLIENT")
+	ErrOAuthInvalidSecret   = errors.New("OAUTH_INVALID_SECRET")
+	ErrOAuthClientDisabled  = errors.New("OAUTH_CLIENT_DISABLED")
+	ErrOAuthInvalidRedirect = errors.New("OAUTH_INVALID_REDIRECT_URI")
 
 	// Token 错误
 	ErrOAuthCodeNotFound     = errors.New("OAUTH_CODE_NOT_FOUND")
@@ -77,9 +74,6 @@ const (
 	oauthAuthCodeExpiry     = 10 * time.Minute
 	oauthAccessTokenExpiry  = 1 * time.Hour
 	oauthRefreshTokenExpiry = 30 * 24 * time.Hour
-
-	// bcrypt 成本
-	oauthBcryptCost = 10
 )
 
 // ====================  数据结构 ====================
@@ -132,7 +126,7 @@ func (s *OAuthService) CreateClient(ctx context.Context, name, description, redi
 		return nil, "", err
 	}
 
-	secretHash, err := bcrypt.GenerateFromPassword([]byte(clientSecret), oauthBcryptCost)
+	secretHash, err := utils.HashPassword(clientSecret)
 	if err != nil {
 		utils.LogError("OAUTH", "CreateClient", err, "Failed to hash client_secret")
 		return nil, "", err
@@ -169,7 +163,7 @@ func (s *OAuthService) ValidateClient(ctx context.Context, clientID, clientSecre
 		return nil, ErrOAuthClientDisabled
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecretHash), []byte(clientSecret)); err != nil {
+	if ok, err := utils.VerifyPassword(clientSecret, client.ClientSecretHash); err != nil || !ok {
 		return nil, ErrOAuthInvalidSecret
 	}
 
@@ -205,7 +199,7 @@ func (s *OAuthService) RegenerateSecret(ctx context.Context, id int64) (string, 
 		return "", err
 	}
 
-	secretHash, err := bcrypt.GenerateFromPassword([]byte(newSecret), oauthBcryptCost)
+	secretHash, err := utils.HashPassword(newSecret)
 	if err != nil {
 		return "", err
 	}
@@ -290,7 +284,6 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 	// 删除客户端
 	return s.clientRepo.Delete(ctx, id)
 }
-
 
 // ====================  Authorization Code 方法 ====================
 
