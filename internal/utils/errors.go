@@ -67,7 +67,7 @@ func LogError(module, operation string, err error, context ...interface{}) error
 	}
 	msg += fmt.Sprintf(", error=%v", err)
 
-	LogPrintf(msg)
+	Log(msg)
 
 	// 包装错误
 	return fmt.Errorf("%s failed: %w", operation, err)
@@ -83,7 +83,7 @@ func LogWarn(module, message string, context ...interface{}) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
 	}
-	LogPrintf(msg)
+	Log(msg)
 }
 
 // LogInfo 记录信息日志
@@ -96,7 +96,7 @@ func LogInfo(module, message string, context ...interface{}) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
 	}
-	LogPrintf(msg)
+	Log(msg)
 }
 
 // LogDebug 记录调试日志
@@ -109,7 +109,7 @@ func LogDebug(module, message string, context ...interface{}) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
 	}
-	LogPrintf(msg)
+	Log(msg)
 }
 
 // ====================  数据库错误处理 ====================
@@ -203,7 +203,7 @@ func HTTPErrorResponse(c *gin.Context, module string, statusCode int, errorCode 
 	// 根据状态码选择日志级别
 	switch {
 	case statusCode >= 500:
-		LogError(module, "HTTP", fmt.Errorf(msg))
+		LogError(module, "HTTP", errors.New(msg))
 	case statusCode >= 400:
 		LogWarn(module, msg)
 	default:
@@ -311,8 +311,7 @@ func CheckError(module, operation string, err error, context ...interface{}) boo
 //   - err: 错误
 func MustNotError(module, operation string, err error) {
 	if err != nil {
-		msg := fmt.Sprintf("[%s] FATAL: %s failed: %v", module, operation, err)
-		LogFatalf(msg)
+		LogFatalf("[%s] FATAL: %s failed: %v", module, operation, err)
 	}
 }
 
@@ -398,7 +397,7 @@ func (ec *ErrorCollector) Error() error {
 
 // RetryConfig 重试配置
 type RetryConfig struct {
-	MaxAttempts int           // 最大尝试次数
+	MaxAttempts int                          // 最大尝试次数
 	OnRetry     func(attempt int, err error) // 重试回调
 }
 

@@ -100,6 +100,13 @@ func getLogger() *zap.SugaredLogger {
 
 // ====================  公开函数 ====================
 
+// Log 安全日志输出，自动脱敏敏感信息
+// 直接输出已构建好的消息
+func Log(message string) {
+	masked := maskSensitiveData(message)
+	getLogger().Info(masked)
+}
+
 // LogPrintf 安全日志输出（格式化），自动脱敏敏感信息
 // 替代 log.Printf，使用 zap 异步写入
 func LogPrintf(format string, args ...interface{}) {
