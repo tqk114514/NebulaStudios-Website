@@ -498,9 +498,9 @@ func isBlockedHost(hostname string) bool {
 	// 如果是域名，执行 DNS 解析并检查所有解析出的 IP
 	ips, err := net.LookupIP(hostname)
 	if err != nil {
-		// 解析失败，出于安全考虑暂时放行（可能是无 A 记录的非 IP 主机名）
-		// 但由于 net.ParseIP 已失败，说明它也不是直接的 IP，因此理论上风险较低
-		return false
+		// DNS 解析失败，拒绝请求（防御深度原则）
+		LogWarn("VALIDATOR", fmt.Sprintf("DNS resolution failed for hostname: %s", hostname))
+		return true
 	}
 
 	for _, resolvedIP := range ips {
