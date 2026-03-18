@@ -80,7 +80,6 @@ func NewR2Service() (*R2Service, error) {
 	}, nil
 }
 
-
 // UploadAvatar 上传头像到 R2
 // 将图片转换为 WebP 格式后上传
 //
