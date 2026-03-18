@@ -103,11 +103,13 @@ type dataExportToken struct {
 
 // dataExportTokens 数据导出 Token 存储（内存）
 // 带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
+// FIFO 使用自增计数器实现
 var (
-	dataExportTokens      = make(map[string]*dataExportToken)
-	dataExportTokensMu    sync.RWMutex
-	dataExportCleanupOnce sync.Once
-	dataExportTokenOrder  []string // 插入顺序（用于 FIFO）
+	dataExportTokens       = make(map[string]*dataExportToken)
+	dataExportTokensMu     sync.RWMutex
+	dataExportCleanupOnce  sync.Once
+	dataExportTokenIndex   = make(map[string]int64) // token -> 插入序号
+	dataExportTokenCounter int64                    // 自增计数器
 )
 
 const (
@@ -679,16 +681,18 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 	dataExportTokensMu.Lock()
 	if len(dataExportTokens) >= maxDataExportTokensCapacity {
 		evictCount := maxDataExportTokensCapacity / 10
-		for i := 0; i < evictCount && i < len(dataExportTokenOrder); i++ {
-			delete(dataExportTokens, dataExportTokenOrder[i])
+		toEvict := findOldestExportTokens(evictCount)
+		for _, t := range toEvict {
+			delete(dataExportTokens, t)
+			delete(dataExportTokenIndex, t)
 		}
-		dataExportTokenOrder = dataExportTokenOrder[evictCount:]
 	}
+	dataExportTokenCounter++
 	dataExportTokens[token] = &dataExportToken{
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 	}
-	dataExportTokenOrder = append(dataExportTokenOrder, token)
+	dataExportTokenIndex[token] = dataExportTokenCounter
 	dataExportTokensMu.Unlock()
 
 	utils.LogInfo("USER", fmt.Sprintf("Data export token generated: userID=%d", userID))
@@ -728,7 +732,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	tokenData, exists := dataExportTokens[token]
 	if exists {
 		delete(dataExportTokens, token)
-		removeExportTokenFromOrder(token)
+		delete(dataExportTokenIndex, token)
 	}
 	dataExportTokensMu.Unlock()
 
@@ -822,29 +826,73 @@ func CleanupExpiredExportTokens() {
 
 	now := time.Now()
 	count := 0
-	newOrder := make([]string, 0, len(dataExportTokenOrder))
-	for _, token := range dataExportTokenOrder {
-		data, ok := dataExportTokens[token]
-		if ok && now.After(data.ExpiresAt) {
-			delete(dataExportTokens, token)
+	for t, data := range dataExportTokens {
+		if now.After(data.ExpiresAt) {
+			delete(dataExportTokens, t)
+			delete(dataExportTokenIndex, t)
 			count++
-		} else {
-			newOrder = append(newOrder, token)
 		}
 	}
-	dataExportTokenOrder = newOrder
 
 	if count > 0 {
 		utils.LogInfo("USER", fmt.Sprintf("Cleanup completed: expired export tokens=%d", count))
 	}
 }
 
-// removeExportTokenFromOrder 从顺序切片中移除元素
-func removeExportTokenFromOrder(token string) {
-	for i, v := range dataExportTokenOrder {
-		if v == token {
-			dataExportTokenOrder = append(dataExportTokenOrder[:i], dataExportTokenOrder[i+1:]...)
-			return
+// findOldestExportTokens 找出序号最小的 N 个 token
+func findOldestExportTokens(count int) []string {
+	if len(dataExportTokenIndex) <= count {
+		keys := make([]string, 0, len(dataExportTokenIndex))
+		for k := range dataExportTokenIndex {
+			keys = append(keys, k)
 		}
+		return keys
+	}
+
+	heap := make([]exportFifoKv, 0, count)
+
+	for k, v := range dataExportTokenIndex {
+		if len(heap) < count {
+			heap = append(heap, exportFifoKv{k, v})
+			if len(heap) == count {
+				buildExportFifoMinHeap(heap)
+			}
+		} else if v < heap[0].value {
+			heap[0] = exportFifoKv{k, v}
+			exportFifoHeapify(heap, 0)
+		}
+	}
+
+	result := make([]string, count)
+	for i := range heap {
+		result[i] = heap[i].key
+	}
+	return result
+}
+
+type exportFifoKv struct {
+	key   string
+	value int64
+}
+
+func buildExportFifoMinHeap(h []exportFifoKv) {
+	for i := len(h)/2 - 1; i >= 0; i-- {
+		exportFifoHeapify(h, i)
+	}
+}
+
+func exportFifoHeapify(h []exportFifoKv, i int) {
+	min := i
+	left := 2*i + 1
+	right := 2*i + 2
+	if left < len(h) && h[left].value < h[min].value {
+		min = left
+	}
+	if right < len(h) && h[right].value < h[min].value {
+		min = right
+	}
+	if min != i {
+		h[i], h[min] = h[min], h[i]
+		exportFifoHeapify(h, min)
 	}
 }
