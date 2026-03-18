@@ -432,9 +432,8 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 
 // ====================  密钥派生 ====================
 
-// DeriveKeyFromString 从字符串派生 32 字节密钥
-// 如果是 64 字符的十六进制字符串，解码为 32 字节
-// 否则取前 32 字节或填充到 32 字节
+// DeriveKeyFromString 使用 Argon2id 从字符串派生 32 字节密钥
+// 每次调用生成随机 salt，确保相同输入产生不同输出（防止彩虹表攻击）
 //
 // 参数：
 //   - keyStr: 密钥字符串
@@ -449,29 +448,17 @@ func DeriveKeyFromString(keyStr string) ([]byte, error) {
 		return nil, errors.New("key string cannot be empty")
 	}
 
-	// 尝试作为十六进制解码（64 字符 hex = 32 字节）
-	if len(keyStr) == 64 {
-		decoded, err := hex.DecodeString(keyStr)
-		if err == nil && len(decoded) == aesKeySize {
-			LogDebug("CRYPTO", fmt.Sprintf("Key derived from hex string: length=%d", len(decoded)))
-			return decoded, nil
-		}
-		// 如果解码失败，继续使用回退方法
-		if err != nil {
-			LogWarn("CRYPTO", fmt.Sprintf("Failed to decode as hex, using fallback: %v", err))
-		}
+	// 生成随机 salt
+	salt := make([]byte, argon2SaltLen)
+	if _, err := rand.Read(salt); err != nil {
+		LogError("CRYPTO", "DeriveKeyFromString", err, "Failed to generate salt")
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
 	}
 
-	// 回退：直接使用字符串字节
-	key := make([]byte, aesKeySize)
-	copy(key, []byte(keyStr))
+	// 使用 Argon2id 派生密钥
+	// 使用固定的 key 作为额外输入，增加安全性
+	key := argon2.IDKey([]byte(keyStr), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 
-	// 如果原始字符串太短，记录警告
-	if len(keyStr) < aesKeySize {
-		LogWarn("CRYPTO", fmt.Sprintf("Key string too short (%d bytes), padded with zeros", len(keyStr)))
-	} else if len(keyStr) > aesKeySize {
-		LogWarn("CRYPTO", fmt.Sprintf("Key string too long (%d bytes), truncated to %d", len(keyStr), aesKeySize))
-	}
-
+	LogDebug("CRYPTO", fmt.Sprintf("Key derived using Argon2id: salt=%s", hex.EncodeToString(salt)[:16]+"..."))
 	return key, nil
 }
