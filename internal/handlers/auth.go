@@ -164,21 +164,6 @@ func (h *AuthHandler) clearAuthCookie(c *gin.Context) {
 	utils.ClearTokenCookieGin(c)
 }
 
-// getClientIP 安全获取客户端 IP
-//
-// 参数：
-//   - c: Gin 上下文
-//
-// 返回：
-//   - string: 客户端 IP 地址
-func (h *AuthHandler) getClientIP(c *gin.Context) string {
-	ip := c.ClientIP()
-	if ip == "" {
-		ip = "unknown"
-	}
-	return ip
-}
-
 // getLanguage 获取请求语言，支持默认值
 //
 // 参数：
@@ -241,7 +226,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	validatedEmail := emailResult.Value
 
 	// 验证码验证
-	clientIP := h.getClientIP(c)
+	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
 		return
@@ -634,7 +619,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// 验证码验证
-	clientIP := h.getClientIP(c)
+	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for login: email=%s, ip=%s", email, clientIP))
 		return
@@ -855,7 +840,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	normalizedEmail := strings.ToLower(email)
 
 	// 验证码验证
-	clientIP := h.getClientIP(c)
+	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for reset: email=%s, ip=%s", normalizedEmail, clientIP))
 		return
@@ -1049,7 +1034,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	// 验证码验证
-	clientIP := h.getClientIP(c)
+	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for change password: userID=%d, ip=%s", userID, clientIP))
 		return

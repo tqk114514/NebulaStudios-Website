@@ -176,21 +176,6 @@ func NewQRLoginHandler(
 
 // ====================  辅助函数 ====================
 
-// getClientIP 安全获取客户端 IP
-//
-// 参数：
-//   - c: Gin 上下文
-//
-// 返回：
-//   - string: 客户端 IP 地址
-func (h *QRLoginHandler) getClientIP(c *gin.Context) string {
-	ip := c.ClientIP()
-	if ip == "" {
-		ip = "unknown"
-	}
-	return ip
-}
-
 // decryptToken 解密 Token 并提取原始 Token
 //
 // 参数：
@@ -360,7 +345,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	expireTime := now + QRTokenExpireMS
 
 	// 获取 PC 端信息
-	pcIP := h.getClientIP(c)
+	pcIP := utils.GetClientIP(c)
 	pcUserAgent := c.GetHeader("User-Agent")
 
 	ctx := c.Request.Context()

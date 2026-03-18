@@ -75,7 +75,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		token := ExtractToken(c)
 		if token == "" {
 			// Token 未找到是预期内的业务情况，使用 DEBUG 级别避免日志洪水
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token not found: ip=%s", c.ClientIP()))
+			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token not found: ip=%s", utils.GetClientIP(c)))
 			respondUnauthorized(c, ErrAuthTokenNotFound.Error())
 			return
 		}
@@ -84,7 +84,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
 			// Token 验证失败是预期内的业务情况，使用 DEBUG 级别
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token verification failed: ip=%s", c.ClientIP()))
+			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token verification failed: ip=%s", utils.GetClientIP(c)))
 			respondUnauthorized(c, err.Error())
 			return
 		}
