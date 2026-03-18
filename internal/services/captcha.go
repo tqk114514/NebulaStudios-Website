@@ -240,7 +240,7 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaTy
 
 	// 验证器类型必须由前端指定
 	if captchaType == "" {
-		utils.LogWarn("CAPTCHA", "Empty captcha type provided", "")
+		utils.LogError("CAPTCHA", "Verify", fmt.Errorf("empty captcha type"), "Captcha type is required")
 		return ErrCaptchaUnsupportedType
 	}
 
