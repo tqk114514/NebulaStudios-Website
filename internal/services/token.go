@@ -481,7 +481,6 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 //   - ctx: 上下文
 func (s *TokenService) CleanupExpired(ctx context.Context) {
 	var wg sync.WaitGroup
-	now := time.Now().UnixMilli()
 
 	tokenRepo := models.NewTokenRepository()
 	codeRepo := models.NewCodeRepository()
@@ -496,6 +495,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
+		now := time.Now().UnixMilli()
 		count, err := tokenRepo.DeleteExpired(ctx, now)
 		if err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup expired tokens", err)
@@ -516,6 +516,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
+		now := time.Now().UnixMilli()
 		count, err := codeRepo.DeleteExpired(ctx, now)
 		if err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup expired codes", err)
