@@ -94,8 +94,11 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		reqPath := c.Request.URL.Path
 
+		// 规范化路径
+		cleanPath := filepath.Clean(reqPath)
+
 		// 安全检查：防止路径遍历攻击
-		if strings.Contains(reqPath, "..") {
+		if strings.Contains(cleanPath, "..") {
 			utils.LogWarn("COMPRESS", "Path traversal attempt detected", fmt.Sprintf("path=%s", reqPath))
 			c.Next()
 			return
@@ -125,9 +128,31 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 			return
 		}
 
+		// 规范化最终路径
+		cleanBrPath := filepath.Clean(brPath)
+		absBasePath, err := filepath.Abs(basePath)
+		if err != nil {
+			utils.LogWarn("COMPRESS", "Failed to get absolute base path", fmt.Sprintf("error=%v", err))
+			c.Next()
+			return
+		}
+		absBrPath, err := filepath.Abs(cleanBrPath)
+		if err != nil {
+			utils.LogWarn("COMPRESS", "Failed to get absolute br path", fmt.Sprintf("error=%v", err))
+			c.Next()
+			return
+		}
+
+		// 确保最终路径在基础路径内
+		if !strings.HasPrefix(absBrPath, absBasePath+string(os.PathSeparator)) && absBrPath != absBasePath {
+			utils.LogWarn("COMPRESS", "Path traversal attempt blocked", fmt.Sprintf("path=%s, brPath=%s", reqPath, brPath))
+			c.Next()
+			return
+		}
+
 		// 检查文件是否存在
-		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogDebug("COMPRESS", fmt.Sprintf("Brotli file not found: %s", brPath))
+		if _, err := os.Stat(absBrPath); os.IsNotExist(err) {
+			utils.LogDebug("COMPRESS", fmt.Sprintf("Brotli file not found: %s", absBrPath))
 			c.Next()
 			return
 		}
@@ -136,7 +161,7 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 		setCompressedHeaders(c, contentType, cacheControlImmutable)
 
 		// 发送文件
-		c.File(brPath)
+		c.File(absBrPath)
 		c.Abort()
 	}
 }
@@ -257,40 +282,49 @@ func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 //   - error: 无法解析时返回错误
 func resolveBrotliPath(basePath, reqPath string) (string, error) {
 	var brPath string
+	var relPath string
+
+	// 规范化请求路径
+	cleanReqPath := filepath.Clean(reqPath)
 
 	switch {
-	case strings.HasPrefix(reqPath, "/shared/"):
+	case strings.HasPrefix(cleanReqPath, "/shared/"):
 		// 处理 /shared/ 路径（js, css, components）
-		relPath := strings.TrimPrefix(reqPath, "/shared")
+		relPath = strings.TrimPrefix(cleanReqPath, "/shared")
 		brPath = filepath.Join(basePath, "shared", relPath+brotliExtension)
 
-	case strings.HasPrefix(reqPath, "/account/assets/"):
+	case strings.HasPrefix(cleanReqPath, "/account/assets/"):
 		// 处理 /account/assets/ 路径
-		relPath := strings.TrimPrefix(reqPath, "/account/assets")
+		relPath = strings.TrimPrefix(cleanReqPath, "/account/assets")
 		brPath = filepath.Join(basePath, "account/assets", relPath+brotliExtension)
 
-	case strings.HasPrefix(reqPath, "/account/data/"):
+	case strings.HasPrefix(cleanReqPath, "/account/data/"):
 		// 处理 /account/data/ 路径（email.json）
-		relPath := strings.TrimPrefix(reqPath, "/account/data")
+		relPath = strings.TrimPrefix(cleanReqPath, "/account/data")
 		brPath = filepath.Join(basePath, "account/data", relPath+brotliExtension)
 
-	case strings.HasPrefix(reqPath, "/policy/assets/"):
+	case strings.HasPrefix(cleanReqPath, "/policy/assets/"):
 		// 处理 /policy/assets/ 路径
-		relPath := strings.TrimPrefix(reqPath, "/policy/assets")
+		relPath = strings.TrimPrefix(cleanReqPath, "/policy/assets")
 		brPath = filepath.Join(basePath, "policy/assets", relPath+brotliExtension)
 
-	case strings.HasPrefix(reqPath, "/policy/data/"):
+	case strings.HasPrefix(cleanReqPath, "/policy/data/"):
 		// 处理 /policy/data/ 路径（i18n-policy.json）
-		relPath := strings.TrimPrefix(reqPath, "/policy/data")
+		relPath = strings.TrimPrefix(cleanReqPath, "/policy/data")
 		brPath = filepath.Join(basePath, "policy/data", relPath+brotliExtension)
 
-	case strings.HasPrefix(reqPath, "/admin/assets/"):
+	case strings.HasPrefix(cleanReqPath, "/admin/assets/"):
 		// 处理 /admin/assets/ 路径（js, css）
-		relPath := strings.TrimPrefix(reqPath, "/admin/assets")
+		relPath = strings.TrimPrefix(cleanReqPath, "/admin/assets")
 		brPath = filepath.Join(basePath, "admin/assets", relPath+brotliExtension)
 
 	default:
 		return "", errors.New("unsupported path prefix")
+	}
+
+	// 检查相对路径是否包含路径遍历
+	if strings.Contains(relPath, "..") {
+		return "", errors.New("invalid path contains traversal")
 	}
 
 	return brPath, nil
