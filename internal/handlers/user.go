@@ -102,15 +102,20 @@ type dataExportToken struct {
 }
 
 // dataExportTokens 数据导出 Token 存储（内存）
+// 带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
 var (
 	dataExportTokens      = make(map[string]*dataExportToken)
 	dataExportTokensMu    sync.RWMutex
 	dataExportCleanupOnce sync.Once
+	dataExportTokenOrder  []string // 插入顺序（用于 FIFO）
 )
 
 const (
 	// DataExportCleanupInterval 数据导出 Token 清理任务间隔
 	DataExportCleanupInterval = 5 * time.Minute
+
+	// maxDataExportTokensCapacity dataExportTokens 最大容量
+	maxDataExportTokensCapacity = 1000
 )
 
 // ====================  构造函数 ====================
@@ -672,10 +677,18 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 
 	// 存储 Token（5 分钟有效）
 	dataExportTokensMu.Lock()
+	if len(dataExportTokens) >= maxDataExportTokensCapacity {
+		evictCount := maxDataExportTokensCapacity / 10
+		for i := 0; i < evictCount && i < len(dataExportTokenOrder); i++ {
+			delete(dataExportTokens, dataExportTokenOrder[i])
+		}
+		dataExportTokenOrder = dataExportTokenOrder[evictCount:]
+	}
 	dataExportTokens[token] = &dataExportToken{
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 	}
+	dataExportTokenOrder = append(dataExportTokenOrder, token)
 	dataExportTokensMu.Unlock()
 
 	utils.LogInfo("USER", fmt.Sprintf("Data export token generated: userID=%d", userID))
@@ -714,7 +727,8 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	dataExportTokensMu.Lock()
 	tokenData, exists := dataExportTokens[token]
 	if exists {
-		delete(dataExportTokens, token) // 立即删除，确保一次性使用
+		delete(dataExportTokens, token)
+		removeExportTokenFromOrder(token)
 	}
 	dataExportTokensMu.Unlock()
 
@@ -808,14 +822,29 @@ func CleanupExpiredExportTokens() {
 
 	now := time.Now()
 	count := 0
-	for token, data := range dataExportTokens {
-		if now.After(data.ExpiresAt) {
+	newOrder := make([]string, 0, len(dataExportTokenOrder))
+	for _, token := range dataExportTokenOrder {
+		data, ok := dataExportTokens[token]
+		if ok && now.After(data.ExpiresAt) {
 			delete(dataExportTokens, token)
 			count++
+		} else {
+			newOrder = append(newOrder, token)
 		}
 	}
+	dataExportTokenOrder = newOrder
 
 	if count > 0 {
 		utils.LogInfo("USER", fmt.Sprintf("Cleanup completed: expired export tokens=%d", count))
+	}
+}
+
+// removeExportTokenFromOrder 从顺序切片中移除元素
+func removeExportTokenFromOrder(token string) {
+	for i, v := range dataExportTokenOrder {
+		if v == token {
+			dataExportTokenOrder = append(dataExportTokenOrder[:i], dataExportTokenOrder[i+1:]...)
+			return
+		}
 	}
 }
