@@ -207,7 +207,7 @@ func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 	return func(c *gin.Context) {
 		// 运行时再次检查文件是否存在
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("HTML file not found: %s", brPath), "")
+			utils.LogInfo("COMPRESS", fmt.Sprintf("HTML file not found: %s", brPath), "")
 			c.String(404, "Page not found")
 			return
 		}
@@ -257,7 +257,7 @@ func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 	return func(c *gin.Context) {
 		// 运行时再次检查文件是否存在
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("Policy HTML file not found: %s", brPath), "")
+			utils.LogInfo("COMPRESS", fmt.Sprintf("Policy HTML file not found: %s", brPath), "")
 			c.String(404, "Page not found")
 			return
 		}
