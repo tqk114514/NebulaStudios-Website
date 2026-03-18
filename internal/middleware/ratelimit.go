@@ -86,6 +86,26 @@ const (
 
 	// defaultEmailInterval 默认邮件发送间隔
 	defaultEmailInterval = 60 * time.Second
+
+	// ====================  后台清理相关常量 ====================
+
+	// rateLimiterCleanupInterval IP限流器后台清理间隔
+	rateLimiterCleanupInterval = 5 * time.Minute
+
+	// rateLimiterEntryTTL IP限流器条目过期时间（1小时未访问则清理）
+	rateLimiterEntryTTL = 1 * time.Hour
+
+	// emailLimiterCleanupInterval 邮件限流器后台清理间隔
+	emailLimiterCleanupInterval = 10 * time.Minute
+
+	// emailLimiterEntryTTL 邮件限流器条目过期时间（24小时未使用则清理）
+	emailLimiterEntryTTL = 24 * time.Hour
+
+	// dataExportLimiterCleanupInterval 数据导出限流器后台清理间隔
+	dataExportLimiterCleanupInterval = 10 * time.Minute
+
+	// dataExportLimiterEntryTTL 数据导出限流器条目过期时间（24小时未使用则清理）
+	dataExportLimiterEntryTTL = 24 * time.Hour
 )
 
 // ====================  数据结构 ====================
@@ -104,11 +124,13 @@ type rateLimiterShard struct {
 
 // ShardedRateLimiter 分片限流器
 // 使用分片减少锁竞争，使用 LRU 防止内存无限增长
-// LRU 自动淘汰最久未使用的条目，无需手动清理
+// 后台 goroutine 定期主动清理过期条目
 type ShardedRateLimiter struct {
-	shards [shardCount]*rateLimiterShard
-	rate   rate.Limit
-	burst  int
+	shards    [shardCount]*rateLimiterShard
+	rate      rate.Limit
+	burst     int
+	stopChan  chan struct{}
+	cleanupWG sync.WaitGroup
 }
 
 // emailLimiterShard 邮件限流器分片（使用 LRU）
@@ -119,10 +141,12 @@ type emailLimiterShard struct {
 
 // ShardedEmailRateLimiter 分片邮件限流器
 // 基于邮箱地址的限流，防止邮件滥发
-// LRU 自动淘汰最久未使用的条目，无需手动清理
+// 后台 goroutine 定期主动清理过期条目
 type ShardedEmailRateLimiter struct {
-	shards   [shardCount]*emailLimiterShard
-	interval time.Duration
+	shards    [shardCount]*emailLimiterShard
+	interval  time.Duration
+	stopChan  chan struct{}
+	cleanupWG sync.WaitGroup
 }
 
 // ====================  构造函数 ====================
@@ -146,8 +170,9 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	}
 
 	srl := &ShardedRateLimiter{
-		rate:  r,
-		burst: burst,
+		rate:     r,
+		burst:    burst,
+		stopChan: make(chan struct{}),
 	}
 
 	// 初始化所有分片
@@ -163,10 +188,69 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 		}
 	}
 
+	// 启动后台清理 goroutine
+	srl.cleanupWG.Add(1)
+	go srl.cleanupLoop()
+
 	utils.LogInfo("RATELIMIT", fmt.Sprintf("Sharded rate limiter created: rate=%v, burst=%d, shards=%d",
 		r, burst, shardCount))
 
 	return srl
+}
+
+// Stop 停止限流器，清理后台 goroutine
+func (srl *ShardedRateLimiter) Stop() {
+	close(srl.stopChan)
+	srl.cleanupWG.Wait()
+	utils.LogInfo("RATELIMIT", "Sharded rate limiter stopped")
+}
+
+// cleanupLoop 后台清理循环，定期清理过期条目
+func (srl *ShardedRateLimiter) cleanupLoop() {
+	defer srl.cleanupWG.Done()
+
+	ticker := time.NewTicker(rateLimiterCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			srl.cleanupExpiredEntries()
+		case <-srl.stopChan:
+			return
+		}
+	}
+}
+
+// cleanupExpiredEntries 清理所有分片中的过期条目
+func (srl *ShardedRateLimiter) cleanupExpiredEntries() {
+	now := time.Now()
+	cleanedCount := 0
+
+	for i := 0; i < shardCount; i++ {
+		shard := srl.shards[i]
+		if shard == nil || shard.cache == nil {
+			continue
+		}
+
+		shard.mu.Lock()
+		keys := shard.cache.Keys()
+		shard.mu.Unlock()
+
+		for _, key := range keys {
+			shard.mu.Lock()
+			entry, exists := shard.cache.Peek(key)
+			if exists && now.Sub(entry.lastSeen) > rateLimiterEntryTTL {
+				shard.cache.Remove(key)
+				cleanedCount++
+			}
+			shard.mu.Unlock()
+		}
+	}
+
+	if cleanedCount > 0 {
+		utils.LogDebug("RATELIMIT", fmt.Sprintf("Cleaned up %d expired rate limiter entries", cleanedCount))
+	}
 }
 
 // NewShardedEmailRateLimiter 创建分片邮件限流器
@@ -184,6 +268,7 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 
 	serl := &ShardedEmailRateLimiter{
 		interval: interval,
+		stopChan: make(chan struct{}),
 	}
 
 	// 初始化所有分片
@@ -199,10 +284,69 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 		}
 	}
 
+	// 启动后台清理 goroutine
+	serl.cleanupWG.Add(1)
+	go serl.cleanupLoop()
+
 	utils.LogInfo("RATELIMIT", fmt.Sprintf("Sharded email rate limiter created: interval=%v, shards=%d",
 		interval, shardCount))
 
 	return serl
+}
+
+// Stop 停止邮件限流器，清理后台 goroutine
+func (serl *ShardedEmailRateLimiter) Stop() {
+	close(serl.stopChan)
+	serl.cleanupWG.Wait()
+	utils.LogInfo("RATELIMIT", "Sharded email rate limiter stopped")
+}
+
+// cleanupLoop 后台清理循环，定期清理过期条目
+func (serl *ShardedEmailRateLimiter) cleanupLoop() {
+	defer serl.cleanupWG.Done()
+
+	ticker := time.NewTicker(emailLimiterCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			serl.cleanupExpiredEntries()
+		case <-serl.stopChan:
+			return
+		}
+	}
+}
+
+// cleanupExpiredEntries 清理所有分片中的过期条目
+func (serl *ShardedEmailRateLimiter) cleanupExpiredEntries() {
+	now := time.Now()
+	cleanedCount := 0
+
+	for i := 0; i < shardCount; i++ {
+		shard := serl.shards[i]
+		if shard == nil || shard.cache == nil {
+			continue
+		}
+
+		shard.mu.Lock()
+		keys := shard.cache.Keys()
+		shard.mu.Unlock()
+
+		for _, key := range keys {
+			shard.mu.Lock()
+			entryTime, exists := shard.cache.Peek(key)
+			if exists && now.Sub(entryTime) > emailLimiterEntryTTL {
+				shard.cache.Remove(key)
+				cleanedCount++
+			}
+			shard.mu.Unlock()
+		}
+	}
+
+	if cleanedCount > 0 {
+		utils.LogDebug("RATELIMIT", fmt.Sprintf("Cleaned up %d expired email limiter entries", cleanedCount))
+	}
 }
 
 // ====================  ShardedRateLimiter 方法 ====================
@@ -401,9 +545,12 @@ type dataExportLimiterShard struct {
 
 // ShardedDataExportLimiter 分片数据导出限流器
 // 基于用户 ID 的限流，防止频繁导出
+// 后台 goroutine 定期主动清理过期条目
 type ShardedDataExportLimiter struct {
-	shards   [shardCount]*dataExportLimiterShard
-	interval time.Duration
+	shards    [shardCount]*dataExportLimiterShard
+	interval  time.Duration
+	stopChan  chan struct{}
+	cleanupWG sync.WaitGroup
 }
 
 // NewShardedDataExportLimiter 创建分片数据导出限流器
@@ -419,6 +566,7 @@ func NewShardedDataExportLimiter(interval time.Duration) *ShardedDataExportLimit
 
 	sdel := &ShardedDataExportLimiter{
 		interval: interval,
+		stopChan: make(chan struct{}),
 	}
 
 	for i := 0; i < shardCount; i++ {
@@ -431,10 +579,69 @@ func NewShardedDataExportLimiter(interval time.Duration) *ShardedDataExportLimit
 		}
 	}
 
+	// 启动后台清理 goroutine
+	sdel.cleanupWG.Add(1)
+	go sdel.cleanupLoop()
+
 	utils.LogInfo("RATELIMIT", fmt.Sprintf("Sharded data export limiter created: interval=%v, shards=%d",
 		interval, shardCount))
 
 	return sdel
+}
+
+// Stop 停止数据导出限流器，清理后台 goroutine
+func (sdel *ShardedDataExportLimiter) Stop() {
+	close(sdel.stopChan)
+	sdel.cleanupWG.Wait()
+	utils.LogInfo("RATELIMIT", "Sharded data export limiter stopped")
+}
+
+// cleanupLoop 后台清理循环，定期清理过期条目
+func (sdel *ShardedDataExportLimiter) cleanupLoop() {
+	defer sdel.cleanupWG.Done()
+
+	ticker := time.NewTicker(dataExportLimiterCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			sdel.cleanupExpiredEntries()
+		case <-sdel.stopChan:
+			return
+		}
+	}
+}
+
+// cleanupExpiredEntries 清理所有分片中的过期条目
+func (sdel *ShardedDataExportLimiter) cleanupExpiredEntries() {
+	now := time.Now()
+	cleanedCount := 0
+
+	for i := 0; i < shardCount; i++ {
+		shard := sdel.shards[i]
+		if shard == nil || shard.cache == nil {
+			continue
+		}
+
+		shard.mu.Lock()
+		keys := shard.cache.Keys()
+		shard.mu.Unlock()
+
+		for _, key := range keys {
+			shard.mu.Lock()
+			entryTime, exists := shard.cache.Peek(key)
+			if exists && now.Sub(entryTime) > dataExportLimiterEntryTTL {
+				shard.cache.Remove(key)
+				cleanedCount++
+			}
+			shard.mu.Unlock()
+		}
+	}
+
+	if cleanedCount > 0 {
+		utils.LogDebug("RATELIMIT", fmt.Sprintf("Cleaned up %d expired data export limiter entries", cleanedCount))
+	}
 }
 
 // getShard 获取 userID 对应的分片
