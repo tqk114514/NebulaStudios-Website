@@ -38,6 +38,8 @@ var (
 	ErrSessionNilConfig = errors.New("session config is nil")
 	// ErrSessionEmptySecret JWT 密钥为空
 	ErrSessionEmptySecret = errors.New("JWT secret is empty")
+	// ErrSessionInvalidSecret JWT 密钥不符合要求
+	ErrSessionInvalidSecret = errors.New("JWT secret is invalid")
 	// ErrSessionInvalidExpiry 无效的过期时间
 	ErrSessionInvalidExpiry = errors.New("invalid JWT expiry duration")
 	// ErrNoToken Token 为空
@@ -133,7 +135,7 @@ func NewSessionServiceWithValidation(cfg *config.Config) (*SessionService, error
 
 	// 验证密钥长度
 	if len(cfg.JWTSecret) < minSecretLength {
-		utils.LogWarn("SESSION", "JWT secret is shorter than recommended minimum", fmt.Sprintf("length=%d, recommended=%d", len(cfg.JWTSecret), minSecretLength))
+		return nil, fmt.Errorf("%w: JWT secret length is %d, minimum is %d", ErrSessionInvalidSecret, len(cfg.JWTSecret), minSecretLength)
 	}
 
 	// 读取 iss/aud（允许空，使用默认值）
