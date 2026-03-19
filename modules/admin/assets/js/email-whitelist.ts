@@ -31,7 +31,7 @@ let editingEntryId: number | null = null;
 
 async function getWhitelist(): Promise<EmailWhitelistEntry[]> {
   try {
-    const result = await fetchApi<{ whitelist: EmailWhitelistEntry[] }>('/admin/api/email-whitelist');
+    const result = await fetchApi<{ whitelist: EmailWhitelistEntry[], total: number, page: number, pageSize: number, totalPages: number }>('/admin/api/email-whitelist');
     if (result.success && result.data) {
       return result.data.whitelist ?? [];
     }
