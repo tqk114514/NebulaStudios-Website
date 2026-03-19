@@ -945,8 +945,17 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 
 // ====================  邮箱白名单管理 ====================
 
+// emailWhitelistListResponse 邮箱白名单列表响应
+type emailWhitelistListResponse struct {
+	Whitelist  []*models.EmailWhitelist `json:"whitelist"`
+	Total      int64                    `json:"total"`
+	Page       int                      `json:"page"`
+	PageSize   int                      `json:"pageSize"`
+	TotalPages int                      `json:"totalPages"`
+}
+
 // GetEmailWhitelist 获取邮箱白名单
-// GET /admin/api/email-whitelist
+// GET /admin/api/email-whitelist?page=1&pageSize=20
 //
 // 权限：仅超级管理员
 func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
@@ -955,16 +964,37 @@ func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 		return
 	}
 
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize)))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > maxPageSize {
+		pageSize = defaultPageSize
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
-	whitelist, err := h.emailWhitelistRepo.FindAll(ctx)
+	whitelist, total, err := h.emailWhitelistRepo.FindAllPaginated(ctx, page, pageSize)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
 		return
 	}
 
-	utils.RespondSuccessWithData(c, gin.H{"whitelist": whitelist})
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize > 0 {
+		totalPages++
+	}
+
+	utils.RespondSuccessWithData(c, emailWhitelistListResponse{
+		Whitelist:  whitelist,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	})
 }
 
 // CreateEmailWhitelist 创建邮箱白名单条目

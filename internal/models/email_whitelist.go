@@ -83,6 +83,44 @@ func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhiteli
 	return whitelist, nil
 }
 
+// FindAllPaginated 获取分页的白名单条目
+func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page int, pageSize int) ([]*EmailWhitelist, int64, error) {
+	if pool == nil {
+		return nil, 0, ErrDBNotInitialized
+	}
+
+	offset := (page - 1) * pageSize
+
+	rows, err := pool.Query(ctx, `
+		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
+		FROM email_whitelist
+		ORDER BY domain ASC
+		LIMIT $1 OFFSET $2
+	`, pageSize, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query email whitelist: %w", err)
+	}
+	defer rows.Close()
+
+	var whitelist []*EmailWhitelist
+	for rows.Next() {
+		item := &EmailWhitelist{}
+		err := rows.Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan email whitelist: %w", err)
+		}
+		whitelist = append(whitelist, item)
+	}
+
+	var total int64
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count email whitelist: %w", err)
+	}
+
+	return whitelist, total, nil
+}
+
 // FindByDomain 按域名查找
 func (r *EmailWhitelistRepository) FindByDomain(ctx context.Context, domain string) (*EmailWhitelist, error) {
 	if pool == nil {
