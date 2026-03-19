@@ -139,7 +139,7 @@ function renderWhitelist(entries: EmailWhitelistEntry[]): void {
   if (!whitelistTableBody) return;
 
   if (entries.length === 0) {
-    whitelistTableBody.innerHTML = '<tr><td colspan="5" class="empty-cell">暂无白名单条目</td></tr>';
+    whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
     return;
   }
 
@@ -247,18 +247,16 @@ async function handleSubmit(e: Event): Promise<void> {
 
   try {
     if (editingEntryId) {
-      // 编辑模式：获取当前状态
       const entry = getEntryById(editingEntryId);
       await updateEntry(editingEntryId, domain, signupUrl, entry?.is_enabled ?? true);
       showToast('更新成功', 'success');
     } else {
-      // 创建模式
       await createEntry(domain, signupUrl);
       showToast('添加成功', 'success');
     }
     closeFormModal();
     await loadWhitelist();
-  } catch (e) {
+  } catch {
     showToast('操作失败', 'error');
   }
 }
@@ -301,8 +299,6 @@ async function loadWhitelist(): Promise<void> {
 }
 
 export function initWhitelistPage(): void {
-  console.log('[WHITELIST] Initializing whitelist page...');
-
   // 绑定创建按钮
   const createBtn = document.getElementById('create-whitelist-btn');
   if (createBtn) {
