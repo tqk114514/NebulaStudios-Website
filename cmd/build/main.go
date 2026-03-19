@@ -137,32 +137,27 @@ func run() error {
 		return fmt.Errorf("cookie-consent build failed: %w", err)
 	}
 
-	// 5. 构建 Account 数据文件
-	if err := buildAccountData(); err != nil {
-		return fmt.Errorf("account data build failed: %w", err)
-	}
-
-	// 6. 构建 JavaScript（包含 Policy 数据内嵌）
+	// 5. 构建 JavaScript（包含 Policy 数据内嵌）
 	if err := buildJS(); err != nil {
 		return fmt.Errorf("JS build failed: %w", err)
 	}
 
-	// 7. 构建 CSS
+	// 6. 构建 CSS
 	if err := buildCSS(); err != nil {
 		return fmt.Errorf("CSS build failed: %w", err)
 	}
 
-	// 8. 构建 HTML
+	// 7. 构建 HTML
 	if err := buildHTML(); err != nil {
 		return fmt.Errorf("HTML build failed: %w", err)
 	}
 
-	// 9. 保存资源清单
+	// 8. 保存资源清单
 	if err := saveAssetManifest(); err != nil {
 		log.Printf("[BUILD] WARN: Failed to save asset manifest: %v", err)
 	}
 
-	// 10. 生产模式下生成 Brotli 预压缩文件
+	// 9. 生产模式下生成 Brotli 预压缩文件
 	if !*isDev {
 		if err := brotliCompressDir(distDir); err != nil {
 			log.Printf("[BUILD] WARN: Brotli compression had errors: %v", err)

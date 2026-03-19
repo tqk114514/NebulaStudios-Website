@@ -20,6 +20,7 @@ import { loadStats } from './stats';
 import { loadUsers, setCurrentUserRole, initUsersPage } from './users';
 import { loadLogs } from './logs';
 import { loadOAuthClients, initOAuthPage } from './oauth';
+import { initWhitelistPage, loadWhitelist } from './email-whitelist';
 
 // ==================== DOM 元素 ====================
 
@@ -32,6 +33,7 @@ const currentAvatarEl = document.getElementById('current-avatar') as HTMLElement
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement | null;
 const navLogs = document.getElementById('nav-logs') as HTMLAnchorElement | null;
 const navOAuth = document.getElementById('nav-oauth') as HTMLAnchorElement | null;
+const navWhitelist = document.getElementById('nav-whitelist') as HTMLAnchorElement | null;
 
 // ==================== 页面路由 ====================
 
@@ -44,6 +46,15 @@ function navigateTo(page: string): void {
   });
 
   // 更新页面显示
+  const titles: Record<string, string> = {
+    dashboard: '仪表盘',
+    users: '用户管理',
+    logs: '操作日志',
+    oauth: 'OAuth 应用',
+    whitelist: '邮箱白名单'
+  };
+
+  // 更新页面显示
   document.querySelectorAll('.page').forEach(p => {
     p.classList.toggle('active', p.id === `page-${page}`);
   });
@@ -54,7 +65,8 @@ function navigateTo(page: string): void {
       dashboard: '仪表盘',
       users: '用户管理',
       logs: '操作日志',
-      oauth: 'OAuth 应用'
+      oauth: 'OAuth 应用',
+      whitelist: '邮箱白名单'
     };
     pageTitle.textContent = titles[page] || page;
   }
@@ -68,6 +80,8 @@ function navigateTo(page: string): void {
     loadLogs();
   } else if (page === 'oauth') {
     loadOAuthClients();
+  } else if (page === 'whitelist') {
+    initWhitelistPage();
   }
 }
 
@@ -86,7 +100,8 @@ async function init(): Promise<void> {
     currentAvatarEl,
     logoutBtn,
     navLogs,
-    navOAuth
+    navOAuth,
+    navWhitelist
   };
   
   for (const [name, el] of Object.entries(requiredElements)) {
@@ -118,6 +133,11 @@ async function init(): Promise<void> {
   // 显示 OAuth 导航（超级管理员可见）
   if (user.role >= 2 && navOAuth) {
     navOAuth.classList.remove('is-hidden');
+  }
+
+  // 显示白名单导航（超级管理员可见）
+  if (user.role >= 2 && navWhitelist) {
+    navWhitelist.classList.remove('is-hidden');
   }
 
   // 显示头像
