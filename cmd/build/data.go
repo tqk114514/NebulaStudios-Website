@@ -63,27 +63,6 @@ func buildBackendData() error {
 	return nil
 }
 
-// buildAccountData 构建 Account 数据文件
-func buildAccountData() error {
-	log.Println("[BUILD] Building account data...")
-
-	src := filepath.Join(dataDir, "email.json")
-	dst := filepath.Join(distDir, "account/data/email.json")
-
-	if _, err := os.Stat(src); os.IsNotExist(err) {
-		log.Printf("[BUILD] WARN: Account data file not found: %s", src)
-		return nil
-	}
-
-	if err := minifyJSONFile(src, dst); err != nil {
-		return fmt.Errorf("failed to build account data: %w", err)
-	}
-
-	atomic.AddInt64(&stats.FilesProcessed, 1)
-	log.Println("[BUILD] Account data built")
-	return nil
-}
-
 // minifyJSONFile 压缩 JSON 文件
 func minifyJSONFile(src, dst string) error {
 	data, err := os.ReadFile(src)

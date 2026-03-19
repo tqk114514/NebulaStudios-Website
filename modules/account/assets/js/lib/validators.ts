@@ -19,9 +19,10 @@ let EMAIL_PROVIDERS: EmailProviders = {};
  */
 export async function loadEmailWhitelist(): Promise<LoadResult> {
   try {
-    const response = await fetch('/account/data/email.json');
+    const response = await fetch('/api/email-whitelist');
     if (!response.ok) {throw new Error('Failed to load email whitelist');}
-    EMAIL_PROVIDERS = await response.json();
+    const data = await response.json();
+    EMAIL_PROVIDERS = data.domains || {};
     return { success: true };
   } catch (error) {
     console.error('[VALIDATOR] ERROR: Failed to load email whitelist:', (error as Error).message);

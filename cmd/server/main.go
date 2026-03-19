@@ -173,18 +173,19 @@ func initDatabase(cfg *config.Config) error {
 
 // Services 服务容器，持有所有服务实例
 type Services struct {
-	userRepo       *models.UserRepository
-	userLogRepo    *models.UserLogRepository
-	qrLoginRepo    *models.QRLoginRepository
-	tokenService   *services.TokenService
-	sessionService *services.SessionService
-	captchaService *services.CaptchaService
-	wsService      *services.WebSocketService
-	emailService   *services.EmailService
-	userCache      *cache.UserCache
-	r2Service      *services.R2Service
-	imgProcessor   *services.ImgProcessor
-	oauthService   *services.OAuthService
+	userRepo           *models.UserRepository
+	userLogRepo        *models.UserLogRepository
+	qrLoginRepo        *models.QRLoginRepository
+	tokenService       *services.TokenService
+	sessionService     *services.SessionService
+	captchaService     *services.CaptchaService
+	wsService          *services.WebSocketService
+	emailService       *services.EmailService
+	userCache          *cache.UserCache
+	r2Service          *services.R2Service
+	imgProcessor       *services.ImgProcessor
+	oauthService       *services.OAuthService
+	emailWhitelistRepo *models.EmailWhitelistRepository
 }
 
 // initServices 初始化所有服务
@@ -207,6 +208,10 @@ func initServices(cfg *config.Config) (*Services, error) {
 	// 扫码登录仓库
 	svcs.qrLoginRepo = models.NewQRLoginRepository()
 	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
+
+	// 邮箱白名单仓库
+	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository()
+	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
 
 	// Token 服务
 	svcs.tokenService = services.NewTokenService()
@@ -307,6 +312,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.emailService,
 		svcs.captchaService,
 		svcs.userCache,
+		svcs.emailWhitelistRepo,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth handler: %w", err)
@@ -375,7 +381,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 
 	// Admin Handler
 	adminLogRepo := models.NewAdminLogRepository()
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService)
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}
@@ -687,6 +693,9 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 
 // setupAuthAPI 配置认证 API
 func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
+	// 公开 API（无需认证）
+	r.GET("/api/email-whitelist", hdlrs.authHandler.GetEmailWhitelist)
+
 	authAPI := r.Group("/api/auth")
 	{
 		// 验证码相关
@@ -816,6 +825,12 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 			superAdminAPI.DELETE("/oauth/clients/:id", hdlrs.adminHandler.DeleteOAuthClient)
 			superAdminAPI.POST("/oauth/clients/:id/regenerate-secret", hdlrs.adminHandler.RegenerateOAuthClientSecret)
 			superAdminAPI.POST("/oauth/clients/:id/toggle", hdlrs.adminHandler.ToggleOAuthClient)
+
+			// 邮箱白名单管理（仅超级管理员）
+			superAdminAPI.GET("/email-whitelist", hdlrs.adminHandler.GetEmailWhitelist)
+			superAdminAPI.POST("/email-whitelist", hdlrs.adminHandler.CreateEmailWhitelist)
+			superAdminAPI.PUT("/email-whitelist/:id", hdlrs.adminHandler.UpdateEmailWhitelist)
+			superAdminAPI.DELETE("/email-whitelist/:id", hdlrs.adminHandler.DeleteEmailWhitelist)
 		}
 	}
 

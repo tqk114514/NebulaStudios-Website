@@ -3,7 +3,7 @@
  * 数据验证模块
  *
  * 功能：
- * - 邮箱格式和白名单验证
+ * - 邮箱格式验证
  * - 用户名长度验证
  * - 密码强度验证
  * - 头像 URL 验证
@@ -18,14 +18,11 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
-	"sync"
 	"unicode/utf8"
 )
 
@@ -125,80 +122,9 @@ var (
 	specialAllowedDomains = []string{"graph.microsoft.com"}
 )
 
-// ====================  邮箱白名单 ====================
-
-var (
-	emailWhitelist     []string
-	emailWhitelistOnce sync.Once
-	emailWhitelistMu   sync.RWMutex
-)
-
-// LoadEmailWhitelist 加载邮箱白名单
-// 从 dist/data/email.json 读取允许的邮箱域名
-// 使用 sync.Once 确保只加载一次
-//
-// 返回：
-//   - []string: 允许的邮箱域名列表
-func LoadEmailWhitelist() []string {
-	emailWhitelistOnce.Do(func() {
-		loadEmailWhitelistInternal()
-	})
-
-	emailWhitelistMu.RLock()
-	defer emailWhitelistMu.RUnlock()
-	return emailWhitelist
-}
-
-// loadEmailWhitelistInternal 内部加载函数
-func loadEmailWhitelistInternal() {
-	emailWhitelistMu.Lock()
-	defer emailWhitelistMu.Unlock()
-
-	// 读取文件
-	data, err := os.ReadFile("dist/data/email.json")
-	if err != nil {
-		LogWarn("VALIDATOR", fmt.Sprintf("Failed to load email whitelist: %v", err))
-		emailWhitelist = []string{}
-		return
-	}
-
-	// 验证文件不为空
-	if len(data) == 0 {
-		LogWarn("VALIDATOR", "Email whitelist file is empty")
-		emailWhitelist = []string{}
-		return
-	}
-
-	// 解析 JSON
-	var domains map[string]string
-	if err := json.Unmarshal(data, &domains); err != nil {
-		LogWarn("VALIDATOR", fmt.Sprintf("Failed to parse email whitelist: %v", err))
-		emailWhitelist = []string{}
-		return
-	}
-
-	// 提取域名
-	emailWhitelist = make([]string, 0, len(domains))
-	for domain := range domains {
-		// 验证域名格式
-		if domain != "" && strings.Contains(domain, ".") {
-			emailWhitelist = append(emailWhitelist, strings.ToLower(domain))
-		}
-	}
-
-	LogInfo("VALIDATOR", fmt.Sprintf("Email whitelist loaded: %d domains", len(emailWhitelist)))
-}
-
-// ReloadEmailWhitelist 重新加载邮箱白名单
-// 用于运行时更新白名单
-func ReloadEmailWhitelist() {
-	loadEmailWhitelistInternal()
-	LogInfo("VALIDATOR", "Email whitelist reloaded")
-}
-
 // ====================  邮箱验证 ====================
 
-// ValidateEmail 验证邮箱格式和白名单
+// ValidateEmail 验证邮箱格式
 // 执行以下检查：
 // 1. 非空检查
 // 2. 格式验证（正则）
@@ -253,21 +179,7 @@ func ValidateEmail(email string) ValidationResult {
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
-	// 白名单验证
-	whitelist := LoadEmailWhitelist()
-	if len(whitelist) > 0 {
-		found := false
-		for _, d := range whitelist {
-			if d == domain {
-				found = true
-				break
-			}
-		}
-		if !found {
-			LogDebug("VALIDATOR", fmt.Sprintf("Email validation failed: domain not in whitelist: %s", domain))
-			return ValidationResult{Valid: false, ErrorCode: ErrEmailNotSupported}
-		}
-	}
+	// 注意：白名单验证由 emailWhitelistRepo 处理，不在这里验证
 
 	return ValidationResult{Valid: true, Value: trimmed}
 }

@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"auth-system/internal/cache"
@@ -67,11 +68,12 @@ const (
 
 // AdminHandler 管理后台 Handler
 type AdminHandler struct {
-	userRepo     *models.UserRepository
-	userCache    *cache.UserCache
-	logRepo      *models.AdminLogRepository
-	userLogRepo  *models.UserLogRepository
-	oauthService *services.OAuthService
+	userRepo           *models.UserRepository
+	userCache          *cache.UserCache
+	logRepo            *models.AdminLogRepository
+	userLogRepo        *models.UserLogRepository
+	oauthService       *services.OAuthService
+	emailWhitelistRepo *models.EmailWhitelistRepository
 }
 
 // userListResponse 用户列表响应
@@ -105,11 +107,12 @@ type setRoleRequest struct {
 //   - logRepo: 管理员日志仓库
 //   - userLogRepo: 用户日志仓库
 //   - oauthService: OAuth 服务（可选）
+//   - emailWhitelistRepo: 邮箱白名单仓库（可选）
 //
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService) (*AdminHandler, error) {
+func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService, emailWhitelistRepo *models.EmailWhitelistRepository) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -123,11 +126,12 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 	utils.LogInfo("ADMIN", "Admin handler initialized")
 
 	return &AdminHandler{
-		userRepo:     userRepo,
-		userCache:    userCache,
-		logRepo:      logRepo,
-		userLogRepo:  userLogRepo,
-		oauthService: oauthService,
+		userRepo:           userRepo,
+		userCache:          userCache,
+		logRepo:            logRepo,
+		userLogRepo:        userLogRepo,
+		oauthService:       oauthService,
+		emailWhitelistRepo: emailWhitelistRepo,
 	}, nil
 }
 
@@ -937,4 +941,207 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client %s: operatorID=%d, clientID=%s", status, operatorID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client " + status})
+}
+
+// ====================  邮箱白名单管理 ====================
+
+// GetEmailWhitelist 获取邮箱白名单
+// GET /admin/api/email-whitelist
+//
+// 权限：仅超级管理员
+func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	whitelist, err := h.emailWhitelistRepo.FindAll(ctx)
+	if err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		return
+	}
+
+	utils.RespondSuccess(c, gin.H{"whitelist": whitelist})
+}
+
+// CreateEmailWhitelist 创建邮箱白名单条目
+// POST /admin/api/email-whitelist
+//
+// 权限：仅超级管理员
+//
+// 请求体：
+//   - domain: 邮箱域名（必需，如 example.com）
+//   - signup_url: 注册页面 URL（必需）
+func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		return
+	}
+
+	var req struct {
+		Domain    string `json:"domain"`
+		SignupURL string `json:"signup_url"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	domain := strings.TrimSpace(req.Domain)
+	signupURL := strings.TrimSpace(req.SignupURL)
+
+	if domain == "" {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_DOMAIN", "Domain is required")
+		return
+	}
+	if signupURL == "" {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_SIGNUP_URL", "Signup URL is required")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	item, err := h.emailWhitelistRepo.Create(ctx, domain, signupURL)
+	if err != nil {
+		if errors.Is(err, models.ErrEmailWhitelistDomainExists) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, "DOMAIN_EXISTS", fmt.Sprintf("Domain %s already exists", domain))
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "CREATE_FAILED", err.Error())
+		return
+	}
+
+	if err := h.logRepo.LogEmailWhitelistCreate(ctx, operatorID, item); err != nil {
+		utils.LogWarn("ADMIN", "Failed to log create email whitelist", err.Error())
+	}
+
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist created: operatorID=%d, domain=%s", operatorID, domain))
+	utils.RespondSuccess(c, gin.H{"item": item})
+}
+
+// UpdateEmailWhitelist 更新邮箱白名单条目
+// PUT /admin/api/email-whitelist/:id
+//
+// 权限：仅超级管理员
+//
+// 请求体：
+//   - domain: 邮箱域名（可选）
+//   - signup_url: 注册页面 URL（可选）
+//   - is_enabled: 是否启用（可选）
+func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		return
+	}
+
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		return
+	}
+
+	var req struct {
+		Domain    *string `json:"domain"`
+		SignupURL *string `json:"signup_url"`
+		IsEnabled *bool   `json:"is_enabled"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	existing, err := h.emailWhitelistRepo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		return
+	}
+
+	domain := existing.Domain
+	if req.Domain != nil && *req.Domain != "" {
+		domain = strings.TrimSpace(*req.Domain)
+	}
+
+	signupURL := existing.SignupURL
+	if req.SignupURL != nil && *req.SignupURL != "" {
+		signupURL = strings.TrimSpace(*req.SignupURL)
+	}
+
+	isEnabled := existing.IsEnabled
+	if req.IsEnabled != nil {
+		isEnabled = *req.IsEnabled
+	}
+
+	item, err := h.emailWhitelistRepo.Update(ctx, id, domain, signupURL, isEnabled)
+	if err != nil {
+		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			return
+		}
+		if errors.Is(err, models.ErrEmailWhitelistDomainExists) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, "DOMAIN_EXISTS", fmt.Sprintf("Domain %s already exists", domain))
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
+		return
+	}
+
+	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorID, item); err != nil {
+		utils.LogWarn("ADMIN", "Failed to log update email whitelist", err.Error())
+	}
+
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist updated: operatorID=%d, id=%d", operatorID, id))
+	utils.RespondSuccess(c, gin.H{"item": item})
+}
+
+// DeleteEmailWhitelist 删除邮箱白名单条目
+// DELETE /admin/api/email-whitelist/:id
+//
+// 权限：仅超级管理员
+func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		return
+	}
+
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		return
+	}
+
+	operatorID, _ := middleware.GetUserID(c)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	err = h.emailWhitelistRepo.Delete(ctx, id)
+	if err != nil {
+		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
+		return
+	}
+
+	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorID, id); err != nil {
+		utils.LogWarn("ADMIN", "Failed to log delete email whitelist", err.Error())
+	}
+
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist deleted: operatorID=%d, id=%d", operatorID, id))
+	utils.RespondSuccess(c, gin.H{"message": "Email whitelist entry deleted"})
 }
