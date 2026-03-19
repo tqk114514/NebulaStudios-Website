@@ -136,6 +136,8 @@ async function toggleEntry(id: number, isEnabled: boolean): Promise<void> {
 // ==================== 渲染 ====================
 
 function renderWhitelist(entries: EmailWhitelistEntry[]): void {
+  console.log('[WHITELIST] renderWhitelist called, entries:', entries);
+  console.log('[WHITELIST] whitelistTableBody:', whitelistTableBody);
   if (!whitelistTableBody) return;
 
   if (entries.length === 0) {
@@ -143,7 +145,7 @@ function renderWhitelist(entries: EmailWhitelistEntry[]): void {
     return;
   }
 
-  whitelistTableBody.innerHTML = entries.map(entry => `
+  const html = entries.map(entry => `
     <tr data-id="${entry.id}">
       <td>${escapeHtml(entry.domain)}</td>
       <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
@@ -163,7 +165,9 @@ function renderWhitelist(entries: EmailWhitelistEntry[]): void {
     </tr>
   `).join('');
 
-  // 绑定事件
+  console.log('[WHITELIST] Setting innerHTML, length:', entries.length);
+  whitelistTableBody.innerHTML = html;
+
   bindTableEvents();
 }
 
