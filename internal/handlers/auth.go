@@ -69,14 +69,15 @@ const (
 // AuthHandler 认证 Handler
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo       *models.UserRepository    // 用户数据仓库
-	userLogRepo    *models.UserLogRepository // 用户日志仓库
-	tokenService   *services.TokenService    // Token 服务
-	sessionService *services.SessionService  // Session 服务
-	emailService   *services.EmailService    // 邮件服务
-	captchaService *services.CaptchaService  // 验证码服务
-	userCache      *cache.UserCache          // 用户缓存
-	baseURL        string                    // 基础 URL
+	userRepo           *models.UserRepository           // 用户数据仓库
+	userLogRepo        *models.UserLogRepository        // 用户日志仓库
+	tokenService       *services.TokenService           // Token 服务
+	sessionService     *services.SessionService         // Session 服务
+	emailService       *services.EmailService           // 邮件服务
+	captchaService     *services.CaptchaService         // 验证码服务
+	userCache          *cache.UserCache                 // 用户缓存
+	emailWhitelistRepo *models.EmailWhitelistRepository // 邮箱白名单仓库
+	baseURL            string                           // 基础 URL
 }
 
 // ====================  构造函数 ====================
@@ -91,6 +92,7 @@ type AuthHandler struct {
 //   - emailService: 邮件服务（必需）
 //   - captchaService: 验证码服务（必需）
 //   - userCache: 用户缓存（必需）
+//   - emailWhitelistRepo: 邮箱白名单仓库（可选，为 nil 时拒绝所有注册）
 //
 // 返回：
 //   - *AuthHandler: Handler 实例
@@ -103,6 +105,7 @@ func NewAuthHandler(
 	emailService *services.EmailService,
 	captchaService *services.CaptchaService,
 	userCache *cache.UserCache,
+	emailWhitelistRepo *models.EmailWhitelistRepository,
 ) (*AuthHandler, error) {
 	// 参数验证
 	if userRepo == nil {
@@ -127,17 +130,18 @@ func NewAuthHandler(
 	// 获取基础 URL（从 config）
 	baseURL := config.Get().BaseURL
 
-	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s", baseURL))
+	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s, whitelistEnabled=%v", baseURL, emailWhitelistRepo != nil))
 
 	return &AuthHandler{
-		userRepo:       userRepo,
-		userLogRepo:    userLogRepo,
-		tokenService:   tokenService,
-		sessionService: sessionService,
-		emailService:   emailService,
-		captchaService: captchaService,
-		userCache:      userCache,
-		baseURL:        baseURL,
+		userRepo:           userRepo,
+		userLogRepo:        userLogRepo,
+		tokenService:       tokenService,
+		sessionService:     sessionService,
+		emailService:       emailService,
+		captchaService:     captchaService,
+		userCache:          userCache,
+		emailWhitelistRepo: emailWhitelistRepo,
+		baseURL:            baseURL,
 	}, nil
 }
 
@@ -179,6 +183,37 @@ func (h *AuthHandler) getLanguage(language string) string {
 }
 
 // ====================  验证码路由 ====================
+
+// GetEmailWhitelist 获取允许注册的邮箱域名白名单（公开 API）
+// GET /api/email-whitelist
+//
+// 响应：
+//   - domains: 允许的邮箱域名列表（key: 域名, value: 注册页面 URL）
+//
+// 注意：此接口无需认证，因为注册页需要加载此信息
+func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		c.JSON(http.StatusOK, gin.H{"domains": gin.H{}})
+		return
+	}
+
+	entries, err := h.emailWhitelistRepo.FindAll(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"domains": gin.H{}})
+		return
+	}
+
+	domains := make(map[string]string)
+	for _, entry := range entries {
+		if entry.IsEnabled {
+			domains[entry.Domain] = entry.SignupURL
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"domains": domains})
+}
+
+// ==================== 验证码相关 Handler ====================
 
 // SendCode 发送注册验证码
 // POST /api/auth/send-code
@@ -225,14 +260,29 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	}
 	validatedEmail := emailResult.Value
 
+	// 获取上下文
+	ctx := c.Request.Context()
+
+	// 检查邮箱域名是否在白名单中（如果配置了白名单）
+	if h.emailWhitelistRepo != nil {
+		domain := strings.Split(validatedEmail, "@")[1]
+		isAllowed, _, err := h.emailWhitelistRepo.IsDomainAllowed(ctx, domain)
+		if err != nil {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "WHITELIST_CHECK_FAILED", fmt.Sprintf("Failed to check email whitelist: %v", err))
+			return
+		}
+		if !isAllowed {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, "EMAIL_DOMAIN_NOT_ALLOWED", fmt.Sprintf("Email domain %s is not in whitelist", domain))
+			return
+		}
+	}
+
 	// 验证码验证
 	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
 		return
 	}
-
-	ctx := c.Request.Context()
 
 	// 检查邮箱是否已注册
 	existingUser, err := h.userRepo.FindByEmail(ctx, validatedEmail)

@@ -52,6 +52,13 @@ const (
 	ActionOAuthClientRegenerateSecret = "oauth_client_regenerate_secret"
 	// ActionOAuthClientToggle 启用/禁用 OAuth 客户端
 	ActionOAuthClientToggle = "oauth_client_toggle"
+
+	// ActionEmailWhitelistCreate 创建邮箱白名单
+	ActionEmailWhitelistCreate = "email_whitelist_create"
+	// ActionEmailWhitelistUpdate 更新邮箱白名单
+	ActionEmailWhitelistUpdate = "email_whitelist_update"
+	// ActionEmailWhitelistDelete 删除邮箱白名单
+	ActionEmailWhitelistDelete = "email_whitelist_delete"
 )
 
 // ====================  数据结构 ====================
@@ -406,6 +413,70 @@ func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminID, 
 		AdminID: adminID,
 		Action:  ActionOAuthClientToggle,
 		Details: detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogEmailWhitelistCreate 记录创建邮箱白名单
+func (r *AdminLogRepository) LogEmailWhitelistCreate(ctx context.Context, adminID int64, entry *EmailWhitelist) error {
+	details := map[string]interface{}{
+		"id":     entry.ID,
+		"domain": entry.Domain,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID:  adminID,
+		Action:   ActionEmailWhitelistCreate,
+		TargetID: &entry.ID,
+		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogEmailWhitelistUpdate 记录更新邮箱白名单
+func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminID int64, entry *EmailWhitelist) error {
+	details := map[string]interface{}{
+		"id":         entry.ID,
+		"domain":     entry.Domain,
+		"signup_url": entry.SignupURL,
+		"is_enabled": entry.IsEnabled,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID:  adminID,
+		Action:   ActionEmailWhitelistUpdate,
+		TargetID: &entry.ID,
+		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogEmailWhitelistDelete 记录删除邮箱白名单
+func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminID int64, id int64) error {
+	details := map[string]interface{}{
+		"id": id,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminID:  adminID,
+		Action:   ActionEmailWhitelistDelete,
+		TargetID: &id,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
