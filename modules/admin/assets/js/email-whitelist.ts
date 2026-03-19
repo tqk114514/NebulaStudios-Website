@@ -1,11 +1,6 @@
 /**
  * modules/admin/assets/js/email-whitelist.ts
  * 管理后台邮箱白名单管理模块
- *
- * 功能：
- * - 邮箱白名单列表展示
- * - 白名单 CRUD 操作
- * - 启用/禁用切换
  */
 
 import {
@@ -18,7 +13,6 @@ import {
 
 // ==================== 类型定义 ====================
 
-/** 邮箱白名单条目 */
 export interface EmailWhitelistEntry {
   id: number;
   domain: string;
@@ -28,40 +22,16 @@ export interface EmailWhitelistEntry {
   updated_at: string;
 }
 
-/** 白名单列表响应 */
-interface WhitelistResponse {
-  whitelist: EmailWhitelistEntry[];
-}
-
-// ==================== DOM 元素 ====================
-
-const whitelistTableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
-
-// 弹窗元素
-const whitelistModal = document.getElementById('whitelist-modal') as HTMLElement | null;
-const whitelistModalTitle = document.getElementById('whitelist-modal-title') as HTMLElement | null;
-const whitelistModalBody = document.getElementById('whitelist-modal-body') as HTMLElement | null;
-const whitelistModalFooter = document.getElementById('whitelist-modal-footer') as HTMLElement | null;
-const whitelistModalClose = document.getElementById('whitelist-modal-close') as HTMLButtonElement | null;
-
-const whitelistFormModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
-const whitelistFormTitle = document.getElementById('whitelist-form-title') as HTMLElement | null;
-const whitelistForm = document.getElementById('whitelist-form') as HTMLFormElement | null;
-const whitelistDomainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
-const whitelistUrlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
-const whitelistFormCancel = document.getElementById('whitelist-form-cancel') as HTMLButtonElement | null;
-const whitelistFormSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
-const whitelistFormClose = document.getElementById('whitelist-form-close') as HTMLButtonElement | null;
-
 // ==================== 状态 ====================
 
+let currentEntries: EmailWhitelistEntry[] = [];
 let editingEntryId: number | null = null;
 
 // ==================== API ====================
 
 async function getWhitelist(): Promise<EmailWhitelistEntry[]> {
   try {
-    const result = await fetchApi<WhitelistResponse>('/admin/api/email-whitelist');
+    const result = await fetchApi<{ whitelist: EmailWhitelistEntry[] }>('/admin/api/email-whitelist');
     if (result.success && result.data) {
       return result.data.whitelist ?? [];
     }
@@ -136,16 +106,15 @@ async function toggleEntry(id: number, isEnabled: boolean): Promise<void> {
 // ==================== 渲染 ====================
 
 function renderWhitelist(entries: EmailWhitelistEntry[]): void {
-  console.log('[WHITELIST] renderWhitelist called, entries:', entries);
-  console.log('[WHITELIST] whitelistTableBody:', whitelistTableBody);
-  if (!whitelistTableBody) return;
+  const tableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
+  if (!tableBody) return;
 
   if (entries.length === 0) {
-    whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
     return;
   }
 
-  const html = entries.map(entry => `
+  tableBody.innerHTML = entries.map(entry => `
     <tr data-id="${entry.id}">
       <td>${escapeHtml(entry.domain)}</td>
       <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
@@ -165,34 +134,26 @@ function renderWhitelist(entries: EmailWhitelistEntry[]): void {
     </tr>
   `).join('');
 
-  console.log('[WHITELIST] Setting innerHTML, length:', entries.length);
-  whitelistTableBody.innerHTML = html;
-
-  bindTableEvents();
+  bindTableEvents(tableBody);
 }
 
-function bindTableEvents(): void {
-  if (!whitelistTableBody) return;
-
-  // 编辑
-  whitelistTableBody.querySelectorAll('.edit-btn').forEach(btn => {
+function bindTableEvents(tableBody: HTMLTableSectionElement): void {
+  tableBody.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number((btn as HTMLButtonElement).dataset.id);
-      const entry = getEntryById(id);
+      const entry = currentEntries.find(e => e.id === id);
       if (entry) openEditModal(entry);
     });
   });
 
-  // 删除
-  whitelistTableBody.querySelectorAll('.delete-btn').forEach(btn => {
+  tableBody.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number((btn as HTMLButtonElement).dataset.id);
       confirmDelete(id);
     });
   });
 
-  // 切换启用状态
-  whitelistTableBody.querySelectorAll('.toggle-btn').forEach(btn => {
+  tableBody.querySelectorAll('.toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number((btn as HTMLButtonElement).dataset.id);
       const enabled = (btn as HTMLButtonElement).dataset.enabled === 'true';
@@ -201,43 +162,54 @@ function bindTableEvents(): void {
   });
 }
 
-let currentEntries: EmailWhitelistEntry[] = [];
-
-function getEntryById(id: number): EmailWhitelistEntry | undefined {
-  return currentEntries.find(e => e.id === id);
-}
-
 // ==================== 弹窗操作 ====================
 
 function openCreateModal(): void {
+  const formTitle = document.getElementById('whitelist-form-title') as HTMLElement | null;
+  const formSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
+  const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
+  const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+  const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
+
   editingEntryId = null;
-  if (whitelistFormTitle) whitelistFormTitle.textContent = '添加白名单';
-  if (whitelistFormSubmit) whitelistFormSubmit.textContent = '添加';
-  if (whitelistDomainInput) whitelistDomainInput.value = '';
-  if (whitelistUrlInput) whitelistUrlInput.value = '';
-  if (whitelistFormModal) whitelistFormModal.classList.remove('is-hidden');
+  if (formTitle) formTitle.textContent = '添加白名单';
+  if (formSubmit) formSubmit.textContent = '添加';
+  if (domainInput) domainInput.value = '';
+  if (urlInput) urlInput.value = '';
+  if (formModal) formModal.classList.remove('is-hidden');
 }
 
 function openEditModal(entry: EmailWhitelistEntry): void {
+  const formTitle = document.getElementById('whitelist-form-title') as HTMLElement | null;
+  const formSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
+  const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
+  const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+  const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
+
   editingEntryId = entry.id;
-  if (whitelistFormTitle) whitelistFormTitle.textContent = '编辑白名单';
-  if (whitelistFormSubmit) whitelistFormSubmit.textContent = '保存';
-  if (whitelistDomainInput) whitelistDomainInput.value = entry.domain;
-  if (whitelistUrlInput) whitelistUrlInput.value = entry.signup_url;
-  if (whitelistFormModal) whitelistFormModal.classList.remove('is-hidden');
+  if (formTitle) formTitle.textContent = '编辑白名单';
+  if (formSubmit) formSubmit.textContent = '保存';
+  if (domainInput) domainInput.value = entry.domain;
+  if (urlInput) urlInput.value = entry.signup_url;
+  if (formModal) formModal.classList.remove('is-hidden');
 }
 
 function closeFormModal(): void {
+  const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
   editingEntryId = null;
-  if (whitelistFormModal) whitelistFormModal.classList.add('is-hidden');
+  if (formModal) formModal.classList.add('is-hidden');
 }
 
 async function handleSubmit(e: Event): Promise<void> {
   e.preventDefault();
-  if (!whitelistDomainInput || !whitelistUrlInput) return;
 
-  const domain = whitelistDomainInput.value.trim();
-  const signupUrl = whitelistUrlInput.value.trim();
+  const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
+  const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+
+  if (!domainInput || !urlInput) return;
+
+  const domain = domainInput.value.trim();
+  const signupUrl = urlInput.value.trim();
 
   if (!domain) {
     showToast('请输入域名', 'error');
@@ -251,7 +223,7 @@ async function handleSubmit(e: Event): Promise<void> {
 
   try {
     if (editingEntryId) {
-      const entry = getEntryById(editingEntryId);
+      const entry = currentEntries.find(e => e.id === editingEntryId);
       await updateEntry(editingEntryId, domain, signupUrl, entry?.is_enabled ?? true);
       showToast('更新成功', 'success');
     } else {
@@ -270,13 +242,13 @@ async function handleToggle(id: number, isEnabled: boolean): Promise<void> {
     await toggleEntry(id, isEnabled);
     showToast(isEnabled ? '已启用' : '已禁用', 'success');
     await loadWhitelist();
-  } catch (e) {
+  } catch {
     showToast('操作失败', 'error');
   }
 }
 
 async function confirmDelete(id: number): Promise<void> {
-  const entry = getEntryById(id);
+  const entry = currentEntries.find(e => e.id === id);
   if (!entry) return;
 
   showConfirm(
@@ -287,7 +259,7 @@ async function confirmDelete(id: number): Promise<void> {
         await deleteEntry(id);
         showToast('删除成功', 'success');
         await loadWhitelist();
-      } catch (e) {
+      } catch {
         showToast('删除失败', 'error');
       }
     }
@@ -303,26 +275,27 @@ async function loadWhitelist(): Promise<void> {
 }
 
 export function initWhitelistPage(): void {
-  // 绑定创建按钮
   const createBtn = document.getElementById('create-whitelist-btn');
+  const form = document.getElementById('whitelist-form') as HTMLFormElement | null;
+  const formCancel = document.getElementById('whitelist-form-cancel');
+  const formClose = document.getElementById('whitelist-form-close');
+
   if (createBtn) {
     createBtn.addEventListener('click', openCreateModal);
   }
 
-  // 绑定表单提交
-  if (whitelistForm) {
-    whitelistForm.addEventListener('submit', handleSubmit);
+  if (form) {
+    form.addEventListener('submit', handleSubmit);
   }
 
-  // 绑定取消按钮
-  if (whitelistFormCancel) {
-    whitelistFormCancel.addEventListener('click', closeFormModal);
-  }
-  if (whitelistFormClose) {
-    whitelistFormClose.addEventListener('click', closeFormModal);
+  if (formCancel) {
+    formCancel.addEventListener('click', closeFormModal);
   }
 
-  // 加载数据
+  if (formClose) {
+    formClose.addEventListener('click', closeFormModal);
+  }
+
   loadWhitelist();
 }
 
