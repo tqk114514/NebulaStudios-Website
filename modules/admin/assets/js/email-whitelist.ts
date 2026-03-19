@@ -59,16 +59,16 @@ let editingEntryId: number | null = null;
 
 // ==================== API ====================
 
-async function getWhitelist(): Promise<EmailWhitelistEntry[] | null> {
+async function getWhitelist(): Promise<EmailWhitelistEntry[]> {
   try {
     const result = await fetchApi<WhitelistResponse>('/admin/api/email-whitelist');
     if (result.success && result.data) {
-      return result.data.whitelist || [];
+      return result.data.whitelist ?? [];
     }
-    return null;
+    return [];
   } catch (e) {
     console.error('[WHITELIST] Failed to load whitelist:', e);
-    return null;
+    return [];
   }
 }
 
@@ -296,14 +296,8 @@ async function confirmDelete(id: number): Promise<void> {
 
 async function loadWhitelist(): Promise<void> {
   const entries = await getWhitelist();
-  if (entries !== null) {
-    currentEntries = entries;
-    renderWhitelist(entries);
-  } else {
-    if (whitelistTableBody) {
-      whitelistTableBody.innerHTML = '<tr><td colspan="5" class="error-cell">加载失败</td></tr>';
-    }
-  }
+  currentEntries = entries;
+  renderWhitelist(entries);
 }
 
 export function initWhitelistPage(): void {
