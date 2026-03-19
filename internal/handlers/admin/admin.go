@@ -964,7 +964,7 @@ func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	utils.RespondSuccess(c, gin.H{"whitelist": whitelist})
+	utils.RespondSuccessWithData(c, gin.H{"whitelist": whitelist})
 }
 
 // CreateEmailWhitelist 创建邮箱白名单条目
@@ -1022,7 +1022,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	}
 
 	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist created: operatorID=%d, domain=%s", operatorID, domain))
-	utils.RespondSuccess(c, gin.H{"item": item})
+	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
 // UpdateEmailWhitelist 更新邮箱白名单条目
@@ -1105,7 +1105,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	}
 
 	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist updated: operatorID=%d, id=%d", operatorID, id))
-	utils.RespondSuccess(c, gin.H{"item": item})
+	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
 // DeleteEmailWhitelist 删除邮箱白名单条目
