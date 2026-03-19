@@ -209,6 +209,18 @@ func getTableSchemas() []TableSchema {
 				{"user_id", "client_id"},
 			},
 		},
+		// email_whitelist 表
+		{
+			Name: "email_whitelist",
+			Columns: []ColumnDefinition{
+				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimary: true},
+				{Name: "domain", Type: "VARCHAR(255)", Nullable: false, IsUnique: true},
+				{Name: "signup_url", Type: "TEXT", Nullable: false},
+				{Name: "is_enabled", Type: "BOOLEAN", Nullable: false, Default: "true"},
+				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
+				{Name: "updated_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
+			},
+		},
 	}
 }
 
