@@ -9,6 +9,7 @@ import {
   showConfirm,
   formatDate,
   escapeHtml,
+  renderPagination
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -22,23 +23,38 @@ export interface EmailWhitelistEntry {
   updated_at: string;
 }
 
+interface EmailWhitelistListResponse {
+  whitelist: EmailWhitelistEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // ==================== 状态 ====================
 
+let currentPage = 1;
 let currentEntries: EmailWhitelistEntry[] = [];
 let editingEntryId: number | null = null;
 
+// ==================== DOM 元素 ====================
+
+const whitelistTableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
+const whitelistPagination = document.getElementById('whitelist-pagination') as HTMLElement | null;
+
 // ==================== API ====================
 
-async function getWhitelist(): Promise<EmailWhitelistEntry[]> {
+async function getWhitelist(page: number): Promise<EmailWhitelistListResponse | null> {
   try {
-    const result = await fetchApi<{ whitelist: EmailWhitelistEntry[], total: number, page: number, pageSize: number, totalPages: number }>('/admin/api/email-whitelist');
+    const params = new URLSearchParams({ page: String(page), pageSize: '20' });
+    const result = await fetchApi<EmailWhitelistListResponse>(`/admin/api/email-whitelist?${params}`);
     if (result.success && result.data) {
-      return result.data.whitelist ?? [];
+      return result.data;
     }
-    return [];
+    return null;
   } catch (e) {
     console.error('[WHITELIST] Failed to load whitelist:', e);
-    return [];
+    return null;
   }
 }
 
@@ -105,12 +121,15 @@ async function toggleEntry(id: number, isEnabled: boolean): Promise<void> {
 
 // ==================== 渲染 ====================
 
-function renderWhitelist(entries: EmailWhitelistEntry[]): void {
+function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: number, totalPages: number): void {
   const tableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
   if (!tableBody) return;
 
   if (entries.length === 0) {
     tableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
+    if (whitelistPagination) {
+      whitelistPagination.innerHTML = '';
+    }
     return;
   }
 
@@ -135,6 +154,18 @@ function renderWhitelist(entries: EmailWhitelistEntry[]): void {
   `).join('');
 
   bindTableEvents(tableBody);
+
+  if (whitelistPagination) {
+    renderPagination({
+      container: whitelistPagination,
+      current: page,
+      total: totalPages,
+      onPageChange: (newPage) => {
+        currentPage = newPage;
+        loadWhitelist();
+      }
+    });
+  }
 }
 
 function bindTableEvents(tableBody: HTMLTableSectionElement): void {
@@ -269,9 +300,23 @@ async function confirmDelete(id: number): Promise<void> {
 // ==================== 初始化 ====================
 
 async function loadWhitelist(): Promise<void> {
-  const entries = await getWhitelist();
-  currentEntries = entries;
-  renderWhitelist(entries);
+  console.log('[ADMIN][WHITELIST] loadWhitelist called');
+
+  if (!whitelistTableBody) {
+    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found');
+    return;
+  }
+
+  whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
+
+  const data = await getWhitelist(currentPage);
+  if (!data) {
+    whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
+    return;
+  }
+
+  currentEntries = data.whitelist;
+  renderWhitelist(data.whitelist, data.total, data.page, data.totalPages);
 }
 
 export function initWhitelistPage(): void {
