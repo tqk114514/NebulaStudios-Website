@@ -37,6 +37,7 @@ import (
 	"auth-system/internal/handlers/auth"
 	"auth-system/internal/handlers/oauth"
 	msauth "auth-system/internal/handlers/oauth/microsoft"
+	"auth-system/internal/handlers/qrlogin"
 	"auth-system/internal/middleware"
 	adminmw "auth-system/internal/middleware/admin"
 	"auth-system/internal/models"
@@ -293,7 +294,7 @@ type Handlers struct {
 	userHandler          *handlers.UserHandler
 	microsoftHandler     *msauth.MicrosoftHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
-	qrLoginHandler       *handlers.QRLoginHandler
+	qrLoginHandler       *qrlogin.QRLoginHandler
 	staticHandler        *handlers.StaticHandler
 	adminHandler         *admin.AdminHandler
 }
@@ -363,7 +364,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 
 	// QR Login Handler
-	hdlrs.qrLoginHandler, err = handlers.NewQRLoginHandler(
+	hdlrs.qrLoginHandler, err = qrlogin.NewQRLoginHandler(
 		svcs.sessionService,
 		svcs.wsService,
 		svcs.qrLoginRepo,
