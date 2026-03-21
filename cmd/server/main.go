@@ -38,6 +38,7 @@ import (
 	"auth-system/internal/handlers/oauth"
 	msauth "auth-system/internal/handlers/oauth/microsoft"
 	"auth-system/internal/handlers/qrlogin"
+	userhandler "auth-system/internal/handlers/user"
 	"auth-system/internal/middleware"
 	adminmw "auth-system/internal/middleware/admin"
 	"auth-system/internal/models"
@@ -291,7 +292,7 @@ func initServices(cfg *config.Config) (*Services, error) {
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
 	authHandler          *auth.AuthHandler
-	userHandler          *handlers.UserHandler
+	userHandler          *userhandler.UserHandler
 	microsoftHandler     *msauth.MicrosoftHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
 	qrLoginHandler       *qrlogin.QRLoginHandler
@@ -323,7 +324,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "AuthHandler initialized")
 
 	// User Handler
-	hdlrs.userHandler, err = handlers.NewUserHandler(
+	hdlrs.userHandler, err = userhandler.NewUserHandler(
 		svcs.userRepo,
 		svcs.userLogRepo,
 		svcs.tokenService,
