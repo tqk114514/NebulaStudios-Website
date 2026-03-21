@@ -257,13 +257,26 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
+
+	if h.emailWhitelistRepo != nil {
+		domain := strings.Split(emailResult.Value, "@")[1]
+		isAllowed, _, err := h.emailWhitelistRepo.IsDomainAllowed(ctx, domain)
+		if err != nil {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "WHITELIST_CHECK_FAILED", fmt.Sprintf("Failed to check email whitelist: %v", err))
+			return
+		}
+		if !isAllowed {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, "EMAIL_DOMAIN_NOT_ALLOWED", fmt.Sprintf("Email domain %s is not in whitelist", domain))
+			return
+		}
+	}
+
 	passwordResult := utils.ValidatePassword(req.Password)
 	if !passwordResult.Valid {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, passwordResult.ErrorCode, "Password validation failed")
 		return
 	}
-
-	ctx := c.Request.Context()
 
 	code := strings.TrimSpace(req.VerificationCode)
 	if code == "" {
