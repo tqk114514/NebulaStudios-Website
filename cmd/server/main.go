@@ -35,6 +35,7 @@ import (
 	"auth-system/internal/handlers"
 	"auth-system/internal/handlers/admin"
 	"auth-system/internal/handlers/oauth"
+	msauth "auth-system/internal/handlers/oauth/microsoft"
 	"auth-system/internal/middleware"
 	adminmw "auth-system/internal/middleware/admin"
 	"auth-system/internal/models"
@@ -289,7 +290,7 @@ func initServices(cfg *config.Config) (*Services, error) {
 type Handlers struct {
 	authHandler          *handlers.AuthHandler
 	userHandler          *handlers.UserHandler
-	microsoftHandler     *oauth.MicrosoftHandler
+	microsoftHandler     *msauth.MicrosoftHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
 	qrLoginHandler       *handlers.QRLoginHandler
 	staticHandler        *handlers.StaticHandler
@@ -337,7 +338,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "UserHandler initialized")
 
 	// OAuth Handler
-	hdlrs.microsoftHandler, err = oauth.NewMicrosoftHandler(
+	hdlrs.microsoftHandler, err = msauth.NewMicrosoftHandler(
 		svcs.userRepo,
 		svcs.userLogRepo,
 		svcs.sessionService,
