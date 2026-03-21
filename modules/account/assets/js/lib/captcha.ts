@@ -24,6 +24,11 @@ interface CaptchaProvider {
 }
 
 /** 验证码配置响应 */
+interface CaptchaConfigResponse {
+  success: boolean;
+  data?: CaptchaConfig;
+}
+
 interface CaptchaConfig {
   providers: CaptchaProvider[];
 }
@@ -103,12 +108,12 @@ export async function loadCaptchaConfig(): Promise<boolean> {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    const config: CaptchaConfig = await response.json();
-    if (!config || !config.providers || config.providers.length === 0) {
+    const result: CaptchaConfigResponse = await response.json();
+    if (!result.success || !result.data || !result.data.providers || result.data.providers.length === 0) {
       throw new Error('Invalid config: no providers available');
     }
 
-    providers = config.providers;
+    providers = result.data.providers;
 
     const selected = providers[Math.floor(Math.random() * providers.length)];
     captchaType = selected.type;
