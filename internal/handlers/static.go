@@ -128,7 +128,9 @@ func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService 
 // GET /api/config/captcha
 //
 // 响应：
-//   - providers: 可用验证器列表 [{type, siteKey}, ...]
+//   - success: 是否成功
+//   - data: 包含 providers 字段
+//   - data.providers: 可用验证器列表 [{type, siteKey}, ...]
 func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	if h.captchaService == nil {
 		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "CONFIG_NOT_LOADED", "CaptchaService is nil in GetCaptchaConfig")
@@ -140,7 +142,7 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 		utils.LogWarn("STATIC", "No captcha providers configured", "")
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	utils.RespondSuccessWithData(c, gin.H{
 		"providers": providers,
 	})
 }
