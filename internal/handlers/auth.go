@@ -188,18 +188,20 @@ func (h *AuthHandler) getLanguage(language string) string {
 // GET /api/email-whitelist
 //
 // 响应：
-//   - domains: 允许的邮箱域名列表（key: 域名, value: 注册页面 URL）
+//   - success: 是否成功
+//   - data: 包含 domains 字段
+//   - data.domains: 允许的邮箱域名列表（key: 域名, value: 注册页面 URL）
 //
 // 注意：此接口无需认证，因为注册页需要加载此信息
 func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		c.JSON(http.StatusOK, gin.H{"domains": gin.H{}})
+		utils.RespondSuccessWithData(c, gin.H{"domains": gin.H{}})
 		return
 	}
 
 	entries, err := h.emailWhitelistRepo.FindAll(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"domains": gin.H{}})
+		utils.RespondSuccessWithData(c, gin.H{"domains": gin.H{}})
 		return
 	}
 
@@ -210,7 +212,7 @@ func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"domains": domains})
+	utils.RespondSuccessWithData(c, gin.H{"domains": domains})
 }
 
 // ==================== 验证码相关 Handler ====================
