@@ -34,6 +34,7 @@ import (
 	"auth-system/internal/config"
 	"auth-system/internal/handlers"
 	"auth-system/internal/handlers/admin"
+	"auth-system/internal/handlers/auth"
 	"auth-system/internal/handlers/oauth"
 	msauth "auth-system/internal/handlers/oauth/microsoft"
 	"auth-system/internal/middleware"
@@ -288,7 +289,7 @@ func initServices(cfg *config.Config) (*Services, error) {
 
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
-	authHandler          *handlers.AuthHandler
+	authHandler          *auth.AuthHandler
 	userHandler          *handlers.UserHandler
 	microsoftHandler     *msauth.MicrosoftHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
@@ -305,7 +306,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	var err error
 
 	// Auth Handler
-	hdlrs.authHandler, err = handlers.NewAuthHandler(
+	hdlrs.authHandler, err = auth.NewAuthHandler(
 		svcs.userRepo,
 		svcs.userLogRepo,
 		svcs.tokenService,
