@@ -13,6 +13,7 @@
 package models
 
 import (
+	"auth-system/internal/utils"
 	"context"
 	"database/sql"
 	"errors"
@@ -313,6 +314,53 @@ func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isE
 
 	if result.RowsAffected() == 0 {
 		return ErrEmailWhitelistNotFound
+	}
+
+	return nil
+}
+
+// ====================  初始化方法 ====================
+
+// InitDefaultWhitelist 初始化默认邮箱白名单
+// 如果白名单为空，自动添加 outlook.com 和 gmail.com
+func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context) error {
+	if pool == nil {
+		return ErrDBNotInitialized
+	}
+
+	// 检查白名单是否为空
+	var count int64
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to count email whitelist: %w", err)
+	}
+
+	if count > 0 {
+		utils.LogInfo("DATABASE", "Email whitelist already initialized")
+		return nil
+	}
+
+	// 白名单为空，添加默认域名
+	utils.LogInfo("DATABASE", "Email whitelist is empty, adding default domains")
+
+	defaultDomains := []struct {
+		domain    string
+		signupURL string
+	}{
+		{"outlook.com", "https://signup.live.com/"},
+		{"gmail.com", "https://accounts.google.com/signup"},
+	}
+
+	for _, d := range defaultDomains {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO email_whitelist (domain, signup_url, is_enabled)
+			VALUES ($1, $2, true)
+		`, d.domain, d.signupURL)
+		if err != nil {
+			utils.LogWarn("DATABASE", "Failed to add default domain", fmt.Sprintf("domain=%s", d.domain))
+		} else {
+			utils.LogInfo("DATABASE", "Added default domain to whitelist", fmt.Sprintf("domain=%s", d.domain))
+		}
 	}
 
 	return nil

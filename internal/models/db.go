@@ -276,6 +276,13 @@ func initTables(ctx context.Context) error {
 		return fmt.Errorf("auto-migration failed: %w", err)
 	}
 
+	// 初始化邮箱白名单
+	whitelistRepo := NewEmailWhitelistRepository()
+	if err := whitelistRepo.InitDefaultWhitelist(ctx); err != nil {
+		utils.LogError("DATABASE", "initTables", err, "Failed to initialize email whitelist")
+		return fmt.Errorf("init email whitelist failed: %w", err)
+	}
+
 	utils.LogInfo("DATABASE", "Tables initialized successfully")
 	return nil
 }
