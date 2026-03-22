@@ -229,6 +229,10 @@
   "dashboard.unbanAt": "解封時間",
   "dashboard.permanentBan": "永久封禁",
   "dashboard.bannedInfo": "帳戶狀態",
+  "dashboard.banReason.violation": "違反服務條款",
+  "dashboard.banReason.abuse": "濫用服務",
+  "dashboard.banReason.malicious": "惡意行為",
+  "dashboard.banReason.spam": "垃圾訊息",
 
   "linkConfirm.title": "確認綁定帳戶",
   "linkConfirm.subtitle": "檢測到您的微軟帳戶郵箱與已有帳戶相同",

@@ -229,6 +229,10 @@
   "dashboard.unbanAt": "解封时间",
   "dashboard.permanentBan": "永久封禁",
   "dashboard.bannedInfo": "账户状态",
+  "dashboard.banReason.violation": "违反服务条款",
+  "dashboard.banReason.abuse": "滥用服务",
+  "dashboard.banReason.malicious": "恶意行为",
+  "dashboard.banReason.spam": "垃圾信息",
 
   "linkConfirm.title": "确认绑定账户",
   "linkConfirm.subtitle": "检测到您的微软账户邮箱与已有账户相同",

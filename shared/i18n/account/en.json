@@ -229,6 +229,10 @@
   "dashboard.unbanAt": "Unban At",
   "dashboard.permanentBan": "Permanent",
   "dashboard.bannedInfo": "Account Status",
+  "dashboard.banReason.violation": "Violation of Terms of Service",
+  "dashboard.banReason.abuse": "Service Abuse",
+  "dashboard.banReason.malicious": "Malicious Behavior",
+  "dashboard.banReason.spam": "Spam",
 
   "linkConfirm.title": "Confirm Account Link",
   "linkConfirm.subtitle": "Your Microsoft account email matches an existing account",

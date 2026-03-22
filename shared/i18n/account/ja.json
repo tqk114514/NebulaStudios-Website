@@ -229,6 +229,10 @@
   "dashboard.unbanAt": "解除日時",
   "dashboard.permanentBan": "永久停止",
   "dashboard.bannedInfo": "アカウント状態",
+  "dashboard.banReason.violation": "利用規約違反",
+  "dashboard.banReason.abuse": "サービス乱用",
+  "dashboard.banReason.malicious": "悪質な行動",
+  "dashboard.banReason.spam": "スパム",
 
   "linkConfirm.title": "アカウント連携確認",
   "linkConfirm.subtitle": "Microsoftアカウントのメールが既存のアカウントと一致しています",

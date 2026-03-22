@@ -229,6 +229,10 @@
   "dashboard.unbanAt": "해제 일시",
   "dashboard.permanentBan": "영구 정지",
   "dashboard.bannedInfo": "계정 상태",
+  "dashboard.banReason.violation": "서비스 약관 위반",
+  "dashboard.banReason.abuse": "서비스 남용",
+  "dashboard.banReason.malicious": "악의적인 행동",
+  "dashboard.banReason.spam": "스팸",
 
   "linkConfirm.title": "계정 연결 확인",
   "linkConfirm.subtitle": "Microsoft 계정 이메일이 기존 계정과 일치합니다",
