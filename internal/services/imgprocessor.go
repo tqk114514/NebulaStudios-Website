@@ -98,7 +98,7 @@ func (p *ImgProcessor) startProcessor() {
 	}
 
 	// 等待 socket 就绪
-	for i := 0; i < 50; i++ { // 最多等 5 秒
+	for range 50 { // 最多等 5 秒
 		time.Sleep(100 * time.Millisecond)
 		if _, err := os.Stat(SocketPath); err == nil {
 			p.available = true

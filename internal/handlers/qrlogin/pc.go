@@ -75,7 +75,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
+	payload, err := json.Marshal(map[string]any{
 		"t":  token,
 		"ts": now,
 	})
@@ -190,7 +190,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	userID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, originalToken, sessionToken)
+	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, originalToken, sessionToken)
 	if err != nil {
 		errStr := err.Error()
 		switch {
@@ -214,13 +214,13 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	if claims == nil || claims.UserID <= 0 || claims.UserID != userID {
+	if claims == nil || claims.UID == "" || claims.UID != userUID {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid claims in SetSession")
 		return
 	}
 
 	utils.SetTokenCookieGin(c, sessionToken)
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Session cookie set for PC: userID=%d", claims.UserID))
+	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Session cookie set for PC: userUID=%s", claims.UID))
 	utils.RespondSuccess(c, gin.H{})
 }

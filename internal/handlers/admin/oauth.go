@@ -135,7 +135,7 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
 	var req createOAuthClientRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -152,12 +152,12 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorID, client.ID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorUID, client.ID, client.ClientID, client.Name); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log create OAuth client", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client created: operatorID=%d, clientID=%s, name=%s",
-		operatorID, client.ClientID, client.Name))
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client created: operatorUID=%s, clientID=%s, name=%s",
+		operatorUID, client.ClientID, client.Name))
 
 	utils.RespondSuccess(c, gin.H{
 		"client":        client,
@@ -175,7 +175,7 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
@@ -204,11 +204,11 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log update OAuth client", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client updated: operatorID=%d, clientID=%s", operatorID, client.ClientID))
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client updated: operatorUID=%s, clientID=%s", operatorUID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client updated"})
 }
@@ -223,7 +223,7 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
@@ -246,12 +246,12 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log delete OAuth client", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client deleted: operatorID=%d, clientID=%s, name=%s",
-		operatorID, client.ClientID, client.Name))
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client deleted: operatorUID=%s, clientID=%s, name=%s",
+		operatorUID, client.ClientID, client.Name))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client deleted"})
 }
@@ -266,7 +266,7 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
@@ -289,11 +289,11 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorID, clientID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log regenerate OAuth client secret", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client secret regenerated: operatorID=%d, clientID=%s", operatorID, client.ClientID))
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client secret regenerated: operatorUID=%s, clientID=%s", operatorUID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"client_secret": newSecret})
 }
@@ -308,7 +308,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
@@ -337,7 +337,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
+	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorUID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log toggle OAuth client", err.Error())
 	}
 
@@ -345,7 +345,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 	if req.Enabled {
 		status = "enabled"
 	}
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client %s: operatorID=%d, clientID=%s", status, operatorID, client.ClientID))
+	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client %s: operatorUID=%s, clientID=%s", status, operatorUID, client.ClientID))
 
 	utils.RespondSuccess(c, gin.H{"message": "Client " + status})
 }

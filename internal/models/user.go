@@ -68,20 +68,21 @@ var allowedUpdateFields = map[string]bool{
 // User 用户模型
 type User struct {
 	ID                  int64          `json:"id"`
+	UID                 string         `json:"uid"`
 	Username            string         `json:"username"`
 	Email               string         `json:"email"`
 	Password            string         `json:"-"` // 不序列化到 JSON
 	AvatarURL           string         `json:"avatar_url"`
 	Role                int            `json:"role"` // 0: user, 1: admin, 2: super_admin
-	MicrosoftID         sql.NullString `json:"microsoft_id,omitempty"`
-	MicrosoftName       sql.NullString `json:"microsoft_name,omitempty"`
-	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url,omitempty"`
-	MicrosoftAvatarHash sql.NullString `json:"-"`              // 头像哈希，用于判断是否需要更新
-	IsBanned            bool           `json:"is_banned"`      // 是否被封禁
-	BanReason           sql.NullString `json:"ban_reason"`     // 封禁原因
-	BannedAt            sql.NullTime   `json:"banned_at"`      // 封禁时间
-	BannedBy            sql.NullInt64  `json:"banned_by"`      // 封禁操作者 ID
-	UnbanAt             sql.NullTime   `json:"unban_at"`       // 解封时间（NULL 表示永封）
+	MicrosoftID         sql.NullString `json:"microsoft_id"`
+	MicrosoftName       sql.NullString `json:"microsoft_name"`
+	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url"`
+	MicrosoftAvatarHash sql.NullString `json:"-"`          // 头像哈希，用于判断是否需要更新
+	IsBanned            bool           `json:"is_banned"`  // 是否被封禁
+	BanReason           sql.NullString `json:"ban_reason"` // 封禁原因
+	BannedAt            sql.NullTime   `json:"banned_at"`  // 封禁时间
+	BannedBy            sql.NullString `json:"banned_by"`  // 封禁操作者 UID
+	UnbanAt             sql.NullTime   `json:"unban_at"`   // 解封时间（NULL 表示永封）
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
 }
@@ -89,6 +90,7 @@ type User struct {
 // UserPublic 公开的用户信息（不含敏感数据）
 type UserPublic struct {
 	ID                 int64      `json:"id"`
+	UID                string     `json:"uid"`
 	Username           string     `json:"username"`
 	Email              string     `json:"email"`
 	AvatarURL          string     `json:"avatar_url"`
@@ -124,6 +126,7 @@ func (u *User) ToPublic() *UserPublic {
 
 	pub := &UserPublic{
 		ID:        u.ID,
+		UID:       u.UID,
 		Username:  u.Username,
 		Email:     u.Email,
 		AvatarURL: avatarURL,
@@ -239,13 +242,13 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, role,
+		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -253,6 +256,44 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 
 	if err != nil {
 		return nil, utils.HandleDatabaseError("USER", "FindByID", err, id)
+	}
+
+	return user, nil
+}
+
+// FindByUID 根据 UID 查找用户
+// 参数：
+//   - ctx: 上下文
+//   - uid: 用户 UID
+//
+// 返回：
+//   - *User: 用户对象
+//   - error: 错误信息
+func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, error) {
+	if uid == "" {
+		return nil, errors.New("invalid user UID")
+	}
+
+	if pool == nil {
+		return nil, errors.New("database not ready")
+	}
+
+	user := &User{}
+	err := pool.QueryRow(ctx, `
+		SELECT id, uid, username, email, password, avatar_url, role,
+		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       is_banned, ban_reason, banned_at, banned_by, unban_at,
+		       created_at, updated_at
+		FROM users WHERE uid = $1
+	`, uid).Scan(
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, utils.HandleDatabaseError("USER", "FindByUID", err, uid)
 	}
 
 	return user, nil
@@ -279,14 +320,14 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, role,
+		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE email = $1 OR username = $1
 		LIMIT 1
 	`, identifier).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -445,12 +486,21 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		user.Role = RoleUser
 	}
 
+	// 生成 UID
+	if user.UID == "" {
+		var err error
+		user.UID, err = utils.GenerateUID()
+		if err != nil {
+			return utils.LogError("USER", "Create", err, "Failed to generate UID")
+		}
+	}
+
 	// 执行插入
 	err := pool.QueryRow(ctx, `
-		INSERT INTO users (username, email, password, avatar_url, microsoft_id, role)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (uid, username, email, password, avatar_url, microsoft_id, role)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
-	`, user.Username, user.Email, user.Password, user.AvatarURL, user.MicrosoftID, user.Role).Scan(
+	`, user.UID, user.Username, user.Email, user.Password, user.AvatarURL, user.MicrosoftID, user.Role).Scan(
 		&user.ID, &user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -465,18 +515,18 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 // Update 更新用户
 // 参数：
 //   - ctx: 上下文
-//   - id: 用户 ID
+//   - uid: 用户 UID
 //   - updates: 要更新的字段映射
 //
 // 返回：
 //   - error: 错误信息
-func (r *UserRepository) Update(ctx context.Context, id int64, updates map[string]interface{}) error {
-	if id <= 0 {
-		return errors.New("invalid user ID")
+func (r *UserRepository) Update(ctx context.Context, uid string, updates map[string]any) error {
+	if uid == "" {
+		return errors.New("invalid user UID")
 	}
 
 	if len(updates) == 0 {
-		utils.LogWarn("USER", fmt.Sprintf("Update called with empty updates: id=%d", id))
+		utils.LogWarn("USER", fmt.Sprintf("Update called with empty updates: uid=%s", uid))
 		return nil
 	}
 
@@ -489,7 +539,7 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 	}
 
 	// 构建动态 SQL（使用白名单验证字段）
-	query, args, err := r.buildUpdateQuery(id, updates)
+	query, args, err := r.buildUpdateQuery(uid, updates)
 	if err != nil {
 		return err
 	}
@@ -497,43 +547,43 @@ func (r *UserRepository) Update(ctx context.Context, id int64, updates map[strin
 	// 执行更新
 	result, err := pool.Exec(ctx, query, args...)
 	if err != nil {
-		return r.handleWriteError(err, "Update", id)
+		return r.handleWriteError(err, "Update", uid)
 	}
 
 	if result.RowsAffected() == 0 {
-		return utils.HandleDatabaseError("USER", "Update", errors.New("no rows affected"), id)
+		return utils.HandleDatabaseError("USER", "Update", errors.New("no rows affected"), uid)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User updated: id=%d, fields=%d", id, len(updates)))
+	utils.LogInfo("USER", fmt.Sprintf("User updated: uid=%s, fields=%d", uid, len(updates)))
 	return nil
 }
 
 // Delete 删除用户
 // 参数：
 //   - ctx: 上下文
-//   - id: 用户 ID
+//   - uid: 用户 UID
 //
 // 返回：
 //   - error: 错误信息
-func (r *UserRepository) Delete(ctx context.Context, id int64) error {
-	if id <= 0 {
-		return errors.New("invalid user ID")
+func (r *UserRepository) Delete(ctx context.Context, uid string) error {
+	if uid == "" {
+		return errors.New("invalid user UID")
 	}
 
 	if pool == nil {
 		return errors.New("database not ready")
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
+	result, err := pool.Exec(ctx, "DELETE FROM users WHERE uid = $1", uid)
 	if err != nil {
-		return utils.LogError("USER", "Delete", err, fmt.Sprintf("id=%d", id))
+		return utils.LogError("USER", "Delete", err, fmt.Sprintf("uid=%s", uid))
 	}
 
 	if result.RowsAffected() == 0 {
-		return utils.HandleDatabaseError("USER", "Delete", errors.New("no rows affected"), id)
+		return utils.HandleDatabaseError("USER", "Delete", errors.New("no rows affected"), uid)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User deleted: id=%d", id))
+	utils.LogInfo("USER", fmt.Sprintf("User deleted: uid=%s", uid))
 	return nil
 }
 
@@ -547,7 +597,7 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 //
 // 返回：
 //   - error: 处理后的错误
-func (r *UserRepository) handleWriteError(err error, operation string, identifier interface{}) error {
+func (r *UserRepository) handleWriteError(err error, operation string, identifier any) error {
 	errStr := err.Error()
 
 	// 检查唯一约束冲突
@@ -567,16 +617,16 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 
 // buildUpdateQuery 构建更新 SQL 查询
 // 参数：
-//   - id: 用户 ID
+//   - uid: 用户 UID
 //   - updates: 要更新的字段映射
 //
 // 返回：
 //   - string: SQL 查询
 //   - []interface{}: 参数列表
 //   - error: 错误信息
-func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface{}) (string, []interface{}, error) {
+func (r *UserRepository) buildUpdateQuery(uid string, updates map[string]any) (string, []any, error) {
 	var setClauses []string
-	args := make([]interface{}, 0, len(updates)+1)
+	args := make([]any, 0, len(updates)+1)
 	argIndex := 1
 
 	for key, value := range updates {
@@ -597,11 +647,11 @@ func (r *UserRepository) buildUpdateQuery(id int64, updates map[string]interface
 
 	// 添加 updated_at
 	query := fmt.Sprintf(
-		"UPDATE users SET updated_at = CURRENT_TIMESTAMP, %s WHERE id = $%d",
+		"UPDATE users SET updated_at = CURRENT_TIMESTAMP, %s WHERE uid = $%d",
 		strings.Join(setClauses, ", "),
 		argIndex,
 	)
-	args = append(args, id)
+	args = append(args, uid)
 
 	return query, args, nil
 }
@@ -687,7 +737,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	users := make([]*User, 0)
 	pgxRows := rows.(interface {
 		Next() bool
-		Scan(dest ...interface{}) error
+		Scan(dest ...any) error
 	})
 
 	for pgxRows.Next() {
@@ -756,23 +806,22 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	return stats, nil
 }
 
-
 // Ban 封禁用户
 // 参数：
 //   - ctx: 上下文
-//   - userID: 被封禁用户 ID
-//   - adminID: 操作管理员 ID
+//   - userUID: 被封禁用户 UID
+//   - adminUID: 操作管理员 UID
 //   - reason: 封禁原因
 //   - unbanAt: 解封时间（nil 表示永久封禁）
 //
 // 返回：
 //   - error: 错误信息
-func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason string, unbanAt *time.Time) error {
-	if userID <= 0 {
-		return errors.New("invalid user ID")
+func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reason string, unbanAt *time.Time) error {
+	if userUID == "" {
+		return errors.New("invalid user UID")
 	}
-	if adminID <= 0 {
-		return errors.New("invalid admin ID")
+	if adminUID == "" {
+		return errors.New("invalid admin UID")
 	}
 
 	if pool == nil {
@@ -788,31 +837,31 @@ func (r *UserRepository) Ban(ctx context.Context, userID, adminID int64, reason 
 			banned_by = $2,
 			unban_at = $3,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $4
-	`, reason, adminID, unbanAt, userID)
+		WHERE uid = $4
+	`, reason, adminUID, unbanAt, userUID)
 
 	if err != nil {
-		return utils.LogError("USER", "Ban", err, fmt.Sprintf("userID=%d", userID))
+		return utils.LogError("USER", "Ban", err, fmt.Sprintf("userUID=%s", userUID))
 	}
 
 	if result.RowsAffected() == 0 {
-		return utils.HandleDatabaseError("USER", "Ban", errors.New("no rows affected"), userID)
+		return utils.HandleDatabaseError("USER", "Ban", errors.New("no rows affected"), userUID)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User banned: id=%d, admin_id=%d, reason=%s", userID, adminID, reason))
+	utils.LogInfo("USER", fmt.Sprintf("User banned: uid=%s, admin_uid=%s, reason=%s", userUID, adminUID, reason))
 	return nil
 }
 
 // Unban 解封用户
 // 参数：
 //   - ctx: 上下文
-//   - userID: 被解封用户 ID
+//   - userUID: 被解封用户 UID
 //
 // 返回：
 //   - error: 错误信息
-func (r *UserRepository) Unban(ctx context.Context, userID int64) error {
-	if userID <= 0 {
-		return errors.New("invalid user ID")
+func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
+	if userUID == "" {
+		return errors.New("invalid user UID")
 	}
 
 	if pool == nil {
@@ -828,17 +877,17 @@ func (r *UserRepository) Unban(ctx context.Context, userID int64) error {
 			banned_by = NULL,
 			unban_at = NULL,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1
-	`, userID)
+		WHERE uid = $1
+	`, userUID)
 
 	if err != nil {
-		return utils.LogError("USER", "Unban", err, fmt.Sprintf("userID=%d", userID))
+		return utils.LogError("USER", "Unban", err, fmt.Sprintf("userUID=%s", userUID))
 	}
 
 	if result.RowsAffected() == 0 {
-		return utils.HandleDatabaseError("USER", "Unban", errors.New("no rows affected"), userID)
+		return utils.HandleDatabaseError("USER", "Unban", errors.New("no rows affected"), userUID)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User unbanned: id=%d", userID))
+	utils.LogInfo("USER", fmt.Sprintf("User unbanned: uid=%s", userUID))
 	return nil
 }

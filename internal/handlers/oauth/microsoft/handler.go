@@ -189,7 +189,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 			return
 		}
 
-		if claims == nil || claims.UserID <= 0 {
+		if claims == nil || claims.UID == "" {
 			utils.LogWarn("OAUTH-MS", "Link action but invalid claims", "")
 			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
 			return
@@ -197,20 +197,20 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 		defer cancel()
-		user, err := h.userCache.GetOrLoad(ctx, claims.UserID, h.userRepo.FindByID)
+		user, err := h.userCache.GetOrLoad(ctx, claims.UID, h.userRepo.FindByUID)
 		if err != nil {
-			utils.LogError("OAUTH-MS", "Auth", err, fmt.Sprintf("Failed to get user for ban check: userID=%d", claims.UserID))
+			utils.LogError("OAUTH-MS", "Auth", err, fmt.Sprintf("Failed to get user for ban check: userUID=%s", claims.UID))
 			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "oauth_error")
 			return
 		}
 		if user.CheckBanned() {
-			utils.LogWarn("OAUTH-MS", "Banned user attempted to link Microsoft", fmt.Sprintf("userID=%d", claims.UserID))
+			utils.LogWarn("OAUTH-MS", "Banned user attempted to link Microsoft", fmt.Sprintf("userUID=%s", claims.UID))
 			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "user_banned")
 			return
 		}
 
-		stateData.UserID = claims.UserID
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Link action initiated: userID=%d", claims.UserID))
+		stateData.UserUID = claims.UID
+		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Link action initiated: userUID=%s", claims.UID))
 	}
 
 	oauth.SaveState(state, stateData)
@@ -286,11 +286,11 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	}
 
 	action := stateData.Action
-	currentUserID := stateData.UserID
+	currentUserUID := stateData.UserUID
 	codeVerifier := stateData.CodeVerifier
 
-	if action == oauth.ActionLink && currentUserID <= 0 {
-		utils.LogWarn("OAUTH-MS", "Link action but no valid userID in state", "")
+	if action == oauth.ActionLink && currentUserUID == "" {
+		utils.LogWarn("OAUTH-MS", "Link action but no valid userUID in state", "")
 		oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
 		return
 	}
@@ -343,8 +343,8 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 
 	ctx := context.Background()
 
-	if action == oauth.ActionLink && currentUserID > 0 {
-		h.handleLinkAction(c, ctx, currentUserID, microsoftID, displayName, avatarData, avatarContentType)
+	if action == oauth.ActionLink && currentUserUID != "" {
+		h.handleLinkAction(c, ctx, currentUserUID, microsoftID, displayName, avatarData, avatarContentType)
 		return
 	}
 
@@ -366,34 +366,34 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 //   - NOT_LINKED: 未绑定微软账户
 //   - UNLINK_FAILED: 解绑失败
 func (h *MicrosoftHandler) Unlink(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
+	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusUnauthorized, "UNAUTHORIZED", "Unlink called without valid userID")
+		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusUnauthorized, "UNAUTHORIZED", "Unlink called without valid userUID")
 		return
 	}
 
-	if userID <= 0 {
-		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userID in Unlink: %d", userID))
+	if userUID == "" {
+		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userUID in Unlink: %s", userUID))
 		return
 	}
 
 	ctx := context.Background()
 
-	user, err := h.userRepo.FindByID(ctx, userID)
+	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "Unlink", err, fmt.Sprintf("FindByID failed in Unlink: userID=%d", userID))
+		utils.LogError("OAUTH-MS", "Unlink", err, fmt.Sprintf("FindByUID failed in Unlink: userUID=%s", userUID))
 		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn("OAUTH-MS", "User not found in Unlink", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-MS", "User not found in Unlink", fmt.Sprintf("userUID=%s", userUID))
 		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if !user.MicrosoftID.Valid || user.MicrosoftID.String == "" {
-		utils.LogWarn("OAUTH-MS", "User not linked to Microsoft", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-MS", "User not linked to Microsoft", fmt.Sprintf("userUID=%s", userUID))
 		utils.RespondError(c, http.StatusBadRequest, "NOT_LINKED")
 		return
 	}
@@ -408,7 +408,7 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 		oldAvatarURL = user.MicrosoftAvatarURL.String
 	}
 
-	updateFields := map[string]interface{}{
+	updateFields := map[string]any{
 		"microsoft_id":          nil,
 		"microsoft_name":        nil,
 		"microsoft_avatar_url":  nil,
@@ -417,39 +417,39 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 
 	if user.AvatarURL == "microsoft" {
 		updateFields["avatar_url"] = config.Get().DefaultAvatarURL
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("User was using Microsoft avatar, resetting to default: userID=%d", userID))
+		utils.LogInfo("OAUTH-MS", fmt.Sprintf("User was using Microsoft avatar, resetting to default: userUID=%s", userUID))
 	}
 
-	err = h.userRepo.Update(ctx, userID, updateFields)
+	err = h.userRepo.Update(ctx, userUID, updateFields)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "Unlink", err, fmt.Sprintf("Failed to unlink Microsoft account: userID=%d", userID))
+		utils.LogError("OAUTH-MS", "Unlink", err, fmt.Sprintf("Failed to unlink Microsoft account: userUID=%s", userUID))
 		utils.RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
 		return
 	}
 
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogUnlinkMicrosoft(ctx, userID, oldMicrosoftID, oldMicrosoftName); err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to log unlink microsoft", fmt.Sprintf("userID=%d", userID))
+		if err := h.userLogRepo.LogUnlinkMicrosoft(ctx, userUID, oldMicrosoftID, oldMicrosoftName); err != nil {
+			utils.LogWarn("OAUTH-MS", "Failed to log unlink microsoft", fmt.Sprintf("userUID=%s", userUID))
 		}
 	}
 
-	h.userCache.Invalidate(userID)
+	h.userCache.Invalidate(userUID)
 
 	if oldAvatarURL != "" && !strings.HasPrefix(oldAvatarURL, "data:") {
-		go func(uid int64) {
+		go func(uid string) {
 			if h.r2Service != nil && h.r2Service.IsConfigured() {
 				deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				if err := h.r2Service.DeleteAvatar(deleteCtx, uid); err != nil {
-					utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", fmt.Sprintf("userID=%d", uid))
+					utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", fmt.Sprintf("userUID=%s", uid))
 				} else {
-					utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar deleted from R2: userID=%d", uid))
+					utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar deleted from R2: userUID=%s", uid))
 				}
 			}
-		}(userID)
+		}(userUID)
 	}
 
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account unlinked: username=%s, userID=%d", user.Username, userID))
+	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account unlinked: username=%s, userUID=%s", user.Username, userUID))
 	utils.RespondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
 }
 
@@ -495,20 +495,20 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 
 	ctx := context.Background()
 
-	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
+	user, err := h.userRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "GetPendingLinkInfo", err, fmt.Sprintf("FindByID failed: userID=%d", pendingData.UserID))
+		utils.LogError("OAUTH-MS", "GetPendingLinkInfo", err, fmt.Sprintf("FindByUID failed: userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn("OAUTH-MS", "User not found in GetPendingLinkInfo", fmt.Sprintf("userID=%d", pendingData.UserID))
+		utils.LogWarn("OAUTH-MS", "User not found in GetPendingLinkInfo", fmt.Sprintf("userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Pending link info retrieved: userID=%d, msName=%s", pendingData.UserID, pendingData.DisplayName))
+	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Pending link info retrieved: userUID=%s, msName=%s", pendingData.UserUID, pendingData.DisplayName))
 	utils.RespondSuccess(c, gin.H{
 		"data": gin.H{
 			"microsoftName":   pendingData.DisplayName,
@@ -566,27 +566,27 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 		utils.LogDebug("OAUTH-MS", "FindByMicrosoftID error in ConfirmLink")
 	}
 
-	if existingMsUser != nil && existingMsUser.ID != pendingData.UserID {
-		utils.LogWarn("OAUTH-MS", "Microsoft account already linked in ConfirmLink", fmt.Sprintf("msID=%s, existingUserID=%d, targetUserID=%d", pendingData.ProviderID, existingMsUser.ID, pendingData.UserID))
+	if existingMsUser != nil && existingMsUser.UID != pendingData.UserUID {
+		utils.LogWarn("OAUTH-MS", "Microsoft account already linked in ConfirmLink", fmt.Sprintf("msID=%s, existingUserUID=%s, targetUserUID=%s", pendingData.ProviderID, existingMsUser.UID, pendingData.UserUID))
 		utils.RespondError(c, http.StatusBadRequest, "MICROSOFT_ALREADY_LINKED")
 		return
 	}
 
-	user, err := h.userRepo.FindByID(ctx, pendingData.UserID)
+	user, err := h.userRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("FindByID failed: userID=%d", pendingData.UserID))
+		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("FindByUID failed: userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn("OAUTH-MS", "User not found in ConfirmLink", fmt.Sprintf("userID=%d", pendingData.UserID))
+		utils.LogWarn("OAUTH-MS", "User not found in ConfirmLink", fmt.Sprintf("userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-MS", "Banned user attempted to confirm link", fmt.Sprintf("userID=%d", pendingData.UserID))
+		utils.LogWarn("OAUTH-MS", "Banned user attempted to confirm link", fmt.Sprintf("userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusForbidden, "USER_BANNED")
 		return
 	}
@@ -597,29 +597,29 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 		avatarData, avatarContentType = h.parseDataURL(pendingData.ProviderAvatarURL)
 	}
 
-	err = h.userRepo.Update(ctx, pendingData.UserID, map[string]interface{}{
+	err = h.userRepo.Update(ctx, pendingData.UserUID, map[string]any{
 		"microsoft_id":   pendingData.ProviderID,
 		"microsoft_name": pendingData.DisplayName,
 	})
 	if err != nil {
-		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("Failed to link Microsoft account: userID=%d", pendingData.UserID))
+		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("Failed to link Microsoft account: userUID=%s", pendingData.UserUID))
 		utils.RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
 		return
 	}
 
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogLinkMicrosoft(ctx, pendingData.UserID, pendingData.ProviderID, pendingData.DisplayName); err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to log link microsoft in ConfirmLink", fmt.Sprintf("userID=%d", pendingData.UserID))
+		if err := h.userLogRepo.LogLinkMicrosoft(ctx, pendingData.UserUID, pendingData.ProviderID, pendingData.DisplayName); err != nil {
+			utils.LogWarn("OAUTH-MS", "Failed to log link microsoft in ConfirmLink", fmt.Sprintf("userUID=%s", pendingData.UserUID))
 		}
 	}
 
-	h.userCache.Invalidate(pendingData.UserID)
+	h.userCache.Invalidate(pendingData.UserUID)
 
-	go h.processAvatarAsync(pendingData.UserID, "", avatarData, avatarContentType)
+	go h.processAvatarAsync(pendingData.UserUID, "", avatarData, avatarContentType)
 
-	jwtToken, err := h.sessionService.GenerateToken(user.ID)
+	jwtToken, err := h.sessionService.GenerateToken(user.UID)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("Token generation failed: userID=%d", user.ID))
+		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
 		return
 	}
@@ -628,6 +628,6 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	utils.ClearLinkTokenCookieGin(c)
 
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account linked and logged in via ConfirmLink: username=%s, userID=%d", user.Username, user.ID))
+	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account linked and logged in via ConfirmLink: username=%s, userUID=%s", user.Username, user.UID))
 	utils.RespondSuccess(c, gin.H{})
 }

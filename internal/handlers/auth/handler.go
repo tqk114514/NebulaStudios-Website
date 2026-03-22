@@ -333,8 +333,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogRegister(ctx, user.ID); err != nil {
-			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userID=%d", user.ID))
+		if err := h.userLogRepo.LogRegister(ctx, user.UID); err != nil {
+			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userUID=%s", user.UID))
 		}
 	}
 
@@ -405,21 +405,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	if !match {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - invalid password: email=%s, userID=%d", email, user.ID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - invalid password: email=%s, userUID=%s", email, user.UID))
 		return
 	}
 
-	token, err := h.sessionService.GenerateToken(user.ID)
+	token, err := h.sessionService.GenerateToken(user.UID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userID=%d", user.ID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		return
 	}
-
-	h.userCache.Set(user.ID, user)
 
 	h.setAuthCookie(c, token)
+	h.userCache.Set(user.UID, user)
 
-	utils.LogInfo("AUTH", fmt.Sprintf("User logged in: username=%s, userID=%d, ip=%s", user.Username, user.ID, clientIP))
+	utils.LogInfo("AUTH", fmt.Sprintf("User logged in: username=%s, userUID=%s, ip=%s", user.Username, user.UID, clientIP))
 	utils.RespondSuccess(c, gin.H{
 		"message": "Login successful",
 		"data": gin.H{
@@ -447,8 +446,8 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 	token, _ := utils.GetTokenCookie(c)
 	if token == "" {
 		authHeader := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token = after
 		}
 	}
 
@@ -470,14 +469,14 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	user, err := h.userCache.GetOrLoad(ctx, claims.UserID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(ctx, claims.UID, h.userRepo.FindByUID)
 	if err != nil {
 		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user: userID=%d", claims.UserID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user: userUID=%s", claims.UID))
 		return
 	}
 
@@ -499,27 +498,27 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 //   - UNAUTHORIZED: 未登录
 //   - USER_NOT_FOUND: 用户不存在
 func (h *AuthHandler) GetMe(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
+	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "GetMe called without valid userID")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "GetMe called without valid userUID")
 		return
 	}
 
-	if userID <= 0 {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userID in GetMe: %d", userID))
+	if userUID == "" {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userUID in GetMe: %s", userUID))
 		return
 	}
 
 	ctx := c.Request.Context()
 
-	user, err := h.userCache.GetOrLoad(ctx, userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(ctx, userUID, h.userRepo.FindByUID)
 	if err != nil {
 		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusNotFound, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userID=%d", userID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusNotFound, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
 		return
 	}
 
@@ -535,9 +534,9 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 //   - success: 是否成功
 //   - message: 成功消息
 func (h *AuthHandler) Logout(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if ok && userID > 0 {
-		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userID=%d", userID))
+	userUID, ok := middleware.GetUID(c)
+	if ok && userUID != "" {
+		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userUID=%s", userUID))
 	} else {
 		utils.LogInfo("AUTH", "User logged out (no session)")
 	}
