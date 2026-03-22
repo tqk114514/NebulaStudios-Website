@@ -36,6 +36,16 @@ import {
 } from './common';
 import { loadStats } from './stats';
 
+function translateBanReason(reason: string): string {
+  const reasonMap: Record<string, string> = {
+    'violation': '违反服务条款',
+    'abuse': '滥用服务',
+    'malicious': '恶意行为',
+    'spam': '垃圾信息'
+  };
+  return reasonMap[reason] || reason;
+}
+
 // ==================== 状态 ====================
 
 let currentPage = 1;
@@ -321,7 +331,7 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
     </div>
     <div class="user-detail-row">
       <span class="user-detail-label">封禁原因</span>
-      <span class="user-detail-value">${escapeHtml(user.ban_reason || '-')}</span>
+      <span class="user-detail-value">${user.ban_reason ? escapeHtml(translateBanReason(user.ban_reason)) : '-'}</span>
     </div>
     <div class="user-detail-row">
       <span class="user-detail-label">封禁时间</span>

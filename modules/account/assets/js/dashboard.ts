@@ -395,7 +395,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (bannedStamp) bannedStamp.classList.remove('is-hidden');
       if (bannedInfo) bannedInfo.classList.remove('is-hidden');
-      if (bannedReason) bannedReason.textContent = user.ban_reason || '-';
+      if (bannedReason) {
+        const reasonKey = user.ban_reason ? `dashboard.banReason.${user.ban_reason}` : '';
+        bannedReason.textContent = user.ban_reason ? (t(reasonKey) !== reasonKey ? t(reasonKey) : user.ban_reason) : '-';
+      }
       if (bannedAt) bannedAt.textContent = formatDateTime(user.banned_at);
       if (unbanAt) {
         if (user.unban_at) {
