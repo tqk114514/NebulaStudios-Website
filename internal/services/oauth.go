@@ -288,7 +288,7 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 // ====================  Authorization Code 方法 ====================
 
 // CreateAuthorizationCode 创建授权码
-func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope string) (string, error) {
+func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope, codeChallenge, codeChallengeMethod string) (string, error) {
 	code, err := s.generateRandomHex(oauthAuthCodeLength)
 	if err != nil {
 		utils.LogError("OAUTH", "CreateAuthCode", err, "Failed to generate auth code")
@@ -296,13 +296,15 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 	}
 
 	authCode := &models.OAuthAuthCode{
-		Code:        code,
-		ClientID:    clientID,
-		UserUID:     userUID,
-		RedirectURI: redirectURI,
-		Scope:       scope,
-		ExpiresAt:   time.Now().Add(oauthAuthCodeExpiry),
-		Used:        false,
+		Code:                code,
+		ClientID:            clientID,
+		UserUID:             userUID,
+		RedirectURI:         redirectURI,
+		Scope:               scope,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
+		ExpiresAt:           time.Now().Add(oauthAuthCodeExpiry),
+		Used:                false,
 	}
 
 	if err := s.authCodeRepo.Create(ctx, authCode); err != nil {
@@ -318,7 +320,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 }
 
 // ExchangeAuthorizationCode 用授权码换取 Token
-func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI string) (*OAuthTokenResponse, string, error) {
+func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI, codeVerifier string) (*OAuthTokenResponse, string, error) {
 	authCode, err := s.authCodeRepo.FindByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthCodeNotFound) {
@@ -341,6 +343,19 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 
 	if authCode.RedirectURI != redirectURI {
 		return nil, "", ErrOAuthRedirectMismatch
+	}
+
+	// PKCE 验证
+	if authCode.CodeChallenge != "" {
+		if codeVerifier == "" {
+			return nil, "", ErrOAuthInvalidGrant
+		}
+		if !utils.ValidateCodeVerifier(codeVerifier) {
+			return nil, "", ErrOAuthInvalidGrant
+		}
+		if !utils.VerifyPKCE(codeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod) {
+			return nil, "", ErrOAuthInvalidGrant
+		}
 	}
 
 	// 标记为已使用
