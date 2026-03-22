@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"maps"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -42,9 +43,7 @@ func RespondError(c *gin.Context, status int, errorCode string) {
 //   - data: 响应数据（gin.H 类型，键值对会展开到响应中）
 func RespondSuccess(c *gin.Context, data gin.H) {
 	response := gin.H{"success": true}
-	for k, v := range data {
-		response[k] = v
-	}
+	maps.Copy(response, data)
 	c.JSON(http.StatusOK, response)
 }
 
@@ -53,7 +52,7 @@ func RespondSuccess(c *gin.Context, data gin.H) {
 // 参数：
 //   - c: Gin 上下文
 //   - data: 响应数据（会封装在 data 字段中）
-func RespondSuccessWithData(c *gin.Context, data interface{}) {
+func RespondSuccessWithData(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    data,

@@ -66,9 +66,9 @@ const (
 // AdminLog 管理员操作日志
 type AdminLog struct {
 	ID        int64           `json:"id"`
-	AdminID   int64           `json:"admin_id"`
+	AdminUID  string          `json:"admin_uid"`
 	Action    string          `json:"action"`
-	TargetID  *int64          `json:"target_id,omitempty"`
+	TargetUID *string         `json:"target_uid,omitempty"`
 	Details   json.RawMessage `json:"details,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 }
@@ -76,10 +76,10 @@ type AdminLog struct {
 // AdminLogPublic 公开的日志信息（含管理员用户名）
 type AdminLogPublic struct {
 	ID            int64           `json:"id"`
-	AdminID       int64           `json:"admin_id"`
+	AdminUID      string          `json:"admin_uid"`
 	AdminUsername string          `json:"admin_username"`
 	Action        string          `json:"action"`
-	TargetID      *int64          `json:"target_id,omitempty"`
+	TargetUID     *string         `json:"target_uid,omitempty"`
 	Details       json.RawMessage `json:"details,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
@@ -150,8 +150,8 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 	if log == nil {
 		return ErrAdminLogInvalidData
 	}
-	if log.AdminID <= 0 {
-		return fmt.Errorf("%w: admin_id is required", ErrAdminLogInvalidData)
+	if log.AdminUID == "" {
+		return fmt.Errorf("%w: admin_uid is required", ErrAdminLogInvalidData)
 	}
 	if log.Action == "" {
 		return fmt.Errorf("%w: action is required", ErrAdminLogInvalidData)
@@ -164,10 +164,10 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 
 	// 执行插入
 	err := pool.QueryRow(ctx, `
-		INSERT INTO admin_logs (admin_id, action, target_id, details)
+		INSERT INTO admin_logs (admin_uid, action, target_uid, details)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
-	`, log.AdminID, log.Action, log.TargetID, log.Details).Scan(
+	`, log.AdminUID, log.Action, log.TargetUID, log.Details).Scan(
 		&log.ID, &log.CreatedAt,
 	)
 
@@ -176,23 +176,23 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 		return fmt.Errorf("create admin log failed: %w", err)
 	}
 
-	utils.LogInfo("ADMIN_LOG", fmt.Sprintf("Log created: id=%d, admin_id=%d, action=%s",
-		log.ID, log.AdminID, log.Action))
+	utils.LogInfo("ADMIN_LOG", fmt.Sprintf("Log created: id=%d, admin_uid=%s, action=%s",
+		log.ID, log.AdminUID, log.Action))
 	return nil
 }
 
 // LogSetRole 记录修改角色操作
 // 参数：
 //   - ctx: 上下文
-//   - adminID: 操作者 ID
-//   - targetID: 目标用户 ID
+//   - adminUID: 操作者 UID
+//   - targetUID: 目标用户 UID
 //   - targetUsername: 目标用户名
 //   - oldRole: 旧角色
 //   - newRole: 新角色
 //
 // 返回：
 //   - error: 错误信息
-func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminID, targetID int64, targetUsername string, oldRole, newRole int) error {
+func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminUID, targetUID string, targetUsername string, oldRole, newRole int) error {
 	details := SetRoleDetails{
 		TargetUsername: targetUsername,
 		OldRole:        oldRole,
@@ -205,10 +205,10 @@ func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminID, targetID i
 	}
 
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionSetRole,
-		TargetID: &targetID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionSetRole,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
@@ -217,14 +217,14 @@ func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminID, targetID i
 // LogDeleteUser 记录删除用户操作
 // 参数：
 //   - ctx: 上下文
-//   - adminID: 操作者 ID
-//   - targetID: 目标用户 ID
+//   - adminUID: 操作者 UID
+//   - targetUID: 目标用户 UID
 //   - targetUsername: 目标用户名
 //   - targetEmail: 目标用户邮箱
 //
 // 返回：
 //   - error: 错误信息
-func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminID, targetID int64, targetUsername, targetEmail string) error {
+func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminUID, targetUID string, targetUsername, targetEmail string) error {
 	details := DeleteUserDetails{
 		TargetUsername: targetUsername,
 		TargetEmail:    targetEmail,
@@ -236,10 +236,10 @@ func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminID, targetI
 	}
 
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionDeleteUser,
-		TargetID: &targetID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionDeleteUser,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
@@ -248,15 +248,15 @@ func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminID, targetI
 // LogBanUser 记录封禁用户操作
 // 参数：
 //   - ctx: 上下文
-//   - adminID: 操作者 ID
-//   - targetID: 目标用户 ID
+//   - adminUID: 操作者 UID
+//   - targetUID: 目标用户 UID
 //   - targetUsername: 目标用户名
 //   - reason: 封禁原因
 //   - unbanAt: 解封时间（nil 表示永久封禁）
 //
 // 返回：
 //   - error: 错误信息
-func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminID, targetID int64, targetUsername, reason string, unbanAt *time.Time) error {
+func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID string, targetUsername, reason string, unbanAt *time.Time) error {
 	details := BanUserDetails{
 		TargetUsername: targetUsername,
 		Reason:         reason,
@@ -269,10 +269,10 @@ func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminID, targetID i
 	}
 
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionBanUser,
-		TargetID: &targetID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionBanUser,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
@@ -281,13 +281,13 @@ func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminID, targetID i
 // LogUnbanUser 记录解封用户操作
 // 参数：
 //   - ctx: 上下文
-//   - adminID: 操作者 ID
-//   - targetID: 目标用户 ID
+//   - adminUID: 操作者 UID
+//   - targetUID: 目标用户 UID
 //   - targetUsername: 目标用户名
 //
 // 返回：
 //   - error: 错误信息
-func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminID, targetID int64, targetUsername string) error {
+func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminUID, targetUID string, targetUsername string) error {
 	details := UnbanUserDetails{
 		TargetUsername: targetUsername,
 	}
@@ -298,17 +298,17 @@ func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminID, targetID
 	}
 
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionUnbanUser,
-		TargetID: &targetID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionUnbanUser,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogOAuthClientCreate 记录创建 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
 	details := OAuthClientDetails{
 		ClientDBID: clientDBID,
 		ClientID:   clientID,
@@ -321,16 +321,16 @@ func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminID, 
 	}
 
 	log := &AdminLog{
-		AdminID: adminID,
-		Action:  ActionOAuthClientCreate,
-		Details: detailsJSON,
+		AdminUID: adminUID,
+		Action:   ActionOAuthClientCreate,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogOAuthClientUpdate 记录更新 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
 	details := OAuthClientDetails{
 		ClientDBID: clientDBID,
 		ClientID:   clientID,
@@ -343,16 +343,16 @@ func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminID, 
 	}
 
 	log := &AdminLog{
-		AdminID: adminID,
-		Action:  ActionOAuthClientUpdate,
-		Details: detailsJSON,
+		AdminUID: adminUID,
+		Action:   ActionOAuthClientUpdate,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogOAuthClientDelete 记录删除 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
 	details := OAuthClientDetails{
 		ClientDBID: clientDBID,
 		ClientID:   clientID,
@@ -365,16 +365,16 @@ func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminID, 
 	}
 
 	log := &AdminLog{
-		AdminID: adminID,
-		Action:  ActionOAuthClientDelete,
-		Details: detailsJSON,
+		AdminUID: adminUID,
+		Action:   ActionOAuthClientDelete,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogOAuthClientRegenerateSecret 记录重新生成 OAuth 客户端密钥操作
-func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context, adminID, clientDBID int64, clientID, clientName string) error {
+func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
 	details := OAuthClientDetails{
 		ClientDBID: clientDBID,
 		ClientID:   clientID,
@@ -387,16 +387,16 @@ func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context,
 	}
 
 	log := &AdminLog{
-		AdminID: adminID,
-		Action:  ActionOAuthClientRegenerateSecret,
-		Details: detailsJSON,
+		AdminUID: adminUID,
+		Action:   ActionOAuthClientRegenerateSecret,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogOAuthClientToggle 记录启用/禁用 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminID, clientDBID int64, clientID, clientName string, enabled bool) error {
+func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string, enabled bool) error {
 	details := OAuthClientToggleDetails{
 		ClientDBID: clientDBID,
 		ClientID:   clientID,
@@ -410,17 +410,17 @@ func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminID, 
 	}
 
 	log := &AdminLog{
-		AdminID: adminID,
-		Action:  ActionOAuthClientToggle,
-		Details: detailsJSON,
+		AdminUID: adminUID,
+		Action:   ActionOAuthClientToggle,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogEmailWhitelistCreate 记录创建邮箱白名单
-func (r *AdminLogRepository) LogEmailWhitelistCreate(ctx context.Context, adminID int64, entry *EmailWhitelist) error {
-	details := map[string]interface{}{
+func (r *AdminLogRepository) LogEmailWhitelistCreate(ctx context.Context, adminUID string, entry *EmailWhitelist) error {
+	details := map[string]any{
 		"id":     entry.ID,
 		"domain": entry.Domain,
 	}
@@ -429,19 +429,20 @@ func (r *AdminLogRepository) LogEmailWhitelistCreate(ctx context.Context, adminI
 		return fmt.Errorf("marshal details failed: %w", err)
 	}
 
+	targetUID := ""
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionEmailWhitelistCreate,
-		TargetID: &entry.ID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionEmailWhitelistCreate,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogEmailWhitelistUpdate 记录更新邮箱白名单
-func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminID int64, entry *EmailWhitelist) error {
-	details := map[string]interface{}{
+func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminUID string, entry *EmailWhitelist) error {
+	details := map[string]any{
 		"id":         entry.ID,
 		"domain":     entry.Domain,
 		"signup_url": entry.SignupURL,
@@ -452,19 +453,20 @@ func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminI
 		return fmt.Errorf("marshal details failed: %w", err)
 	}
 
+	targetUID := ""
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionEmailWhitelistUpdate,
-		TargetID: &entry.ID,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionEmailWhitelistUpdate,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
 }
 
 // LogEmailWhitelistDelete 记录删除邮箱白名单
-func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminID int64, id int64) error {
-	details := map[string]interface{}{
+func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminUID string, id int64) error {
+	details := map[string]any{
 		"id": id,
 	}
 	detailsJSON, err := json.Marshal(details)
@@ -472,11 +474,12 @@ func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminI
 		return fmt.Errorf("marshal details failed: %w", err)
 	}
 
+	targetUID := ""
 	log := &AdminLog{
-		AdminID:  adminID,
-		Action:   ActionEmailWhitelistDelete,
-		TargetID: &id,
-		Details:  detailsJSON,
+		AdminUID:  adminUID,
+		Action:    ActionEmailWhitelistDelete,
+		TargetUID: &targetUID,
+		Details:   detailsJSON,
 	}
 
 	return r.Create(ctx, log)
@@ -512,9 +515,9 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 
 	// 查询日志列表（关联用户表获取管理员用户名）
 	rows, err := pool.Query(ctx, `
-		SELECT l.id, l.admin_id, u.username, l.action, l.target_id, l.details, l.created_at
+		SELECT l.id, l.admin_uid, u.username, l.action, l.target_uid, l.details, l.created_at
 		FROM admin_logs l
-		LEFT JOIN users u ON l.admin_id = u.id
+		LEFT JOIN users u ON l.admin_uid = u.uid
 		ORDER BY l.id DESC
 		LIMIT $1 OFFSET $2
 	`, pageSize, offset)
@@ -529,8 +532,8 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 		log := &AdminLogPublic{}
 		var adminUsername *string
 		err := rows.Scan(
-			&log.ID, &log.AdminID, &adminUsername, &log.Action,
-			&log.TargetID, &log.Details, &log.CreatedAt,
+			&log.ID, &log.AdminUID, &adminUsername, &log.Action,
+			&log.TargetUID, &log.Details, &log.CreatedAt,
 		)
 		if err != nil {
 			utils.LogError("ADMIN_LOG", "FindAll.Scan", err)

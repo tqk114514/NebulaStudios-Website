@@ -37,15 +37,15 @@ import (
 
 // 错误定义从 models 层导入
 var (
-	ErrInvalidToken     = models.ErrInvalidToken
-	ErrTokenExpired     = models.ErrTokenExpired
-	ErrTokenUsed        = models.ErrTokenUsed
-	ErrInvalidCode      = models.ErrInvalidCode
-	ErrCodeExpired      = models.ErrCodeExpired
-	ErrEmailMismatch    = models.ErrEmailMismatch
-	ErrTypeMismatch     = models.ErrTypeMismatch
-	ErrTooManyAttempts  = models.ErrTooManyAttempts
-	ErrCodeNotVerified  = models.ErrCodeNotVerified
+	ErrInvalidToken    = models.ErrInvalidToken
+	ErrTokenExpired    = models.ErrTokenExpired
+	ErrTokenUsed       = models.ErrTokenUsed
+	ErrInvalidCode     = models.ErrInvalidCode
+	ErrCodeExpired     = models.ErrCodeExpired
+	ErrEmailMismatch   = models.ErrEmailMismatch
+	ErrTypeMismatch    = models.ErrTypeMismatch
+	ErrTooManyAttempts = models.ErrTooManyAttempts
+	ErrCodeNotVerified = models.ErrCodeNotVerified
 )
 
 // ====================  常量定义 ====================
@@ -486,9 +486,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 	codeRepo := models.NewCodeRepository()
 
 	// 清理过期 Token（异步）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError("TOKEN", "TokenCleanupPanic", fmt.Errorf("%v", r))
@@ -504,12 +502,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired tokens", count))
 		}
-	}()
+	})
 
 	// 清理过期验证码（异步）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError("TOKEN", "CodeCleanupPanic", fmt.Errorf("%v", r))
@@ -525,12 +521,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired codes", count))
 		}
-	}()
+	})
 
 	// 清理过期 OAuth 授权码（异步）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError("TOKEN", "OAuthAuthCodeCleanupPanic", fmt.Errorf("%v", r))
@@ -543,12 +537,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth auth codes", count))
 		}
-	}()
+	})
 
 	// 清理过期 OAuth Access Token（异步）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError("TOKEN", "OAuthAccessTokenCleanupPanic", fmt.Errorf("%v", r))
@@ -561,12 +553,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth access tokens", count))
 		}
-	}()
+	})
 
 	// 清理过期 OAuth Refresh Token（异步）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError("TOKEN", "OAuthRefreshTokenCleanupPanic", fmt.Errorf("%v", r))
@@ -579,7 +569,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth refresh tokens", count))
 		}
-	}()
+	})
 
 	// 等待所有清理任务完成
 	wg.Wait()
