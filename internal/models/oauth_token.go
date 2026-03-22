@@ -47,15 +47,17 @@ var (
 
 // OAuthAuthCode 授权码
 type OAuthAuthCode struct {
-	ID          int64     `json:"id"`
-	Code        string    `json:"-"` // 不序列化
-	ClientID    string    `json:"client_id"`
-	UserUID     string    `json:"user_uid"`
-	RedirectURI string    `json:"redirect_uri"`
-	Scope       string    `json:"scope"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Used        bool      `json:"used"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                  int64     `json:"id"`
+	Code                string    `json:"-"` // 不序列化
+	ClientID            string    `json:"client_id"`
+	UserUID             string    `json:"user_uid"`
+	RedirectURI         string    `json:"redirect_uri"`
+	Scope               string    `json:"scope"`
+	CodeChallenge       string    `json:"-"` // 不序列化
+	CodeChallengeMethod string    `json:"-"` // 不序列化
+	ExpiresAt           time.Time `json:"expires_at"`
+	Used                bool      `json:"used"`
+	CreatedAt           time.Time `json:"created_at"`
 }
 
 // OAuthAccessToken 访问令牌
@@ -179,10 +181,10 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	}
 
 	err := pool.QueryRow(ctx, `
-		INSERT INTO oauth_auth_codes (code, client_id, user_uid, redirect_uri, scope, expires_at, used)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO oauth_auth_codes (code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
-	`, code.Code, code.ClientID, code.UserUID, code.RedirectURI, code.Scope, code.ExpiresAt, code.Used).Scan(
+	`, code.Code, code.ClientID, code.UserUID, code.RedirectURI, code.Scope, code.CodeChallenge, code.CodeChallengeMethod, code.ExpiresAt, code.Used).Scan(
 		&code.ID, &code.CreatedAt,
 	)
 
@@ -213,11 +215,12 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 
 	authCode := &OAuthAuthCode{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, code, client_id, user_uid, redirect_uri, scope, expires_at, used, created_at
+		SELECT id, code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used, created_at
 		FROM oauth_auth_codes WHERE code = $1
 	`, code).Scan(
 		&authCode.ID, &authCode.Code, &authCode.ClientID, &authCode.UserUID,
-		&authCode.RedirectURI, &authCode.Scope, &authCode.ExpiresAt, &authCode.Used, &authCode.CreatedAt,
+		&authCode.RedirectURI, &authCode.Scope, &authCode.CodeChallenge, &authCode.CodeChallengeMethod,
+		&authCode.ExpiresAt, &authCode.Used, &authCode.CreatedAt,
 	)
 
 	if err != nil {

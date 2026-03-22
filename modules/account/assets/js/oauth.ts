@@ -124,6 +124,8 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
   const redirectUri = getUrlParameter('redirect_uri');
   const scope = getUrlParameter('scope');
   const state = getUrlParameter('state');
+  const codeChallenge = getUrlParameter('code_challenge');
+  const codeChallengeMethod = getUrlParameter('code_challenge_method');
 
   // 创建表单并提交
   const form = document.createElement('form');
@@ -135,6 +137,8 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
     redirect_uri: redirectUri,
     scope: scope,
     state: state,
+    code_challenge: codeChallenge,
+    code_challenge_method: codeChallengeMethod,
     decision: decision
   };
 
