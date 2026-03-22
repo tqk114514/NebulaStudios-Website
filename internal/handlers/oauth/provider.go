@@ -118,12 +118,14 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	codeChallenge := c.Query("code_challenge")
 	codeChallengeMethod := c.Query("code_challenge_method")
 
-	// 验证 PKCE 参数（如果提供了 code_challenge）
-	if codeChallenge != "" {
-		if !utils.ValidateCodeChallenge(codeChallenge, codeChallengeMethod) {
-			h.redirectToErrorPage(c, "invalid_request", "Invalid code_challenge or code_challenge_method")
-			return
-		}
+	// 强制要求 PKCE 参数
+	if codeChallenge == "" {
+		h.redirectToErrorPage(c, "invalid_request", "Missing code_challenge parameter")
+		return
+	}
+	if !utils.ValidateCodeChallenge(codeChallenge, codeChallengeMethod) {
+		h.redirectToErrorPage(c, "invalid_request", "Invalid code_challenge or code_challenge_method")
+		return
 	}
 
 	// 验证必需参数
