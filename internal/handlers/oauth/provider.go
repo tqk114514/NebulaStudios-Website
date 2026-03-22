@@ -101,8 +101,8 @@ func NewOAuthProviderHandler(
 //   - response_type: 响应类型，必须为 "code"（必需）
 //   - scope: 请求的权限范围（必需）
 //   - state: 状态参数（推荐）
-//   - code_challenge: PKCE code_challenge（如果是公共客户端）
-//   - code_challenge_method: code_challenge 方法，支持 plain 和 S256
+//   - code_challenge: PKCE code_challenge（必需）
+//   - code_challenge_method: code_challenge 方法，支持 plain 和 S256（必需）
 //
 // 响应：
 //   - 重定向到授权页面（用户已登录）
