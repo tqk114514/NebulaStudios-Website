@@ -1,6 +1,12 @@
 /**
  * modules/admin/assets/js/email-whitelist.ts
  * 管理后台邮箱白名单管理模块
+ *
+ * 功能：
+ * - 白名单列表（分页）
+ * - 白名单详情弹窗
+ * - 白名单操作（启用/禁用、编辑、删除）
+ * - 白名单数据缓存
  */
 
 import {
@@ -9,7 +15,13 @@ import {
   showConfirm,
   formatDate,
   escapeHtml,
-  renderPagination
+  renderPagination,
+  whitelistModal,
+  whitelistModalBody,
+  whitelistModalFooter,
+  whitelistModalClose,
+  showModal,
+  hideModal
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -31,11 +43,36 @@ interface EmailWhitelistListResponse {
   totalPages: number;
 }
 
+// 白名单数据缓存（带时间戳）
+interface CachedWhitelistEntry {
+  entry: EmailWhitelistEntry;
+  cachedAt: number;
+}
+
 // ==================== 状态 ====================
 
 let currentPage = 1;
 let currentEntries: EmailWhitelistEntry[] = [];
 let editingEntryId: number | null = null;
+let whitelistCache: Map<number, CachedWhitelistEntry> = new Map();
+
+/** 缓存最大条目数 */
+const CACHE_MAX_SIZE = 100;
+
+/**
+ * 添加白名单到缓存（带大小限制）
+ * @param entryId - 白名单 ID
+ * @param cached - 缓存数据
+ */
+function setCacheWhitelist(entryId: number, cached: CachedWhitelistEntry): void {
+  if (whitelistCache.size >= CACHE_MAX_SIZE && !whitelistCache.has(entryId)) {
+    const oldestKey = whitelistCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      whitelistCache.delete(oldestKey);
+    }
+  }
+  whitelistCache.set(entryId, cached);
+}
 
 // ==================== DOM 元素 ====================
 
@@ -54,6 +91,19 @@ async function getWhitelist(page: number): Promise<EmailWhitelistListResponse | 
     return null;
   } catch (e) {
     console.error('[WHITELIST] Failed to load whitelist:', e);
+    return null;
+  }
+}
+
+async function getEntry(id: number): Promise<EmailWhitelistEntry | null> {
+  try {
+    const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`);
+    if (result.success && result.data) {
+      return result.data.item || null;
+    }
+    return null;
+  } catch (e) {
+    console.error('[WHITELIST] Failed to get entry:', e);
     return null;
   }
 }
@@ -121,6 +171,93 @@ async function toggleEntry(id: number, isEnabled: boolean): Promise<void> {
 
 // ==================== 渲染 ====================
 
+function renderWhitelistRow(entry: EmailWhitelistEntry): string {
+  return `
+    <tr data-id="${entry.id}">
+      <td>${escapeHtml(entry.domain)}</td>
+      <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
+      <td>
+        <span class="status-badge ${entry.is_enabled ? 'status-enabled' : 'status-disabled'}">
+          ${entry.is_enabled ? '已启用' : '已禁用'}
+        </span>
+      </td>
+      <td>${formatDate(entry.created_at)}</td>
+      <td>
+        <button class="action-btn view" data-id="${entry.id}">查看</button>
+      </td>
+    </tr>
+  `;
+}
+
+function bindWhitelistRowEvents(row: HTMLTableRowElement): void {
+  const btn = row.querySelector('.action-btn.view');
+  btn?.addEventListener('click', () => {
+    const entryId = Number((btn as HTMLElement).dataset.id);
+    showWhitelistDetail(entryId);
+  });
+}
+
+/**
+ * 更新指定白名单的表格行（重新获取数据并刷新显示）
+ * @param entryId - 白名单 ID
+ */
+async function updateWhitelistRow(entryId: number): Promise<void> {
+  if (!whitelistTableBody) {
+    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found in updateWhitelistRow');
+    return;
+  }
+  
+  const oldRow = whitelistTableBody.querySelector(`tr[data-id="${entryId}"]`) as HTMLTableRowElement;
+  if (!oldRow) return;
+
+  oldRow.classList.add('is-updating');
+
+  const entry = await getEntry(entryId);
+  if (!entry) {
+    oldRow.classList.remove('is-updating');
+    return;
+  }
+
+  setCacheWhitelist(entryId, { entry, cachedAt: Date.now() });
+
+  const temp = document.createElement('tbody');
+  temp.innerHTML = renderWhitelistRow(entry);
+  const newRow = temp.firstElementChild as HTMLTableRowElement;
+
+  oldRow.replaceWith(newRow);
+  bindWhitelistRowEvents(newRow);
+}
+
+/**
+ * 从表格中移除白名单行（带动画效果）
+ * @param entryId - 白名单 ID
+ */
+function removeWhitelistRow(entryId: number): void {
+  if (!whitelistTableBody) {
+    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found in removeWhitelistRow');
+    return;
+  }
+  
+  const row = whitelistTableBody.querySelector(`tr[data-id="${entryId}"]`) as HTMLTableRowElement;
+  if (!row) return;
+
+  whitelistCache.delete(entryId);
+  row.classList.add('is-deleting');
+
+  setTimeout(() => {
+    row.style.transition = 'opacity 0.2s, transform 0.2s';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+
+    setTimeout(() => {
+      row.remove();
+      if (whitelistTableBody.children.length === 0) {
+        whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
+      }
+    }, 200);
+  }, 600);
+}
+
 function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: number, totalPages: number): void {
   const tableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
   if (!tableBody) return;
@@ -133,27 +270,14 @@ function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: nu
     return;
   }
 
-  tableBody.innerHTML = entries.map(entry => `
-    <tr data-id="${entry.id}">
-      <td>${escapeHtml(entry.domain)}</td>
-      <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
-      <td>
-        <span class="status-badge ${entry.is_enabled ? 'status-enabled' : 'status-disabled'}">
-          ${entry.is_enabled ? '已启用' : '已禁用'}
-        </span>
-      </td>
-      <td>${formatDate(entry.created_at)}</td>
-      <td class="action-cell">
-        <button class="btn btn-sm btn-secondary toggle-btn" data-id="${entry.id}" data-enabled="${entry.is_enabled}">
-          ${entry.is_enabled ? '禁用' : '启用'}
-        </button>
-        <button class="btn btn-sm btn-primary edit-btn" data-id="${entry.id}">编辑</button>
-        <button class="btn btn-sm btn-danger delete-btn" data-id="${entry.id}">删除</button>
-      </td>
-    </tr>
-  `).join('');
+  const now = Date.now();
+  entries.forEach(entry => setCacheWhitelist(entry.id, { entry, cachedAt: now }));
 
-  bindTableEvents(tableBody);
+  tableBody.innerHTML = entries.map(entry => renderWhitelistRow(entry)).join('');
+
+  tableBody.querySelectorAll('tr[data-id]').forEach(row => {
+    bindWhitelistRowEvents(row as HTMLTableRowElement);
+  });
 
   if (whitelistPagination) {
     renderPagination({
@@ -168,29 +292,176 @@ function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: nu
   }
 }
 
-function bindTableEvents(tableBody: HTMLTableSectionElement): void {
-  tableBody.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number((btn as HTMLButtonElement).dataset.id);
-      const entry = currentEntries.find(e => e.id === id);
-      if (entry) openEditModal(entry);
+// ==================== 白名单详情 ====================
+
+function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: number, isRefreshing?: boolean): void {
+  console.log('[ADMIN][WHITELIST] renderWhitelistDetailContent called');
+  
+  if (!whitelistModalBody) {
+    console.error('[ADMIN][WHITELIST] whitelistModalBody not found');
+    return;
+  }
+
+  whitelistModalBody.innerHTML = `
+    <div class="user-detail">
+      <div class="user-detail-row">
+        <span class="user-detail-label">ID</span>
+        <span class="user-detail-value">${entry.id}</span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">域名</span>
+        <span class="user-detail-value">${escapeHtml(entry.domain)}</span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">注册页面 URL</span>
+        <span class="user-detail-value">${escapeHtml(entry.signup_url)}</span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">状态</span>
+        <span class="user-detail-value">
+          <span class="status-badge ${entry.is_enabled ? 'status-enabled' : 'status-disabled'}">
+            ${entry.is_enabled ? '已启用' : '已禁用'}
+          </span>
+        </span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">创建时间</span>
+        <span class="user-detail-value">${formatDate(entry.created_at)}</span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">更新时间</span>
+        <span class="user-detail-value">${formatDate(entry.updated_at)}</span>
+      </div>
+    </div>
+    <div class="user-detail-meta" id="whitelist-detail-meta">
+      ${cachedAt ? `数据更新于 ${formatDate(new Date(cachedAt).toISOString())}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
+    </div>
+  `;
+}
+
+function bindWhitelistDetailButtons(entry: EmailWhitelistEntry): void {
+  console.log('[ADMIN][WHITELIST] bindWhitelistDetailButtons called');
+  
+  if (!whitelistModalFooter) {
+    console.error('[ADMIN][WHITELIST] whitelistModalFooter not found');
+    return;
+  }
+  
+  let footerHtml = '<button class="btn btn-secondary" id="close-whitelist-modal">关闭</button>';
+
+  footerHtml += `<button class="btn ${entry.is_enabled ? 'btn-warning' : 'btn-success'}" id="toggle-whitelist" data-id="${entry.id}">${entry.is_enabled ? '禁用' : '启用'}</button>`;
+  footerHtml += `<button class="btn btn-primary" id="edit-whitelist" data-id="${entry.id}">编辑</button>`;
+  footerHtml += `<button class="btn btn-danger" id="delete-whitelist" data-id="${entry.id}">删除</button>`;
+
+  whitelistModalFooter.innerHTML = footerHtml;
+
+  document.getElementById('close-whitelist-modal')?.addEventListener('click', () => hideModal(whitelistModal));
+
+  document.getElementById('toggle-whitelist')?.addEventListener('click', async () => {
+    showConfirm(entry.is_enabled ? '禁用白名单' : '启用白名单', `确定要${entry.is_enabled ? '禁用' : '启用'}域名 "${entry.domain}" 吗？`, async () => {
+      try {
+        await toggleEntry(entry.id, !entry.is_enabled);
+        showToast(entry.is_enabled ? '已禁用' : '已启用', 'success');
+        hideModal(whitelistModal);
+        updateWhitelistRow(entry.id);
+      } catch {
+        showToast('操作失败', 'error');
+      }
     });
   });
 
-  tableBody.querySelectorAll('.delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number((btn as HTMLButtonElement).dataset.id);
-      confirmDelete(id);
-    });
+  document.getElementById('edit-whitelist')?.addEventListener('click', () => {
+    hideModal(whitelistModal);
+    openEditModal(entry);
   });
 
-  tableBody.querySelectorAll('.toggle-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number((btn as HTMLButtonElement).dataset.id);
-      const enabled = (btn as HTMLButtonElement).dataset.enabled === 'true';
-      handleToggle(id, !enabled);
+  document.getElementById('delete-whitelist')?.addEventListener('click', async () => {
+    showConfirm('删除白名单', `确定要删除域名 "${entry.domain}" 吗？`, async () => {
+      try {
+        await deleteEntry(entry.id);
+        showToast('删除成功', 'success');
+        hideModal(whitelistModal);
+        removeWhitelistRow(entry.id);
+      } catch {
+        showToast('删除失败', 'error');
+      }
     });
   });
+}
+
+async function showWhitelistDetail(entryId: number): Promise<void> {
+  console.log('[ADMIN][WHITELIST] showWhitelistDetail called');
+  
+  if (!whitelistModal || !whitelistModalBody || !whitelistModalFooter) {
+    console.error('[ADMIN][WHITELIST] Whitelist modal elements not found');
+    return;
+  }
+  
+  const cached = whitelistCache.get(entryId);
+  
+  if (cached) {
+    renderWhitelistDetailContent(cached.entry, cached.cachedAt, true);
+    showModal(whitelistModal);
+    
+    getEntry(entryId).then(freshEntry => {
+      if (!freshEntry) {
+        const metaEl = document.getElementById('whitelist-detail-meta');
+        if (metaEl) metaEl.textContent = `数据更新于 ${formatDate(new Date(cached.cachedAt).toISOString())}`;
+        return;
+      }
+      
+      const newCachedAt = Date.now();
+      setCacheWhitelist(entryId, { entry: freshEntry, cachedAt: newCachedAt });
+      
+      if (whitelistModal && !whitelistModal.classList.contains('is-hidden')) {
+        renderWhitelistDetailContent(freshEntry, newCachedAt, false);
+        bindWhitelistDetailButtons(freshEntry);
+      }
+    });
+    
+    bindWhitelistDetailButtons(cached.entry);
+    return;
+  }
+
+  whitelistModalBody.innerHTML = `
+    <div class="user-detail">
+      <div class="user-detail-row">
+        <span class="user-detail-label">ID</span>
+        <span class="user-detail-value skeleton-text"></span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">域名</span>
+        <span class="user-detail-value skeleton-text"></span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">注册页面 URL</span>
+        <span class="user-detail-value skeleton-text skeleton-wide"></span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">状态</span>
+        <span class="user-detail-value skeleton-text"></span>
+      </div>
+      <div class="user-detail-row">
+        <span class="user-detail-label">创建时间</span>
+        <span class="user-detail-value skeleton-text skeleton-wide"></span>
+      </div>
+    </div>
+  `;
+  whitelistModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-whitelist-modal">关闭</button>';
+  document.getElementById('close-whitelist-modal')?.addEventListener('click', () => hideModal(whitelistModal));
+  showModal(whitelistModal);
+
+  const entry = await getEntry(entryId);
+  if (!entry) {
+    hideModal(whitelistModal);
+    showToast('获取白名单信息失败', 'error');
+    return;
+  }
+
+  const cachedAt = Date.now();
+  setCacheWhitelist(entryId, { entry, cachedAt });
+  renderWhitelistDetailContent(entry, cachedAt, false);
+  bindWhitelistDetailButtons(entry);
 }
 
 // ==================== 弹窗操作 ====================
@@ -268,35 +539,6 @@ async function handleSubmit(e: Event): Promise<void> {
   }
 }
 
-async function handleToggle(id: number, isEnabled: boolean): Promise<void> {
-  try {
-    await toggleEntry(id, isEnabled);
-    showToast(isEnabled ? '已启用' : '已禁用', 'success');
-    await loadWhitelist();
-  } catch {
-    showToast('操作失败', 'error');
-  }
-}
-
-async function confirmDelete(id: number): Promise<void> {
-  const entry = currentEntries.find(e => e.id === id);
-  if (!entry) return;
-
-  showConfirm(
-    '删除白名单',
-    `确定要删除域名 "${entry.domain}" 吗？`,
-    async () => {
-      try {
-        await deleteEntry(id);
-        showToast('删除成功', 'success');
-        await loadWhitelist();
-      } catch {
-        showToast('删除失败', 'error');
-      }
-    }
-  );
-}
-
 // ==================== 初始化 ====================
 
 async function loadWhitelist(): Promise<void> {
@@ -324,6 +566,10 @@ export function initWhitelistPage(): void {
   const form = document.getElementById('whitelist-form') as HTMLFormElement | null;
   const formCancel = document.getElementById('whitelist-form-cancel');
   const formClose = document.getElementById('whitelist-form-close');
+
+  if (whitelistModalClose) {
+    whitelistModalClose.addEventListener('click', () => hideModal(whitelistModal));
+  }
 
   if (createBtn) {
     createBtn.addEventListener('click', openCreateModal);
