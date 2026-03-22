@@ -21,8 +21,6 @@ import {
   userModalFooter,
   banModal,
   banReason,
-  banCustomReasonGroup,
-  banCustomReason,
   banDuration,
   banCancel,
   banConfirm,
@@ -486,12 +484,10 @@ function showBanModal(user: UserPublic): void {
   console.log('[ADMIN][USERS] showBanModal called');
   
   const localBanReason = banReason;
-  const localBanCustomReason = banCustomReason;
-  const localBanCustomReasonGroup = banCustomReasonGroup;
   const localBanDuration = banDuration;
   const localBanConfirm = banConfirm;
   
-  if (!localBanReason || !localBanCustomReason || !localBanCustomReasonGroup || !localBanDuration || !localBanConfirm) {
+  if (!localBanReason || !localBanDuration || !localBanConfirm) {
     console.error('[ADMIN][USERS] Ban modal elements not found');
     return;
   }
@@ -500,8 +496,6 @@ function showBanModal(user: UserPublic): void {
   
   // 重置表单
   localBanReason.value = '';
-  localBanCustomReason.value = '';
-  localBanCustomReasonGroup.style.display = 'none';
   localBanDuration.value = '7';
   localBanConfirm.disabled = true;
 
@@ -515,33 +509,20 @@ function initBanModal(): void {
   console.log('[ADMIN][USERS] initBanModal called');
   
   const localBanReason = banReason;
-  const localBanCustomReasonGroup = banCustomReasonGroup;
-  const localBanCustomReason = banCustomReason;
   const localBanConfirm = banConfirm;
   const localBanCancel = banCancel;
   const localBanModalClose = banModalClose;
   const localBanDuration = banDuration;
   
   // 检查必要元素是否存在
-  if (!localBanReason || !localBanCustomReasonGroup || !localBanCustomReason || !localBanConfirm || !localBanCancel || !localBanModalClose || !localBanDuration) {
+  if (!localBanReason || !localBanConfirm || !localBanCancel || !localBanModalClose || !localBanDuration) {
     console.warn('[ADMIN][USERS] Ban modal elements not all found, skipping ban modal init');
     return;
   }
   
   // 封禁原因选择
   localBanReason.addEventListener('change', () => {
-    if (localBanReason.value === '其他') {
-      localBanCustomReasonGroup.style.display = 'block';
-      localBanConfirm.disabled = !localBanCustomReason.value.trim();
-    } else {
-      localBanCustomReasonGroup.style.display = 'none';
-      localBanConfirm.disabled = !localBanReason.value;
-    }
-  });
-
-  // 自定义原因输入
-  localBanCustomReason.addEventListener('input', () => {
-    localBanConfirm.disabled = !localBanCustomReason.value.trim();
+    localBanConfirm.disabled = !localBanReason.value;
   });
 
   // 取消按钮
@@ -560,11 +541,11 @@ function initBanModal(): void {
   localBanConfirm.addEventListener('click', async () => {
     if (!currentBanUser) return;
 
-    const reason = localBanReason.value === '其他' ? localBanCustomReason.value.trim() : localBanReason.value;
+    const reason = localBanReason.value;
     const days = parseInt(localBanDuration.value, 10);
 
     if (!reason) {
-      showToast('请选择或输入封禁原因', 'error');
+      showToast('请选择封禁原因', 'error');
       return;
     }
 
