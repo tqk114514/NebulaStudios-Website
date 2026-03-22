@@ -176,7 +176,7 @@ func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	}
 
 	// 初始化所有分片
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		cache, err := lru.New[string, *rateLimiterEntry](maxEntriesPerShard)
 		if err != nil {
 			utils.LogError("RATELIMIT", "NewShardedRateLimiter", err, fmt.Sprintf("Failed to create LRU cache for shard %d", i))
@@ -227,7 +227,7 @@ func (srl *ShardedRateLimiter) cleanupExpiredEntries() {
 	now := time.Now()
 	cleanedCount := 0
 
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := srl.shards[i]
 		if shard == nil || shard.cache == nil {
 			continue
@@ -272,7 +272,7 @@ func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter
 	}
 
 	// 初始化所有分片
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		cache, err := lru.New[string, time.Time](maxEntriesPerShard)
 		if err != nil {
 			utils.LogError("RATELIMIT", "NewShardedEmailRateLimiter", err, fmt.Sprintf("Failed to create email LRU cache for shard %d", i))
@@ -323,7 +323,7 @@ func (serl *ShardedEmailRateLimiter) cleanupExpiredEntries() {
 	now := time.Now()
 	cleanedCount := 0
 
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := serl.shards[i]
 		if shard == nil || shard.cache == nil {
 			continue
@@ -422,7 +422,7 @@ func (srl *ShardedRateLimiter) Allow(key string) bool {
 //   - int: 当前总条目数
 func (srl *ShardedRateLimiter) Stats() int {
 	total := 0
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := srl.shards[i]
 		if shard != nil && shard.cache != nil {
 			shard.mu.Lock()
@@ -523,7 +523,7 @@ func (serl *ShardedEmailRateLimiter) GetWaitTime(email string) int {
 //   - int: 当前总条目数
 func (serl *ShardedEmailRateLimiter) Stats() int {
 	total := 0
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := serl.shards[i]
 		if shard != nil && shard.cache != nil {
 			shard.mu.Lock()
@@ -537,14 +537,14 @@ func (serl *ShardedEmailRateLimiter) Stats() int {
 // ====================  数据导出限流器 ====================
 
 // dataExportLimiterShard 数据导出限流器分片（使用 LRU）
-// 基于用户 ID 的限流，24 小时内只允许 1 次
+// 基于用户 UID 的限流，24 小时内只允许 1 次
 type dataExportLimiterShard struct {
-	cache *lru.Cache[int64, time.Time]
+	cache *lru.Cache[string, time.Time]
 	mu    sync.Mutex
 }
 
 // ShardedDataExportLimiter 分片数据导出限流器
-// 基于用户 ID 的限流，防止频繁导出
+// 基于用户 UID 的限流，防止频繁导出
 // 后台 goroutine 定期主动清理过期条目
 type ShardedDataExportLimiter struct {
 	shards    [shardCount]*dataExportLimiterShard
@@ -569,10 +569,10 @@ func NewShardedDataExportLimiter(interval time.Duration) *ShardedDataExportLimit
 		stopChan: make(chan struct{}),
 	}
 
-	for i := 0; i < shardCount; i++ {
-		cache, err := lru.New[int64, time.Time](maxEntriesPerShard)
+	for i := range shardCount {
+		cache, err := lru.New[string, time.Time](maxEntriesPerShard)
 		if err != nil {
-			cache, _ = lru.New[int64, time.Time](1)
+			cache, _ = lru.New[string, time.Time](1)
 		}
 		sdel.shards[i] = &dataExportLimiterShard{
 			cache: cache,
@@ -618,7 +618,7 @@ func (sdel *ShardedDataExportLimiter) cleanupExpiredEntries() {
 	now := time.Now()
 	cleanedCount := 0
 
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := sdel.shards[i]
 		if shard == nil || shard.cache == nil {
 			continue
@@ -644,23 +644,27 @@ func (sdel *ShardedDataExportLimiter) cleanupExpiredEntries() {
 	}
 }
 
-// getShard 获取 userID 对应的分片
-func (sdel *ShardedDataExportLimiter) getShard(userID int64) *dataExportLimiterShard {
-	return sdel.shards[uint64(userID)%shardCount]
+// getShard 获取 userUID 对应的分片
+func (sdel *ShardedDataExportLimiter) getShard(userUID string) *dataExportLimiterShard {
+	if userUID == "" {
+		return sdel.shards[0]
+	}
+	h := maphash.String(hashSeed, userUID)
+	return sdel.shards[h%shardCount]
 }
 
 // Allow 检查是否允许数据导出
 // 参数：
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - bool: true 表示允许，false 表示被限流
-func (sdel *ShardedDataExportLimiter) Allow(userID int64) bool {
-	if userID <= 0 {
+func (sdel *ShardedDataExportLimiter) Allow(userUID string) bool {
+	if userUID == "" {
 		return false
 	}
 
-	shard := sdel.getShard(userID)
+	shard := sdel.getShard(userUID)
 	now := time.Now()
 
 	shard.mu.Lock()
@@ -670,27 +674,27 @@ func (sdel *ShardedDataExportLimiter) Allow(userID int64) bool {
 		return true
 	}
 
-	lastTime, exists := shard.cache.Get(userID)
+	lastTime, exists := shard.cache.Get(userUID)
 	if exists && now.Sub(lastTime) < sdel.interval {
 		return false
 	}
 
-	shard.cache.Add(userID, now)
+	shard.cache.Add(userUID, now)
 	return true
 }
 
 // GetWaitTime 获取需要等待的时间（秒）
 // 参数：
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - int: 需要等待的秒数，0 表示可以立即导出
-func (sdel *ShardedDataExportLimiter) GetWaitTime(userID int64) int {
-	if userID <= 0 {
+func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
+	if userUID == "" {
 		return 0
 	}
 
-	shard := sdel.getShard(userID)
+	shard := sdel.getShard(userUID)
 
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
@@ -699,7 +703,7 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userID int64) int {
 		return 0
 	}
 
-	lastTime, exists := shard.cache.Get(userID)
+	lastTime, exists := shard.cache.Get(userUID)
 	if !exists {
 		return 0
 	}

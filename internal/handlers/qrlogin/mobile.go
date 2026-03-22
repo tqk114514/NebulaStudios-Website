@@ -160,12 +160,12 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	if claims == nil || claims.UserID <= 0 {
+	if claims == nil || claims.UID == "" {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusUnauthorized, "INVALID_SESSION", "Invalid claims in MobileConfirm")
 		return
 	}
 
-	userID := claims.UserID
+	userUID := claims.UID
 
 	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
@@ -188,14 +188,14 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	pcSessionToken, err := h.sessionService.GenerateToken(userID)
+	pcSessionToken, err := h.sessionService.GenerateToken(userUID)
 	if err != nil {
-		utils.LogError("QR-LOGIN", "MobileConfirm", err, fmt.Sprintf("Failed to generate PC session token: userID=%d", userID))
+		utils.LogError("QR-LOGIN", "MobileConfirm", err, fmt.Sprintf("Failed to generate PC session token: userUID=%s", userUID))
 		utils.RespondError(c, http.StatusInternalServerError, "SESSION_CREATE_FAILED")
 		return
 	}
 
-	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, originalToken, userID, pcSessionToken)
+	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, originalToken, userUID, pcSessionToken)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
@@ -211,7 +211,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		"sessionToken": pcSessionToken,
 	})
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Mobile confirmed login: userID=%d", userID))
+	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Mobile confirmed login: userUID=%s", userUID))
 	utils.RespondSuccess(c, gin.H{})
 }
 

@@ -288,7 +288,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 	clients := make([]*OAuthClient, 0)
 	pgxRows := rows.(interface {
 		Next() bool
-		Scan(dest ...interface{}) error
+		Scan(dest ...any) error
 	})
 
 	for pgxRows.Next() {
@@ -307,7 +307,6 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 
 	return clients, total, nil
 }
-
 
 // ====================  写入方法 ====================
 
@@ -361,7 +360,7 @@ func (r *OAuthClientRepository) Create(ctx context.Context, client *OAuthClient)
 //
 // 返回：
 //   - error: 错误信息
-func (r *OAuthClientRepository) Update(ctx context.Context, id int64, updates map[string]interface{}) error {
+func (r *OAuthClientRepository) Update(ctx context.Context, id int64, updates map[string]any) error {
 	// 参数验证
 	if id <= 0 {
 		return ErrOAuthClientRepoInvalidID
@@ -452,7 +451,7 @@ func (r *OAuthClientRepository) checkDB() error {
 //
 // 返回：
 //   - error: 处理后的错误
-func (r *OAuthClientRepository) handleQueryError(err error, operation string, identifier interface{}) error {
+func (r *OAuthClientRepository) handleQueryError(err error, operation string, identifier any) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrOAuthClientNotFound
 	}
@@ -474,7 +473,7 @@ func (r *OAuthClientRepository) handleQueryError(err error, operation string, id
 //
 // 返回：
 //   - error: 处理后的错误
-func (r *OAuthClientRepository) handleWriteError(err error, operation string, identifier interface{}) error {
+func (r *OAuthClientRepository) handleWriteError(err error, operation string, identifier any) error {
 	errStr := err.Error()
 
 	// 检查唯一约束冲突
@@ -495,9 +494,9 @@ func (r *OAuthClientRepository) handleWriteError(err error, operation string, id
 //   - string: SQL 查询
 //   - []interface{}: 参数列表
 //   - error: 错误信息
-func (r *OAuthClientRepository) buildUpdateQuery(id int64, updates map[string]interface{}) (string, []interface{}, error) {
+func (r *OAuthClientRepository) buildUpdateQuery(id int64, updates map[string]any) (string, []any, error) {
 	var setClauses []string
-	args := make([]interface{}, 0, len(updates)+1)
+	args := make([]any, 0, len(updates)+1)
 	argIndex := 1
 
 	for key, value := range updates {

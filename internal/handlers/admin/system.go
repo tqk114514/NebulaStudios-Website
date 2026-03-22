@@ -201,7 +201,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
@@ -215,11 +215,11 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogEmailWhitelistCreate(ctx, operatorID, item); err != nil {
+	if err := h.logRepo.LogEmailWhitelistCreate(ctx, operatorUID, item); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log create email whitelist", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist created: operatorID=%d, domain=%s", operatorID, domain))
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist created: operatorUID=%s, domain=%s", operatorUID, domain))
 	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
@@ -255,7 +255,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
@@ -298,11 +298,11 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorID, item); err != nil {
+	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorUID, item); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log update email whitelist", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist updated: operatorID=%d, id=%d", operatorID, id))
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist updated: operatorUID=%s, id=%d", operatorUID, id))
 	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
@@ -322,7 +322,7 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
@@ -336,10 +336,10 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorID, id); err != nil {
+	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorUID, id); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log delete email whitelist", err.Error())
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist deleted: operatorID=%d, id=%d", operatorID, id))
+	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist deleted: operatorUID=%s, id=%d", operatorUID, id))
 	utils.RespondSuccess(c, gin.H{"message": "Email whitelist entry deleted"})
 }

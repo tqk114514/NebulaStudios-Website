@@ -73,7 +73,7 @@ func minifyJSONFile(src, dst string) error {
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
 	// 验证 JSON 格式
-	var jsonData interface{}
+	var jsonData any
 	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
 	}

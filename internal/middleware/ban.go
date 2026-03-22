@@ -73,22 +73,22 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 	}
 
 	return func(c *gin.Context) {
-		// 第一步：尝试从 Context 获取用户 ID（如果 AuthMiddleware 已执行）
-		userID, ok := GetUserID(c)
+		// 第一步：尝试从 Context 获取用户 UID（如果 AuthMiddleware 已执行）
+		userUID, ok := GetUID(c)
 
-		// 第二步：如果 Context 中没有用户 ID，自己提取并验证 Token
+		// 第二步：如果 Context 中没有用户 UID，自己提取并验证 Token
 		if !ok {
 			token := ExtractToken(c)
 			if token != "" {
 				claims, err := sessionService.VerifyToken(token)
-				if err == nil && claims != nil && claims.UserID > 0 {
-					userID = claims.UserID
+				if err == nil && claims != nil && claims.UID != "" {
+					userUID = claims.UID
 					ok = true
 				}
 			}
 		}
 
-		// 如果还是没有用户 ID，未登录，跳过封禁检查
+		// 如果还是没有用户 UID，未登录，跳过封禁检查
 		if !ok {
 			c.Next()
 			return
@@ -99,9 +99,9 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 		defer cancel()
 
 		// 从缓存或数据库获取用户
-		user, err := userCache.GetOrLoad(ctx, userID, userRepo.FindByID)
+		user, err := userCache.GetOrLoad(ctx, userUID, userRepo.FindByUID)
 		if err != nil {
-			utils.LogError("BAN-MW", "BanCheckMiddleware", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
+			utils.LogError("BAN-MW", "BanCheckMiddleware", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
 			// 获取用户失败，允许继续（避免误杀）
 			c.Next()
 			return
@@ -109,8 +109,8 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 
 		// 检查封禁状态
 		if user.CheckBanned() {
-			utils.LogWarn("BAN-MW", "Banned user attempted API access", fmt.Sprintf("userID=%d, reason=%s",
-				userID, user.BanReason.String))
+			utils.LogWarn("BAN-MW", "Banned user attempted API access", fmt.Sprintf("userUID=%s, reason=%s",
+				userUID, user.BanReason.String))
 			
 			// 构建封禁响应
 			response := gin.H{

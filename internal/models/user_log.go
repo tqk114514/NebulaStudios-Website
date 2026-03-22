@@ -58,7 +58,7 @@ const (
 // UserLog 用户操作日志
 type UserLog struct {
 	ID        int64           `json:"id"`
-	UserID    int64           `json:"user_id"`
+	UserUID   string          `json:"user_uid"`
 	Action    string          `json:"action"`
 	Details   json.RawMessage `json:"details,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
@@ -125,8 +125,8 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 	if log == nil {
 		return errors.New("log object is nil")
 	}
-	if log.UserID <= 0 {
-		return errors.New("user_id is required")
+	if log.UserUID == "" {
+		return errors.New("user_uid is required")
 	}
 	if log.Action == "" {
 		return errors.New("action is required")
@@ -137,39 +137,39 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 	}
 
 	err := pool.QueryRow(ctx, `
-		INSERT INTO user_logs (user_id, action, details)
+		INSERT INTO user_logs (user_uid, action, details)
 		VALUES ($1, $2, $3)
 		RETURNING id, created_at
-	`, log.UserID, log.Action, log.Details).Scan(&log.ID, &log.CreatedAt)
+	`, log.UserUID, log.Action, log.Details).Scan(&log.ID, &log.CreatedAt)
 
 	if err != nil {
-		return utils.LogError("USER_LOG", "Create", err, fmt.Sprintf("user_id=%d, action=%s", log.UserID, log.Action))
+		return utils.LogError("USER_LOG", "Create", err, fmt.Sprintf("user_uid=%s, action=%s", log.UserUID, log.Action))
 	}
 
-	utils.LogInfo("USER_LOG", fmt.Sprintf("Log created: id=%d, user_id=%d, action=%s", log.ID, log.UserID, log.Action))
+	utils.LogInfo("USER_LOG", fmt.Sprintf("Log created: id=%d, user_uid=%s, action=%s", log.ID, log.UserUID, log.Action))
 	return nil
 }
 
 // LogChangePassword 记录修改密码操作
-func (r *UserLogRepository) LogChangePassword(ctx context.Context, userID int64) error {
+func (r *UserLogRepository) LogChangePassword(ctx context.Context, userUID string) error {
 	log := &UserLog{
-		UserID: userID,
+		UserUID: userUID,
 		Action: UserActionChangePassword,
 	}
 	return r.Create(ctx, log)
 }
 
 // LogRegister 记录用户注册操作
-func (r *UserLogRepository) LogRegister(ctx context.Context, userID int64) error {
+func (r *UserLogRepository) LogRegister(ctx context.Context, userUID string) error {
 	log := &UserLog{
-		UserID: userID,
+		UserUID: userUID,
 		Action: UserActionRegister,
 	}
 	return r.Create(ctx, log)
 }
 
 // LogChangeUsername 记录修改用户名操作
-func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userID int64, oldUsername, newUsername string) error {
+func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userUID string, oldUsername, newUsername string) error {
 	details := ChangeUsernameDetails{
 		OldUsername: oldUsername,
 		NewUsername: newUsername,
@@ -180,7 +180,7 @@ func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userID int64,
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionChangeUsername,
 		Details: detailsJSON,
 	}
@@ -188,7 +188,7 @@ func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userID int64,
 }
 
 // LogChangeAvatar 记录修改头像操作
-func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userID int64, oldURL, newURL string) error {
+func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string) error {
 	details := ChangeAvatarDetails{
 		OldAvatarURL: oldURL,
 		NewAvatarURL: newURL,
@@ -199,7 +199,7 @@ func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userID int64, o
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionChangeAvatar,
 		Details: detailsJSON,
 	}
@@ -207,7 +207,7 @@ func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userID int64, o
 }
 
 // LogLinkMicrosoft 记录绑定微软账户操作
-func (r *UserLogRepository) LogLinkMicrosoft(ctx context.Context, userID int64, microsoftID, microsoftName string) error {
+func (r *UserLogRepository) LogLinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error {
 	details := LinkMicrosoftDetails{
 		MicrosoftID:   microsoftID,
 		MicrosoftName: microsoftName,
@@ -218,7 +218,7 @@ func (r *UserLogRepository) LogLinkMicrosoft(ctx context.Context, userID int64, 
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionLinkMicrosoft,
 		Details: detailsJSON,
 	}
@@ -226,7 +226,7 @@ func (r *UserLogRepository) LogLinkMicrosoft(ctx context.Context, userID int64, 
 }
 
 // LogUnlinkMicrosoft 记录解绑微软账户操作
-func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userID int64, microsoftID, microsoftName string) error {
+func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error {
 	details := UnlinkMicrosoftDetails{
 		MicrosoftID:   microsoftID,
 		MicrosoftName: microsoftName,
@@ -237,7 +237,7 @@ func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userID int64
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionUnlinkMicrosoft,
 		Details: detailsJSON,
 	}
@@ -245,16 +245,16 @@ func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userID int64
 }
 
 // LogDeleteAccount 记录删除账户操作
-func (r *UserLogRepository) LogDeleteAccount(ctx context.Context, userID int64) error {
+func (r *UserLogRepository) LogDeleteAccount(ctx context.Context, userUID string) error {
 	log := &UserLog{
-		UserID: userID,
+		UserUID: userUID,
 		Action: UserActionDeleteAccount,
 	}
 	return r.Create(ctx, log)
 }
 
 // LogBanned 记录被封禁
-func (r *UserLogRepository) LogBanned(ctx context.Context, userID int64, reason string, unbanAt *time.Time) error {
+func (r *UserLogRepository) LogBanned(ctx context.Context, userUID string, reason string, unbanAt *time.Time) error {
 	details := BannedDetails{
 		Reason:  reason,
 		UnbanAt: unbanAt,
@@ -265,7 +265,7 @@ func (r *UserLogRepository) LogBanned(ctx context.Context, userID int64, reason 
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionBanned,
 		Details: detailsJSON,
 	}
@@ -273,16 +273,16 @@ func (r *UserLogRepository) LogBanned(ctx context.Context, userID int64, reason 
 }
 
 // LogUnbanned 记录被解封
-func (r *UserLogRepository) LogUnbanned(ctx context.Context, userID int64) error {
+func (r *UserLogRepository) LogUnbanned(ctx context.Context, userUID string) error {
 	log := &UserLog{
-		UserID: userID,
+		UserUID: userUID,
 		Action: UserActionUnbanned,
 	}
 	return r.Create(ctx, log)
 }
 
 // LogOAuthAuthorize 记录 OAuth 授权第三方应用
-func (r *UserLogRepository) LogOAuthAuthorize(ctx context.Context, userID int64, clientID, clientName, scope string) error {
+func (r *UserLogRepository) LogOAuthAuthorize(ctx context.Context, userUID string, clientID, clientName, scope string) error {
 	details := OAuthAuthorizeDetails{
 		ClientID:   clientID,
 		ClientName: clientName,
@@ -294,7 +294,7 @@ func (r *UserLogRepository) LogOAuthAuthorize(ctx context.Context, userID int64,
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionOAuthAuthorize,
 		Details: detailsJSON,
 	}
@@ -302,7 +302,7 @@ func (r *UserLogRepository) LogOAuthAuthorize(ctx context.Context, userID int64,
 }
 
 // LogOAuthRevoke 记录 OAuth 撤销第三方应用授权
-func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userID int64, clientID, clientName string) error {
+func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userUID string, clientID, clientName string) error {
 	details := OAuthRevokeDetails{
 		ClientID:   clientID,
 		ClientName: clientName,
@@ -313,7 +313,7 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userID int64, cl
 	}
 
 	log := &UserLog{
-		UserID:  userID,
+		UserUID: userUID,
 		Action:  UserActionOAuthRevoke,
 		Details: detailsJSON,
 	}
@@ -323,8 +323,8 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userID int64, cl
 
 // ====================  查询方法 ====================
 
-// FindByUserID 查询用户的操作日志（分页）
-func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page, pageSize int) ([]*UserLog, int64, error) {
+// FindByUserUID 查询用户的操作日志（分页）
+func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, page, pageSize int) ([]*UserLog, int64, error) {
 	if pool == nil {
 		return nil, 0, errors.New("database not ready")
 	}
@@ -334,30 +334,30 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 	// 查询总数
 	var total int64
 	err := pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM user_logs WHERE user_id = $1",
-		userID,
+		"SELECT COUNT(*) FROM user_logs WHERE user_uid = $1",
+		userUID,
 	).Scan(&total)
 	if err != nil {
-		return nil, 0, utils.LogError("USER_LOG", "CountLogs", err, fmt.Sprintf("user_id=%d", userID))
+		return nil, 0, utils.LogError("USER_LOG", "CountLogs", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 
 	// 查询日志列表
 	rows, err := pool.Query(ctx, `
-		SELECT id, user_id, action, details, created_at
+		SELECT id, user_uid, action, details, created_at
 		FROM user_logs
-		WHERE user_id = $1
+		WHERE user_uid = $1
 		ORDER BY id DESC
 		LIMIT $2 OFFSET $3
-	`, userID, pageSize, offset)
+	`, userUID, pageSize, offset)
 	if err != nil {
-		return nil, 0, utils.LogError("USER_LOG", "QueryLogs", err, fmt.Sprintf("user_id=%d", userID))
+		return nil, 0, utils.LogError("USER_LOG", "QueryLogs", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 	defer rows.Close()
 
 	logs := make([]*UserLog, 0)
 	for rows.Next() {
 		log := &UserLog{}
-		err := rows.Scan(&log.ID, &log.UserID, &log.Action, &log.Details, &log.CreatedAt)
+		err := rows.Scan(&log.ID, &log.UserUID, &log.Action, &log.Details, &log.CreatedAt)
 		if err != nil {
 			utils.LogWarn("USER_LOG", fmt.Sprintf("Failed to scan log: %v", err))
 			continue
@@ -368,19 +368,19 @@ func (r *UserLogRepository) FindByUserID(ctx context.Context, userID int64, page
 	return logs, total, nil
 }
 
-// DeleteByUserID 删除用户的所有日志（账户删除时调用）
+// DeleteByUserUID 删除用户的所有日志（账户删除时调用）
 // 注意：根据隐私政策，用户日志保留6个月，此方法仅供特殊情况使用
-func (r *UserLogRepository) DeleteByUserID(ctx context.Context, userID int64) error {
+func (r *UserLogRepository) DeleteByUserUID(ctx context.Context, userUID string) error {
 	if pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM user_logs WHERE user_id = $1", userID)
+	_, err := pool.Exec(ctx, "DELETE FROM user_logs WHERE user_uid = $1", userUID)
 	if err != nil {
-		return utils.LogError("USER_LOG", "DeleteByUserID", err, fmt.Sprintf("user_id=%d", userID))
+		return utils.LogError("USER_LOG", "DeleteByUserUID", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 
-	utils.LogInfo("USER_LOG", fmt.Sprintf("Logs deleted: user_id=%d", userID))
+	utils.LogInfo("USER_LOG", fmt.Sprintf("Logs deleted: user_uid=%s", userUID))
 	return nil
 }
 

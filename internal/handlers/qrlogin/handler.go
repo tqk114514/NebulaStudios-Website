@@ -178,7 +178,7 @@ func (h *QRLoginHandler) decryptToken(encryptedToken string) (string, error) {
 		return "", fmt.Errorf("%w: decryption failed: %v", ErrQRInvalidToken, err)
 	}
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal(decrypted, &payload); err != nil {
 		return "", fmt.Errorf("%w: invalid payload: %v", ErrQRInvalidToken, err)
 	}

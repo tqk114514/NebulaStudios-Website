@@ -71,8 +71,8 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		// 获取客户端 IP
 		clientIP := utils.GetClientIP(c)
 
-		// 获取用户 ID（由 AuthMiddleware 设置）
-		userID, ok := middleware.GetUserID(c)
+		// 获取用户 UID（由 AuthMiddleware 设置）
+		userUID, ok := middleware.GetUID(c)
 		if !ok {
 			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "UNAUTHORIZED")
@@ -83,7 +83,7 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), adminCheckTimeout)
 		defer cancel()
 
-		user, err := userRepo.FindByID(ctx, userID)
+		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
 			utils.LogError("ADMIN-MW", "AdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
@@ -139,8 +139,8 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		// 获取客户端 IP
 		clientIP := utils.GetClientIP(c)
 
-		// 获取用户 ID（由 AuthMiddleware 设置）
-		userID, ok := middleware.GetUserID(c)
+		// 获取用户 UID（由 AuthMiddleware 设置）
+		userUID, ok := middleware.GetUID(c)
 		if !ok {
 			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "UNAUTHORIZED")
@@ -151,7 +151,7 @@ func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), adminCheckTimeout)
 		defer cancel()
 
-		user, err := userRepo.FindByID(ctx, userID)
+		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
 			utils.LogError("ADMIN-MW", "SuperAdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
 			respondForbidden(c, "USER_NOT_FOUND")
@@ -272,7 +272,7 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 
 		// 验证 Token
 		claims, err := sessionService.VerifyToken(token)
-		if err != nil || claims == nil || claims.UserID <= 0 {
+		if err != nil || claims == nil || claims.UID == "" {
 			// Token 无效，伪装成 404
 			utils.LogDebug("ADMIN-MW", "Admin page access with invalid token, showing 404")
 			handlers.NotFoundHandler(c)
@@ -280,13 +280,13 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 			return
 		}
 
-		userID := claims.UserID
+		userUID := claims.UID
 
 		// 直接查询数据库，不走缓存（安全优先）
 		ctx, cancel := context.WithTimeout(c.Request.Context(), adminCheckTimeout)
 		defer cancel()
 
-		user, err := userRepo.FindByID(ctx, userID)
+		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil || user == nil {
 			// 用户不存在，伪装成 404
 			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
@@ -304,8 +304,8 @@ func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *servic
 			return
 		}
 
-		// 将用户 ID 和角色挂载到 Context
-		c.Set(middleware.ContextKeyUserID, userID)
+		// 将用户 UID 和角色挂载到 Context
+		c.Set(middleware.ContextKeyUID, userUID)
 		c.Set(ContextKeyUserRole, user.Role)
 		c.Next()
 	}
