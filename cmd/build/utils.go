@@ -108,7 +108,7 @@ func addToManifest(originalPath string) (string, error) {
 	hashedName := fmt.Sprintf("%s.%s%s", base, hash, ext)
 	hashedPath := filepath.Join(dir, hashedName)
 
-	if err := copyFile(originalPath, hashedPath); err != nil {
+	if err := os.Rename(originalPath, hashedPath); err != nil {
 		return "", err
 	}
 
