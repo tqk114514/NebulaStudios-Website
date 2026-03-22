@@ -138,7 +138,9 @@ func minifyHTMLFile(src, outDir string) error {
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
-	minified := minifyHTML(string(data))
+	content := string(data)
+	content = replaceAssetRefs(content)
+	minified := minifyHTML(content)
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
 
