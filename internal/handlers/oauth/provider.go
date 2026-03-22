@@ -101,6 +101,8 @@ func NewOAuthProviderHandler(
 //   - response_type: 响应类型，必须为 "code"（必需）
 //   - scope: 请求的权限范围（必需）
 //   - state: 状态参数（推荐）
+//   - code_challenge: PKCE code_challenge（如果是公共客户端）
+//   - code_challenge_method: code_challenge 方法，支持 plain 和 S256
 //
 // 响应：
 //   - 重定向到授权页面（用户已登录）
@@ -113,6 +115,16 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	responseType := c.Query("response_type")
 	scope := c.Query("scope")
 	state := c.Query("state")
+	codeChallenge := c.Query("code_challenge")
+	codeChallengeMethod := c.Query("code_challenge_method")
+
+	// 验证 PKCE 参数（如果提供了 code_challenge）
+	if codeChallenge != "" {
+		if !utils.ValidateCodeChallenge(codeChallenge, codeChallengeMethod) {
+			h.redirectToErrorPage(c, "invalid_request", "Invalid code_challenge or code_challenge_method")
+			return
+		}
+	}
 
 	// 验证必需参数
 	if clientID == "" {
@@ -162,7 +174,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
 		// 未登录，重定向到登录页面，登录后返回
-		returnURL := h.buildAuthorizeURL(clientID, redirectURI, responseType, scope, state)
+		returnURL := h.buildAuthorizeURL(clientID, redirectURI, responseType, scope, state, codeChallenge, codeChallengeMethod)
 		loginURL := h.baseURL + "/account/login?return=" + url.QueryEscape(returnURL)
 		c.Redirect(http.StatusFound, loginURL)
 		return
@@ -184,7 +196,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	}
 
 	// 重定向到授权页面（带参数）
-	authPageURL := h.buildAuthPageURL(clientID, redirectURI, normalizedScope, state)
+	authPageURL := h.buildAuthPageURL(clientID, redirectURI, normalizedScope, state, codeChallenge, codeChallengeMethod)
 	c.Redirect(http.StatusFound, authPageURL)
 }
 
@@ -280,6 +292,8 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 //   - redirect_uri: 回调地址（必需）
 //   - scope: 请求的权限范围（必需）
 //   - state: 状态参数（可选）
+//   - code_challenge: PKCE code_challenge
+//   - code_challenge_method: PKCE code_challenge_method
 //   - decision: 用户决定，"approve" 或 "deny"（必需）
 //
 // 响应：
@@ -290,6 +304,8 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	redirectURI := c.PostForm("redirect_uri")
 	scope := c.PostForm("scope")
 	state := c.PostForm("state")
+	codeChallenge := c.PostForm("code_challenge")
+	codeChallengeMethod := c.PostForm("code_challenge_method")
 	decision := c.PostForm("decision")
 
 	// 验证必需参数
@@ -349,7 +365,7 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	}
 
 	// 生成授权码
-	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userUID, redirectURI, normalizedScope)
+	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userUID, redirectURI, normalizedScope, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userUID=%s, clientID=%s", userUID, clientID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to create authorization code")
@@ -425,6 +441,7 @@ func (h *OAuthProviderHandler) Token(c *gin.Context) {
 func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clientID string) {
 	code := c.PostForm("code")
 	redirectURI := c.PostForm("redirect_uri")
+	codeVerifier := c.PostForm("code_verifier")
 
 	if code == "" {
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_request", "Missing code parameter")
@@ -437,7 +454,7 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 	}
 
 	// 换取 Token
-	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI)
+	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI, codeVerifier)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid authorization code")
@@ -619,7 +636,7 @@ func (h *OAuthProviderHandler) parseScopeList(scope string) []string {
 }
 
 // buildAuthorizeURL 构建授权 URL
-func (h *OAuthProviderHandler) buildAuthorizeURL(clientID, redirectURI, responseType, scope, state string) string {
+func (h *OAuthProviderHandler) buildAuthorizeURL(clientID, redirectURI, responseType, scope, state, codeChallenge, codeChallengeMethod string) string {
 	params := url.Values{}
 	params.Set("client_id", clientID)
 	params.Set("redirect_uri", redirectURI)
@@ -627,6 +644,12 @@ func (h *OAuthProviderHandler) buildAuthorizeURL(clientID, redirectURI, response
 	params.Set("scope", scope)
 	if state != "" {
 		params.Set("state", state)
+	}
+	if codeChallenge != "" {
+		params.Set("code_challenge", codeChallenge)
+		if codeChallengeMethod != "" {
+			params.Set("code_challenge_method", codeChallengeMethod)
+		}
 	}
 	return h.baseURL + "/oauth/authorize?" + params.Encode()
 }
@@ -676,13 +699,19 @@ func (h *OAuthProviderHandler) redirectToErrorPage(c *gin.Context, errorCode, er
 }
 
 // buildAuthPageURL 构建授权页面 URL
-func (h *OAuthProviderHandler) buildAuthPageURL(clientID, redirectURI, scope, state string) string {
+func (h *OAuthProviderHandler) buildAuthPageURL(clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod string) string {
 	params := url.Values{}
 	params.Set("client_id", clientID)
 	params.Set("redirect_uri", redirectURI)
 	params.Set("scope", scope)
 	if state != "" {
 		params.Set("state", state)
+	}
+	if codeChallenge != "" {
+		params.Set("code_challenge", codeChallenge)
+		if codeChallengeMethod != "" {
+			params.Set("code_challenge_method", codeChallengeMethod)
+		}
 	}
 	return h.baseURL + "/account/oauth?" + params.Encode()
 }
