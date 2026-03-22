@@ -359,13 +359,13 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, role,
+		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -397,13 +397,13 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, role,
+		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE username = $1
 	`, username).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -435,13 +435,13 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 
 	user := &User{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, username, email, password, avatar_url, role,
+		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
 		FROM users WHERE microsoft_id = $1
 	`, msID).Scan(
-		&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -697,7 +697,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = pool.Query(ctx, `
-			SELECT id, username, email, password, avatar_url, role,
+			SELECT id, uid, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       is_banned, ban_reason, banned_at, banned_by, unban_at,
 			       created_at, updated_at
@@ -717,7 +717,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = pool.Query(ctx, `
-			SELECT id, username, email, password, avatar_url, role,
+			SELECT id, uid, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       is_banned, ban_reason, banned_at, banned_by, unban_at,
 			       created_at, updated_at
@@ -743,7 +743,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	for pgxRows.Next() {
 		user := &User{}
 		err := pgxRows.Scan(
-			&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+			&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 			&user.CreatedAt, &user.UpdatedAt,
