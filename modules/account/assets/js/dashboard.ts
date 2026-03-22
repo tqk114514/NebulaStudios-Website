@@ -375,8 +375,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
-    // 显示封禁状态
-    if (checkBanned()) {
+    /**
+     * 更新封禁状态显示
+     */
+    function updateBannedDisplay(): void {
+      if (!checkBanned()) {
+        return;
+      }
+
       const bannedStamp = document.getElementById('banned-stamp');
       const bannedInfo = document.getElementById('banned-info');
       const bannedReason = document.getElementById('banned-reason');
@@ -394,12 +400,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (unbanAt) {
         if (user.unban_at) {
           unbanAt.textContent = formatDateTime(user.unban_at);
+          unbanAt.classList.remove('is-permanent');
         } else {
           unbanAt.textContent = t('dashboard.permanentBan');
           unbanAt.classList.add('is-permanent');
         }
       }
     }
+
+    // 显示封禁状态
+    updateBannedDisplay();
 
     // 显示用户名
     if (usernameEl) {
@@ -528,6 +538,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       updatePageTitle();
       // 语言切换后重新应用微软账户状态和按钮文本
       updateMicrosoftStatus(!!user.microsoft_id, user.microsoft_name || null);
+      // 语言切换后重新应用封禁状态
+      updateBannedDisplay();
       // 触发高度过渡动画
       requestAnimationFrame(() => requestAnimationFrame(adjustInfoListHeight));
     });
