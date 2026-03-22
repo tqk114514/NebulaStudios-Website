@@ -28,31 +28,31 @@
     <form id="register-form">
       <div class="form-group">
         <label for="register-username" class="sr-only" data-i18n="register.usernamePlaceholder"></label>
-        <input type="text" id="register-username" name="username" placeholder="" data-i18n-placeholder="register.usernamePlaceholder" aria-label="Username" autocomplete="username" required>
+        <input type="text" id="register-username" name="username" placeholder="" data-i18n-placeholder="register.usernamePlaceholder" autocomplete="username" required>
         <div id="username-error" class="form-error is-hidden">
           <span id="username-error-text"></span>
         </div>
       </div>
       <div class="form-group">
         <label for="register-email" class="sr-only" data-i18n="register.emailPlaceholder"></label>
-        <input type="email" id="register-email" name="email" placeholder="" data-i18n-placeholder="register.emailPlaceholder" aria-label="Email" autocomplete="email" required>
+        <input type="email" id="register-email" name="email" placeholder="" data-i18n-placeholder="register.emailPlaceholder" autocomplete="email" required>
         <div id="email-error" class="form-error is-hidden">
           <span id="email-error-text" data-i18n="register.emailNotSupported"></span>
-          <a href="#" id="show-supported-emails" class="error-link" data-i18n="register.viewSupportedEmails" aria-label="View supported emails"></a>
+          <a href="#" id="show-supported-emails" class="error-link" data-i18n="register.viewSupportedEmails"></a>
         </div>
       </div>
       <div class="form-group verification-input-group">
         <span id="code-expiry-timer" class="code-expiry-timer"></span>
         <label for="register-verification-code" class="sr-only" data-i18n="register.verificationCodePlaceholder"></label>
-        <input type="text" id="register-verification-code" name="verificationCode" placeholder="" data-i18n-placeholder="register.verificationCodePlaceholder" aria-label="Verification Code" autocomplete="one-time-code" maxlength="6" required>
+        <input type="text" id="register-verification-code" name="verificationCode" placeholder="" data-i18n-placeholder="register.verificationCodePlaceholder" autocomplete="one-time-code" maxlength="6" required>
       </div>
       <div class="form-group">
-        <button type="button" id="send-verification-code" class="button-secondary" data-i18n="register.sendCodeButton" aria-label="Send verification code" disabled></button>
+        <button type="button" id="send-verification-code" class="button-secondary" data-i18n="register.sendCodeButton" disabled></button>
         <div id="captcha-container" class="captcha-wrapper is-hidden"></div>
       </div>
       <div class="form-group">
         <label for="register-password" class="sr-only" data-i18n="register.passwordPlaceholder"></label>
-        <input type="password" id="register-password" name="password" placeholder="" data-i18n-placeholder="register.passwordPlaceholder" aria-label="Password" autocomplete="new-password" required>
+        <input type="password" id="register-password" name="password" placeholder="" data-i18n-placeholder="register.passwordPlaceholder" autocomplete="new-password" required>
         <div class="password-requirements">
           <div class="req-item" id="req-length" data-i18n="register.reqLength"></div>
           <div class="req-item" id="req-number" data-i18n="register.reqNumber"></div>
@@ -62,9 +62,9 @@
       </div>
       <div class="form-group">
         <label for="register-password-confirm" class="sr-only" data-i18n="register.confirmPasswordPlaceholder"></label>
-        <input type="password" id="register-password-confirm" name="passwordConfirm" placeholder="" data-i18n-placeholder="register.confirmPasswordPlaceholder" aria-label="Confirm Password" autocomplete="new-password" required>
+        <input type="password" id="register-password-confirm" name="passwordConfirm" placeholder="" data-i18n-placeholder="register.confirmPasswordPlaceholder" autocomplete="new-password" required>
       </div>
-      <button type="submit" class="button-primary" data-i18n="register.submitButton" aria-label="Register"></button>
+      <button type="submit" class="button-primary" data-i18n="register.submitButton"></button>
       <p class="policy-agree">
         <span data-i18n="policy.agreeByRegister"></span>
         <a href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
@@ -73,7 +73,7 @@
       </p>
     </form>
     <div class="footer-links">
-      <a href="/account/login" data-i18n="register.backToLogin" aria-label="Back to login"></a>
+      <a href="/account/login" data-i18n="register.backToLogin"></a>
     </div>
   </div>
   <div class="page-footer" data-i18n="footer.copyright"></div>
