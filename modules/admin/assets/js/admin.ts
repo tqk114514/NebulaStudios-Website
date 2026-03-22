@@ -20,7 +20,7 @@ import { loadStats } from './stats';
 import { loadUsers, setCurrentUserRole, initUsersPage } from './users';
 import { loadLogs } from './logs';
 import { loadOAuthClients, initOAuthPage } from './oauth';
-import { initWhitelistPage, loadWhitelist } from './email-whitelist';
+import { initWhitelistPage } from './email-whitelist';
 
 // ==================== DOM 元素 ====================
 
