@@ -289,6 +289,14 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 
 // CreateAuthorizationCode 创建授权码
 func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope, codeChallenge, codeChallengeMethod string) (string, error) {
+	// 强制要求 PKCE
+	if codeChallenge == "" {
+		return "", ErrOAuthInvalidGrant
+	}
+	if !utils.ValidateCodeChallenge(codeChallenge, codeChallengeMethod) {
+		return "", ErrOAuthInvalidGrant
+	}
+
 	code, err := s.generateRandomHex(oauthAuthCodeLength)
 	if err != nil {
 		utils.LogError("OAUTH", "CreateAuthCode", err, "Failed to generate auth code")
@@ -345,17 +353,15 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, "", ErrOAuthRedirectMismatch
 	}
 
-	// PKCE 验证
-	if authCode.CodeChallenge != "" {
-		if codeVerifier == "" {
-			return nil, "", ErrOAuthInvalidGrant
-		}
-		if !utils.ValidateCodeVerifier(codeVerifier) {
-			return nil, "", ErrOAuthInvalidGrant
-		}
-		if !utils.VerifyPKCE(codeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod) {
-			return nil, "", ErrOAuthInvalidGrant
-		}
+	// 强制要求 PKCE 验证
+	if codeVerifier == "" {
+		return nil, "", ErrOAuthInvalidGrant
+	}
+	if !utils.ValidateCodeVerifier(codeVerifier) {
+		return nil, "", ErrOAuthInvalidGrant
+	}
+	if !utils.VerifyPKCE(codeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod) {
+		return nil, "", ErrOAuthInvalidGrant
 	}
 
 	// 标记为已使用
