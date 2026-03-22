@@ -51,25 +51,25 @@ function translateBanReason(reason: string): string {
 let currentPage = 1;
 let currentSearch = '';
 let currentUserRole = 0;
-let usersCache: Map<number, CachedUser> = new Map();
+let usersCache: Map<string, CachedUser> = new Map();
 
 /** 缓存最大条目数 */
 const CACHE_MAX_SIZE = 100;
 
 /**
  * 添加用户到缓存（带大小限制）
- * @param userId - 用户 ID
+ * @param uid - 用户 UID
  * @param cached - 缓存数据
  */
-function setCacheUser(userId: number, cached: CachedUser): void {
+function setCacheUser(uid: string, cached: CachedUser): void {
   // 如果缓存已满，删除最旧的条目
-  if (usersCache.size >= CACHE_MAX_SIZE && !usersCache.has(userId)) {
+  if (usersCache.size >= CACHE_MAX_SIZE && !usersCache.has(uid)) {
     const oldestKey = usersCache.keys().next().value;
     if (oldestKey !== undefined) {
       usersCache.delete(oldestKey);
     }
   }
-  usersCache.set(userId, cached);
+  usersCache.set(uid, cached);
 }
 
 // ==================== DOM 元素 ====================
@@ -89,36 +89,36 @@ async function getUsers(page: number, search: string): Promise<UserListResponse 
   return result.success ? result.data! : null;
 }
 
-async function getUser(id: number): Promise<UserPublic | null> {
-  const result = await fetchApi<UserPublic>(`/admin/api/users/${id}`);
+async function getUser(uid: string): Promise<UserPublic | null> {
+  const result = await fetchApi<UserPublic>(`/admin/api/users/${uid}`);
   return result.success ? result.data! : null;
 }
 
-async function setUserRole(id: number, role: number): Promise<boolean> {
-  const result = await fetchApi(`/admin/api/users/${id}/role`, {
+async function setUserRole(uid: string, role: number): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${uid}/role`, {
     method: 'PUT',
     body: JSON.stringify({ role })
   });
   return result.success;
 }
 
-async function deleteUser(id: number): Promise<boolean> {
-  const result = await fetchApi(`/admin/api/users/${id}`, {
+async function deleteUser(uid: string): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${uid}`, {
     method: 'DELETE'
   });
   return result.success;
 }
 
-async function banUser(id: number, reason: string, days: number): Promise<boolean> {
-  const result = await fetchApi(`/admin/api/users/${id}/ban`, {
+async function banUser(uid: string, reason: string, days: number): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${uid}/ban`, {
     method: 'POST',
     body: JSON.stringify({ reason, days })
   });
   return result.success;
 }
 
-async function unbanUser(id: number): Promise<boolean> {
-  const result = await fetchApi(`/admin/api/users/${id}/unban`, {
+async function unbanUser(uid: string): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/users/${uid}/unban`, {
     method: 'POST'
   });
   return result.success;
@@ -133,14 +133,14 @@ async function unbanUser(id: number): Promise<boolean> {
  */
 function renderUserRow(user: UserPublic): string {
   return `
-    <tr data-user-id="${user.id}">
-      <td>${user.id}</td>
+    <tr data-user-uid="${user.uid}">
+      <td>${user.uid}</td>
       <td>${escapeHtml(user.username)}</td>
       <td>${escapeHtml(user.email)}</td>
       <td><span class="role-badge ${ROLE_CLASSES[user.role]}">${ROLE_NAMES[user.role]}</span></td>
       <td>${formatDate(user.created_at)}</td>
       <td>
-        <button class="action-btn view" data-user-id="${user.id}">查看</button>
+        <button class="action-btn view" data-user-uid="${user.uid}">查看</button>
       </td>
     </tr>
   `;
@@ -153,33 +153,33 @@ function renderUserRow(user: UserPublic): string {
 function bindUserRowEvents(row: HTMLTableRowElement): void {
   const btn = row.querySelector('.action-btn.view');
   btn?.addEventListener('click', () => {
-    const userId = Number((btn as HTMLElement).dataset.userId);
-    showUserDetail(userId);
+    const userUid = (btn as HTMLElement).dataset.userUid!;
+    showUserDetail(userUid);
   });
 }
 
 /**
  * 更新指定用户的表格行（重新获取数据并刷新显示）
- * @param userId - 用户 ID
+ * @param userUid - 用户 UID
  */
-async function updateUserRow(userId: number): Promise<void> {
+async function updateUserRow(userUid: string): Promise<void> {
   if (!usersTableBody) {
     console.error('[ADMIN][USERS] usersTableBody element not found in updateUserRow');
     return;
   }
   
-  const oldRow = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
+  const oldRow = usersTableBody.querySelector(`tr[data-user-uid="${userUid}"]`) as HTMLTableRowElement;
   if (!oldRow) return;
 
   oldRow.classList.add('is-updating');
 
-  const user = await getUser(userId);
+  const user = await getUser(userUid);
   if (!user) {
     oldRow.classList.remove('is-updating');
     return;
   }
 
-  setCacheUser(userId, { user, cachedAt: Date.now() });
+  setCacheUser(userUid, { user, cachedAt: Date.now() });
 
   const temp = document.createElement('tbody');
   temp.innerHTML = renderUserRow(user);
@@ -191,18 +191,18 @@ async function updateUserRow(userId: number): Promise<void> {
 
 /**
  * 从表格中移除用户行（带动画效果）
- * @param userId - 用户 ID
+ * @param userUid - 用户 UID
  */
-function removeUserRow(userId: number): void {
+function removeUserRow(userUid: string): void {
   if (!usersTableBody) {
     console.error('[ADMIN][USERS] usersTableBody element not found in removeUserRow');
     return;
   }
   
-  const row = usersTableBody.querySelector(`tr[data-user-id="${userId}"]`) as HTMLTableRowElement;
+  const row = usersTableBody.querySelector(`tr[data-user-uid="${userUid}"]`) as HTMLTableRowElement;
   if (!row) return;
 
-  usersCache.delete(userId);
+  usersCache.delete(userUid);
   row.classList.add('is-deleting');
 
   setTimeout(() => {
@@ -244,7 +244,7 @@ export async function loadUsers(): Promise<void> {
   }
 
   const now = Date.now();
-  data.users.forEach(user => setCacheUser(user.id, { user, cachedAt: now }));
+  data.users.forEach(user => setCacheUser(user.uid, { user, cachedAt: now }));
 
   usersTableBody.innerHTML = data.users.map(user => renderUserRow(user)).join('');
 
@@ -270,7 +270,7 @@ export async function loadUsers(): Promise<void> {
 const userDetailSkeleton = `
   <div class="user-detail">
     <div class="user-detail-row">
-      <span class="user-detail-label">ID</span>
+      <span class="user-detail-label">UID</span>
       <span class="user-detail-value skeleton-text"></span>
     </div>
     <div class="user-detail-row">
@@ -346,8 +346,8 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
   userModalBody.innerHTML = `
     <div class="user-detail">
       <div class="user-detail-row">
-        <span class="user-detail-label">ID</span>
-        <span class="user-detail-value">${user.id}</span>
+        <span class="user-detail-label">UID</span>
+        <span class="user-detail-value">${user.uid}</span>
       </div>
       <div class="user-detail-row">
         <span class="user-detail-label">用户名</span>
@@ -398,9 +398,9 @@ function bindUserDetailButtons(user: UserPublic): void {
   // 管理员可以封禁/解封普通用户
   if (currentUserRole >= 1 && user.role < 1) {
     if (isBanned) {
-      footerHtml += `<button class="btn btn-success" id="unban-user" data-user-id="${user.id}">解除封禁</button>`;
+      footerHtml += `<button class="btn btn-success" id="unban-user" data-user-uid="${user.uid}">解除封禁</button>`;
     } else {
-      footerHtml += `<button class="btn btn-warning" id="ban-user" data-user-id="${user.id}">封禁用户</button>`;
+      footerHtml += `<button class="btn btn-warning" id="ban-user" data-user-uid="${user.uid}">封禁用户</button>`;
     }
   }
 
@@ -408,11 +408,11 @@ function bindUserDetailButtons(user: UserPublic): void {
   if (currentUserRole >= 2 && user.role < 2) {
     // 封禁用户不能设为管理员
     if (user.role === 0 && !isBanned) {
-      footerHtml += `<button class="btn btn-warning" id="promote-user" data-user-id="${user.id}">设为管理员</button>`;
+      footerHtml += `<button class="btn btn-warning" id="promote-user" data-user-uid="${user.uid}">设为管理员</button>`;
     } else if (user.role === 1) {
-      footerHtml += `<button class="btn btn-secondary" id="demote-user" data-user-id="${user.id}">撤销管理员</button>`;
+      footerHtml += `<button class="btn btn-secondary" id="demote-user" data-user-uid="${user.uid}">撤销管理员</button>`;
     }
-    footerHtml += `<button class="btn btn-danger" id="delete-user" data-user-id="${user.id}">删除用户</button>`;
+    footerHtml += `<button class="btn btn-danger" id="delete-user" data-user-uid="${user.uid}">删除用户</button>`;
   }
 
   userModalFooter.innerHTML = footerHtml;
@@ -428,11 +428,11 @@ function bindUserDetailButtons(user: UserPublic): void {
   // 解封用户
   document.getElementById('unban-user')?.addEventListener('click', async () => {
     showConfirm('确认解封', `确定要解除 ${user.username} 的封禁吗？`, async () => {
-      const success = await unbanUser(user.id);
+      const success = await unbanUser(user.uid);
       if (success) {
         showToast('已解除封禁', 'success');
         hideModal(userModal);
-        updateUserRow(user.id);
+        updateUserRow(user.uid);
         loadStats();
       } else {
         showToast('操作失败', 'error');
@@ -442,11 +442,11 @@ function bindUserDetailButtons(user: UserPublic): void {
 
   document.getElementById('promote-user')?.addEventListener('click', async () => {
     showConfirm('确认操作', `确定要将 ${user.username} 设为管理员吗？`, async () => {
-      const success = await setUserRole(user.id, 1);
+      const success = await setUserRole(user.uid, 1);
       if (success) {
         showToast('已设为管理员', 'success');
         hideModal(userModal);
-        updateUserRow(user.id);
+        updateUserRow(user.uid);
         loadStats();
       } else {
         showToast('操作失败', 'error');
@@ -456,11 +456,11 @@ function bindUserDetailButtons(user: UserPublic): void {
 
   document.getElementById('demote-user')?.addEventListener('click', async () => {
     showConfirm('确认操作', `确定要撤销 ${user.username} 的管理员权限吗？`, async () => {
-      const success = await setUserRole(user.id, 0);
+      const success = await setUserRole(user.uid, 0);
       if (success) {
         showToast('已撤销管理员', 'success');
         hideModal(userModal);
-        updateUserRow(user.id);
+        updateUserRow(user.uid);
         loadStats();
       } else {
         showToast('操作失败', 'error');
@@ -470,11 +470,11 @@ function bindUserDetailButtons(user: UserPublic): void {
 
   document.getElementById('delete-user')?.addEventListener('click', async () => {
     showConfirm('确认删除', `确定要删除用户 ${user.username} 吗？此操作不可恢复！`, async () => {
-      const success = await deleteUser(user.id);
+      const success = await deleteUser(user.uid);
       if (success) {
         showToast('用户已删除', 'success');
         hideModal(userModal);
-        removeUserRow(user.id);
+        removeUserRow(user.uid);
         loadStats();
       } else {
         showToast('删除失败', 'error');
@@ -561,11 +561,11 @@ function initBanModal(): void {
 
     localBanConfirm.disabled = true;
 
-    const success = await banUser(currentBanUser.id, reason, days);
+    const success = await banUser(currentBanUser.uid, reason, days);
     if (success) {
       showToast('用户已封禁', 'success');
       hideModal(banModal);
-      updateUserRow(currentBanUser.id);
+      updateUserRow(currentBanUser.uid);
       loadStats();
       currentBanUser = null;
     } else {
@@ -577,9 +577,9 @@ function initBanModal(): void {
 
 /**
  * 显示用户详情弹窗（优先使用缓存，后台刷新数据）
- * @param userId - 用户 ID
+ * @param userUid - 用户 UID
  */
-async function showUserDetail(userId: number): Promise<void> {
+async function showUserDetail(userUid: string): Promise<void> {
   console.log('[ADMIN][USERS] showUserDetail called');
   
   if (!userModal || !userModalBody || !userModalFooter) {
@@ -587,13 +587,13 @@ async function showUserDetail(userId: number): Promise<void> {
     return;
   }
   
-  const cached = usersCache.get(userId);
+  const cached = usersCache.get(userUid);
   
   if (cached) {
     renderUserDetailContent(cached.user, cached.cachedAt, true);
     showModal(userModal);
     
-    getUser(userId).then(freshUser => {
+    getUser(userUid).then(freshUser => {
       if (!freshUser) {
         const metaEl = document.getElementById('user-detail-meta');
         if (metaEl) metaEl.textContent = `数据更新于 ${formatRelativeTime(cached.cachedAt)}`;
@@ -601,7 +601,7 @@ async function showUserDetail(userId: number): Promise<void> {
       }
       
       const newCachedAt = Date.now();
-      setCacheUser(userId, { user: freshUser, cachedAt: newCachedAt });
+      setCacheUser(userUid, { user: freshUser, cachedAt: newCachedAt });
       
       if (userModal && !userModal.classList.contains('is-hidden')) {
         renderUserDetailContent(freshUser, newCachedAt, false);
@@ -618,7 +618,7 @@ async function showUserDetail(userId: number): Promise<void> {
   document.getElementById('close-user-modal')?.addEventListener('click', () => hideModal(userModal));
   showModal(userModal);
 
-  const user = await getUser(userId);
+  const user = await getUser(userUid);
   if (!user) {
     hideModal(userModal);
     showToast('获取用户信息失败', 'error');
@@ -626,7 +626,7 @@ async function showUserDetail(userId: number): Promise<void> {
   }
 
   const cachedAt = Date.now();
-  setCacheUser(userId, { user, cachedAt });
+  setCacheUser(userUid, { user, cachedAt });
   renderUserDetailContent(user, cachedAt, false);
   bindUserDetailButtons(user);
 }
