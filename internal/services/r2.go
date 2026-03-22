@@ -14,15 +14,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 
 	"auth-system/internal/config"
 	"auth-system/internal/utils"
 
-	"github.com/HugoSmits86/nativewebp"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -96,37 +91,19 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userUID string, imageData 
 		return "", fmt.Errorf("R2 service not initialized")
 	}
 
-	var webpData []byte
-
-	// 优先使用 Rust 处理器
-	if s.imgProcessor != nil && s.imgProcessor.IsAvailable() {
-		data, err := s.imgProcessor.ToWebP(imageData)
-		if err != nil {
-			utils.LogWarn("R2", "Rust processor failed, falling back to Go", "")
-		} else {
-			webpData = data
-			utils.LogInfo("R2", "Image processed by Rust")
-		}
+	if s.imgProcessor == nil || !s.imgProcessor.IsAvailable() {
+		return "", fmt.Errorf("image processor not available")
 	}
 
-	// 降级到 Go 处理
-	if webpData == nil {
-		img, _, err := image.Decode(bytes.NewReader(imageData))
-		if err != nil {
-			return "", fmt.Errorf("failed to decode image: %w", err)
-		}
-
-		var webpBuf bytes.Buffer
-		if err := nativewebp.Encode(&webpBuf, img, nil); err != nil {
-			return "", fmt.Errorf("failed to encode webp: %w", err)
-		}
-		webpData = webpBuf.Bytes()
-		utils.LogInfo("R2", "Image processed by Go (fallback)")
+	webpData, err := s.imgProcessor.ToWebP(imageData)
+	if err != nil {
+		return "", fmt.Errorf("failed to process image: %w", err)
 	}
+	utils.LogInfo("R2", "Image processed by Zig")
 
 	// 上传到 R2
 	key := fmt.Sprintf("avatar/%s.webp", userUID)
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(webpData),

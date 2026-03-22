@@ -2,7 +2,7 @@
  * internal/services/imgprocessor.go
  * 图片处理服务客户端
  *
- * 通过 Unix Socket 与 Rust img-processor 通信
+ * 通过 Unix Socket 与 Zig img-processor 通信
  * 将图片转换为 WebP 格式
  */
 
@@ -46,7 +46,7 @@ var (
 	ErrProcessFailed = errors.New("image process failed")
 )
 
-// 嵌入 Rust 二进制（编译时由 GitHub Actions 放置）
+// 嵌入 Zig 二进制（编译时由 GitHub Actions 放置）
 // 如果文件不存在，embed 会失败，所以用 embed.FS 更安全
 //
 //go:embed img-processor-bin
@@ -70,7 +70,7 @@ func NewImgProcessor() *ImgProcessor {
 	return p
 }
 
-// startProcessor 启动 Rust 处理器
+// startProcessor 启动 Zig 处理器
 func (p *ImgProcessor) startProcessor() {
 	// 检查嵌入的二进制是否存在
 	if len(imgProcessorBin) == 0 {
