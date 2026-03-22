@@ -317,8 +317,18 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	}
 
 	// 验证封禁原因
+	allowedReasons := map[string]bool{
+		"violation": true,
+		"abuse":     true,
+		"malicious": true,
+		"spam":      true,
+	}
 	if req.Reason == "" {
 		utils.RespondError(c, http.StatusBadRequest, "REASON_REQUIRED")
+		return
+	}
+	if !allowedReasons[req.Reason] {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_REASON")
 		return
 	}
 
