@@ -163,6 +163,8 @@ func getTableSchemas() []TableSchema {
 				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: false, References: "users(uid)", OnDelete: "CASCADE"},
 				{Name: "redirect_uri", Type: "TEXT", Nullable: false},
 				{Name: "scope", Type: "VARCHAR(255)", Nullable: false},
+				{Name: "code_challenge", Type: "VARCHAR(128)", Nullable: true},
+				{Name: "code_challenge_method", Type: "VARCHAR(10)", Nullable: true},
 				{Name: "expires_at", Type: "TIMESTAMPTZ", Nullable: false},
 				{Name: "used", Type: "BOOLEAN", Nullable: true, Default: "false"},
 				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: true, Default: "NOW()"},

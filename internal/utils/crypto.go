@@ -18,6 +18,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
@@ -488,4 +489,113 @@ func DeriveKeyFromString(keyStr string) ([]byte, error) {
 
 	LogDebug("CRYPTO", fmt.Sprintf("Key derived using Argon2id: salt=%s", hex.EncodeToString(salt)[:16]+"..."))
 	return key, nil
+}
+
+// ====================  PKCE (Proof Key for Code Exchange) ====================
+
+// S256CodeChallenge 从 code_verifier 生成 S256 方式的 code_challenge
+// RFC 7636: code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
+//
+// 参数：
+//   - codeVerifier: 43-128 字符的随机字符串
+//
+// 返回：
+//   - string: code_challenge
+func S256CodeChallenge(codeVerifier string) string {
+	hash := sha256.Sum256([]byte(codeVerifier))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
+// VerifyPKCE 验证 code_verifier 是否匹配 code_challenge
+//
+// 参数：
+//   - codeVerifier: 客户端提供的 code_verifier
+//   - codeChallenge: 存储的 code_challenge
+//   - codeChallengeMethod: 存储的 code_challenge_method ("S256" 或 "plain")
+//
+// 返回：
+//   - bool: 是否验证通过
+func VerifyPKCE(codeVerifier, codeChallenge, codeChallengeMethod string) bool {
+	if codeChallenge == "" {
+		return true
+	}
+
+	if codeVerifier == "" {
+		return false
+	}
+
+	switch codeChallengeMethod {
+	case "S256":
+		expected := S256CodeChallenge(codeVerifier)
+		return subtle.ConstantTimeCompare([]byte(expected), []byte(codeChallenge)) == 1
+	case "plain":
+		return subtle.ConstantTimeCompare([]byte(codeVerifier), []byte(codeChallenge)) == 1
+	default:
+		return false
+	}
+}
+
+// ValidateCodeVerifier 验证 code_verifier 格式是否正确
+// RFC 7636: 43-128 字符，只能包含 [A-Z]/[a-z]/[0-9]/[-._~]
+//
+// 参数：
+//   - codeVerifier: 要验证的 code_verifier
+//
+// 返回：
+//   - bool: 是否有效
+func ValidateCodeVerifier(codeVerifier string) bool {
+	if len(codeVerifier) < 43 || len(codeVerifier) > 128 {
+		return false
+	}
+
+	for _, c := range codeVerifier {
+		if !((c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') ||
+			c == '-' || c == '.' || c == '_' || c == '~') {
+			return false
+		}
+	}
+
+	return true
+}
+
+// ValidateCodeChallenge 验证 code_challenge 格式是否正确
+//
+// 参数：
+//   - codeChallenge: 要验证的 code_challenge
+//   - codeChallengeMethod: code_challenge_method ("S256" 或 "plain")
+//
+// 返回：
+//   - bool: 是否有效
+func ValidateCodeChallenge(codeChallenge, codeChallengeMethod string) bool {
+	if codeChallenge == "" {
+		return true
+	}
+
+	switch codeChallengeMethod {
+	case "S256":
+		if len(codeChallenge) != 43 {
+			return false
+		}
+	case "plain":
+		if len(codeChallenge) < 43 || len(codeChallenge) > 128 {
+			return false
+		}
+	case "":
+		return false
+	default:
+		return false
+	}
+
+	for _, c := range codeChallenge {
+		if !((c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') ||
+			c == '-' || c == '_') {
+			return false
+		}
+	}
+
+	return true
 }
