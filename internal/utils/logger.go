@@ -109,7 +109,7 @@ func Log(message string) {
 
 // LogPrintf 安全日志输出（格式化），自动脱敏敏感信息
 // 替代 log.Printf，使用 zap 异步写入
-func LogPrintf(format string, args ...interface{}) {
+func LogPrintf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	masked := maskSensitiveData(message)
 	getLogger().Info(masked)
@@ -117,7 +117,7 @@ func LogPrintf(format string, args ...interface{}) {
 
 // LogFatalf 安全日志输出后退出，自动脱敏敏感信息
 // 替代 log.Fatalf
-func LogFatalf(format string, args ...interface{}) {
+func LogFatalf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	masked := maskSensitiveData(message)
 	getLogger().Fatal(masked)

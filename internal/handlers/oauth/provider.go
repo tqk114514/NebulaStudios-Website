@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"auth-system/internal/cache"
@@ -160,8 +159,8 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	}
 
 	// 检查用户登录状态
-	userID, ok := middleware.GetUserID(c)
-	if !ok || userID <= 0 {
+	userUID, ok := middleware.GetUID(c)
+	if !ok || userUID == "" {
 		// 未登录，重定向到登录页面，登录后返回
 		returnURL := h.buildAuthorizeURL(clientID, redirectURI, responseType, scope, state)
 		loginURL := h.baseURL + "/account/login?return=" + url.QueryEscape(returnURL)
@@ -170,16 +169,16 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	}
 
 	// 获取用户信息
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "Authorize", err, fmt.Sprintf("Failed to get user: userID=%d", userID))
+		utils.LogError("OAUTH-PROVIDER", "Authorize", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
 		return
 	}
 
 	// 检查用户是否被封禁
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize", fmt.Sprintf("userUID=%s", userUID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
@@ -234,8 +233,8 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 	}
 
 	// 获取用户信息
-	userID, ok := middleware.GetUserID(c)
-	if !ok || userID <= 0 {
+	userUID, ok := middleware.GetUID(c)
+	if !ok || userUID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success":   false,
 			"errorCode": "unauthorized",
@@ -243,7 +242,7 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
@@ -315,29 +314,29 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	}
 
 	// 检查用户登录状态
-	userID, ok := middleware.GetUserID(c)
-	if !ok || userID <= 0 {
+	userUID, ok := middleware.GetUID(c)
+	if !ok || userUID == "" {
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User not logged in")
 		return
 	}
 
 	// 获取用户信息并检查封禁状态
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to get user in POST: userID=%d", userID))
+		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to get user in POST: userUID=%s", userUID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize in POST", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize in POST", fmt.Sprintf("userUID=%s", userUID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
 
 	// 处理用户决定
 	if decision != "approve" {
-		utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("User denied authorization: userID=%d, clientID=%s", userID, clientID))
+		utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("User denied authorization: userUID=%s, clientID=%s", userUID, clientID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User denied authorization")
 		return
 	}
@@ -350,23 +349,23 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	}
 
 	// 生成授权码
-	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userID, redirectURI, normalizedScope)
+	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userUID, redirectURI, normalizedScope)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userID=%d, clientID=%s", userID, clientID))
+		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userUID=%s, clientID=%s", userUID, clientID))
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to create authorization code")
 		return
 	}
 
 	// 记录用户操作日志
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogOAuthAuthorize(c.Request.Context(), userID, clientID, client.Name, normalizedScope); err != nil {
-			utils.LogWarn("OAUTH-PROVIDER", "Failed to log OAuth authorize", fmt.Sprintf("userID=%d", userID))
+		if err := h.userLogRepo.LogOAuthAuthorize(c.Request.Context(), userUID, clientID, client.Name, normalizedScope); err != nil {
+			utils.LogWarn("OAUTH-PROVIDER", "Failed to log OAuth authorize", fmt.Sprintf("userUID=%s", userUID))
 		}
 	}
 
 	// 重定向到回调地址
 	redirectURL := h.buildRedirectURL(redirectURI, code, state)
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Authorization granted: userID=%d, clientID=%s", userID, clientID))
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Authorization granted: userUID=%s, clientID=%s", userUID, clientID))
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -438,7 +437,7 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 	}
 
 	// 换取 Token
-	tokenResp, userID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI)
+	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid authorization code")
@@ -446,14 +445,14 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 	}
 
 	// 检查用户是否被封禁
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token exchange", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token exchange", fmt.Sprintf("userUID=%s", userUID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token issued: clientID=%s, userID=%d", clientID, userID))
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token issued: clientID=%s, userUID=%s", clientID, userUID))
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -467,7 +466,7 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 	}
 
 	// 刷新 Token
-	tokenResp, userID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
+	tokenResp, userUID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s", clientID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid refresh token")
@@ -475,14 +474,14 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 	}
 
 	// 检查用户是否被封禁
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), userID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token refresh", fmt.Sprintf("userID=%d", userID))
+		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token refresh", fmt.Sprintf("userUID=%s", userUID))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token refreshed: clientID=%s, userID=%d", clientID, userID))
+	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token refreshed: clientID=%s, userUID=%s", clientID, userUID))
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -522,16 +521,16 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 	}
 
 	// 获取用户信息
-	user, err := h.userCache.GetOrLoad(c.Request.Context(), tokenInfo.UserID, h.userRepo.FindByID)
+	user, err := h.userCache.GetOrLoad(c.Request.Context(), tokenInfo.UserUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "UserInfo", err, fmt.Sprintf("Failed to get user for userinfo: userID=%d", tokenInfo.UserID))
+		utils.LogError("OAUTH-PROVIDER", "UserInfo", err, fmt.Sprintf("Failed to get user for userinfo: userUID=%s", tokenInfo.UserUID))
 		h.respondUserInfoError(c, http.StatusInternalServerError, "server_error", "Failed to get user info")
 		return
 	}
 
 	// 检查用户是否被封禁
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to access userinfo", fmt.Sprintf("userID=%d", tokenInfo.UserID))
+		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to access userinfo", fmt.Sprintf("userUID=%s", tokenInfo.UserUID))
 		h.respondUserInfoError(c, http.StatusForbidden, "access_denied", "User is banned")
 		return
 	}
@@ -544,12 +543,12 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 // buildUserInfoResponse 根据 scope 构建用户信息响应
 func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope string) gin.H {
 	response := gin.H{}
-	scopes := strings.Split(scope, " ")
+	scopes := strings.SplitSeq(scope, " ")
 
-	for _, s := range scopes {
+	for s := range scopes {
 		switch s {
 		case ScopeOpenID:
-			response["sub"] = strconv.FormatInt(user.ID, 10)
+			response["sub"] = user.UID
 		case ScopeProfile:
 			response["username"] = user.Username
 			// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像

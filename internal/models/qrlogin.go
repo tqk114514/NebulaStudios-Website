@@ -44,7 +44,7 @@ const (
 type QRLoginToken struct {
 	Token          string         `json:"token"`
 	Status         string         `json:"status"`
-	UserID         sql.NullInt64  `json:"user_id"`
+	UserUID        sql.NullString `json:"user_uid"`
 	PcIP           string         `json:"pc_ip"`
 	PcUserAgent    string         `json:"pc_user_agent"`
 	PcSessionToken sql.NullString `json:"pc_session_token"`
@@ -87,11 +87,11 @@ func (r *QRLoginRepository) FindByToken(ctx context.Context, token string) (*QRL
 
 	qrToken := &QRLoginToken{}
 	err := pool.QueryRow(ctx, `
-		SELECT token, status, user_id, pc_ip, pc_user_agent, pc_session_token,
+		SELECT token, status, user_uid, pc_ip, pc_user_agent, pc_session_token,
 		       created_at, scanned_at, confirmed_at, expire_time
 		FROM qr_login_tokens WHERE token = $1
 	`, token).Scan(
-		&qrToken.Token, &qrToken.Status, &qrToken.UserID, &qrToken.PcIP, &qrToken.PcUserAgent,
+		&qrToken.Token, &qrToken.Status, &qrToken.UserUID, &qrToken.PcIP, &qrToken.PcUserAgent,
 		&qrToken.PcSessionToken, &qrToken.CreatedAt, &qrToken.ScannedAt, &qrToken.ConfirmedAt, &qrToken.ExpireTime,
 	)
 
@@ -228,17 +228,17 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 	return success, nil
 }
 
-// ConfirmLogin 确认登录（更新状态、user_id、confirmed_at 和 pc_session_token）
+// ConfirmLogin 确认登录（更新状态、user_uid、confirmed_at 和 pc_session_token）
 // 参数：
 //   - ctx: 上下文
 //   - token: Token
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - pcSessionToken: PC 会话 Token
 //
 // 返回：
 //   - error: 错误信息
-func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, userID int64, pcSessionToken string) error {
-	if token == "" || userID <= 0 || pcSessionToken == "" {
+func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, userUID string, pcSessionToken string) error {
+	if token == "" || userUID == "" || pcSessionToken == "" {
 		return errors.New("invalid parameters")
 	}
 
@@ -248,15 +248,15 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, user
 
 	_, err := pool.Exec(ctx, `
 		UPDATE qr_login_tokens 
-		SET status = $1, user_id = $2, confirmed_at = $3, pc_session_token = $4
+		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
 		WHERE token = $5
-	`, QRStatusConfirmed, userID, time.Now().UnixMilli(), pcSessionToken, token)
+	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionToken, token)
 
 	if err != nil {
 		return utils.LogError("QRLOGIN", "ConfirmLogin", err, fmt.Sprintf("token=%s", token[:8]+"..."))
 	}
 
-	utils.LogInfo("QRLOGIN", fmt.Sprintf("Login confirmed: userID=%d", userID))
+	utils.LogInfo("QRLOGIN", fmt.Sprintf("Login confirmed: userUID=%s", userUID))
 	return nil
 }
 
@@ -264,14 +264,14 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, user
 // 参数：
 //   - ctx: 上下文
 //   - token: Token
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - pcSessionToken: PC 会话 Token
 //
 // 返回：
 //   - bool: 是否更新成功
 //   - error: 错误信息
-func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token string, userID int64, pcSessionToken string) (bool, error) {
-	if token == "" || userID <= 0 || pcSessionToken == "" {
+func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token string, userUID string, pcSessionToken string) (bool, error) {
+	if token == "" || userUID == "" || pcSessionToken == "" {
 		return false, errors.New("invalid parameters")
 	}
 
@@ -281,9 +281,9 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 
 	commandTag, err := pool.Exec(ctx, `
 		UPDATE qr_login_tokens 
-		SET status = $1, user_id = $2, confirmed_at = $3, pc_session_token = $4
+		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
 		WHERE token = $5 AND status = $6
-	`, QRStatusConfirmed, userID, time.Now().UnixMilli(), pcSessionToken, token, QRStatusScanned)
+	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionToken, token, QRStatusScanned)
 
 	if err != nil {
 		return false, utils.LogError("QRLOGIN", "ConfirmLoginWithCondition", err, fmt.Sprintf("token=%s", token[:8]+"..."))
@@ -293,7 +293,7 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 	success := rowsAffected > 0
 
 	if success {
-		utils.LogInfo("QRLOGIN", fmt.Sprintf("Login atomically confirmed: userID=%d", userID))
+		utils.LogInfo("QRLOGIN", fmt.Sprintf("Login atomically confirmed: userUID=%s", userUID))
 	}
 
 	return success, nil
@@ -337,38 +337,38 @@ func (r *QRLoginRepository) Delete(ctx context.Context, token string) error {
 //   - pcSessionToken: PC 会话 Token
 //
 // 返回：
-//   - int64: 用户 ID
+//   - string: 用户 UID
 //   - error: 错误信息
-func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcSessionToken string) (int64, error) {
+func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcSessionToken string) (string, error) {
 	if token == "" || pcSessionToken == "" {
-		return 0, errors.New("invalid parameters")
+		return "", errors.New("invalid parameters")
 	}
 
 	if pool == nil {
-		return 0, errors.New("database not ready")
+		return "", errors.New("database not ready")
 	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return 0, utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to begin transaction")
+		return "", utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to begin transaction")
 	}
 	defer tx.Rollback(ctx)
 
 	var status string
 	var expireTime int64
 	var dbPcSessionToken sql.NullString
-	var userID sql.NullInt64
+	var userUID sql.NullString
 
 	// 查询 Token 信息并加锁
 	err = tx.QueryRow(ctx, `
-		SELECT status, expire_time, pc_session_token, user_id 
+		SELECT status, expire_time, pc_session_token, user_uid 
 		FROM qr_login_tokens 
 		WHERE token = $1
 		FOR UPDATE
-	`, token).Scan(&status, &expireTime, &dbPcSessionToken, &userID)
+	`, token).Scan(&status, &expireTime, &dbPcSessionToken, &userUID)
 
 	if err != nil {
-		return 0, utils.HandleDatabaseError("QRLOGIN", "ConsumeAndSetSession", err, token)
+		return "", utils.HandleDatabaseError("QRLOGIN", "ConsumeAndSetSession", err, token)
 	}
 
 	// 检查是否过期
@@ -376,22 +376,22 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcS
 		utils.LogWarn("QRLOGIN", "Token expired in ConsumeAndSetSession", "")
 		_, _ = tx.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 		_ = tx.Commit(ctx)
-		return 0, errors.New("TOKEN_EXPIRED")
+		return "", errors.New("TOKEN_EXPIRED")
 	}
 
 	// 检查状态
 	if status != QRStatusConfirmed {
-		return 0, fmt.Errorf("invalid token status: %s", status)
+		return "", fmt.Errorf("invalid token status: %s", status)
 	}
 
 	// 验证 pc_session_token 是否匹配
 	if !dbPcSessionToken.Valid || dbPcSessionToken.String != pcSessionToken {
-		return 0, errors.New("INVALID_SESSION")
+		return "", errors.New("INVALID_SESSION")
 	}
 
-	// 验证 user_id
-	if !userID.Valid || userID.Int64 <= 0 {
-		return 0, errors.New("INVALID_USER")
+	// 验证 user_uid
+	if !userUID.Valid || userUID.String == "" {
+		return "", errors.New("INVALID_USER")
 	}
 
 	// 删除 Token（一次性消费）
@@ -403,8 +403,8 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcS
 	// 提交事务
 	err = tx.Commit(ctx)
 	if err != nil {
-		return 0, utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to commit transaction")
+		return "", utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to commit transaction")
 	}
 
-	return userID.Int64, nil
+	return userUID.String, nil
 }

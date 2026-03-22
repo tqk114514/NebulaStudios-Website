@@ -50,7 +50,7 @@ type OAuthAuthCode struct {
 	ID          int64     `json:"id"`
 	Code        string    `json:"-"` // 不序列化
 	ClientID    string    `json:"client_id"`
-	UserID      int64     `json:"user_id"`
+	UserUID     string    `json:"user_uid"`
 	RedirectURI string    `json:"redirect_uri"`
 	Scope       string    `json:"scope"`
 	ExpiresAt   time.Time `json:"expires_at"`
@@ -63,7 +63,7 @@ type OAuthAccessToken struct {
 	ID        int64     `json:"id"`
 	TokenHash string    `json:"-"` // 不序列化
 	ClientID  string    `json:"client_id"`
-	UserID    int64     `json:"user_id"`
+	UserUID   string    `json:"user_uid"`
 	Scope     string    `json:"scope"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
@@ -74,7 +74,7 @@ type OAuthRefreshToken struct {
 	ID            int64     `json:"id"`
 	TokenHash     string    `json:"-"` // 不序列化
 	ClientID      string    `json:"client_id"`
-	UserID        int64     `json:"user_id"`
+	UserUID       string    `json:"user_uid"`
 	Scope         string    `json:"scope"`
 	ExpiresAt     time.Time `json:"expires_at"`
 	AccessTokenID int64     `json:"access_token_id"`
@@ -84,7 +84,7 @@ type OAuthRefreshToken struct {
 // OAuthGrant 用户授权记录（用于用户管理已授权的应用）
 type OAuthGrant struct {
 	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
+	UserUID   string    `json:"user_uid"`
 	ClientID  string    `json:"client_id"`
 	Scope     string    `json:"scope"`
 	CreatedAt time.Time `json:"created_at"`
@@ -179,18 +179,18 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	}
 
 	err := pool.QueryRow(ctx, `
-		INSERT INTO oauth_auth_codes (code, client_id, user_id, redirect_uri, scope, expires_at, used)
+		INSERT INTO oauth_auth_codes (code, client_id, user_uid, redirect_uri, scope, expires_at, used)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at
-	`, code.Code, code.ClientID, code.UserID, code.RedirectURI, code.Scope, code.ExpiresAt, code.Used).Scan(
+	`, code.Code, code.ClientID, code.UserUID, code.RedirectURI, code.Scope, code.ExpiresAt, code.Used).Scan(
 		&code.ID, &code.CreatedAt,
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_CODE", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", code.ClientID, code.UserID))
+		return utils.LogError("OAUTH_CODE", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", code.ClientID, code.UserUID))
 	}
 
-	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code created: id=%d, client_id=%s, user_id=%d", code.ID, code.ClientID, code.UserID))
+	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code created: id=%d, client_id=%s, user_uid=%s", code.ID, code.ClientID, code.UserUID))
 	return nil
 }
 
@@ -213,10 +213,10 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 
 	authCode := &OAuthAuthCode{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, code, client_id, user_id, redirect_uri, scope, expires_at, used, created_at
+		SELECT id, code, client_id, user_uid, redirect_uri, scope, expires_at, used, created_at
 		FROM oauth_auth_codes WHERE code = $1
 	`, code).Scan(
-		&authCode.ID, &authCode.Code, &authCode.ClientID, &authCode.UserID,
+		&authCode.ID, &authCode.Code, &authCode.ClientID, &authCode.UserUID,
 		&authCode.RedirectURI, &authCode.Scope, &authCode.ExpiresAt, &authCode.Used, &authCode.CreatedAt,
 	)
 
@@ -293,7 +293,6 @@ func (r *OAuthAuthCodeRepository) checkDB() error {
 	return nil
 }
 
-
 // ====================  OAuthAccessTokenRepository 方法 ====================
 
 // Create 创建 Access Token
@@ -313,18 +312,18 @@ func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAcc
 	}
 
 	err := pool.QueryRow(ctx, `
-		INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, scope, expires_at)
+		INSERT INTO oauth_access_tokens (token_hash, client_id, user_uid, scope, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at
-	`, token.TokenHash, token.ClientID, token.UserID, token.Scope, token.ExpiresAt).Scan(
+	`, token.TokenHash, token.ClientID, token.UserUID, token.Scope, token.ExpiresAt).Scan(
 		&token.ID, &token.CreatedAt,
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_ACCESS_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", token.ClientID, token.UserID))
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", token.ClientID, token.UserUID))
 	}
 
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token created: id=%d, client_id=%s, user_id=%d", token.ID, token.ClientID, token.UserID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token created: id=%d, client_id=%s, user_uid=%s", token.ID, token.ClientID, token.UserUID))
 	return nil
 }
 
@@ -347,10 +346,10 @@ func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 
 	token := &OAuthAccessToken{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, token_hash, client_id, user_id, scope, expires_at, created_at
+		SELECT id, token_hash, client_id, user_uid, scope, expires_at, created_at
 		FROM oauth_access_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(
-		&token.ID, &token.TokenHash, &token.ClientID, &token.UserID,
+		&token.ID, &token.TokenHash, &token.ClientID, &token.UserUID,
 		&token.Scope, &token.ExpiresAt, &token.CreatedAt,
 	)
 
@@ -408,50 +407,50 @@ func (r *OAuthAccessTokenRepository) DeleteByTokenHash(ctx context.Context, toke
 // DeleteByUserAndClient 删除指定用户和客户端的所有 Access Token
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - clientID: 客户端 ID
 //
 // 返回：
 //   - int64: 删除的数量
 //   - error: 错误信息
-func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, userID int64, clientID string) (int64, error) {
+func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
 	}
 
 	result, err := pool.Exec(ctx, `
-		DELETE FROM oauth_access_tokens WHERE user_id = $1 AND client_id = $2
-	`, userID, clientID)
+		DELETE FROM oauth_access_tokens WHERE user_uid = $1 AND client_id = $2
+	`, userUID, clientID)
 
 	if err != nil {
-		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_id=%d, client_id=%s", count, userID, clientID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_uid=%s, client_id=%s", count, userUID, clientID))
 	return count, nil
 }
 
 // DeleteByUser 删除指定用户的所有 Access Token
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - int64: 删除的数量
 //   - error: 错误信息
-func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userID int64) (int64, error) {
+func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_id = $1", userID)
+	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_id=%d", count, userID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_uid=%s", count, userUID))
 	return count, nil
 }
 
@@ -510,7 +509,6 @@ func (r *OAuthAccessTokenRepository) checkDB() error {
 	return nil
 }
 
-
 // ====================  OAuthRefreshTokenRepository 方法 ====================
 
 // Create 创建 Refresh Token
@@ -529,24 +527,24 @@ func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRe
 		return err
 	}
 
-	var accessTokenID interface{}
+	var accessTokenID any
 	if token.AccessTokenID > 0 {
 		accessTokenID = token.AccessTokenID
 	}
 
 	err := pool.QueryRow(ctx, `
-		INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scope, expires_at, access_token_id)
+		INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_uid, scope, expires_at, access_token_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at
-	`, token.TokenHash, token.ClientID, token.UserID, token.Scope, token.ExpiresAt, accessTokenID).Scan(
+	`, token.TokenHash, token.ClientID, token.UserUID, token.Scope, token.ExpiresAt, accessTokenID).Scan(
 		&token.ID, &token.CreatedAt,
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_REFRESH_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_id=%d", token.ClientID, token.UserID))
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", token.ClientID, token.UserUID))
 	}
 
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token created: id=%d, client_id=%s, user_id=%d", token.ID, token.ClientID, token.UserID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token created: id=%d, client_id=%s, user_uid=%s", token.ID, token.ClientID, token.UserUID))
 	return nil
 }
 
@@ -570,10 +568,10 @@ func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, token
 	token := &OAuthRefreshToken{}
 	var accessTokenID sql.NullInt64
 	err := pool.QueryRow(ctx, `
-		SELECT id, token_hash, client_id, user_id, scope, expires_at, access_token_id, created_at
+		SELECT id, token_hash, client_id, user_uid, scope, expires_at, access_token_id, created_at
 		FROM oauth_refresh_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(
-		&token.ID, &token.TokenHash, &token.ClientID, &token.UserID,
+		&token.ID, &token.TokenHash, &token.ClientID, &token.UserUID,
 		&token.Scope, &token.ExpiresAt, &accessTokenID, &token.CreatedAt,
 	)
 
@@ -635,50 +633,50 @@ func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tok
 // DeleteByUserAndClient 删除指定用户和客户端的所有 Refresh Token
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - clientID: 客户端 ID
 //
 // 返回：
 //   - int64: 删除的数量
 //   - error: 错误信息
-func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context, userID int64, clientID string) (int64, error) {
+func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
 	}
 
 	result, err := pool.Exec(ctx, `
-		DELETE FROM oauth_refresh_tokens WHERE user_id = $1 AND client_id = $2
-	`, userID, clientID)
+		DELETE FROM oauth_refresh_tokens WHERE user_uid = $1 AND client_id = $2
+	`, userUID, clientID)
 
 	if err != nil {
-		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_id=%d, client_id=%s", count, userID, clientID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_uid=%s, client_id=%s", count, userUID, clientID))
 	return count, nil
 }
 
 // DeleteByUser 删除指定用户的所有 Refresh Token
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - int64: 删除的数量
 //   - error: 错误信息
-func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userID int64) (int64, error) {
+func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_id = $1", userID)
+	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_id=%d", count, userID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_uid=%s", count, userUID))
 	return count, nil
 }
 
@@ -737,7 +735,6 @@ func (r *OAuthRefreshTokenRepository) checkDB() error {
 	return nil
 }
 
-
 // ====================  OAuthGrantRepository 方法 ====================
 
 // CreateOrUpdate 创建或更新授权记录
@@ -758,48 +755,48 @@ func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthG
 
 	// 使用 UPSERT（INSERT ... ON CONFLICT）
 	err := pool.QueryRow(ctx, `
-		INSERT INTO oauth_grants (user_id, client_id, scope)
+		INSERT INTO oauth_grants (user_uid, client_id, scope)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, client_id) DO UPDATE SET
+		ON CONFLICT (user_uid, client_id) DO UPDATE SET
 			scope = EXCLUDED.scope,
 			updated_at = CURRENT_TIMESTAMP
 		RETURNING id, created_at, updated_at
-	`, grant.UserID, grant.ClientID, grant.Scope).Scan(
+	`, grant.UserUID, grant.ClientID, grant.Scope).Scan(
 		&grant.ID, &grant.CreatedAt, &grant.UpdatedAt,
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_GRANT", "CreateOrUpdate", err, fmt.Sprintf("user_id=%d, client_id=%s", grant.UserID, grant.ClientID))
+		return utils.LogError("OAUTH_GRANT", "CreateOrUpdate", err, fmt.Sprintf("user_uid=%s, client_id=%s", grant.UserUID, grant.ClientID))
 	}
 
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant created/updated: id=%d, user_id=%d, client_id=%s", grant.ID, grant.UserID, grant.ClientID))
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant created/updated: id=%d, user_uid=%s, client_id=%s", grant.ID, grant.UserUID, grant.ClientID))
 	return nil
 }
 
-// FindByUserID 查找用户的所有授权记录（带客户端信息）
+// FindByUserUID 查找用户的所有授权记录（带客户端信息）
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - []*OAuthGrantWithClient: 授权记录列表
 //   - error: 错误信息
-func (r *OAuthGrantRepository) FindByUserID(ctx context.Context, userID int64) ([]*OAuthGrantWithClient, error) {
+func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string) ([]*OAuthGrantWithClient, error) {
 	if err := r.checkDB(); err != nil {
 		return nil, err
 	}
 
 	rows, err := pool.Query(ctx, `
-		SELECT g.id, g.user_id, g.client_id, g.scope, g.created_at, g.updated_at,
+		SELECT g.id, g.user_uid, g.client_id, g.scope, g.created_at, g.updated_at,
 		       c.name, COALESCE(c.description, '')
 		FROM oauth_grants g
 		JOIN oauth_clients c ON g.client_id = c.client_id
-		WHERE g.user_id = $1
+		WHERE g.user_uid = $1
 		ORDER BY g.updated_at DESC
-	`, userID)
+	`, userUID)
 
 	if err != nil {
-		return nil, utils.LogError("OAUTH_GRANT", "FindByUserID", err, fmt.Sprintf("user_id=%d", userID))
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserUID", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 	defer rows.Close()
 
@@ -807,7 +804,7 @@ func (r *OAuthGrantRepository) FindByUserID(ctx context.Context, userID int64) (
 	for rows.Next() {
 		grant := &OAuthGrantWithClient{}
 		err := rows.Scan(
-			&grant.ID, &grant.UserID, &grant.ClientID, &grant.Scope,
+			&grant.ID, &grant.UserUID, &grant.ClientID, &grant.Scope,
 			&grant.CreatedAt, &grant.UpdatedAt,
 			&grant.ClientName, &grant.ClientDescription,
 		)
@@ -824,23 +821,23 @@ func (r *OAuthGrantRepository) FindByUserID(ctx context.Context, userID int64) (
 // FindByUserAndClient 查找指定用户和客户端的授权记录
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - clientID: 客户端 ID
 //
 // 返回：
 //   - *OAuthGrant: 授权记录
 //   - error: 错误信息
-func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userID int64, clientID string) (*OAuthGrant, error) {
+func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID string, clientID string) (*OAuthGrant, error) {
 	if err := r.checkDB(); err != nil {
 		return nil, err
 	}
 
 	grant := &OAuthGrant{}
 	err := pool.QueryRow(ctx, `
-		SELECT id, user_id, client_id, scope, created_at, updated_at
-		FROM oauth_grants WHERE user_id = $1 AND client_id = $2
-	`, userID, clientID).Scan(
-		&grant.ID, &grant.UserID, &grant.ClientID, &grant.Scope,
+		SELECT id, user_uid, client_id, scope, created_at, updated_at
+		FROM oauth_grants WHERE user_uid = $1 AND client_id = $2
+	`, userUID, clientID).Scan(
+		&grant.ID, &grant.UserUID, &grant.ClientID, &grant.Scope,
 		&grant.CreatedAt, &grant.UpdatedAt,
 	)
 
@@ -848,7 +845,7 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userID i
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthGrantNotFound
 		}
-		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
 	}
 
 	return grant, nil
@@ -857,52 +854,52 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userID i
 // Delete 删除授权记录
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - clientID: 客户端 ID
 //
 // 返回：
 //   - error: 错误信息
-func (r *OAuthGrantRepository) Delete(ctx context.Context, userID int64, clientID string) error {
+func (r *OAuthGrantRepository) Delete(ctx context.Context, userUID string, clientID string) error {
 	if err := r.checkDB(); err != nil {
 		return err
 	}
 
 	result, err := pool.Exec(ctx, `
-		DELETE FROM oauth_grants WHERE user_id = $1 AND client_id = $2
-	`, userID, clientID)
+		DELETE FROM oauth_grants WHERE user_uid = $1 AND client_id = $2
+	`, userUID, clientID)
 
 	if err != nil {
-		return utils.LogError("OAUTH_GRANT", "Delete", err, fmt.Sprintf("user_id=%d, client_id=%s", userID, clientID))
+		return utils.LogError("OAUTH_GRANT", "Delete", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrOAuthGrantNotFound
 	}
 
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant deleted: user_id=%d, client_id=%s", userID, clientID))
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant deleted: user_uid=%s, client_id=%s", userUID, clientID))
 	return nil
 }
 
 // DeleteByUser 删除用户的所有授权记录
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - int64: 删除的数量
 //   - error: 错误信息
-func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userID int64) (int64, error) {
+func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_id = $1", userID)
+	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, fmt.Sprintf("user_id=%d", userID))
+		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for user_id=%d", count, userID))
+	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for user_uid=%s", count, userUID))
 	return count, nil
 }
 
@@ -936,4 +933,3 @@ func (r *OAuthGrantRepository) checkDB() error {
 	}
 	return nil
 }
-

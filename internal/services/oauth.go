@@ -204,7 +204,7 @@ func (s *OAuthService) RegenerateSecret(ctx context.Context, id int64) (string, 
 		return "", err
 	}
 
-	if err := s.clientRepo.Update(ctx, id, map[string]interface{}{
+	if err := s.clientRepo.Update(ctx, id, map[string]any{
 		"client_secret_hash": string(secretHash),
 	}); err != nil {
 		return "", err
@@ -231,7 +231,7 @@ func (s *OAuthService) GetClients(ctx context.Context, page, pageSize int, searc
 
 // UpdateClient 更新客户端
 func (s *OAuthService) UpdateClient(ctx context.Context, id int64, name, description, redirectURI string) error {
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if name != "" {
 		updates["name"] = name
 	}
@@ -259,7 +259,7 @@ func (s *OAuthService) ToggleClient(ctx context.Context, id int64, enabled bool)
 		_ = s.RevokeClientTokens(ctx, client.ClientID)
 	}
 
-	err := s.clientRepo.Update(ctx, id, map[string]interface{}{"is_enabled": enabled})
+	err := s.clientRepo.Update(ctx, id, map[string]any{"is_enabled": enabled})
 	if err == nil {
 		status := "enabled"
 		if !enabled {
@@ -288,7 +288,7 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 // ====================  Authorization Code 方法 ====================
 
 // CreateAuthorizationCode 创建授权码
-func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userID int64, redirectURI, scope string) (string, error) {
+func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope string) (string, error) {
 	code, err := s.generateRandomHex(oauthAuthCodeLength)
 	if err != nil {
 		utils.LogError("OAUTH", "CreateAuthCode", err, "Failed to generate auth code")
@@ -298,7 +298,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 	authCode := &models.OAuthAuthCode{
 		Code:        code,
 		ClientID:    clientID,
-		UserID:      userID,
+		UserUID:     userUID,
 		RedirectURI: redirectURI,
 		Scope:       scope,
 		ExpiresAt:   time.Now().Add(oauthAuthCodeExpiry),
@@ -310,74 +310,74 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 	}
 
 	// 创建或更新用户授权记录
-	grant := &models.OAuthGrant{UserID: userID, ClientID: clientID, Scope: scope}
+	grant := &models.OAuthGrant{UserUID: userUID, ClientID: clientID, Scope: scope}
 	_ = s.grantRepo.CreateOrUpdate(ctx, grant)
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code created: client_id=%s, user_id=%d", clientID, userID))
+	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code created: client_id=%s, user_uid=%s", clientID, userUID))
 	return code, nil
 }
 
 // ExchangeAuthorizationCode 用授权码换取 Token
-func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI string) (*OAuthTokenResponse, int64, error) {
+func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI string) (*OAuthTokenResponse, string, error) {
 	authCode, err := s.authCodeRepo.FindByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthCodeNotFound) {
-			return nil, 0, ErrOAuthCodeNotFound
+			return nil, "", ErrOAuthCodeNotFound
 		}
-		return nil, 0, err
+		return nil, "", err
 	}
 
 	if authCode.Used {
-		return nil, 0, ErrOAuthCodeUsed
+		return nil, "", ErrOAuthCodeUsed
 	}
 
 	if authCode.IsExpired() {
-		return nil, 0, ErrOAuthCodeExpired
+		return nil, "", ErrOAuthCodeExpired
 	}
 
 	if authCode.ClientID != clientID {
-		return nil, 0, ErrOAuthInvalidGrant
+		return nil, "", ErrOAuthInvalidGrant
 	}
 
 	if authCode.RedirectURI != redirectURI {
-		return nil, 0, ErrOAuthRedirectMismatch
+		return nil, "", ErrOAuthRedirectMismatch
 	}
 
 	// 标记为已使用
 	if err := s.authCodeRepo.MarkUsed(ctx, authCode.ID); err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
 
 	// 生成 Token
-	tokenResp, err := s.createTokenPair(ctx, authCode.ClientID, authCode.UserID, authCode.Scope)
+	tokenResp, err := s.createTokenPair(ctx, authCode.ClientID, authCode.UserUID, authCode.Scope)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code exchanged: client_id=%s, user_id=%d", clientID, authCode.UserID))
-	return tokenResp, authCode.UserID, nil
+	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code exchanged: client_id=%s, user_uid=%s", clientID, authCode.UserUID))
+	return tokenResp, authCode.UserUID, nil
 }
 
 // ====================  Token 方法 ====================
 
 // RefreshAccessToken 刷新 Access Token
-func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, clientID string) (*OAuthTokenResponse, int64, error) {
+func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, clientID string) (*OAuthTokenResponse, string, error) {
 	tokenHash := s.hashToken(refreshToken)
 
 	token, err := s.refreshTokenRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthTokenNotFound) {
-			return nil, 0, ErrOAuthTokenNotFound
+			return nil, "", ErrOAuthTokenNotFound
 		}
-		return nil, 0, err
+		return nil, "", err
 	}
 
 	if token.IsExpired() {
-		return nil, 0, ErrOAuthTokenExpired
+		return nil, "", ErrOAuthTokenExpired
 	}
 
 	if token.ClientID != clientID {
-		return nil, 0, ErrOAuthInvalidGrant
+		return nil, "", ErrOAuthInvalidGrant
 	}
 
 	// 删除旧 Token
@@ -387,13 +387,13 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 	}
 
 	// 生成新 Token
-	tokenResp, err := s.createTokenPair(ctx, token.ClientID, token.UserID, token.Scope)
+	tokenResp, err := s.createTokenPair(ctx, token.ClientID, token.UserUID, token.Scope)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Token refreshed: client_id=%s, user_id=%d", clientID, token.UserID))
-	return tokenResp, token.UserID, nil
+	utils.LogInfo("OAUTH", fmt.Sprintf("Token refreshed: client_id=%s, user_uid=%s", clientID, token.UserUID))
+	return tokenResp, token.UserUID, nil
 }
 
 // ValidateAccessToken 验证 Access Token
@@ -424,26 +424,26 @@ func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
 }
 
 // RevokeUserClientTokens 撤销用户对某客户端的所有授权
-func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userID int64, clientID string) error {
-	_, _ = s.accessTokenRepo.DeleteByUserAndClient(ctx, userID, clientID)
-	_, _ = s.refreshTokenRepo.DeleteByUserAndClient(ctx, userID, clientID)
-	_ = s.grantRepo.Delete(ctx, userID, clientID)
-	utils.LogInfo("OAUTH", fmt.Sprintf("User-client tokens revoked: user_id=%d, client_id=%s", userID, clientID))
+func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userUID string, clientID string) error {
+	_, _ = s.accessTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID)
+	_, _ = s.refreshTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID)
+	_ = s.grantRepo.Delete(ctx, userUID, clientID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("User-client tokens revoked: user_uid=%s, client_id=%s", userUID, clientID))
 	return nil
 }
 
 // RevokeUserTokens 撤销用户的所有 OAuth Token（用于封禁）
-func (s *OAuthService) RevokeUserTokens(ctx context.Context, userID int64) error {
-	_, _ = s.accessTokenRepo.DeleteByUser(ctx, userID)
-	_, _ = s.refreshTokenRepo.DeleteByUser(ctx, userID)
-	_, _ = s.grantRepo.DeleteByUser(ctx, userID)
-	utils.LogInfo("OAUTH", fmt.Sprintf("All user tokens revoked: user_id=%d", userID))
+func (s *OAuthService) RevokeUserTokens(ctx context.Context, userUID string) error {
+	_, _ = s.accessTokenRepo.DeleteByUser(ctx, userUID)
+	_, _ = s.refreshTokenRepo.DeleteByUser(ctx, userUID)
+	_, _ = s.grantRepo.DeleteByUser(ctx, userUID)
+	utils.LogInfo("OAUTH", fmt.Sprintf("All user tokens revoked: user_uid=%s", userUID))
 	return nil
 }
 
 // GetUserGrants 获取用户的所有授权记录
-func (s *OAuthService) GetUserGrants(ctx context.Context, userID int64) ([]*models.OAuthGrantWithClient, error) {
-	return s.grantRepo.FindByUserID(ctx, userID)
+func (s *OAuthService) GetUserGrants(ctx context.Context, userUID string) ([]*models.OAuthGrantWithClient, error) {
+	return s.grantRepo.FindByUserUID(ctx, userUID)
 }
 
 // RevokeClientTokens 撤销某客户端的所有 Token（用于禁用/删除客户端）
@@ -458,7 +458,7 @@ func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) 
 // ====================  私有方法 ====================
 
 // createTokenPair 创建 Access Token 和 Refresh Token 对
-func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, userID int64, scope string) (*OAuthTokenResponse, error) {
+func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, userUID string, scope string) (*OAuthTokenResponse, error) {
 	accessToken, err := s.generateRandomHex(oauthAccessTokenLength)
 	if err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 	accessTokenModel := &models.OAuthAccessToken{
 		TokenHash: s.hashToken(accessToken),
 		ClientID:  clientID,
-		UserID:    userID,
+		UserUID:   userUID,
 		Scope:     scope,
 		ExpiresAt: time.Now().Add(oauthAccessTokenExpiry),
 	}
@@ -485,7 +485,7 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 	refreshTokenModel := &models.OAuthRefreshToken{
 		TokenHash:     s.hashToken(refreshToken),
 		ClientID:      clientID,
-		UserID:        userID,
+		UserUID:       userUID,
 		Scope:         scope,
 		ExpiresAt:     time.Now().Add(oauthRefreshTokenExpiry),
 		AccessTokenID: accessTokenModel.ID,

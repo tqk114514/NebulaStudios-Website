@@ -46,7 +46,7 @@ func NewR2Service() (*R2Service, error) {
 		return nil, nil
 	}
 
-	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...any) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			URL: cfg.R2Endpoint,
 		}, nil
@@ -85,13 +85,13 @@ func NewR2Service() (*R2Service, error) {
 //
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //   - imageData: 图片二进制数据
 //
 // 返回：
 //   - string: 头像 URL
 //   - error: 错误信息
-func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []byte) (string, error) {
+func (s *R2Service) UploadAvatar(ctx context.Context, userUID string, imageData []byte) (string, error) {
 	if s == nil || s.client == nil {
 		return "", fmt.Errorf("R2 service not initialized")
 	}
@@ -125,7 +125,7 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 	}
 
 	// 上传到 R2
-	key := fmt.Sprintf("avatar/%d.webp", userID)
+	key := fmt.Sprintf("avatar/%s.webp", userUID)
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
@@ -137,7 +137,7 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 	}
 
 	avatarURL := fmt.Sprintf("%s/%s", s.url, key)
-	utils.LogInfo("R2", fmt.Sprintf("Avatar uploaded: userID=%d, url=%s, size=%d bytes", userID, avatarURL, len(webpData)))
+	utils.LogInfo("R2", fmt.Sprintf("Avatar uploaded: userUID=%s, url=%s, size=%d bytes", userUID, avatarURL, len(webpData)))
 
 	return avatarURL, nil
 }
@@ -146,16 +146,16 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userID int64, imageData []
 //
 // 参数：
 //   - ctx: 上下文
-//   - userID: 用户 ID
+//   - userUID: 用户 UID
 //
 // 返回：
 //   - error: 错误信息
-func (s *R2Service) DeleteAvatar(ctx context.Context, userID int64) error {
+func (s *R2Service) DeleteAvatar(ctx context.Context, userUID string) error {
 	if s == nil || s.client == nil {
 		return fmt.Errorf("R2 service not initialized")
 	}
 
-	key := fmt.Sprintf("avatar/%d.webp", userID)
+	key := fmt.Sprintf("avatar/%s.webp", userUID)
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -164,7 +164,7 @@ func (s *R2Service) DeleteAvatar(ctx context.Context, userID int64) error {
 		return fmt.Errorf("failed to delete from R2: %w", err)
 	}
 
-	utils.LogInfo("R2", fmt.Sprintf("Avatar deleted: userID=%d", userID))
+	utils.LogInfo("R2", fmt.Sprintf("Avatar deleted: userUID=%s", userUID))
 	return nil
 }
 

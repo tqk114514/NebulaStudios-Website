@@ -106,8 +106,8 @@ var upgrader = websocket.Upgrader{
 			return false
 		}
 
-		allowedOrigins := strings.Split(cfg.CORSAllowOrigins, ",")
-		for _, allowed := range allowedOrigins {
+		allowedOrigins := strings.SplitSeq(cfg.CORSAllowOrigins, ",")
+		for allowed := range allowedOrigins {
 			allowed = strings.TrimSpace(allowed)
 			if allowed == origin {
 				return true
@@ -168,7 +168,7 @@ func NewWebSocketService() *WebSocketService {
 	}
 
 	// 初始化所有分片
-	for i := 0; i < wsShardCount; i++ {
+	for i := range wsShardCount {
 		ws.shards[i] = &wsClientShard{
 			clients: make(map[string]*WSClient),
 		}
@@ -268,7 +268,7 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	}
 
 	// 构建消息
-	message := map[string]interface{}{
+	message := map[string]any{
 		"type":   "status",
 		"status": status,
 	}
@@ -332,8 +332,8 @@ func (ws *WebSocketService) Shutdown() {
 // GetStats 获取服务统计信息
 // 返回：
 //   - map[string]interface{}: 统计信息
-func (ws *WebSocketService) GetStats() map[string]interface{} {
-	stats := map[string]interface{}{
+func (ws *WebSocketService) GetStats() map[string]any {
+	stats := map[string]any{
 		"connectionCount": ws.GetConnectionCount(),
 		"maxConnections":  maxConnections,
 		"shardCount":      wsShardCount,
@@ -342,7 +342,7 @@ func (ws *WebSocketService) GetStats() map[string]interface{} {
 
 	// 统计每个分片的连接数
 	shardStats := make([]int, wsShardCount)
-	for i := 0; i < wsShardCount; i++ {
+	for i := range wsShardCount {
 		shard := ws.shards[i]
 		shard.mu.RLock()
 		shardStats[i] = len(shard.clients)
@@ -574,7 +574,7 @@ func (ws *WebSocketService) cleanupExpired() {
 	now := time.Now()
 	expired := 0
 
-	for i := 0; i < wsShardCount; i++ {
+	for i := range wsShardCount {
 		shard := ws.shards[i]
 
 		// 收集过期的客户端
@@ -604,7 +604,7 @@ func (ws *WebSocketService) cleanupExpired() {
 
 // closeAllConnections 关闭所有连接
 func (ws *WebSocketService) closeAllConnections() {
-	for i := 0; i < wsShardCount; i++ {
+	for i := range wsShardCount {
 		shard := ws.shards[i]
 
 		shard.mu.Lock()

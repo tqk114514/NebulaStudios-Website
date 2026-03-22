@@ -36,7 +36,7 @@ import (
 // 返回：
 //   - map[string]interface{}: Token 响应数据
 //   - error: 错误信息
-func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]interface{}, error) {
+func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", oauth.ErrOAuthTokenExchange)
 	}
@@ -76,7 +76,7 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthTokenExchange, resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("%w: failed to parse response: %v", oauth.ErrOAuthTokenExchange, err)
 	}
@@ -98,7 +98,7 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 // 返回：
 //   - map[string]interface{}: 用户信息
 //   - error: 错误信息
-func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]interface{}, error) {
+func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", oauth.ErrOAuthUserInfo)
 	}
@@ -130,12 +130,12 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]interface
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthUserInfo, resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("%w: failed to parse response: %v", oauth.ErrOAuthUserInfo, err)
 	}
 
-	if errCode, ok := result["error"].(map[string]interface{}); ok {
+	if errCode, ok := result["error"].(map[string]any); ok {
 		if code, ok := errCode["code"].(string); ok {
 			utils.LogError("OAUTH-MS", "getUserInfo", fmt.Errorf("%s", code), fmt.Sprintf("Get user info error: %s", code))
 			return nil, fmt.Errorf("%w: %s", oauth.ErrOAuthUserInfo, code)

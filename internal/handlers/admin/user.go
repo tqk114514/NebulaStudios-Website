@@ -103,14 +103,14 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 }
 
 // GetUser 获取用户详情
-// GET /admin/api/users/:id
+// GET /admin/api/users/:uid
 //
 // 权限：管理员
 func (h *AdminHandler) GetUser(c *gin.Context) {
-	// 解析用户 ID
-	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || userID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+	// 解析用户 UID
+	userUID := c.Param("uid")
+	if userUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	defer cancel()
 
 	// 查询用户
-	user, err := h.userRepo.FindByID(ctx, userID)
+	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
@@ -132,23 +132,23 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 }
 
 // SetUserRole 设置用户角色
-// PUT /admin/api/users/:id/role
+// PUT /admin/api/users/:uid/role
 //
 // 权限：超级管理员
 func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	// 获取当前操作者信息
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 	operatorRole, _ := adminmw.GetUserRole(c)
 
-	// 解析目标用户 ID
-	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || targetUserID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+	// 解析目标用户 UID
+	targetUserUID := c.Param("uid")
+	if targetUserUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
 		return
 	}
 
 	// 不能修改自己的角色
-	if targetUserID == operatorID {
+	if targetUserUID == operatorUID {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_MODIFY_SELF", "Attempted to modify own role")
 		return
 	}
@@ -171,7 +171,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	defer cancel()
 
 	// 查询目标用户
-	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
@@ -194,7 +194,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	}
 
 	// 执行更新
-	err = h.userRepo.Update(ctx, targetUserID, map[string]interface{}{
+	err = h.userRepo.Update(ctx, targetUserUID, map[string]any{
 		"role": req.Role,
 	})
 	if err != nil {
@@ -203,37 +203,37 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	}
 
 	// 使缓存失效
-	h.userCache.Invalidate(targetUserID)
+	h.userCache.Invalidate(targetUserUID)
 
 	// 记录审计日志到数据库
-	if err := h.logRepo.LogSetRole(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Role, req.Role); err != nil {
+	if err := h.logRepo.LogSetRole(ctx, operatorUID, targetUserUID, targetUser.Username, targetUser.Role, req.Role); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log set_role", err.Error())
 	}
 
 	// 记录审计日志到控制台
-	utils.LogInfo("ADMIN", fmt.Sprintf("Role updated: operatorID=%d, operatorRole=%d, targetID=%d, oldRole=%d, newRole=%d",
-		operatorID, operatorRole, targetUserID, targetUser.Role, req.Role))
+	utils.LogInfo("ADMIN", fmt.Sprintf("Role updated: operatorUID=%s, operatorRole=%d, targetUID=%s, oldRole=%d, newRole=%d",
+		operatorUID, operatorRole, targetUserUID, targetUser.Role, req.Role))
 
 	utils.RespondSuccess(c, gin.H{"message": "Role updated"})
 }
 
 // DeleteUser 删除用户
-// DELETE /admin/api/users/:id
+// DELETE /admin/api/users/:uid
 //
 // 权限：超级管理员
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	// 获取当前操作者信息
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
-	// 解析目标用户 ID
-	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || targetUserID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+	// 解析目标用户 UID
+	targetUserUID := c.Param("uid")
+	if targetUserUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
 		return
 	}
 
 	// 不能删除自己
-	if targetUserID == operatorID {
+	if targetUserUID == operatorUID {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_DELETE_SELF", "Attempted to delete self")
 		return
 	}
@@ -242,7 +242,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	defer cancel()
 
 	// 查询目标用户
-	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
@@ -265,23 +265,23 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	}
 
 	// 执行删除
-	err = h.userRepo.Delete(ctx, targetUserID)
+	err = h.userRepo.Delete(ctx, targetUserUID)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return
 	}
 
 	// 使缓存失效
-	h.userCache.Invalidate(targetUserID)
+	h.userCache.Invalidate(targetUserUID)
 
 	// 记录审计日志到数据库
-	if err := h.logRepo.LogDeleteUser(ctx, operatorID, targetUserID, targetUser.Username, targetUser.Email); err != nil {
+	if err := h.logRepo.LogDeleteUser(ctx, operatorUID, targetUserUID, targetUser.Username, targetUser.Email); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log delete_user", err.Error())
 	}
 
 	// 记录审计日志到控制台
-	utils.LogInfo("ADMIN", fmt.Sprintf("User deleted: operatorID=%d, targetID=%d, targetUsername=%s",
-		operatorID, targetUserID, targetUser.Username))
+	utils.LogInfo("ADMIN", fmt.Sprintf("User deleted: operatorUID=%s, targetUID=%s, targetUsername=%s",
+		operatorUID, targetUserUID, targetUser.Username))
 
 	utils.RespondSuccess(c, gin.H{"message": "User deleted"})
 }
@@ -289,22 +289,22 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 // ====================  封禁管理 ====================
 
 // BanUser 封禁用户
-// POST /admin/api/users/:id/ban
+// POST /admin/api/users/:uid/ban
 //
 // 权限：管理员（不能封禁管理员及以上）
 func (h *AdminHandler) BanUser(c *gin.Context) {
 	// 获取当前操作者信息
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
-	// 解析目标用户 ID
-	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || targetUserID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+	// 解析目标用户 UID
+	targetUserUID := c.Param("uid")
+	if targetUserUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
 		return
 	}
 
 	// 不能封禁自己
-	if targetUserID == operatorID {
+	if targetUserUID == operatorUID {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_BAN_SELF", "Attempted to ban self")
 		return
 	}
@@ -336,7 +336,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	defer cancel()
 
 	// 查询目标用户
-	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
@@ -361,51 +361,50 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	// 计算解封时间
 	var unbanAt *time.Time
 	if req.Days > 0 {
-		t := time.Now().AddDate(0, 0, req.Days)
-		unbanAt = &t
+		unbanAt = new(time.Now().AddDate(0, 0, req.Days))
 	}
 
 	// 执行封禁
-	err = h.userRepo.Ban(ctx, targetUserID, operatorID, req.Reason, unbanAt)
+	err = h.userRepo.Ban(ctx, targetUserUID, operatorUID, req.Reason, unbanAt)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "BAN_FAILED", err.Error())
 		return
 	}
 
 	// 使缓存失效
-	h.userCache.Invalidate(targetUserID)
+	h.userCache.Invalidate(targetUserUID)
 
 	// 记录审计日志到数据库
-	if err := h.logRepo.LogBanUser(ctx, operatorID, targetUserID, targetUser.Username, req.Reason, unbanAt); err != nil {
+	if err := h.logRepo.LogBanUser(ctx, operatorUID, targetUserUID, targetUser.Username, req.Reason, unbanAt); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log ban_user", err.Error())
 	}
 
 	// 记录用户日志
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogBanned(ctx, targetUserID, req.Reason, unbanAt); err != nil {
+		if err := h.userLogRepo.LogBanned(ctx, targetUserUID, req.Reason, unbanAt); err != nil {
 			utils.LogWarn("ADMIN", "Failed to log user banned", err.Error())
 		}
 	}
 
 	// 记录审计日志到控制台
-	utils.LogInfo("ADMIN", fmt.Sprintf("User banned: operatorID=%d, targetID=%d, reason=%s, days=%d",
-		operatorID, targetUserID, req.Reason, req.Days))
+	utils.LogInfo("ADMIN", fmt.Sprintf("User banned: operatorUID=%s, targetUID=%s, reason=%s, days=%d",
+		operatorUID, targetUserUID, req.Reason, req.Days))
 
 	utils.RespondSuccess(c, gin.H{"message": "User banned"})
 }
 
 // UnbanUser 解封用户
-// POST /admin/api/users/:id/unban
+// POST /admin/api/users/:uid/unban
 //
 // 权限：管理员
 func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	// 获取当前操作者信息
-	operatorID, _ := middleware.GetUserID(c)
+	operatorUID, _ := middleware.GetUID(c)
 
-	// 解析目标用户 ID
-	targetUserID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || targetUserID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_ID")
+	// 解析目标用户 UID
+	targetUserUID := c.Param("uid")
+	if targetUserUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
 		return
 	}
 
@@ -413,7 +412,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	defer cancel()
 
 	// 查询目标用户
-	targetUser, err := h.userRepo.FindByID(ctx, targetUserID)
+	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
@@ -430,30 +429,30 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	}
 
 	// 执行解封
-	err = h.userRepo.Unban(ctx, targetUserID)
+	err = h.userRepo.Unban(ctx, targetUserUID)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UNBAN_FAILED", err.Error())
 		return
 	}
 
 	// 使缓存失效
-	h.userCache.Invalidate(targetUserID)
+	h.userCache.Invalidate(targetUserUID)
 
 	// 记录审计日志到数据库
-	if err := h.logRepo.LogUnbanUser(ctx, operatorID, targetUserID, targetUser.Username); err != nil {
+	if err := h.logRepo.LogUnbanUser(ctx, operatorUID, targetUserUID, targetUser.Username); err != nil {
 		utils.LogWarn("ADMIN", "Failed to log unban_user", err.Error())
 	}
 
 	// 记录用户日志
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogUnbanned(ctx, targetUserID); err != nil {
+		if err := h.userLogRepo.LogUnbanned(ctx, targetUserUID); err != nil {
 			utils.LogWarn("ADMIN", "Failed to log user unbanned", err.Error())
 		}
 	}
 
 	// 记录审计日志到控制台
-	utils.LogInfo("ADMIN", fmt.Sprintf("User unbanned: operatorID=%d, targetID=%d",
-		operatorID, targetUserID))
+	utils.LogInfo("ADMIN", fmt.Sprintf("User unbanned: operatorUID=%s, targetUID=%s",
+		operatorUID, targetUserUID))
 
 	utils.RespondSuccess(c, gin.H{"message": "User unbanned"})
 }

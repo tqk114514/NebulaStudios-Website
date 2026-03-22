@@ -175,16 +175,16 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.userRepo.Update(ctx, user.ID, map[string]interface{}{"password": hashedPassword}); err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userID=%d", user.ID))
+	if err := h.userRepo.Update(ctx, user.UID, map[string]any{"password": hashedPassword}); err != nil {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userUID=%s", user.UID))
 		return
 	}
 
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
 
-	h.userCache.Invalidate(user.ID)
+	h.userCache.Invalidate(user.UID)
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Password reset successful: email=%s, userID=%d", normalizedEmail, user.ID))
+	utils.LogInfo("AUTH", fmt.Sprintf("Password reset successful: email=%s, userUID=%s", normalizedEmail, user.UID))
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -212,14 +212,14 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 //   - SAME_PASSWORD: 新密码与旧密码相同
 //   - UPDATE_FAILED: 更新失败
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
+	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "ChangePassword called without valid userID")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "ChangePassword called without valid userUID")
 		return
 	}
 
-	if userID <= 0 {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userID in ChangePassword: %d", userID))
+	if userUID == "" {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userUID in ChangePassword: %s", userUID))
 		return
 	}
 
@@ -245,13 +245,13 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for change password: userID=%d, ip=%s", userID, clientIP))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for change password: userUID=%s, ip=%s", userUID, clientIP))
 		return
 	}
 
 	ctx := c.Request.Context()
 
-	user, err := h.userRepo.FindByID(ctx, userID)
+	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
 		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
@@ -263,7 +263,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if !match {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "WRONG_PASSWORD", fmt.Sprintf("Wrong current password in ChangePassword: userID=%d", userID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "WRONG_PASSWORD", fmt.Sprintf("Wrong current password in ChangePassword: userUID=%s", userUID))
 		return
 	}
 
@@ -279,7 +279,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if samePassword {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "SAME_PASSWORD", fmt.Sprintf("New password same as old in ChangePassword: userID=%d", userID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "SAME_PASSWORD", fmt.Sprintf("New password same as old in ChangePassword: userUID=%s", userUID))
 		return
 	}
 
@@ -289,19 +289,19 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.userRepo.Update(ctx, userID, map[string]interface{}{"password": hashedPassword}); err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Password update failed in ChangePassword: userID=%d", userID))
+	if err := h.userRepo.Update(ctx, userUID, map[string]any{"password": hashedPassword}); err != nil {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Password update failed in ChangePassword: userUID=%s", userUID))
 		return
 	}
 
-	h.userCache.Invalidate(userID)
+	h.userCache.Invalidate(userUID)
 
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogChangePassword(ctx, userID); err != nil {
-			utils.LogWarn("AUTH", "Failed to log password change", fmt.Sprintf("userID=%d", userID))
+		if err := h.userLogRepo.LogChangePassword(ctx, userUID); err != nil {
+			utils.LogWarn("AUTH", "Failed to log password change", fmt.Sprintf("userUID=%s", userUID))
 		}
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Password changed successfully: userID=%d, email=%s", userID, user.Email))
+	utils.LogInfo("AUTH", fmt.Sprintf("Password changed successfully: userUID=%s, email=%s", userUID, user.Email))
 	utils.RespondSuccess(c, gin.H{})
 }

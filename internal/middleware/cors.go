@@ -101,7 +101,7 @@ func parseAllowOrigins(originsStr string) []string {
 		return nil
 	}
 	var origins []string
-	for _, origin := range strings.Split(originsStr, ",") {
+	for origin := range strings.SplitSeq(originsStr, ",") {
 		origin = strings.TrimSpace(origin)
 		if origin != "" {
 			origins = append(origins, origin)

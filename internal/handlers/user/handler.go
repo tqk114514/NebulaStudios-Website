@@ -66,7 +66,7 @@ type UserHandler struct {
 
 // dataExportToken 数据导出 Token（内存存储，一次性使用）
 type dataExportToken struct {
-	UserID    int64
+	UserUID   string
 	ExpiresAt time.Time
 }
 
@@ -172,11 +172,11 @@ func (h *UserHandler) verifyCaptcha(token, captchaType, clientIP string) error {
 
 // invalidateUserCache 使用户缓存失效
 // 参数：
-//   - userID: 用户 ID
-func (h *UserHandler) invalidateUserCache(userID int64) {
+//   - userUID: 用户 UID
+func (h *UserHandler) invalidateUserCache(userUID string) {
 	if h.userCache != nil {
-		h.userCache.Invalidate(userID)
-		utils.LogInfo("USER", fmt.Sprintf("Cache invalidated: userID=%d", userID))
+		h.userCache.Invalidate(userUID)
+		utils.LogInfo("USER", fmt.Sprintf("Cache invalidated: userUID=%s", userUID))
 	}
 }
 

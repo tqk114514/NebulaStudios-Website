@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,7 +78,7 @@ func loadPolicyDataJSON() (string, error) {
 	}
 
 	// 验证并压缩 JSON
-	var jsonData interface{}
+	var jsonData any
 	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return "", err
 	}
@@ -254,9 +255,7 @@ func buildTranslations() error {
 			}
 
 			// 合并到语言数据
-			for k, v := range moduleData {
-				langData[k] = v
-			}
+			maps.Copy(langData, moduleData)
 		}
 
 		if len(langData) == 0 {

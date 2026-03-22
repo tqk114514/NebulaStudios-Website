@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,7 +56,7 @@ const (
 //
 // 返回：
 //   - error: 包装后的错误
-func LogError(module, operation string, err error, context ...interface{}) error {
+func LogError(module, operation string, err error, context ...any) error {
 	if err == nil {
 		return nil
 	}
@@ -78,7 +79,7 @@ func LogError(module, operation string, err error, context ...interface{}) error
 //   - module: 模块名称
 //   - message: 警告消息
 //   - context: 额外的上下文信息（可选）
-func LogWarn(module, message string, context ...interface{}) {
+func LogWarn(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] WARN: %s", module, message)
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
@@ -91,7 +92,7 @@ func LogWarn(module, message string, context ...interface{}) {
 //   - module: 模块名称
 //   - message: 信息消息
 //   - context: 额外的上下文信息（可选）
-func LogInfo(module, message string, context ...interface{}) {
+func LogInfo(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] %s", module, message)
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
@@ -104,7 +105,7 @@ func LogInfo(module, message string, context ...interface{}) {
 //   - module: 模块名称
 //   - message: 调试消息
 //   - context: 额外的上下文信息（可选）
-func LogDebug(module, message string, context ...interface{}) {
+func LogDebug(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] DEBUG: %s", module, message)
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context...)
@@ -145,7 +146,7 @@ func (e *DatabaseError) Unwrap() error {
 //
 // 返回：
 //   - error: 包装后的错误（DatabaseError 类型）
-func HandleDatabaseError(module, operation string, err error, identifier interface{}) error {
+func HandleDatabaseError(module, operation string, err error, identifier any) error {
 	if err == nil {
 		return nil
 	}
@@ -248,11 +249,11 @@ func HTTPDatabaseError(c *gin.Context, module string, err error, notFoundCode ..
 type OperationResult struct {
 	Success bool
 	Error   error
-	Data    interface{}
+	Data    any
 }
 
 // NewSuccess 创建成功结果
-func NewSuccess(data interface{}) *OperationResult {
+func NewSuccess(data any) *OperationResult {
 	return &OperationResult{
 		Success: true,
 		Data:    data,
@@ -272,7 +273,7 @@ func NewFailure(err error) *OperationResult {
 //   - module: 模块名称
 //   - operation: 操作名称
 //   - context: 上下文信息
-func (r *OperationResult) LogAndReturn(module, operation string, context ...interface{}) *OperationResult {
+func (r *OperationResult) LogAndReturn(module, operation string, context ...any) *OperationResult {
 	if r.Success {
 		LogInfo(module, fmt.Sprintf("%s succeeded", operation), context...)
 	} else {
@@ -294,7 +295,7 @@ func (r *OperationResult) LogAndReturn(module, operation string, context ...inte
 //
 // 返回：
 //   - bool: 是否有错误
-func CheckError(module, operation string, err error, context ...interface{}) bool {
+func CheckError(module, operation string, err error, context ...any) bool {
 	if err != nil {
 		LogError(module, operation, err, context...)
 		return true
@@ -339,7 +340,7 @@ func WithContext(err error, context string) error {
 //
 // 返回：
 //   - error: 包装后的错误
-func WithContextf(err error, format string, args ...interface{}) error {
+func WithContextf(err error, format string, args ...any) error {
 	if err == nil {
 		return nil
 	}
@@ -385,12 +386,13 @@ func (ec *ErrorCollector) Error() error {
 	}
 
 	// 合并多个错误
-	msg := fmt.Sprintf("multiple errors occurred (%d):", len(ec.errors))
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("multiple errors occurred (%d):", len(ec.errors)))
 	for i, err := range ec.errors {
-		msg += fmt.Sprintf("\n  %d. %v", i+1, err)
+		msg.WriteString(fmt.Sprintf("\n  %d. %v", i+1, err))
 	}
 
-	return errors.New(msg)
+	return errors.New(msg.String())
 }
 
 // ====================  重试辅助函数 ====================

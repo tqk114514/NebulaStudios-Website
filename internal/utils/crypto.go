@@ -89,7 +89,11 @@ const (
 const (
 	tokenByteSize = 32 // Token 字节长度（hex 编码后 64 字符）
 	codeLength    = 6  // 验证码长度
+	uidLength     = 16 // UID 长度
 )
+
+// UID 字符集（数字 + 小写字母）
+const uidChars = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 // ====================  Token 生成 ====================
 
@@ -126,7 +130,7 @@ func GenerateCode() (string, error) {
 	code := make([]byte, codeLength)
 	charLen := big.NewInt(int64(len(codeChars)))
 
-	for i := 0; i < codeLength; i++ {
+	for i := range codeLength {
 		n, err := rand.Int(rand.Reader, charLen)
 		if err != nil {
 			return "", LogError("CRYPTO", "GenerateCode", err)
@@ -136,6 +140,29 @@ func GenerateCode() (string, error) {
 
 	result := string(code)
 	LogDebug("CRYPTO", fmt.Sprintf("Generated verification code: length=%d", len(result)))
+	return result, nil
+}
+
+// GenerateUID 生成 16 位用户唯一标识符
+// 由数字和小写字母组成，使用密码学安全的随机数
+//
+// 返回：
+//   - string: 16 位 UID
+//   - error: 随机数生成失败时返回错误
+func GenerateUID() (string, error) {
+	uid := make([]byte, uidLength)
+	charLen := big.NewInt(int64(len(uidChars)))
+
+	for i := range uidLength {
+		n, err := rand.Int(rand.Reader, charLen)
+		if err != nil {
+			return "", LogError("CRYPTO", "GenerateUID", err)
+		}
+		uid[i] = uidChars[n.Int64()]
+	}
+
+	result := string(uid)
+	LogDebug("CRYPTO", fmt.Sprintf("Generated UID: length=%d", len(result)))
 	return result, nil
 }
 

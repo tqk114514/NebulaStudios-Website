@@ -101,14 +101,14 @@ const (
 type State struct {
 	Timestamp    int64  // 创建时间戳（毫秒）
 	Action       string // 操作类型：login/link
-	UserID       int64  // 用户 ID（仅 link 操作）
+	UserUID      string // 用户 UID（仅 link 操作）
 	CodeVerifier string // PKCE code_verifier
 }
 
 // PendingLink 待确认绑定数据
 // 当用户通过 OAuth 登录但邮箱已存在时，需要确认绑定
 type PendingLink struct {
-	UserID            int64  // 已存在用户的 ID
+	UserUID           string // 已存在用户的 UID
 	ProviderID        string // 第三方账户 ID
 	DisplayName       string // 第三方显示名称
 	ProviderAvatarURL string // 第三方头像 URL
@@ -419,7 +419,7 @@ func cleanupExpiredData() {
 //   - indexMap: 序号 map
 //   - counter: 当前计数器指针
 //   - count: 淘汰数量
-func fifoEvictLocked(dataMap interface{}, indexMap map[string]int64, counter *int64, count int) {
+func fifoEvictLocked(dataMap any, indexMap map[string]int64, counter *int64, count int) {
 	if count <= 0 {
 		return
 	}

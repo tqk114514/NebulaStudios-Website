@@ -31,16 +31,16 @@ var (
 	ErrAuthNilSessionService = errors.New("session service is nil")
 	// ErrAuthTokenNotFound Token 未找到
 	ErrAuthTokenNotFound = errors.New("TOKEN_NOT_FOUND")
-	// ErrAuthInvalidUserID 用户 ID 无效
-	ErrAuthInvalidUserID = errors.New("invalid user ID in context")
+	// ErrAuthInvalidUID 用户 UID 无效
+	ErrAuthInvalidUID = errors.New("invalid user UID in context")
 )
 
 // ====================  常量定义 ====================
 
 const (
-	// ContextKeyUserID Context 中存储用户 ID 的键
+	// ContextKeyUID Context 中存储用户 UID 的键
 	// 使用应用前缀防止与第三方中间件冲突
-	ContextKeyUserID = "auth-system:userId"
+	ContextKeyUID = "auth-system:uid"
 
 	// authHeaderPrefix Authorization Header 前缀
 	authHeaderPrefix = "Bearer "
@@ -96,21 +96,21 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 			return
 		}
 
-		// 验证用户 ID 有效性
-		if claims.UserID <= 0 {
-			utils.LogWarn("AUTH-MW", "Invalid user ID in claims", fmt.Sprintf("userID=%d", claims.UserID))
-			respondUnauthorized(c, "INVALID_USER_ID")
+		// 验证用户 UID 有效性
+		if claims.UID == "" {
+			utils.LogWarn("AUTH-MW", "Invalid user UID in claims", fmt.Sprintf("uid=%s", claims.UID))
+			respondUnauthorized(c, "INVALID_UID")
 			return
 		}
 
-		// 将用户 ID 挂载到 Context
-		c.Set(ContextKeyUserID, claims.UserID)
+		// 将用户 UID 挂载到 Context
+		c.Set(ContextKeyUID, claims.UID)
 		c.Next()
 	}
 }
 
 // OptionalAuthMiddleware 可选认证中间件（不强制要求登录）
-// 如果提供了有效 Token，将用户 ID 挂载到 Context
+// 如果提供了有效 Token，将用户 UID 挂载到 Context
 // 如果没有 Token 或 Token 无效，继续处理请求但不设置用户 ID
 //
 // 参数：
@@ -146,52 +146,52 @@ func OptionalAuthMiddleware(sessionService *services.SessionService) gin.Handler
 		}
 
 		// 验证 claims 有效性
-		if claims == nil || claims.UserID <= 0 {
+		if claims == nil || claims.UID == "" {
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Optional auth invalid claims: path=%s", c.Request.URL.Path))
 			c.Next()
 			return
 		}
 
-		// 将用户 ID 挂载到 Context
-		c.Set(ContextKeyUserID, claims.UserID)
+		// 将用户 UID 挂载到 Context
+		c.Set(ContextKeyUID, claims.UID)
 		c.Next()
 	}
 }
 
-// GetUserID 从 Context 获取用户 ID
+// GetUID 从 Context 获取用户 UID
 // 参数：
 //   - c: Gin Context
 //
 // 返回：
-//   - int64: 用户 ID
+//   - string: 用户 UID
 //   - bool: 是否成功获取（false 表示未登录或数据无效）
-func GetUserID(c *gin.Context) (int64, bool) {
+func GetUID(c *gin.Context) (string, bool) {
 	// 检查 Context 是否为空
 	if c == nil {
-		utils.LogError("AUTH-MW", "GetUserID", fmt.Errorf("context is nil"), "")
-		return 0, false
+		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("context is nil"), "")
+		return "", false
 	}
 
-	// 获取用户 ID
-	userID, exists := c.Get(ContextKeyUserID)
+	// 获取用户 UID
+	uid, exists := c.Get(ContextKeyUID)
 	if !exists {
-		return 0, false
+		return "", false
 	}
 
 	// 类型断言
-	id, ok := userID.(int64)
+	uidStr, ok := uid.(string)
 	if !ok {
-		utils.LogError("AUTH-MW", "GetUserID", fmt.Errorf("type assertion failed: got %T, want int64", userID), "")
-		return 0, false
+		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("type assertion failed: got %T, want string", uid), "")
+		return "", false
 	}
 
-	// 验证 ID 有效性
-	if id <= 0 {
-		utils.LogWarn("AUTH-MW", "Invalid user ID in context", fmt.Sprintf("id=%d", id))
-		return 0, false
+	// 验证 UID 有效性
+	if uidStr == "" {
+		utils.LogWarn("AUTH-MW", "Invalid user UID in context", fmt.Sprintf("uid=%s", uidStr))
+		return "", false
 	}
 
-	return id, true
+	return uidStr, true
 }
 
 // IsAuthenticated 检查用户是否已认证
@@ -201,7 +201,7 @@ func GetUserID(c *gin.Context) (int64, bool) {
 // 返回：
 //   - bool: 是否已认证
 func IsAuthenticated(c *gin.Context) bool {
-	_, ok := GetUserID(c)
+	_, ok := GetUID(c)
 	return ok
 }
 
@@ -301,8 +301,8 @@ func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFun
 			return
 		}
 
-		// Token 有效且用户 ID 有效，重定向到 dashboard
-		if claims != nil && claims.UserID > 0 {
+		// Token 有效且用户 UID 有效，重定向到 dashboard
+		if claims != nil && claims.UID != "" {
 			c.Redirect(http.StatusFound, "/account/dashboard")
 			c.Abort()
 			return

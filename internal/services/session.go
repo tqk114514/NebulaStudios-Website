@@ -23,6 +23,7 @@ import (
 	"auth-system/internal/utils"
 	"errors"
 	"fmt"
+	"slices"
 
 	"time"
 
@@ -78,7 +79,7 @@ const (
 
 // Claims JWT 声明
 type Claims struct {
-	UserID int64 `json:"userId"`
+	UID string `json:"uid"`
 	jwt.RegisteredClaims
 }
 
@@ -173,15 +174,15 @@ func NewSessionServiceWithValidation(cfg *config.Config) (*SessionService, error
 
 // GenerateToken 生成 JWT Token
 // 参数：
-//   - userID: 用户 ID
+//   - uid: 用户 UID
 //
 // 返回：
 //   - string: JWT Token
 //   - error: 生成失败时返回错误
-func (s *SessionService) GenerateToken(userID int64) (string, error) {
+func (s *SessionService) GenerateToken(uid string) (string, error) {
 	// 参数验证
-	if userID <= 0 {
-		utils.LogWarn("SESSION", "Invalid user ID for token generation", fmt.Sprintf("userID=%d", userID))
+	if uid == "" {
+		utils.LogWarn("SESSION", "Invalid user UID for token generation", fmt.Sprintf("uid=%s", uid))
 		return "", ErrInvalidUser
 	}
 
@@ -199,7 +200,7 @@ func (s *SessionService) GenerateToken(userID int64) (string, error) {
 	// 创建 Claims
 	now := time.Now()
 	claims := &Claims{
-		UserID: userID,
+		UID: uid,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiresIn)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -215,11 +216,11 @@ func (s *SessionService) GenerateToken(userID int64) (string, error) {
 	// 签名 Token
 	tokenString, err := token.SignedString(s.jwtSecret)
 	if err != nil {
-		utils.LogError("SESSION", "GenerateToken", err, fmt.Sprintf("Failed to sign token: userID=%d", userID))
+		utils.LogError("SESSION", "GenerateToken", err, fmt.Sprintf("Failed to sign token: uid=%s", uid))
 		return "", fmt.Errorf("%w: %v", ErrTokenGenerationFailed, err)
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Token generated: userID=%d, expiry=%v", userID, s.jwtExpiresIn))
+	utils.LogInfo("SESSION", fmt.Sprintf("Token generated: uid=%s, expiry=%v", uid, s.jwtExpiresIn))
 	return tokenString, nil
 }
 
@@ -248,7 +249,7 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 	}
 
 	// 解析 Token
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		// 验证签名方法
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			utils.LogWarn("SESSION", "Unexpected signing method", fmt.Sprintf("alg=%v", token.Header["alg"]))
@@ -355,9 +356,9 @@ func (s *SessionService) validateClaims(claims *Claims) error {
 		return ErrInvalidTokenSession
 	}
 
-	// 验证用户 ID
-	if claims.UserID <= 0 {
-		utils.LogWarn("SESSION", "Invalid user ID in claims", fmt.Sprintf("userID=%d", claims.UserID))
+	// 验证用户 UID
+	if claims.UID == "" {
+		utils.LogWarn("SESSION", "Invalid user UID in claims", fmt.Sprintf("uid=%s", claims.UID))
 		return ErrInvalidUser
 	}
 
@@ -374,13 +375,7 @@ func (s *SessionService) validateClaims(claims *Claims) error {
 	}
 
 	// 验证受众（aud）
-	audienceValid := false
-	for _, aud := range claims.Audience {
-		if aud == s.jwtAudience {
-			audienceValid = true
-			break
-		}
-	}
+	audienceValid := slices.Contains(claims.Audience, s.jwtAudience)
 	if !audienceValid {
 		utils.LogWarn("SESSION", "Invalid token audience", fmt.Sprintf("expected=%s, got=%v", s.jwtAudience, claims.Audience))
 		return ErrInvalidTokenSession
