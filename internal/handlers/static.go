@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
@@ -174,10 +175,15 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 
 		var versions []string
 		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".md" {
-				// 去掉 .md 扩展名
-				version := entry.Name()[:len(entry.Name())-3]
-				versions = append(versions, version)
+			if !entry.IsDir() {
+				name := entry.Name()
+				if strings.HasSuffix(name, ".md") {
+					version := name[:len(name)-3]
+					versions = append(versions, version)
+				} else if strings.HasSuffix(name, ".md.br") {
+					version := name[:len(name)-6]
+					versions = append(versions, version)
+				}
 			}
 		}
 
