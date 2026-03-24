@@ -61,9 +61,9 @@ func brotliCompressDir(dir string) error {
 			return nil
 		}
 
-		// 只压缩 js, css, html, json 文件
+		// 只压缩 js, css, html, json, md 文件
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".js" || ext == ".css" || ext == ".html" || ext == ".json" {
+		if ext == ".js" || ext == ".css" || ext == ".html" || ext == ".json" || ext == ".md" {
 			filesToCompress = append(filesToCompress, path)
 		}
 
