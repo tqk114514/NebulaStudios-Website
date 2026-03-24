@@ -91,3 +91,25 @@ func minifyJSONFile(src, dst string) error {
 	atomic.AddInt64(&stats.BytesWritten, int64(len(minified)))
 	return nil
 }
+
+// buildPolicyMarkdown 复制 Policy Markdown 文件到 dist 目录
+func buildPolicyMarkdown() error {
+	log.Println("[BUILD] Building policy markdown files...")
+
+	policyTypes := []string{"privacy", "terms", "cookies"}
+	var processedCount int
+
+	for _, policyType := range policyTypes {
+		src := filepath.Join(sharedDir, "i18n/policy", policyType, "2025-12-18.md")
+		dst := filepath.Join(distDir, "shared/i18n/policy", policyType, "2025-12-18.md")
+
+		if err := copyFile(src, dst); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", src, err)
+		}
+		processedCount++
+	}
+
+	atomic.AddInt64(&stats.FilesProcessed, int64(processedCount))
+	log.Printf("[BUILD] Processed %d policy markdown files", processedCount)
+	return nil
+}

@@ -59,6 +59,7 @@ var contentTypeMap = map[string]string{
 	".css":  "text/css; charset=utf-8",
 	".html": "text/html; charset=utf-8",
 	".json": "application/json; charset=utf-8",
+	".md":   "text/markdown; charset=utf-8",
 }
 
 // ====================  公开函数 ====================
@@ -105,8 +106,8 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 		}
 
 		// i18n JSON 已合并到 translations.js，生产环境不需要单独服务
-		// 保留跳过逻辑以防万一有请求
-		if strings.HasPrefix(reqPath, "/shared/i18n/") {
+		// 但 policy 目录下的 Markdown 文件需要单独服务
+		if strings.HasPrefix(reqPath, "/shared/i18n/") && !strings.HasPrefix(reqPath, "/shared/i18n/policy/") {
 			c.Next()
 			return
 		}
@@ -288,6 +289,10 @@ func resolveBrotliPath(basePath, reqPath string) (string, error) {
 	cleanReqPath := filepath.Clean(reqPath)
 
 	switch {
+	case strings.HasPrefix(cleanReqPath, "/shared/i18n/policy/"):
+		// 处理 policy Markdown 文件路径
+		relPath = strings.TrimPrefix(cleanReqPath, "/shared")
+		brPath = filepath.Join(basePath, "shared", relPath+brotliExtension)
 	case strings.HasPrefix(cleanReqPath, "/shared/"):
 		// 处理 /shared/ 路径（js, css, components）
 		relPath = strings.TrimPrefix(cleanReqPath, "/shared")
