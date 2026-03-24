@@ -155,7 +155,7 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 //   - data: 包含各政策类型的版本列表
 //   - data.{type}: 该政策类型的版本数组（按日期降序）
 func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
-	policyBasePath := "shared/i18n/policy"
+	policyBasePath := "dist/shared/i18n/policy"
 
 	// 政策类型列表
 	policyTypes := []string{"privacy", "terms", "cookies"}
