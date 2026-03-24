@@ -4,72 +4,41 @@
  *
  * 功能：
  * - Hash 路由切换政策页面
- * - 动态加载政策内容
+ * - 动态加载 Markdown 政策内容
+ * - 使用 marked.js 和 DOMPurify 渲染和净化
  * - 支持扩展新政策类型
  */
 
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 
+declare const marked: {
+  parse: (markdown: string) => string;
+};
+
+declare const DOMPurify: {
+  sanitize: (html: string) => string;
+};
+
 // ==================== 类型定义 ====================
-
-interface PolicySection {
-  id: string;
-  title: string;
-  content: string;
-}
-
-interface PolicyFooter {
-  lastUpdated: string;
-  statement?: string;
-  notice?: string;
-}
-
-interface PolicyContent {
-  title: string;
-  effectiveDate: string;
-  publisher?: string;
-  contactEmail?: string;
-  sections?: PolicySection[];
-  content?: string;
-  footer?: PolicyFooter;
-}
-
-interface PolicyData {
-  [key: string]: PolicyContent;
-}
 
 // 支持的政策类型（可扩展）
 type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
-// ==================== 构建时注入的数据 ====================
-
-declare const __POLICY_DATA__: PolicyData | undefined;
-
 // ==================== 状态管理 ====================
 
-let policyData: PolicyData | null = typeof __POLICY_DATA__ !== 'undefined' ? __POLICY_DATA__ : null;
 let currentPolicy: PolicyType = 'privacy';
 
 // ==================== 数据加载 ====================
 
-async function loadPolicyData(): Promise<PolicyData | null> {
-  // 生产环境：使用构建时注入的数据
-  if (policyData) return policyData;
-
-  // 开发环境：动态加载
+async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
   try {
-    const response = await fetch('/shared/i18n/policy/policy.json');
-    if (!response.ok) throw new Error('Failed to load policy data');
-    policyData = await response.json();
-    return policyData;
+    const response = await fetch(`/shared/i18n/policy/${type}/2025-12-18.md`);
+    if (!response.ok) throw new Error('Failed to load policy markdown');
+    return await response.text();
   } catch (error) {
-    console.error('[POLICY] Failed to load data:', (error as Error).message);
+    console.error('[POLICY] Failed to load markdown:', (error as Error).message);
     return null;
   }
-}
-
-function getPolicyContent(type: PolicyType): PolicyContent | null {
-  return policyData?.[type] || null;
 }
 
 // ==================== 路由管理 ====================
@@ -90,16 +59,24 @@ function updateNavActive(policy: PolicyType): void {
   });
 }
 
-
 // ==================== 内容渲染 ====================
 
-function renderPolicy(type: PolicyType): void {
-  const content = getPolicyContent(type);
+async function renderPolicy(type: PolicyType): Promise<void> {
   const container = document.querySelector('.policy-container');
   if (!container) return;
 
+  // 显示加载中
+  container.innerHTML = `
+    <div class="policy-loading">
+      <div class="loader-spinner"></div>
+      <p>加载中...</p>
+    </div>
+  `;
+
+  const markdown = await loadPolicyMarkdown(type);
+
   // 政策不存在时显示提示
-  if (!content) {
+  if (!markdown) {
     container.innerHTML = `
       <div class="policy-not-found">
         <h1>政策未找到</h1>
@@ -110,39 +87,11 @@ function renderPolicy(type: PolicyType): void {
     return;
   }
 
-  // 构建 HTML
-  let html = `<h1 class="policy-title">${content.title}</h1>`;
-  
-  // 元信息
-  html += `<p class="policy-meta">${content.effectiveDate}`;
-  if (content.publisher) html += `<br>${content.publisher}`;
-  if (content.contactEmail) html += `<br>${content.contactEmail}`;
-  html += `</p>`;
+  // 使用 marked.js 转换 Markdown 为 HTML
+  let html = marked.parse(markdown) as string;
 
-  // 渲染章节
-  if (content.sections?.length) {
-    content.sections.forEach(section => {
-      html += `
-        <section class="policy-section" id="${section.id}">
-          <h2>${section.title}</h2>
-          ${section.content}
-        </section>
-      `;
-    });
-  } else if (content.content) {
-    html += `<section class="policy-section">${content.content}</section>`;
-  }
-
-  // 渲染页脚
-  if (content.footer) {
-    html += `
-      <section class="policy-section policy-contact">
-        <p><strong>${content.footer.lastUpdated}</strong></p>
-        ${content.footer.statement ? `<p>${content.footer.statement}</p>` : ''}
-        ${content.footer.notice ? `<p><em>${content.footer.notice}</em></p>` : ''}
-      </section>
-    `;
-  }
+  // 使用 DOMPurify 净化 HTML
+  html = DOMPurify.sanitize(html);
 
   // 添加淡入动画
   container.classList.remove('fade-in');
@@ -153,16 +102,16 @@ function renderPolicy(type: PolicyType): void {
 
 // ==================== 路由处理 ====================
 
-function handleRouteChange(): void {
+async function handleRouteChange(): Promise<void> {
   const policy = getHashRoute();
-  
+
   // 避免重复渲染
   if (policy === currentPolicy && document.querySelector('.policy-title')) return;
-  
+
   currentPolicy = policy;
   updateNavActive(policy);
-  renderPolicy(policy);
-  
+  await renderPolicy(policy);
+
   // 滚动到顶部
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -177,7 +126,7 @@ function initScrollBehavior(): void {
 
   const updateProgress = (): void => {
     if (!progressBar) return;
-    
+
     const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
     const progress = scrollHeight > 0 ? (window.scrollY / scrollHeight) * 100 : 0;
     progressBar.style.width = `${Math.min(100, progress)}%`;
@@ -185,10 +134,10 @@ function initScrollBehavior(): void {
 
   const handleScroll = (): void => {
     const currentScrollY = window.scrollY;
-    
+
     // 更新进度条
     updateProgress();
-    
+
     // 在顶部时始终显示 header
     if (currentScrollY < threshold) {
       document.body.classList.remove('header-hidden');
@@ -227,14 +176,13 @@ function initScrollBehavior(): void {
 async function init(): Promise<void> {
   try {
     await waitForTranslations();
-    await loadPolicyData();
-    
+
     // 初始渲染
-    handleRouteChange();
-    
+    await handleRouteChange();
+
     // 监听 hash 变化
     window.addEventListener('hashchange', handleRouteChange);
-    
+
     // 导航点击事件（阻止默认行为，使用 SPA 路由）
     document.querySelectorAll('.policy-nav-item').forEach(item => {
       item.addEventListener('click', (e) => {
@@ -249,10 +197,10 @@ async function init(): Promise<void> {
 
     hidePageLoader();
     updatePageTitle();
-    
+
     initLanguageSwitcher(() => {
       updatePageTitle();
-      renderPolicy(currentPolicy);
+      handleRouteChange();
     });
 
   } catch (error) {
