@@ -27,12 +27,30 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 // ==================== 状态管理 ====================
 
 let currentPolicy: PolicyType = 'privacy';
+let policyVersions: Record<string, string[]> = {};
 
 // ==================== 数据加载 ====================
 
+async function loadPolicyVersions(): Promise<void> {
+  try {
+    const response = await fetch('/api/policy/versions');
+    if (!response.ok) throw new Error('Failed to load policy versions');
+    const data = await response.json();
+    if (data.success && data.data) {
+      policyVersions = data.data;
+    }
+  } catch (error) {
+    console.error('[POLICY] Failed to load policy versions:', (error as Error).message);
+  }
+}
+
 async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
   try {
-    const response = await fetch(`/shared/i18n/policy/${type}/2025-12-18.md`);
+    let version = '2025-12-18';
+    if (policyVersions[type] && policyVersions[type].length > 0) {
+      version = policyVersions[type][0];
+    }
+    const response = await fetch(`/shared/i18n/policy/${type}/${version}.md`);
     if (!response.ok) throw new Error('Failed to load policy markdown');
     return await response.text();
   } catch (error) {
@@ -176,6 +194,9 @@ function initScrollBehavior(): void {
 async function init(): Promise<void> {
   try {
     await waitForTranslations();
+
+    // 加载政策版本列表
+    await loadPolicyVersions();
 
     // 初始渲染
     await handleRouteChange();

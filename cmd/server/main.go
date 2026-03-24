@@ -693,6 +693,12 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	{
 		configAPI.GET("/captcha", hdlrs.staticHandler.GetCaptchaConfig)
 	}
+
+	// 政策版本 API
+	policyAPI := r.Group("/api/policy")
+	{
+		policyAPI.GET("/versions", hdlrs.staticHandler.GetPolicyVersions)
+	}
 }
 
 // setupAuthAPI 配置认证 API
