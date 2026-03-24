@@ -48,15 +48,8 @@ func buildJS() error {
 		return err
 	}
 
-	// 读取 Policy 数据用于注入
-	policyDataJSON, err := loadPolicyDataJSON()
-	if err != nil {
-		log.Printf("[BUILD] WARN: Failed to load policy data: %v", err)
-		policyDataJSON = "{}"
-	}
-
-	// 构建 Policy 模块（注入数据）
-	if err := buildJSModule(policyPageEntries, "dist/policy/assets/js", "policy", policyDataJSON); err != nil {
+	// 构建 Policy 模块（无数据注入）
+	if err := buildJSModule(policyPageEntries, "dist/policy/assets/js", "policy", ""); err != nil {
 		return err
 	}
 
@@ -67,28 +60,6 @@ func buildJS() error {
 
 	log.Println("[BUILD] JavaScript build completed")
 	return nil
-}
-
-// loadPolicyDataJSON 读取并压缩 Policy 数据
-func loadPolicyDataJSON() (string, error) {
-	src := filepath.Join(sharedDir, "i18n/policy/policy.json")
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return "", err
-	}
-
-	// 验证并压缩 JSON
-	var jsonData any
-	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return "", err
-	}
-
-	minified, err := json.Marshal(jsonData)
-	if err != nil {
-		return "", err
-	}
-
-	return string(minified), nil
 }
 
 // validateEntryPoints 验证入口文件是否存在
