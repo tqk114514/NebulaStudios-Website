@@ -212,11 +212,6 @@ func loadConfig() error {
 	// 加载 QR 登录加密密钥
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 
-	// 加载 AI 配置
-	newCfg.AIAPIKey = getEnv("AI_API_KEY", "")
-	newCfg.AIBaseURL = getEnv("AI_BASE_URL", "")
-	newCfg.AIModel = getEnv("AI_MODEL", "glm-4-flash")
-
 	// 加载 R2 配置
 	newCfg.R2URL = getEnv("R2_URL", "")
 	newCfg.R2AccessKey = getEnv("R2_ACCESS_KEY", "")
