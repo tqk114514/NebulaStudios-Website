@@ -147,6 +147,55 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
+// GetPolicyVersions 获取政策版本列表
+// GET /api/policy/versions
+//
+// 响应：
+//   - success: 是否成功
+//   - data: 包含各政策类型的版本列表
+//   - data.{type}: 该政策类型的版本数组（按日期降序）
+func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
+	policyBasePath := "shared/i18n/policy"
+
+	// 政策类型列表
+	policyTypes := []string{"privacy", "terms", "cookies"}
+
+	result := make(map[string][]string)
+
+	for _, policyType := range policyTypes {
+		policyPath := filepath.Join(policyBasePath, policyType)
+
+		entries, err := os.ReadDir(policyPath)
+		if err != nil {
+			utils.LogWarn("STATIC", fmt.Sprintf("Failed to read policy directory: %s", policyPath), err.Error())
+			result[policyType] = []string{}
+			continue
+		}
+
+		var versions []string
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".md" {
+				// 去掉 .md 扩展名
+				version := entry.Name()[:len(entry.Name())-3]
+				versions = append(versions, version)
+			}
+		}
+
+		// 按日期降序排序
+		for i := range versions {
+			for j := i + 1; j < len(versions); j++ {
+				if versions[i] < versions[j] {
+					versions[i], versions[j] = versions[j], versions[i]
+				}
+			}
+		}
+
+		result[policyType] = versions
+	}
+
+	utils.RespondSuccessWithData(c, result)
+}
+
 // GetHealth 健康检查（增强版）
 // GET /api/health
 //
