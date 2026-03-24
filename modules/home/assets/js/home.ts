@@ -5,6 +5,7 @@
  * 功能：
  * - 自定义光标
  * - 滚动显示动画
+ * - Ticker 无限滚动
  */
 
 // ==================== 自定义光标 ====================
@@ -57,3 +58,40 @@ const observer = new IntersectionObserver(
 );
 
 reveals.forEach((el) => observer.observe(el));
+
+// ==================== Ticker 无限滚动 ====================
+
+function initTicker(): void {
+  const tickerInner = document.querySelector('.ticker-inner') as HTMLElement | null;
+  const tickerItem = document.querySelector('.ticker-item') as HTMLElement | null;
+
+  if (!tickerInner || !tickerItem) return;
+
+  const itemWidth = tickerItem.offsetWidth;
+  const screenWidth = window.innerWidth;
+
+  while (tickerInner.offsetWidth < screenWidth + itemWidth * 2) {
+    const clone = tickerItem.cloneNode(true) as HTMLElement;
+    tickerInner.appendChild(clone);
+  }
+
+  let position = 0;
+  const speed = 0.5;
+
+  function animate(): void {
+    position -= speed;
+
+    if (position <= -itemWidth) {
+      position = 0;
+    }
+
+    if (tickerInner) {
+      tickerInner.style.transform = `translateX(${position}px)`;
+    }
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
+initTicker();

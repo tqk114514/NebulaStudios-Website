@@ -164,6 +164,15 @@ body:has(button:hover) #cursor-ring {
   animation: fadeUp 1s var(--ease) 0.8s forwards;
 }
 
+.hero-cta .button-primary,
+.hero-cta .button-secondary,
+.cta-actions .button-primary,
+.cta-actions .button-secondary {
+  width: auto;
+  display: inline-flex;
+  text-decoration: none;
+}
+
 .hero-right {
   display: flex;
   flex-direction: column;
@@ -314,8 +323,6 @@ body:has(button:hover) #cursor-ring {
 
 .ticker-inner {
   display: inline-flex;
-  gap: 0;
-  animation: ticker 28s linear infinite;
 }
 
 .ticker-item {
@@ -325,16 +332,8 @@ body:has(button:hover) #cursor-ring {
   letter-spacing: 0.35em;
   text-transform: uppercase;
   color: var(--mid);
-  padding: 0 40px;
-}
-
-.ticker-dot {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--dim);
-  letter-spacing: 0;
-  padding: 0 4px;
-  vertical-align: middle;
+  padding: 0 80px;
+  flex-shrink: 0;
 }
 
 /* ==================== 功能特性区域 ==================== */
@@ -646,15 +645,6 @@ body:has(button:hover) #cursor-ring {
   }
   to {
     transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-@keyframes ticker {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
   }
 }
 
