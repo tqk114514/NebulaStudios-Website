@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEBULA STUDIOS — Account System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;400;700;900&family=Azeret+Mono:wght@300;400&family=Newsreader:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/shared/css/general.css" />
+  <link rel="stylesheet" href="/home/assets/css/home.css" />
+  <script type="module" src="/shared/js/cookie-consent.js"></script>
+</head>
+<body>
+
+  <div id="cursor"></div>
+  <div id="cursor-ring"></div>
+
+  {{HEADER}}
+
+  <section class="hero">
+    <div class="hero-left">
+      <p class="hero-eyebrow"><span></span>账户系统 · v2.0</p>
+      <h1 class="hero-title">
+        ONE<br>
+        IDENTITY<br>
+        <em>Everywhere</em>
+      </h1>
+      <p class="hero-desc">
+        一个账户，连接所有。安全、简洁、无缝的身份管理体验。
+      </p>
+      <div class="hero-cta">
+        <a class="btn-primary" href="/account/register">创建账户</a>
+        <a class="btn-ghost" href="/account/login">登录</a>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="nebula-graphic">
+        <div class="nebula-ring"></div>
+        <div class="nebula-ring"></div>
+        <div class="nebula-ring"></div>
+        <div class="nebula-ring"></div>
+        <div class="nebula-dot"></div>
+
+        <svg class="nebula-stars" viewBox="0 0 360 360">
+          <circle cx="60" cy="80" r="1" fill="#f0ede8" opacity="0.5"/>
+          <circle cx="300" cy="120" r="1.5" fill="#f0ede8" opacity="0.35"/>
+          <circle cx="40" cy="280" r="1" fill="#f0ede8" opacity="0.4"/>
+          <circle cx="320" cy="300" r="1" fill="#f0ede8" opacity="0.3"/>
+          <circle cx="180" cy="30" r="1" fill="#f0ede8" opacity="0.6"/>
+          <circle cx="100" cy="340" r="1.5" fill="#f0ede8" opacity="0.25"/>
+          <circle cx="280" cy="60" r="1" fill="#f0ede8" opacity="0.45"/>
+          <circle cx="200" cy="310" r="1" fill="#f0ede8" opacity="0.3"/>
+          <circle cx="340" cy="200" r="1.5" fill="#f0ede8" opacity="0.35"/>
+          <circle cx="20" cy="160" r="1" fill="#f0ede8" opacity="0.4"/>
+          <line x1="178" y1="179" x2="182" y2="179" stroke="#f0ede8" stroke-width="0.5" opacity="0.6"/>
+          <line x1="180" y1="177" x2="180" y2="183" stroke="#f0ede8" stroke-width="0.5" opacity="0.6"/>
+        </svg>
+      </div>
+
+      <div class="hero-stats">
+        <div class="stat-item">
+          <span class="stat-num">99.9%</span>
+          <span class="stat-label">服务可用率</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-num">&lt; 80ms</span>
+          <span class="stat-label">鉴权响应</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+      <span class="ticker-item">NEBULA</span>
+      <span class="ticker-item ticker-dot">✦</span>
+    </div>
+  </div>
+
+  <section class="features" id="features">
+    <div class="section-header">
+      <div class="reveal">
+        <p class="section-label">功能特性</p>
+        <h2 class="section-title">Everything<br>You <em>Need</em></h2>
+      </div>
+      <p class="section-body reveal reveal-delay-2">
+        从账户创建到权限管理，每一个细节都经过精心设计。简单的外表之下，是严密的安全体系。
+      </p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal">
+        <p class="feature-number">01</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <rect x="8" y="16" width="20" height="16" rx="0"/>
+            <path d="M12 16V11a6 6 0 0 1 12 0v5"/>
+            <circle cx="18" cy="24" r="2"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">身份安全</h3>
+        <p class="feature-desc">加密保护，密码从不明文存储。修改密码即时生效，操作全程留痕。</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-1">
+        <p class="feature-number">02</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <circle cx="18" cy="12" r="5"/>
+            <path d="M6 30c0-6.627 5.373-8 12-8s12 1.373 12 8"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">个人资料</h3>
+        <p class="feature-desc">自定义用户名、头像与邮箱地址。你的账户，完全属于你。</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-2">
+        <p class="feature-number">03</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <path d="M10 18 L26 18 M18 10 L26 18 L18 26"/>
+            <rect x="4" y="4" width="28" height="28" rx="0"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">第三方授权</h3>
+        <p class="feature-desc">查看并管理所有已授权的第三方应用。随时撤销访问，掌握数据主权。</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <p class="feature-number">04</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <path d="M4 8h6v6H4z M4 22h6v6H4z M14 11h18 M14 25h18"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">操作日志</h3>
+        <p class="feature-desc">完整记录账户所有操作行为。异常登录？立即察觉，快速响应。</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-1">
+        <p class="feature-number">05</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <rect x="8" y="4" width="20" height="28" rx="0"/>
+            <path d="M14 10h8 M14 16h8 M14 22h5"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">Microsoft 集成</h3>
+        <p class="feature-desc">与微软账户无缝绑定，统一管理，一键互通生态内所有服务。</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-2">
+        <p class="feature-number">06</p>
+        <div class="feature-icon">
+          <svg viewBox="0 0 36 36">
+            <path d="M18 4 L18 24 M10 16 L18 24 L26 16"/>
+            <path d="M6 30 L30 30"/>
+          </svg>
+        </div>
+        <h3 class="feature-name">数据导出</h3>
+        <p class="feature-desc">随时导出你的完整数据。你的信息始终由你掌控，绝不锁定。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="manifesto" id="about">
+    <div class="manifesto-left reveal">
+      <div class="manifesto-quote">
+        YOUR<br>
+        <span class="accent">DATA</span><br>
+        YOUR<br>
+        RULES
+      </div>
+    </div>
+    <div class="manifesto-right">
+      <p class="manifesto-text reveal">
+        我们相信，<strong>身份认证不应该是负担</strong>。它应该是无形的、可靠的，像空气一样存在——你需要它时它就在那里，但从不打扰你。
+      </p>
+      <p class="manifesto-text reveal reveal-delay-1">
+        Nebula Studios 账户系统从零开始构建，拒绝臃肿的解决方案。<strong>每一行代码都有其存在的理由</strong>，每一个交互都经过反复打磨。
+      </p>
+      <p class="manifesto-text reveal reveal-delay-2">
+        安全不是功能，它是<strong>基础设施</strong>。隐私不是选项，它是<strong>默认值</strong>。这是我们对每一位用户的承诺。
+      </p>
+    </div>
+  </section>
+
+  <section class="cta-section">
+    <div class="cta-title reveal">
+      Start<br>
+      <em>Today</em><br>
+      Free
+    </div>
+    <div class="cta-right reveal reveal-delay-2">
+      <p class="cta-sub">
+        注册只需要一个邮箱。无需信用卡，无隐藏收费。立即获得完整的账户功能体验。
+      </p>
+      <div class="cta-actions">
+        <a class="btn-primary" href="/account/register">立即注册</a>
+        <a class="btn-ghost" href="/account/login">已有账户，去登录</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="home-footer">
+    <span class="footer-logo">Nebula Studios</span>
+    <div class="footer-links">
+      <a class="footer-link" href="/policy#privacy">隐私政策</a>
+      <a class="footer-link" href="/policy#terms">服务条款</a>
+      <a class="footer-link" href="/policy#cookies">Cookie</a>
+    </div>
+    <span class="footer-copy">© 2025 Nebula Studios</span>
+  </footer>
+
+  <script type="module" src="/home/assets/js/home.js"></script>
+</body>
+</html>
