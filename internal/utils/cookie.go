@@ -50,8 +50,8 @@ const (
 	// DefaultCookiePath 默认 Cookie 路径
 	DefaultCookiePath = "/"
 
-	// DefaultCookieDomain 默认 Cookie 域名（空字符串表示当前域名）
-	DefaultCookieDomain = ""
+	// DefaultCookieDomain 默认 Cookie 域名（仅对 www 子域名有效，隔离其他子域名）
+	DefaultCookieDomain = "www.nebulastudios.top"
 )
 
 // ====================  Cookie 写入函数 ====================
@@ -67,7 +67,7 @@ func SetTokenCookie(w http.ResponseWriter, token string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   DefaultCookieMaxAge,
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -84,7 +84,7 @@ func ClearTokenCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -101,7 +101,7 @@ func SetLanguageCookie(w http.ResponseWriter, language string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   int(365 * 24 * time.Hour / time.Second),
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -117,7 +117,7 @@ func ClearLanguageCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -181,7 +181,7 @@ func SetLinkTokenCookie(w http.ResponseWriter, token string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   int(StateExpiryDuration.Seconds()),
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -197,7 +197,7 @@ func ClearLinkTokenCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   false,
+		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
