@@ -164,44 +164,6 @@ body:has(button:hover) #cursor-ring {
   animation: fadeUp 1s var(--ease) 0.8s forwards;
 }
 
-.btn-primary {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--bg);
-  background: var(--fg);
-  border: 1px solid var(--fg);
-  padding: 14px 32px;
-  cursor: none;
-  text-decoration: none;
-  transition: background 0.3s, color 0.3s;
-}
-
-.btn-primary:hover {
-  background: transparent;
-  color: var(--fg);
-}
-
-.btn-ghost {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--mid);
-  background: transparent;
-  border: 1px solid var(--line);
-  padding: 14px 32px;
-  cursor: none;
-  text-decoration: none;
-  transition: border-color 0.3s, color 0.3s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--mid);
-  color: var(--fg);
-}
-
 .hero-right {
   display: flex;
   flex-direction: column;
