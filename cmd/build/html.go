@@ -33,6 +33,11 @@ var (
 func buildHTML() error {
 	log.Println("[BUILD] Building HTML...")
 
+	// 构建 Home 页面
+	if err := buildHTMLModule("modules/home/pages/*.html", "dist/home/pages", "home"); err != nil {
+		return err
+	}
+
 	// 构建 Account 页面
 	if err := buildHTMLModule("modules/account/pages/*.html", "dist/account/pages", "account"); err != nil {
 		return err

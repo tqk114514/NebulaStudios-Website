@@ -31,6 +31,10 @@ func buildJS() error {
 	log.Println("[BUILD] Building JavaScript...")
 
 	// 验证入口文件存在
+	if err := validateEntryPoints(homePageEntries); err != nil {
+		return fmt.Errorf("home entries validation failed: %w", err)
+	}
+
 	if err := validateEntryPoints(accountPageEntries); err != nil {
 		return fmt.Errorf("account entries validation failed: %w", err)
 	}
@@ -41,6 +45,11 @@ func buildJS() error {
 
 	if err := validateEntryPoints(adminPageEntries); err != nil {
 		return fmt.Errorf("admin entries validation failed: %w", err)
+	}
+
+	// 构建 Home 模块
+	if err := buildJSModule(homePageEntries, "dist/home/assets/js", "home", ""); err != nil {
+		return err
 	}
 
 	// 构建 Account 模块

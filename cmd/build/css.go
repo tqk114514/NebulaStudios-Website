@@ -31,6 +31,11 @@ func buildCSS() error {
 		return err
 	}
 
+	// 构建 Home 模块 CSS
+	if err := buildCSSModule("modules/home/assets/css/*.css", "dist/home/assets/css", "home"); err != nil {
+		return err
+	}
+
 	// 构建 Account 模块 CSS
 	if err := buildCSSModule("modules/account/assets/css/*.css", "dist/account/assets/css", "account"); err != nil {
 		return err

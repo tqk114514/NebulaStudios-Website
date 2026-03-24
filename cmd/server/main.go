@@ -563,10 +563,8 @@ func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 
 // setupPageRoutes 配置页面路由
 func setupPageRoutes(r *gin.Engine, svcs *Services) {
-	// 根路径重定向
-	r.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusFound, "/account/login")
-	})
+	// 首页
+	r.GET("/", handlers.ServeHomePage)
 
 	// Account 模块页面
 	accountPages := r.Group("/account")
