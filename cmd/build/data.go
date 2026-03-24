@@ -100,13 +100,29 @@ func buildPolicyMarkdown() error {
 	var processedCount int
 
 	for _, policyType := range policyTypes {
-		src := filepath.Join(sharedDir, "i18n/policy", policyType, "2025-12-18.md")
-		dst := filepath.Join(distDir, "shared/i18n/policy", policyType, "2025-12-18.md")
+		srcDir := filepath.Join(sharedDir, "i18n/policy", policyType)
+		dstDir := filepath.Join(distDir, "shared/i18n/policy", policyType)
 
-		if err := copyFile(src, dst); err != nil {
-			return fmt.Errorf("failed to copy %s: %w", src, err)
+		if err := os.MkdirAll(dstDir, dirPerm); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
 		}
-		processedCount++
+
+		entries, err := os.ReadDir(srcDir)
+		if err != nil {
+			return fmt.Errorf("failed to read directory %s: %w", srcDir, err)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".md" {
+				src := filepath.Join(srcDir, entry.Name())
+				dst := filepath.Join(dstDir, entry.Name())
+
+				if err := copyFile(src, dst); err != nil {
+					return fmt.Errorf("failed to copy %s: %w", src, err)
+				}
+				processedCount++
+			}
+		}
 	}
 
 	atomic.AddInt64(&stats.FilesProcessed, int64(processedCount))
