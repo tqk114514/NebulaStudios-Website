@@ -298,6 +298,10 @@ func resolveBrotliPath(basePath, reqPath string) (string, error) {
 		relPath = strings.TrimPrefix(cleanReqPath, "/shared")
 		brPath = filepath.Join(basePath, "shared", relPath+brotliExtension)
 
+	case strings.HasPrefix(cleanReqPath, "/home/assets/"):
+		relPath = strings.TrimPrefix(cleanReqPath, "/home/assets")
+		brPath = filepath.Join(basePath, "home/assets", relPath+brotliExtension)
+
 	case strings.HasPrefix(cleanReqPath, "/account/assets/"):
 		// 处理 /account/assets/ 路径
 		relPath = strings.TrimPrefix(cleanReqPath, "/account/assets")
