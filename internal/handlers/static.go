@@ -52,6 +52,9 @@ var (
 // ====================  常量定义 ====================
 
 const (
+	// DistHomePages Home 模块页面路径
+	DistHomePages = "dist/home/pages"
+
 	// DistAccountPages Account 模块页面路径
 	DistAccountPages = "dist/account/pages"
 
@@ -322,6 +325,14 @@ func serve404Fallback(c *gin.Context) {
 	// 最终回退：返回简单的 404 文本
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusNotFound, "404 Not Found")
+}
+
+// ====================  Home 模块页面路由 ====================
+
+// ServeHomePage 服务首页
+// GET /
+func ServeHomePage(c *gin.Context) {
+	serveHTML(c, DistHomePages, "index.html")
 }
 
 // ====================  Account 模块页面路由 ====================

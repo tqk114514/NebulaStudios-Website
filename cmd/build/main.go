@@ -49,6 +49,11 @@ var (
 	// 命令行参数
 	isDev = flag.Bool("dev", false, "Development mode (no minification, with sourcemap)")
 
+	// Home 模块页面入口文件
+	homePageEntries = []string{
+		"modules/home/assets/js/home.ts",
+	}
+
 	// Account 模块页面入口文件
 	accountPageEntries = []string{
 		"modules/account/assets/js/login.ts",
@@ -191,6 +196,9 @@ func setupDistDir() error {
 		"dist/shared/i18n/policy/privacy",
 		"dist/shared/i18n/policy/terms",
 		"dist/shared/i18n/policy/cookies",
+		"dist/home/assets/js",
+		"dist/home/assets/css",
+		"dist/home/pages",
 		"dist/account/assets/js",
 		"dist/account/assets/css",
 		"dist/account/pages",
