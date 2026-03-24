@@ -3,9 +3,7 @@
  * 客户端 IP 地址获取工具
  *
  * 功能：
- * - 安全获取真实客户端 IP
- * - 支持 Cloudflare 代理头 (CF-Connecting-IP)
- * - 支持通用代理头 (X-Forwarded-For)
+ * - 从 X-Real-IP 头获取客户端 IP
  * - 回退到直接连接 IP
  *
  * 用法：
@@ -19,7 +17,7 @@ import "github.com/gin-gonic/gin"
 // ====================  公开函数 ====================
 
 // GetClientIP 安全获取客户端 IP
-// 优先从代理头获取，其次从直接连接获取
+// 优先从 X-Real-IP 头获取，其次从直接连接获取
 //
 // 参数：
 //   - c: Gin Context
@@ -31,10 +29,7 @@ func GetClientIP(c *gin.Context) string {
 		return "unknown"
 	}
 
-	ip := c.GetHeader("CF-Connecting-IP")
-	if ip == "" {
-		ip = c.GetHeader("X-Forwarded-For")
-	}
+	ip := c.GetHeader("X-Real-IP")
 	if ip == "" {
 		ip = c.ClientIP()
 	}
