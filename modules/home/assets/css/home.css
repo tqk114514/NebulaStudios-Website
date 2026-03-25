@@ -15,12 +15,15 @@
 
 /* ==================== 基础覆盖 ==================== */
 
+*, *::before, *::after, a, button, [role="button"], input, select, textarea, label {
+  cursor: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  cursor: none;
   overflow-x: hidden;
 }
 
