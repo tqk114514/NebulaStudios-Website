@@ -104,7 +104,3 @@ go run cmd/server/main.go
 1.  **环境依赖**: 图片处理服务默认监听 `/tmp/img-processor.sock`，请确保运行环境支持 Unix Socket 且有权限读写该路径。
 2.  **安全性**: 项目中虽然包含限流和简单的防护，但作为个人项目，未经过专业的安全审计。在生产环境使用请自行评估风险。
 3.  **配置**: 大部分配置通过环境变量加载，具体请查看 `internal/config`。
-
-## License
-
-本项目仅供学习和参考。 This project is for personal use and educational purposes.
