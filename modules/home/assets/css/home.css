@@ -323,6 +323,8 @@ body:has(button:hover) #cursor-ring {
 
 .ticker-inner {
   display: inline-flex;
+  gap: 0;
+  will-change: transform;
 }
 
 .ticker-item {
@@ -332,8 +334,8 @@ body:has(button:hover) #cursor-ring {
   letter-spacing: 0.35em;
   text-transform: uppercase;
   color: var(--mid);
-  padding: 0 80px;
-  flex-shrink: 0;
+  padding: 0 48px;
+  white-space: nowrap;
 }
 
 /* ==================== 功能特性区域 ==================== */
