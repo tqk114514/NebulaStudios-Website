@@ -61,37 +61,36 @@ reveals.forEach((el) => observer.observe(el));
 
 // ==================== Ticker 无限滚动 ====================
 
-function initTicker(): void {
-  const tickerInner = document.querySelector('.ticker-inner') as HTMLElement | null;
-  const tickerItem = document.querySelector('.ticker-item') as HTMLElement | null;
+(function initTicker() {
+  const inner = document.getElementById('ticker-inner') as HTMLElement | null;
+  const seed = inner?.querySelector('.ticker-item') as HTMLElement | null;
 
-  if (!tickerInner || !tickerItem) return;
+  if (!inner || !seed) return;
 
-  const itemWidth = tickerItem.offsetWidth;
-  const screenWidth = window.innerWidth;
-
-  while (tickerInner.offsetWidth < screenWidth + itemWidth * 2) {
-    const clone = tickerItem.cloneNode(true) as HTMLElement;
-    tickerInner.appendChild(clone);
+  while (inner.scrollWidth < window.innerWidth + seed.offsetWidth * 2) {
+    inner.appendChild(seed.cloneNode(true));
   }
 
-  let position = 0;
-  const speed = 0.5;
+  const trackW = inner.offsetWidth;
 
-  function animate(): void {
-    position -= speed;
+  const clone = inner.cloneNode(true) as HTMLElement;
+  clone.removeAttribute('id');
 
-    if (position <= -itemWidth) {
-      position = 0;
-    }
+  const tickerEl = document.getElementById('ticker') as HTMLElement | null;
+  const runner = document.createElement('div');
+  runner.style.cssText = 'display:inline-flex;will-change:transform;';
+  tickerEl?.appendChild(runner);
+  runner.appendChild(inner);
+  runner.appendChild(clone);
 
-    if (tickerInner) {
-      tickerInner.style.transform = `translateX(${position}px)`;
-    }
-    requestAnimationFrame(animate);
+  let x = 0;
+  const speed = 0.6;
+
+  function step() {
+    x -= speed;
+    if (x <= -trackW) x += trackW;
+    runner.style.transform = `translateX(${x}px)`;
+    requestAnimationFrame(step);
   }
-
-  animate();
-}
-
-initTicker();
+  requestAnimationFrame(step);
+})();
