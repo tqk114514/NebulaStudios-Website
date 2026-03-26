@@ -32,6 +32,12 @@ type oauthClientListResponse struct {
 	TotalPages int                   `json:"totalPages"`
 }
 
+// createOAuthClientResponse 创建 OAuth 客户端响应
+type createOAuthClientResponse struct {
+	Client       *models.OAuthClient `json:"client"`
+	ClientSecret string              `json:"client_secret"`
+}
+
 // createOAuthClientRequest 创建 OAuth 客户端请求
 type createOAuthClientRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
@@ -44,6 +50,11 @@ type updateOAuthClientRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=1,max=100"`
 	Description string `json:"description" binding:"max=500"`
 	RedirectURI string `json:"redirect_uri"`
+}
+
+// regenerateSecretResponse 重新生成密钥响应
+type regenerateSecretResponse struct {
+	ClientSecret string `json:"client_secret"`
 }
 
 // toggleOAuthClientRequest 启用/禁用 OAuth 客户端请求
@@ -159,9 +170,9 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client created: operatorUID=%s, clientID=%s, name=%s",
 		operatorUID, client.ClientID, client.Name))
 
-	utils.RespondSuccess(c, gin.H{
-		"client":        client,
-		"client_secret": clientSecret,
+	utils.RespondSuccessWithData(c, createOAuthClientResponse{
+		Client:       client,
+		ClientSecret: clientSecret,
 	})
 }
 
@@ -295,7 +306,9 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 
 	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client secret regenerated: operatorUID=%s, clientID=%s", operatorUID, client.ClientID))
 
-	utils.RespondSuccess(c, gin.H{"client_secret": newSecret})
+	utils.RespondSuccessWithData(c, regenerateSecretResponse{
+		ClientSecret: newSecret,
+	})
 }
 
 // ToggleOAuthClient 启用/禁用 OAuth 客户端
