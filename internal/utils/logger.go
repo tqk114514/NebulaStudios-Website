@@ -107,6 +107,30 @@ func Log(message string) {
 	getLogger().Info(masked)
 }
 
+// logDebug 安全日志输出（DEBUG 级别），自动脱敏敏感信息
+func logDebug(message string) {
+	masked := maskSensitiveData(message)
+	getLogger().Debug(masked)
+}
+
+// logInfo 安全日志输出（INFO 级别），自动脱敏敏感信息
+func logInfo(message string) {
+	masked := maskSensitiveData(message)
+	getLogger().Info(masked)
+}
+
+// logWarn 安全日志输出（WARN 级别），自动脱敏敏感信息
+func logWarn(message string) {
+	masked := maskSensitiveData(message)
+	getLogger().Warn(masked)
+}
+
+// logError 安全日志输出（ERROR 级别），自动脱敏敏感信息
+func logError(message string) {
+	masked := maskSensitiveData(message)
+	getLogger().Error(masked)
+}
+
 // LogPrintf 安全日志输出（格式化），自动脱敏敏感信息
 // 替代 log.Printf，使用 zap 异步写入
 func LogPrintf(format string, args ...any) {

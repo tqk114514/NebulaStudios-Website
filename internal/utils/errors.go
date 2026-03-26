@@ -69,7 +69,7 @@ func LogError(module, operation string, err error, context ...any) error {
 	}
 	msg += fmt.Sprintf(", error=%v", err)
 
-	Log(msg)
+	logError(msg)
 
 	// 包装错误
 	return fmt.Errorf("%s failed: %w", operation, err)
@@ -85,7 +85,7 @@ func LogWarn(module, message string, context ...any) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context)
 	}
-	Log(msg)
+	logWarn(msg)
 }
 
 // LogInfo 记录信息日志
@@ -98,7 +98,7 @@ func LogInfo(module, message string, context ...any) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context)
 	}
-	Log(msg)
+	logInfo(msg)
 }
 
 // LogDebug 记录调试日志
@@ -111,7 +111,7 @@ func LogDebug(module, message string, context ...any) {
 	if len(context) > 0 {
 		msg += fmt.Sprintf(": %v", context)
 	}
-	Log(msg)
+	logDebug(msg)
 }
 
 // ====================  数据库错误处理 ====================
