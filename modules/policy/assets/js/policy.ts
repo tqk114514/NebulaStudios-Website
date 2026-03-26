@@ -28,6 +28,7 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
 let currentPolicy: PolicyType = 'privacy';
 let policyVersions: Record<string, string[]> = {};
+let policyCache: Record<string, string> = {};
 
 // ==================== 数据加载 ====================
 
@@ -45,6 +46,9 @@ async function loadPolicyVersions(): Promise<void> {
 }
 
 async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
+  if (policyCache[type]) {
+    return policyCache[type];
+  }
   try {
     let version = '2025-12-18';
     if (policyVersions[type] && policyVersions[type].length > 0) {
@@ -52,7 +56,9 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
     }
     const response = await fetch(`/shared/i18n/policy/${type}/${version}.md`);
     if (!response.ok) throw new Error('Failed to load policy markdown');
-    return await response.text();
+    const markdown = await response.text();
+    policyCache[type] = markdown;
+    return markdown;
   } catch (error) {
     console.error('[POLICY] Failed to load markdown:', (error as Error).message);
     return null;
@@ -83,13 +89,16 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   const container = document.querySelector('.policy-container');
   if (!container) return;
 
-  // 显示加载中
-  container.innerHTML = `
-    <div class="policy-loading">
-      <div class="loader-spinner"></div>
-      <p>加载中...</p>
-    </div>
-  `;
+  // 先检查缓存，如果有缓存直接渲染
+  const hasCache = !!policyCache[type];
+  if (!hasCache) {
+    container.innerHTML = `
+      <div class="policy-loading">
+        <div class="loader-spinner"></div>
+        <p>加载中...</p>
+      </div>
+    `;
+  }
 
   const markdown = await loadPolicyMarkdown(type);
 
