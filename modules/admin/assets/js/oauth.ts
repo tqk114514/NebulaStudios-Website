@@ -18,7 +18,10 @@ import {
   showConfirm,
   formatDate,
   escapeHtml,
-  renderPagination
+  renderPagination,
+  initSearch,
+  copyToClipboard,
+  renderStatusBadge
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -152,8 +155,6 @@ async function toggleClient(id: number, enabled: boolean): Promise<boolean> {
  * 渲染客户端表格行
  */
 function renderClientRow(client: OAuthClient): string {
-  const statusClass = client.is_enabled ? 'enabled' : 'disabled';
-  const statusText = client.is_enabled ? '已启用' : '已禁用';
   const toggleText = client.is_enabled ? '禁用' : '启用';
   const toggleClass = client.is_enabled ? '' : 'off';
 
@@ -164,7 +165,7 @@ function renderClientRow(client: OAuthClient): string {
         ${client.description ? `<div class="client-desc">${escapeHtml(client.description)}</div>` : ''}
       </td>
       <td><code class="client-id">${escapeHtml(client.client_id)}</code></td>
-      <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+      <td>${renderStatusBadge(client.is_enabled)}</td>
       <td>${formatDate(client.created_at)}</td>
       <td>
         <div class="action-btns">
@@ -330,9 +331,6 @@ function renderClientDetail(client: OAuthClient): void {
     console.error('[ADMIN][OAUTH] Modal elements not found for renderClientDetail');
     return;
   }
-  
-  const statusClass = client.is_enabled ? 'enabled' : 'disabled';
-  const statusText = client.is_enabled ? '已启用' : '已禁用';
 
   localOauthModalBody.innerHTML = `
     <div class="oauth-detail">
@@ -354,7 +352,7 @@ function renderClientDetail(client: OAuthClient): void {
       </div>
       <div class="oauth-detail-row">
         <span class="oauth-detail-label">状态</span>
-        <span class="oauth-detail-value"><span class="status-badge ${statusClass}">${statusText}</span></span>
+        <span class="oauth-detail-value">${renderStatusBadge(client.is_enabled)}</span>
       </div>
       <div class="oauth-detail-row">
         <span class="oauth-detail-label">创建时间</span>
@@ -551,29 +549,11 @@ function showSecretModal(secret: string): void {
  * 复制密钥到剪贴板
  */
 async function copySecret(): Promise<void> {
-  console.log('[ADMIN][OAUTH] copySecret called');
+  if (!oauthSecretValue) return;
   
-  const localOauthSecretValue = oauthSecretValue;
-  
-  if (!localOauthSecretValue) {
-    console.error('[ADMIN][OAUTH] oauthSecretValue element not found');
-    return;
-  }
-  
-  const secret = localOauthSecretValue.textContent || '';
-  try {
-    await navigator.clipboard.writeText(secret);
-    showToast('已复制到剪贴板', 'success');
-  } catch {
-    // 降级方案
-    const textarea = document.createElement('textarea');
-    textarea.value = secret;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
+  const secret = oauthSecretValue.textContent || '';
+  const success = await copyToClipboard(secret);
+  if (success) {
     showToast('已复制到剪贴板', 'success');
   }
 }
@@ -601,29 +581,18 @@ export function initOAuthPage(): void {
   const localCopySecretBtn = copySecretBtn;
   const localOauthSecretModal = oauthSecretModal;
   
-  // 搜索
   if (localOauthSearchBtn && localOauthSearch) {
-    localOauthSearchBtn.addEventListener('click', () => {
-      currentSearch = localOauthSearch.value.trim();
+    initSearch(localOauthSearch, localOauthSearchBtn, (query) => {
+      currentSearch = query;
       currentPage = 1;
       loadOAuthClients();
     });
-
-    localOauthSearch.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        currentSearch = localOauthSearch.value.trim();
-        currentPage = 1;
-        loadOAuthClients();
-      }
-    });
   }
 
-  // 创建按钮
   if (localCreateOAuthBtn) {
     localCreateOAuthBtn.addEventListener('click', showCreateForm);
   }
 
-  // 详情弹窗关闭
   if (localOauthModalClose && localOauthModal) {
     localOauthModalClose.addEventListener('click', () => hideModal(localOauthModal));
     localOauthModal.addEventListener('click', (e) => {
@@ -631,7 +600,6 @@ export function initOAuthPage(): void {
     });
   }
 
-  // 表单弹窗
   if (localOauthFormClose && localOauthFormCancel && localOauthFormModal && localOauthForm && localOauthFormSubmit) {
     localOauthFormClose.addEventListener('click', () => hideModal(localOauthFormModal));
     localOauthFormCancel.addEventListener('click', () => hideModal(localOauthFormModal));
@@ -650,7 +618,6 @@ export function initOAuthPage(): void {
     });
   }
 
-  // 密钥弹窗
   if (localOauthSecretClose && localOauthSecretOk && localCopySecretBtn && localOauthSecretModal) {
     localOauthSecretClose.addEventListener('click', () => hideModal(localOauthSecretModal));
     localOauthSecretOk.addEventListener('click', () => hideModal(localOauthSecretModal));

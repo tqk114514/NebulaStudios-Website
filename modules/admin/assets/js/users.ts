@@ -13,7 +13,6 @@ import {
   fetchApi,
   UserPublic,
   UserListResponse,
-  CachedUser,
   ROLE_NAMES,
   ROLE_CLASSES,
   userModal,
@@ -32,7 +31,12 @@ import {
   formatDate,
   formatRelativeTime,
   escapeHtml,
-  renderPagination
+  renderPagination,
+  DataCache,
+  updateTableRow,
+  removeTableRow,
+  initSearch,
+  renderRoleBadge
 } from './common';
 import { loadStats } from './stats';
 
@@ -51,26 +55,7 @@ function translateBanReason(reason: string): string {
 let currentPage = 1;
 let currentSearch = '';
 let currentUserRole = 0;
-let usersCache: Map<string, CachedUser> = new Map();
-
-/** 缓存最大条目数 */
-const CACHE_MAX_SIZE = 100;
-
-/**
- * 添加用户到缓存（带大小限制）
- * @param uid - 用户 UID
- * @param cached - 缓存数据
- */
-function setCacheUser(uid: string, cached: CachedUser): void {
-  // 如果缓存已满，删除最旧的条目
-  if (usersCache.size >= CACHE_MAX_SIZE && !usersCache.has(uid)) {
-    const oldestKey = usersCache.keys().next().value;
-    if (oldestKey !== undefined) {
-      usersCache.delete(oldestKey);
-    }
-  }
-  usersCache.set(uid, cached);
-}
+const usersCache = new DataCache<UserPublic>();
 
 // ==================== DOM 元素 ====================
 
@@ -137,7 +122,7 @@ function renderUserRow(user: UserPublic): string {
       <td>${user.uid}</td>
       <td>${escapeHtml(user.username)}</td>
       <td>${escapeHtml(user.email)}</td>
-      <td><span class="role-badge ${ROLE_CLASSES[user.role]}">${ROLE_NAMES[user.role]}</span></td>
+      <td>${renderRoleBadge(user.role)}</td>
       <td>${formatDate(user.created_at)}</td>
       <td>
         <button class="action-btn view" data-user-uid="${user.uid}">查看</button>
@@ -163,30 +148,18 @@ function bindUserRowEvents(row: HTMLTableRowElement): void {
  * @param userUid - 用户 UID
  */
 async function updateUserRow(userUid: string): Promise<void> {
-  if (!usersTableBody) {
-    console.error('[ADMIN][USERS] usersTableBody element not found in updateUserRow');
-    return;
-  }
+  if (!usersTableBody) return;
   
-  const oldRow = usersTableBody.querySelector(`tr[data-user-uid="${userUid}"]`) as HTMLTableRowElement;
-  if (!oldRow) return;
-
-  oldRow.classList.add('is-updating');
-
-  const user = await getUser(userUid);
-  if (!user) {
-    oldRow.classList.remove('is-updating');
-    return;
-  }
-
-  setCacheUser(userUid, { user, cachedAt: Date.now() });
-
-  const temp = document.createElement('tbody');
-  temp.innerHTML = renderUserRow(user);
-  const newRow = temp.firstElementChild as HTMLTableRowElement;
-
-  oldRow.replaceWith(newRow);
-  bindUserRowEvents(newRow);
+  await updateTableRow({
+    tableBody: usersTableBody,
+    rowId: userUid,
+    rowIdAttr: 'data-user-uid',
+    fetchData: () => getUser(userUid),
+    renderRow: renderUserRow,
+    bindEvents: bindUserRowEvents,
+    cache: usersCache,
+    cacheKey: userUid
+  });
 }
 
 /**
@@ -194,29 +167,16 @@ async function updateUserRow(userUid: string): Promise<void> {
  * @param userUid - 用户 UID
  */
 function removeUserRow(userUid: string): void {
-  if (!usersTableBody) {
-    console.error('[ADMIN][USERS] usersTableBody element not found in removeUserRow');
-    return;
-  }
+  if (!usersTableBody) return;
   
-  const row = usersTableBody.querySelector(`tr[data-user-uid="${userUid}"]`) as HTMLTableRowElement;
-  if (!row) return;
-
-  usersCache.delete(userUid);
-  row.classList.add('is-deleting');
-
-  setTimeout(() => {
-    row.style.transition = 'opacity 0.2s, transform 0.2s';
-    row.style.opacity = '0';
-    row.style.transform = 'translateX(-20px)';
-
-    setTimeout(() => {
-      row.remove();
-      if (usersTableBody.children.length === 0) {
-        usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
-      }
-    }, 200);
-  }, 600);
+  removeTableRow({
+    tableBody: usersTableBody,
+    rowId: userUid,
+    rowIdAttr: 'data-user-uid',
+    cache: usersCache as DataCache<unknown>,
+    cacheKey: userUid,
+    colspan: 6
+  });
 }
 
 export async function loadUsers(): Promise<void> {
@@ -244,11 +204,11 @@ export async function loadUsers(): Promise<void> {
   }
 
   const now = Date.now();
-  data.users.forEach(user => setCacheUser(user.uid, { user, cachedAt: now }));
+  data.users.forEach(user => usersCache.set(user.uid, user));
 
   usersTableBody.innerHTML = data.users.map(user => renderUserRow(user)).join('');
 
-  usersTableBody.querySelectorAll('tr[data-user-id]').forEach(row => {
+  usersTableBody.querySelectorAll('tr[data-user-uid]').forEach(row => {
     bindUserRowEvents(row as HTMLTableRowElement);
   });
 
@@ -360,7 +320,7 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
       <div class="user-detail-row">
         <span class="user-detail-label">角色</span>
         <span class="user-detail-value">
-          <span class="role-badge ${ROLE_CLASSES[user.role]}">${ROLE_NAMES[user.role]}</span>
+          ${renderRoleBadge(user.role)}
         </span>
       </div>
       <div class="user-detail-row">
@@ -590,7 +550,7 @@ async function showUserDetail(userUid: string): Promise<void> {
   const cached = usersCache.get(userUid);
   
   if (cached) {
-    renderUserDetailContent(cached.user, cached.cachedAt, true);
+    renderUserDetailContent(cached.data, cached.cachedAt, true);
     showModal(userModal);
     
     getUser(userUid).then(freshUser => {
@@ -600,8 +560,8 @@ async function showUserDetail(userUid: string): Promise<void> {
         return;
       }
       
+      usersCache.set(userUid, freshUser);
       const newCachedAt = Date.now();
-      setCacheUser(userUid, { user: freshUser, cachedAt: newCachedAt });
       
       if (userModal && !userModal.classList.contains('is-hidden')) {
         renderUserDetailContent(freshUser, newCachedAt, false);
@@ -609,7 +569,7 @@ async function showUserDetail(userUid: string): Promise<void> {
       }
     });
     
-    bindUserDetailButtons(cached.user);
+    bindUserDetailButtons(cached.data);
     return;
   }
 
@@ -625,9 +585,8 @@ async function showUserDetail(userUid: string): Promise<void> {
     return;
   }
 
-  const cachedAt = Date.now();
-  setCacheUser(userUid, { user, cachedAt });
-  renderUserDetailContent(user, cachedAt, false);
+  usersCache.set(userUid, user);
+  renderUserDetailContent(user, Date.now(), false);
   bindUserDetailButtons(user);
 }
 
@@ -641,23 +600,14 @@ export function initUsersPage(): void {
   console.log('[ADMIN][USERS] initUsersPage called');
   
   if (searchBtn && userSearch) {
-    searchBtn.addEventListener('click', () => {
-      currentSearch = userSearch.value.trim();
+    initSearch(userSearch, searchBtn, (query) => {
+      currentSearch = query;
       currentPage = 1;
       loadUsers();
-    });
-
-    userSearch.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        currentSearch = userSearch.value.trim();
-        currentPage = 1;
-        loadUsers();
-      }
     });
   } else {
     console.warn('[ADMIN][USERS] search elements not found, skipping search initialization');
   }
 
-  // 初始化封禁弹窗
   initBanModal();
 }
