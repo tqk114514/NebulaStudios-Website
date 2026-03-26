@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 
 	"net/http"
 	"os"
@@ -904,17 +905,27 @@ func createServer(port string, handler http.Handler) *http.Server {
 }
 
 // startServer 启动服务器（非阻塞）
+// 使用 net.Listen 先占用端口，确保服务器真正就绪后再返回
 func startServer(srv *http.Server) {
+	// 先绑定端口，确保端口可用
+	ln, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		utils.LogError("SERVER", "startServer", err, "Failed to bind port")
+		utils.LogFatalf("Failed to bind port %s", srv.Addr)
+		return
+	}
+
+	utils.LogInfo("SERVER", fmt.Sprintf("Starting HTTP server on %s", srv.Addr))
+
+	// 在 goroutine 中启动服务器
 	go func() {
-		utils.LogInfo("SERVER", fmt.Sprintf("Starting HTTP server on %s", srv.Addr))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			utils.LogError("SERVER", "ListenAndServe", err, "HTTP server failed")
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			utils.LogError("SERVER", "Serve", err, "HTTP server failed")
 			utils.LogFatalf("HTTP server startup failed")
 		}
 	}()
 
-	// 等待服务器启动
-	time.Sleep(100 * time.Millisecond)
+	// 此时端口已确认监听，服务器已就绪
 	utils.LogInfo("SERVER", fmt.Sprintf("Server is running on http://localhost%s", srv.Addr))
 }
 
