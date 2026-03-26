@@ -14,6 +14,7 @@ import {
   showToast,
   showConfirm,
   formatDate,
+  formatRelativeTime,
   escapeHtml,
   renderPagination,
   whitelistModal,
@@ -25,7 +26,8 @@ import {
   DataCache,
   updateTableRow,
   removeTableRow,
-  renderStatusBadge
+  renderStatusBadge,
+  showDetailWithCache
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -244,73 +246,81 @@ function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: nu
 
 // ==================== 白名单详情 ====================
 
-function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: number, isRefreshing?: boolean): void {
-  console.log('[ADMIN][WHITELIST] renderWhitelistDetailContent called');
-  
-  if (!whitelistModalBody) {
-    console.error('[ADMIN][WHITELIST] whitelistModalBody not found');
-    return;
-  }
+const whitelistDetailSkeleton = `
+  <div class="detail">
+    <div class="detail-row">
+      <span class="detail-label">域名</span>
+      <span class="detail-value skeleton-text"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">注册页面 URL</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">状态</span>
+      <span class="detail-value skeleton-text"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">创建时间</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">更新时间</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+  </div>
+`;
 
-  whitelistModalBody.innerHTML = `
-    <div class="user-detail">
-      <div class="user-detail-row">
-        <span class="user-detail-label">ID</span>
-        <span class="user-detail-value">${entry.id}</span>
+function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: number, isRefreshing?: boolean): string {
+  return `
+    <div class="detail">
+      <div class="detail-row">
+        <span class="detail-label">域名</span>
+        <span class="detail-value">${escapeHtml(entry.domain)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">域名</span>
-        <span class="user-detail-value">${escapeHtml(entry.domain)}</span>
+      <div class="detail-row">
+        <span class="detail-label">注册页面 URL</span>
+        <span class="detail-value">${escapeHtml(entry.signup_url)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">注册页面 URL</span>
-        <span class="user-detail-value">${escapeHtml(entry.signup_url)}</span>
+      <div class="detail-row">
+        <span class="detail-label">状态</span>
+        <span class="detail-value">${renderStatusBadge(entry.is_enabled)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">状态</span>
-        <span class="user-detail-value">
-          ${renderStatusBadge(entry.is_enabled)}
-        </span>
+      <div class="detail-row">
+        <span class="detail-label">创建时间</span>
+        <span class="detail-value">${formatDate(entry.created_at)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">创建时间</span>
-        <span class="user-detail-value">${formatDate(entry.created_at)}</span>
-      </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">更新时间</span>
-        <span class="user-detail-value">${formatDate(entry.updated_at)}</span>
+      <div class="detail-row">
+        <span class="detail-label">更新时间</span>
+        <span class="detail-value">${formatDate(entry.updated_at)}</span>
       </div>
     </div>
-    <div class="user-detail-meta" id="whitelist-detail-meta">
-      ${cachedAt ? `数据更新于 ${formatDate(new Date(cachedAt).toISOString())}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
+    <div class="detail-meta" id="whitelist-detail-meta">
+      ${cachedAt ? `数据更新于 ${formatRelativeTime(cachedAt)}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
     </div>
   `;
 }
 
-function bindWhitelistDetailButtons(entry: EmailWhitelistEntry): void {
-  console.log('[ADMIN][WHITELIST] bindWhitelistDetailButtons called');
-  
-  if (!whitelistModalFooter) {
-    console.error('[ADMIN][WHITELIST] whitelistModalFooter not found');
-    return;
-  }
-  
-  let footerHtml = '<button class="btn btn-secondary" id="close-whitelist-modal">关闭</button>';
+function renderWhitelistDetailFooter(entry: EmailWhitelistEntry): string {
+  const toggleClass = entry.is_enabled ? 'btn-warning' : 'btn-success';
+  const toggleText = entry.is_enabled ? '禁用' : '启用';
+  return `
+    <button class="btn btn-secondary" data-close-modal>关闭</button>
+    <button class="btn ${toggleClass}" id="toggle-whitelist" data-id="${entry.id}">${toggleText}</button>
+    <button class="btn btn-primary" id="edit-whitelist" data-id="${entry.id}">编辑</button>
+    <button class="btn btn-danger" id="delete-whitelist" data-id="${entry.id}">删除</button>
+  `;
+}
 
-  footerHtml += `<button class="btn ${entry.is_enabled ? 'btn-warning' : 'btn-success'}" id="toggle-whitelist" data-id="${entry.id}">${entry.is_enabled ? '禁用' : '启用'}</button>`;
-  footerHtml += `<button class="btn btn-primary" id="edit-whitelist" data-id="${entry.id}">编辑</button>`;
-  footerHtml += `<button class="btn btn-danger" id="delete-whitelist" data-id="${entry.id}">删除</button>`;
-
-  whitelistModalFooter.innerHTML = footerHtml;
-
-  document.getElementById('close-whitelist-modal')?.addEventListener('click', () => hideModal(whitelistModal));
+function bindWhitelistDetailEvents(entry: EmailWhitelistEntry, modal: HTMLElement): void {
+  modal.querySelector('[data-close-modal]')?.addEventListener('click', () => hideModal(modal));
 
   document.getElementById('toggle-whitelist')?.addEventListener('click', async () => {
     showConfirm(entry.is_enabled ? '禁用白名单' : '启用白名单', `确定要${entry.is_enabled ? '禁用' : '启用'}域名 "${entry.domain}" 吗？`, async () => {
       try {
         await toggleEntry(entry.id, !entry.is_enabled);
         showToast(entry.is_enabled ? '已禁用' : '已启用', 'success');
-        hideModal(whitelistModal);
+        hideModal(modal);
         updateWhitelistRow(entry.id);
       } catch {
         showToast('操作失败', 'error');
@@ -319,7 +329,7 @@ function bindWhitelistDetailButtons(entry: EmailWhitelistEntry): void {
   });
 
   document.getElementById('edit-whitelist')?.addEventListener('click', () => {
-    hideModal(whitelistModal);
+    hideModal(modal);
     openEditModal(entry);
   });
 
@@ -328,7 +338,7 @@ function bindWhitelistDetailButtons(entry: EmailWhitelistEntry): void {
       try {
         await deleteEntry(entry.id);
         showToast('删除成功', 'success');
-        hideModal(whitelistModal);
+        hideModal(modal);
         removeWhitelistRow(entry.id);
       } catch {
         showToast('删除失败', 'error');
@@ -337,78 +347,21 @@ function bindWhitelistDetailButtons(entry: EmailWhitelistEntry): void {
   });
 }
 
-async function showWhitelistDetail(entryId: number): Promise<void> {
+function showWhitelistDetail(entryId: number): void {
   console.log('[ADMIN][WHITELIST] showWhitelistDetail called');
-  
-  if (!whitelistModal || !whitelistModalBody || !whitelistModalFooter) {
-    console.error('[ADMIN][WHITELIST] Whitelist modal elements not found');
-    return;
-  }
-  
-  const cached = whitelistCache.get(entryId);
-  
-  if (cached) {
-    renderWhitelistDetailContent(cached.data, cached.cachedAt, true);
-    showModal(whitelistModal);
-    
-    getEntry(entryId).then(freshEntry => {
-      if (!freshEntry) {
-        const metaEl = document.getElementById('whitelist-detail-meta');
-        if (metaEl) metaEl.textContent = `数据更新于 ${formatDate(new Date(cached.cachedAt).toISOString())}`;
-        return;
-      }
-      
-      whitelistCache.set(entryId, freshEntry);
-      const newCachedAt = Date.now();
-      
-      if (whitelistModal && !whitelistModal.classList.contains('is-hidden')) {
-        renderWhitelistDetailContent(freshEntry, newCachedAt, false);
-        bindWhitelistDetailButtons(freshEntry);
-      }
-    });
-    
-    bindWhitelistDetailButtons(cached.data);
-    return;
-  }
 
-  whitelistModalBody.innerHTML = `
-    <div class="user-detail">
-      <div class="user-detail-row">
-        <span class="user-detail-label">ID</span>
-        <span class="user-detail-value skeleton-text"></span>
-      </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">域名</span>
-        <span class="user-detail-value skeleton-text"></span>
-      </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">注册页面 URL</span>
-        <span class="user-detail-value skeleton-text skeleton-wide"></span>
-      </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">状态</span>
-        <span class="user-detail-value skeleton-text"></span>
-      </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">创建时间</span>
-        <span class="user-detail-value skeleton-text skeleton-wide"></span>
-      </div>
-    </div>
-  `;
-  whitelistModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-whitelist-modal">关闭</button>';
-  document.getElementById('close-whitelist-modal')?.addEventListener('click', () => hideModal(whitelistModal));
-  showModal(whitelistModal);
-
-  const entry = await getEntry(entryId);
-  if (!entry) {
-    hideModal(whitelistModal);
-    showToast('获取白名单信息失败', 'error');
-    return;
-  }
-
-  whitelistCache.set(entryId, entry);
-  renderWhitelistDetailContent(entry, Date.now(), false);
-  bindWhitelistDetailButtons(entry);
+  showDetailWithCache<EmailWhitelistEntry>({
+    modal: whitelistModal,
+    modalBody: whitelistModalBody,
+    modalFooter: whitelistModalFooter,
+    cache: whitelistCache,
+    cacheKey: entryId,
+    fetchData: () => getEntry(entryId),
+    skeletonHtml: whitelistDetailSkeleton,
+    renderContent: renderWhitelistDetailContent,
+    renderFooter: renderWhitelistDetailFooter,
+    bindFooterEvents: bindWhitelistDetailEvents
+  });
 }
 
 // ==================== 弹窗操作 ====================
