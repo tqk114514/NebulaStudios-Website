@@ -24,6 +24,7 @@ package services
 import (
 	"auth-system/internal/config"
 	"auth-system/internal/utils"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -308,25 +309,39 @@ func (ws *WebSocketService) IsShutdown() bool {
 }
 
 // Shutdown 优雅关闭
-func (ws *WebSocketService) Shutdown() {
-	ws.mu.Lock()
-	if ws.isShutdown {
+// 参数：
+//   - ctx: 控制关闭超时的上下文
+func (ws *WebSocketService) Shutdown(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		ws.mu.Lock()
+		if ws.isShutdown {
+			ws.mu.Unlock()
+			close(done)
+			return
+		}
+		ws.isShutdown = true
 		ws.mu.Unlock()
-		return
+
+		// 发送关闭信号
+		close(ws.shutdown)
+
+		// 关闭所有连接
+		ws.closeAllConnections()
+
+		// 等待清理协程结束
+		ws.wg.Wait()
+
+		utils.LogInfo("WS", "WebSocket service shutdown complete")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 正常关闭
+	case <-ctx.Done():
+		utils.LogWarn("WS", "Shutdown timeout exceeded, forcing shutdown", "")
 	}
-	ws.isShutdown = true
-	ws.mu.Unlock()
-
-	// 发送关闭信号
-	close(ws.shutdown)
-
-	// 关闭所有连接
-	ws.closeAllConnections()
-
-	// 等待清理协程结束
-	ws.wg.Wait()
-
-	utils.LogInfo("WS", "WebSocket service shutdown complete")
 }
 
 // GetStats 获取服务统计信息
