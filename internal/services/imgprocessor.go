@@ -9,6 +9,7 @@
 package services
 
 import (
+	"context"
 	_ "embed"
 	"encoding/binary"
 	"errors"
@@ -112,14 +113,27 @@ func (p *ImgProcessor) startProcessor() {
 }
 
 // Shutdown 关闭处理器
-func (p *ImgProcessor) Shutdown() {
-	if p.cmd != nil && p.cmd.Process != nil {
-		p.cmd.Process.Kill()
-		p.cmd.Wait()
-		utils.LogInfo("IMG", "Image processor stopped")
+// 参数：
+//   - ctx: 控制关闭超时的上下文
+func (p *ImgProcessor) Shutdown(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		if p.cmd != nil && p.cmd.Process != nil {
+			p.cmd.Process.Kill()
+			p.cmd.Wait()
+			utils.LogInfo("IMG", "Image processor stopped")
+		}
+		os.Remove(SocketPath)
+		os.Remove(BinaryPath)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 正常关闭
+	case <-ctx.Done():
+		utils.LogWarn("IMG", "Shutdown timeout exceeded, forcing shutdown", "")
 	}
-	os.Remove(SocketPath)
-	os.Remove(BinaryPath)
 }
 
 // IsAvailable 检查服务是否可用
