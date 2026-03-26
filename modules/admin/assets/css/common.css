@@ -364,35 +364,42 @@ button {
   border-top: 1px solid var(--border);
 }
 
-/* --- 用户详情 --- */
-.user-detail {
-  display: grid;
+/* --- 详情弹窗 --- */
+.detail {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.user-detail-row {
+.detail-row {
   display: flex;
   justify-content: space-between;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
-.user-detail-row:last-child {
+.detail-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
 }
 
-.user-detail-label {
+.detail-label {
   color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
-.user-detail-value {
+.detail-value {
   font-weight: 500;
   text-align: right;
 }
 
-.user-detail-meta {
+.detail-value.mono {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.detail-meta {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -577,15 +584,14 @@ button {
   color: var(--danger);
 }
 
-/* --- 封禁详情样式 --- */
-.user-detail-banned {
+.detail-banned {
   background: rgba(239, 68, 68, 0.05);
   margin: -12px -24px;
   padding: 12px 24px;
   border-radius: 0;
 }
 
-.user-detail-banned + .user-detail-row {
+.detail-banned + .detail-row {
   padding-top: 12px;
 }
 

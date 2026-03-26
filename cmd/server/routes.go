@@ -290,16 +290,16 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		adminAPI.GET("/stats", hdlrs.adminHandler.GetStats)
 
 		adminAPI.GET("/users", hdlrs.adminHandler.GetUsers)
-		adminAPI.GET("/users/:id", hdlrs.adminHandler.GetUser)
+		adminAPI.GET("/users/:uid", hdlrs.adminHandler.GetUser)
 
-		adminAPI.POST("/users/:id/ban", hdlrs.adminHandler.BanUser)
-		adminAPI.POST("/users/:id/unban", hdlrs.adminHandler.UnbanUser)
+		adminAPI.POST("/users/:uid/ban", hdlrs.adminHandler.BanUser)
+		adminAPI.POST("/users/:uid/unban", hdlrs.adminHandler.UnbanUser)
 
 		superAdminAPI := adminAPI.Group("")
 		superAdminAPI.Use(adminmw.SuperAdminMiddleware(svcs.userRepo))
 		{
-			superAdminAPI.PUT("/users/:id/role", hdlrs.adminHandler.SetUserRole)
-			superAdminAPI.DELETE("/users/:id", hdlrs.adminHandler.DeleteUser)
+			superAdminAPI.PUT("/users/:uid/role", hdlrs.adminHandler.SetUserRole)
+			superAdminAPI.DELETE("/users/:uid", hdlrs.adminHandler.DeleteUser)
 			superAdminAPI.GET("/logs", hdlrs.adminHandler.GetLogs)
 
 			superAdminAPI.GET("/oauth/clients", hdlrs.adminHandler.GetOAuthClients)
