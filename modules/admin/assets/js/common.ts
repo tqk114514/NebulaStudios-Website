@@ -78,12 +78,6 @@ export interface ApiErrorResponse {
 /** API 响应联合类型 */
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
-// 用户数据缓存（带时间戳）
-export interface CachedUser {
-  user: UserPublic;
-  cachedAt: number;
-}
-
 // ==================== 常量 ====================
 
 export const ROLE_NAMES: Record<number, string> = {
@@ -314,4 +308,179 @@ export function renderPagination(config: PaginationConfig): void {
       }
     });
   });
+}
+
+// ==================== 通用缓存管理器 ====================
+
+export interface CachedItem<T> {
+  data: T;
+  cachedAt: number;
+}
+
+export class DataCache<T> {
+  private cache: Map<string | number, CachedItem<T>>;
+  private maxSize: number;
+
+  constructor(maxSize: number = 100) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key: string | number): CachedItem<T> | undefined {
+    return this.cache.get(key);
+  }
+
+  set(key: string | number, data: T): void {
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    this.cache.set(key, { data, cachedAt: Date.now() });
+  }
+
+  delete(key: string | number): boolean {
+    return this.cache.delete(key);
+  }
+
+  has(key: string | number): boolean {
+    return this.cache.has(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+// ==================== 表格行操作 ====================
+
+export interface TableRowUpdateConfig<T> {
+  tableBody: HTMLTableSectionElement;
+  rowId: string | number;
+  rowIdAttr: string;
+  fetchData: () => Promise<T | null>;
+  renderRow: (data: T) => string;
+  bindEvents: (row: HTMLTableRowElement) => void;
+  cache?: DataCache<T>;
+  cacheKey?: string | number;
+}
+
+export async function updateTableRow<T>(config: TableRowUpdateConfig<T>): Promise<void> {
+  const { tableBody, rowId, rowIdAttr, fetchData, renderRow, bindEvents, cache, cacheKey } = config;
+
+  const oldRow = tableBody.querySelector(`tr[${rowIdAttr}="${rowId}"]`) as HTMLTableRowElement;
+  if (!oldRow) return;
+
+  oldRow.classList.add('is-updating');
+
+  const data = await fetchData();
+  if (!data) {
+    oldRow.classList.remove('is-updating');
+    return;
+  }
+
+  if (cache && cacheKey !== undefined) {
+    cache.set(cacheKey, data);
+  }
+
+  const temp = document.createElement('tbody');
+  temp.innerHTML = renderRow(data);
+  const newRow = temp.firstElementChild as HTMLTableRowElement;
+
+  oldRow.replaceWith(newRow);
+  bindEvents(newRow);
+}
+
+export interface TableRowRemoveConfig {
+  tableBody: HTMLTableSectionElement;
+  rowId: string | number;
+  rowIdAttr: string;
+  cache?: DataCache<unknown>;
+  cacheKey?: string | number;
+  colspan: number;
+  emptyMessage?: string;
+}
+
+export function removeTableRow(config: TableRowRemoveConfig): void {
+  const { tableBody, rowId, rowIdAttr, cache, cacheKey, colspan, emptyMessage = '暂无数据' } = config;
+
+  const row = tableBody.querySelector(`tr[${rowIdAttr}="${rowId}"]`) as HTMLTableRowElement;
+  if (!row) return;
+
+  if (cache && cacheKey !== undefined) {
+    cache.delete(cacheKey);
+  }
+
+  row.classList.add('is-deleting');
+
+  setTimeout(() => {
+    row.style.transition = 'opacity 0.2s, transform 0.2s';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(-20px)';
+
+    setTimeout(() => {
+      row.remove();
+      if (tableBody.children.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${emptyMessage}</td></tr>`;
+      }
+    }, 200);
+  }, 600);
+}
+
+// ==================== 搜索初始化 ====================
+
+export function initSearch(
+  searchInput: HTMLInputElement,
+  searchBtn: HTMLButtonElement,
+  onSearch: (query: string) => void
+): void {
+  searchBtn.addEventListener('click', () => {
+    onSearch(searchInput.value.trim());
+  });
+
+  searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      onSearch(searchInput.value.trim());
+    }
+  });
+}
+
+// ==================== 剪贴板操作 ====================
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const success = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return success;
+  }
+}
+
+// ==================== 状态徽章 ====================
+
+export function renderStatusBadge(
+  enabled: boolean,
+  enabledText: string = '已启用',
+  disabledText: string = '已禁用'
+): string {
+  const statusClass = enabled ? 'enabled' : 'disabled';
+  const statusText = enabled ? enabledText : disabledText;
+  return `<span class="status-badge ${statusClass}">${statusText}</span>`;
+}
+
+export function renderRoleBadge(role: number): string {
+  return `<span class="role-badge ${ROLE_CLASSES[role]}">${ROLE_NAMES[role]}</span>`;
 }
