@@ -17,11 +17,14 @@ import {
   hideModal,
   showConfirm,
   formatDate,
+  formatRelativeTime,
   escapeHtml,
   renderPagination,
   initSearch,
   copyToClipboard,
-  renderStatusBadge
+  renderStatusBadge,
+  DataCache,
+  showDetailWithCache
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -63,6 +66,7 @@ interface RegenerateSecretResponse {
 let currentPage = 1;
 let currentSearch = '';
 let editingClientId: number | null = null;
+const clientsCache = new DataCache<OAuthClient>();
 
 // ==================== DOM 元素 ====================
 
@@ -228,6 +232,8 @@ async function updateClientRow(clientId: number): Promise<void> {
     return;
   }
 
+  clientsCache.set(clientId, client);
+
   const temp = document.createElement('tbody');
   temp.innerHTML = renderClientRow(client);
   const newRow = temp.firstElementChild as HTMLTableRowElement;
@@ -268,6 +274,8 @@ export async function loadOAuthClients(): Promise<void> {
 
   localOauthTableBody.innerHTML = data.clients.map(client => renderClientRow(client)).join('');
 
+  data.clients.forEach(client => clientsCache.set(client.id, client));
+
   localOauthTableBody.querySelectorAll('tr[data-client-id]').forEach(row => {
     bindClientRowEvents(row as HTMLTableRowElement);
   });
@@ -287,95 +295,91 @@ export async function loadOAuthClients(): Promise<void> {
 
 // ==================== 客户端详情 ====================
 
-/**
- * 显示客户端详情弹窗
- */
-async function showClientDetail(clientId: number): Promise<void> {
-  console.log('[ADMIN][OAUTH] showClientDetail called');
-  
-  const localOauthModalTitle = oauthModalTitle;
-  const localOauthModalBody = oauthModalBody;
-  const localOauthModalFooter = oauthModalFooter;
-  const localOauthModal = oauthModal;
-  
-  if (!localOauthModalTitle || !localOauthModalBody || !localOauthModalFooter || !localOauthModal) {
-    console.error('[ADMIN][OAUTH] Modal elements not found');
-    return;
-  }
-  
-  localOauthModalTitle.textContent = '应用详情';
-  localOauthModalBody.innerHTML = '<div class="loading-cell">加载中...</div>';
-  localOauthModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-oauth-modal">关闭</button>';
-  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(localOauthModal));
-  showModal(localOauthModal);
+const clientDetailSkeleton = `
+  <div class="detail">
+    <div class="detail-row">
+      <span class="detail-label">应用名称</span>
+      <span class="detail-value skeleton-text"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">应用描述</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Client ID</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">回调地址</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">状态</span>
+      <span class="detail-value skeleton-text"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">创建时间</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">更新时间</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
+    </div>
+  </div>
+`;
 
-  const client = await getClient(clientId);
-  if (!client) {
-    hideModal(localOauthModal);
-    showToast('获取应用信息失败', 'error');
-    return;
-  }
-
-  renderClientDetail(client);
-}
-
-/**
- * 渲染客户端详情
- */
-function renderClientDetail(client: OAuthClient): void {
-  const localOauthModalBody = oauthModalBody;
-  const localOauthModalFooter = oauthModalFooter;
-  const localOauthModal = oauthModal;
-  
-  if (!localOauthModalBody || !localOauthModalFooter || !localOauthModal) {
-    console.error('[ADMIN][OAUTH] Modal elements not found for renderClientDetail');
-    return;
-  }
-
-  localOauthModalBody.innerHTML = `
-    <div class="oauth-detail">
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">应用名称</span>
-        <span class="oauth-detail-value">${escapeHtml(client.name)}</span>
+function renderClientDetailContent(client: OAuthClient, cachedAt?: number, isRefreshing?: boolean): string {
+  return `
+    <div class="detail">
+      <div class="detail-row">
+        <span class="detail-label">应用名称</span>
+        <span class="detail-value">${escapeHtml(client.name)}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">应用描述</span>
-        <span class="oauth-detail-value">${client.description ? escapeHtml(client.description) : '-'}</span>
+      <div class="detail-row">
+        <span class="detail-label">应用描述</span>
+        <span class="detail-value">${client.description ? escapeHtml(client.description) : '-'}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">Client ID</span>
-        <span class="oauth-detail-value mono">${escapeHtml(client.client_id)}</span>
+      <div class="detail-row">
+        <span class="detail-label">Client ID</span>
+        <span class="detail-value mono">${escapeHtml(client.client_id)}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">回调地址</span>
-        <span class="oauth-detail-value mono">${escapeHtml(client.redirect_uri)}</span>
+      <div class="detail-row">
+        <span class="detail-label">回调地址</span>
+        <span class="detail-value mono">${escapeHtml(client.redirect_uri)}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">状态</span>
-        <span class="oauth-detail-value">${renderStatusBadge(client.is_enabled)}</span>
+      <div class="detail-row">
+        <span class="detail-label">状态</span>
+        <span class="detail-value">${renderStatusBadge(client.is_enabled)}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">创建时间</span>
-        <span class="oauth-detail-value">${formatDate(client.created_at)}</span>
+      <div class="detail-row">
+        <span class="detail-label">创建时间</span>
+        <span class="detail-value">${formatDate(client.created_at)}</span>
       </div>
-      <div class="oauth-detail-row">
-        <span class="oauth-detail-label">更新时间</span>
-        <span class="oauth-detail-value">${formatDate(client.updated_at)}</span>
+      <div class="detail-row">
+        <span class="detail-label">更新时间</span>
+        <span class="detail-value">${formatDate(client.updated_at)}</span>
       </div>
     </div>
+    <div class="detail-meta" id="oauth-detail-meta">
+      ${cachedAt ? `数据更新于 ${formatRelativeTime(cachedAt)}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
+    </div>
   `;
+}
 
-  localOauthModalFooter.innerHTML = `
-    <button class="btn btn-secondary" id="close-oauth-modal">关闭</button>
+function renderClientDetailFooter(client: OAuthClient): string {
+  return `
+    <button class="btn btn-secondary" data-close-modal>关闭</button>
     <button class="btn btn-secondary" id="edit-oauth-btn" data-client-id="${client.id}">编辑</button>
     <button class="btn btn-warning" id="regenerate-secret-btn" data-client-id="${client.id}">重新生成密钥</button>
     <button class="btn btn-danger" id="delete-oauth-btn" data-client-id="${client.id}">删除</button>
   `;
+}
 
-  document.getElementById('close-oauth-modal')?.addEventListener('click', () => hideModal(localOauthModal));
+function bindClientDetailEvents(client: OAuthClient, modal: HTMLElement): void {
+  modal.querySelector('[data-close-modal]')?.addEventListener('click', () => hideModal(modal));
 
   document.getElementById('edit-oauth-btn')?.addEventListener('click', () => {
-    hideModal(localOauthModal);
+    hideModal(modal);
     showEditForm(client);
   });
 
@@ -383,7 +387,7 @@ function renderClientDetail(client: OAuthClient): void {
     showConfirm('确认操作', '重新生成密钥后，使用旧密钥的应用将无法正常工作。确定要继续吗？', async () => {
       const newSecret = await regenerateSecret(client.id);
       if (newSecret) {
-        hideModal(localOauthModal);
+        hideModal(modal);
         showSecretModal(newSecret);
         showToast('密钥已重新生成', 'success');
       } else {
@@ -397,12 +401,33 @@ function renderClientDetail(client: OAuthClient): void {
       const success = await deleteClient(client.id);
       if (success) {
         showToast('应用已删除', 'success');
-        hideModal(localOauthModal);
+        hideModal(modal);
         loadOAuthClients();
       } else {
         showToast('删除失败', 'error');
       }
     });
+  });
+}
+
+function showClientDetail(clientId: number): void {
+  console.log('[ADMIN][OAUTH] showClientDetail called');
+
+  if (oauthModalTitle) {
+    oauthModalTitle.textContent = '应用详情';
+  }
+
+  showDetailWithCache<OAuthClient>({
+    modal: oauthModal,
+    modalBody: oauthModalBody,
+    modalFooter: oauthModalFooter,
+    cache: clientsCache,
+    cacheKey: clientId,
+    fetchData: () => getClient(clientId),
+    skeletonHtml: clientDetailSkeleton,
+    renderContent: renderClientDetailContent,
+    renderFooter: renderClientDetailFooter,
+    bindFooterEvents: bindClientDetailEvents
   });
 }
 

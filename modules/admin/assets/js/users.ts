@@ -36,7 +36,8 @@ import {
   updateTableRow,
   removeTableRow,
   initSearch,
-  renderRoleBadge
+  renderRoleBadge,
+  showDetailWithCache
 } from './common';
 import { loadStats } from './stats';
 
@@ -228,30 +229,30 @@ export async function loadUsers(): Promise<void> {
 // ==================== 用户详情 ====================
 
 const userDetailSkeleton = `
-  <div class="user-detail">
-    <div class="user-detail-row">
-      <span class="user-detail-label">UID</span>
-      <span class="user-detail-value skeleton-text"></span>
+  <div class="detail">
+    <div class="detail-row">
+      <span class="detail-label">UID</span>
+      <span class="detail-value skeleton-text"></span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">用户名</span>
-      <span class="user-detail-value skeleton-text"></span>
+    <div class="detail-row">
+      <span class="detail-label">用户名</span>
+      <span class="detail-value skeleton-text"></span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">邮箱</span>
-      <span class="user-detail-value skeleton-text skeleton-wide"></span>
+    <div class="detail-row">
+      <span class="detail-label">邮箱</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">角色</span>
-      <span class="user-detail-value skeleton-text"></span>
+    <div class="detail-row">
+      <span class="detail-label">角色</span>
+      <span class="detail-value skeleton-text"></span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">微软账户</span>
-      <span class="user-detail-value skeleton-text"></span>
+    <div class="detail-row">
+      <span class="detail-label">微软账户</span>
+      <span class="detail-value skeleton-text"></span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">注册时间</span>
-      <span class="user-detail-value skeleton-text skeleton-wide"></span>
+    <div class="detail-row">
+      <span class="detail-label">注册时间</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
     </div>
   </div>
 `;
@@ -267,95 +268,69 @@ function checkUserBanned(user: UserPublic): boolean {
   return true;
 }
 
-/**
- * 渲染用户详情弹窗内容
- * @param user - 用户数据
- * @param cachedAt - 缓存时间戳（可选）
- * @param isRefreshing - 是否正在刷新数据（可选）
- */
-function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshing?: boolean): void {
-  console.log('[ADMIN][USERS] renderUserDetailContent called');
-  
-  if (!userModalBody) {
-    console.error('[ADMIN][USERS] userModalBody not found');
-    return;
-  }
-  
+function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshing?: boolean): string {
   const isBanned = checkUserBanned(user);
   const banStatusHtml = isBanned ? `
-    <div class="user-detail-row user-detail-banned">
-      <span class="user-detail-label">封禁状态</span>
-      <span class="user-detail-value">
+    <div class="detail-row detail-banned">
+      <span class="detail-label">封禁状态</span>
+      <span class="detail-value">
         <span class="status-badge banned">已封禁</span>
       </span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">封禁原因</span>
-      <span class="user-detail-value">${user.ban_reason ? escapeHtml(translateBanReason(user.ban_reason)) : '-'}</span>
+    <div class="detail-row">
+      <span class="detail-label">封禁原因</span>
+      <span class="detail-value">${user.ban_reason ? escapeHtml(translateBanReason(user.ban_reason)) : '-'}</span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">封禁时间</span>
-      <span class="user-detail-value">${formatDate(user.banned_at)}</span>
+    <div class="detail-row">
+      <span class="detail-label">封禁时间</span>
+      <span class="detail-value">${formatDate(user.banned_at)}</span>
     </div>
-    <div class="user-detail-row">
-      <span class="user-detail-label">解封时间</span>
-      <span class="user-detail-value ${!user.unban_at ? 'permanent-ban' : ''}">${user.unban_at ? formatDate(user.unban_at) : '永久封禁'}</span>
+    <div class="detail-row">
+      <span class="detail-label">解封时间</span>
+      <span class="detail-value ${!user.unban_at ? 'permanent-ban' : ''}">${user.unban_at ? formatDate(user.unban_at) : '永久封禁'}</span>
     </div>
   ` : '';
 
-  userModalBody.innerHTML = `
-    <div class="user-detail">
-      <div class="user-detail-row">
-        <span class="user-detail-label">UID</span>
-        <span class="user-detail-value">${user.uid}</span>
+  return `
+    <div class="detail">
+      <div class="detail-row">
+        <span class="detail-label">UID</span>
+        <span class="detail-value">${user.uid}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">用户名</span>
-        <span class="user-detail-value">${escapeHtml(user.username)}</span>
+      <div class="detail-row">
+        <span class="detail-label">用户名</span>
+        <span class="detail-value">${escapeHtml(user.username)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">邮箱</span>
-        <span class="user-detail-value">${escapeHtml(user.email)}</span>
+      <div class="detail-row">
+        <span class="detail-label">邮箱</span>
+        <span class="detail-value">${escapeHtml(user.email)}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">角色</span>
-        <span class="user-detail-value">
+      <div class="detail-row">
+        <span class="detail-label">角色</span>
+        <span class="detail-value">
           ${renderRoleBadge(user.role)}
         </span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">微软账户</span>
-        <span class="user-detail-value">${user.microsoft_name || '未绑定'}</span>
+      <div class="detail-row">
+        <span class="detail-label">微软账户</span>
+        <span class="detail-value">${user.microsoft_name || '未绑定'}</span>
       </div>
-      <div class="user-detail-row">
-        <span class="user-detail-label">注册时间</span>
-        <span class="user-detail-value">${formatDate(user.created_at)}</span>
+      <div class="detail-row">
+        <span class="detail-label">注册时间</span>
+        <span class="detail-value">${formatDate(user.created_at)}</span>
       </div>
       ${banStatusHtml}
     </div>
-    <div class="user-detail-meta" id="user-detail-meta">
+    <div class="detail-meta" id="user-detail-meta">
       ${cachedAt ? `数据更新于 ${formatRelativeTime(cachedAt)}` : ''}${isRefreshing ? ' · 刷新中...' : ''}
     </div>
   `;
 }
 
-/**
- * 绑定用户详情弹窗的操作按钮事件
- * @param user - 用户数据
- */
-function bindUserDetailButtons(user: UserPublic): void {
-  console.log('[ADMIN][USERS] bindUserDetailButtons called');
-  
-  if (!userModalFooter) {
-    console.error('[ADMIN][USERS] userModalFooter not found');
-    return;
-  }
-  
-  let footerHtml = '<button class="btn btn-secondary" id="close-user-modal">关闭</button>';
-
+function renderUserDetailFooter(user: UserPublic): string {
   const isBanned = checkUserBanned(user);
+  let footerHtml = '<button class="btn btn-secondary" data-close-modal>关闭</button>';
 
-  // 管理员可以封禁/解封普通用户
   if (currentUserRole >= 1 && user.role < 1) {
     if (isBanned) {
       footerHtml += `<button class="btn btn-success" id="unban-user" data-user-uid="${user.uid}">解除封禁</button>`;
@@ -364,9 +339,7 @@ function bindUserDetailButtons(user: UserPublic): void {
     }
   }
 
-  // 超级管理员可以设置角色和删除用户
   if (currentUserRole >= 2 && user.role < 2) {
-    // 封禁用户不能设为管理员
     if (user.role === 0 && !isBanned) {
       footerHtml += `<button class="btn btn-warning" id="promote-user" data-user-uid="${user.uid}">设为管理员</button>`;
     } else if (user.role === 1) {
@@ -375,23 +348,23 @@ function bindUserDetailButtons(user: UserPublic): void {
     footerHtml += `<button class="btn btn-danger" id="delete-user" data-user-uid="${user.uid}">删除用户</button>`;
   }
 
-  userModalFooter.innerHTML = footerHtml;
+  return footerHtml;
+}
 
-  document.getElementById('close-user-modal')?.addEventListener('click', () => hideModal(userModal));
+function bindUserDetailEvents(user: UserPublic, modal: HTMLElement): void {
+  modal.querySelector('[data-close-modal]')?.addEventListener('click', () => hideModal(modal));
 
-  // 封禁用户
   document.getElementById('ban-user')?.addEventListener('click', () => {
-    hideModal(userModal);
+    hideModal(modal);
     showBanModal(user);
   });
 
-  // 解封用户
   document.getElementById('unban-user')?.addEventListener('click', async () => {
     showConfirm('确认解封', `确定要解除 ${user.username} 的封禁吗？`, async () => {
       const success = await unbanUser(user.uid);
       if (success) {
         showToast('已解除封禁', 'success');
-        hideModal(userModal);
+        hideModal(modal);
         updateUserRow(user.uid);
         loadStats();
       } else {
@@ -405,7 +378,7 @@ function bindUserDetailButtons(user: UserPublic): void {
       const success = await setUserRole(user.uid, 1);
       if (success) {
         showToast('已设为管理员', 'success');
-        hideModal(userModal);
+        hideModal(modal);
         updateUserRow(user.uid);
         loadStats();
       } else {
@@ -419,7 +392,7 @@ function bindUserDetailButtons(user: UserPublic): void {
       const success = await setUserRole(user.uid, 0);
       if (success) {
         showToast('已撤销管理员', 'success');
-        hideModal(userModal);
+        hideModal(modal);
         updateUserRow(user.uid);
         loadStats();
       } else {
@@ -433,7 +406,7 @@ function bindUserDetailButtons(user: UserPublic): void {
       const success = await deleteUser(user.uid);
       if (success) {
         showToast('用户已删除', 'success');
-        hideModal(userModal);
+        hideModal(modal);
         removeUserRow(user.uid);
         loadStats();
       } else {
@@ -535,59 +508,21 @@ function initBanModal(): void {
   });
 }
 
-/**
- * 显示用户详情弹窗（优先使用缓存，后台刷新数据）
- * @param userUid - 用户 UID
- */
-async function showUserDetail(userUid: string): Promise<void> {
+function showUserDetail(userUid: string): void {
   console.log('[ADMIN][USERS] showUserDetail called');
-  
-  if (!userModal || !userModalBody || !userModalFooter) {
-    console.error('[ADMIN][USERS] User modal elements not found');
-    return;
-  }
-  
-  const cached = usersCache.get(userUid);
-  
-  if (cached) {
-    renderUserDetailContent(cached.data, cached.cachedAt, true);
-    showModal(userModal);
-    
-    getUser(userUid).then(freshUser => {
-      if (!freshUser) {
-        const metaEl = document.getElementById('user-detail-meta');
-        if (metaEl) metaEl.textContent = `数据更新于 ${formatRelativeTime(cached.cachedAt)}`;
-        return;
-      }
-      
-      usersCache.set(userUid, freshUser);
-      const newCachedAt = Date.now();
-      
-      if (userModal && !userModal.classList.contains('is-hidden')) {
-        renderUserDetailContent(freshUser, newCachedAt, false);
-        bindUserDetailButtons(freshUser);
-      }
-    });
-    
-    bindUserDetailButtons(cached.data);
-    return;
-  }
 
-  userModalBody.innerHTML = userDetailSkeleton;
-  userModalFooter.innerHTML = '<button class="btn btn-secondary" id="close-user-modal">关闭</button>';
-  document.getElementById('close-user-modal')?.addEventListener('click', () => hideModal(userModal));
-  showModal(userModal);
-
-  const user = await getUser(userUid);
-  if (!user) {
-    hideModal(userModal);
-    showToast('获取用户信息失败', 'error');
-    return;
-  }
-
-  usersCache.set(userUid, user);
-  renderUserDetailContent(user, Date.now(), false);
-  bindUserDetailButtons(user);
+  showDetailWithCache<UserPublic>({
+    modal: userModal,
+    modalBody: userModalBody,
+    modalFooter: userModalFooter,
+    cache: usersCache,
+    cacheKey: userUid,
+    fetchData: () => getUser(userUid),
+    skeletonHtml: userDetailSkeleton,
+    renderContent: renderUserDetailContent,
+    renderFooter: renderUserDetailFooter,
+    bindFooterEvents: bindUserDetailEvents
+  });
 }
 
 // ==================== 初始化 ====================

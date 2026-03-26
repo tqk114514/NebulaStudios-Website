@@ -484,3 +484,86 @@ export function renderStatusBadge(
 export function renderRoleBadge(role: number): string {
   return `<span class="role-badge ${ROLE_CLASSES[role]}">${ROLE_NAMES[role]}</span>`;
 }
+
+// ==================== 详情弹窗缓存渲染 ====================
+
+export interface DetailModalConfig<T> {
+  modal: HTMLElement | null;
+  modalBody: HTMLElement | null;
+  modalFooter: HTMLElement | null;
+  cache: DataCache<T>;
+  cacheKey: string | number;
+  fetchData: () => Promise<T | null>;
+  skeletonHtml: string;
+  renderContent: (data: T, cachedAt?: number, isRefreshing?: boolean) => string;
+  renderFooter: (data: T) => string;
+  bindFooterEvents: (data: T, modal: HTMLElement) => void;
+}
+
+export function showDetailWithCache<T>(config: DetailModalConfig<T>): void {
+  const {
+    modal,
+    modalBody,
+    modalFooter,
+    cache,
+    cacheKey,
+    fetchData,
+    skeletonHtml,
+    renderContent,
+    renderFooter,
+    bindFooterEvents
+  } = config;
+
+  if (!modal || !modalBody || !modalFooter) {
+    console.error('[ADMIN][COMMON] showDetailWithCache: modal elements not found');
+    return;
+  }
+
+  const cached = cache.get(cacheKey);
+
+  if (cached) {
+    modalBody.innerHTML = renderContent(cached.data, cached.cachedAt, true);
+    modalFooter.innerHTML = renderFooter(cached.data);
+    bindFooterEvents(cached.data, modal);
+    showModal(modal);
+
+    fetchData().then(freshData => {
+      if (!freshData) {
+        const metaEl = modalBody.querySelector('.detail-meta') as HTMLElement;
+        if (metaEl) {
+          metaEl.textContent = `数据更新于 ${formatRelativeTime(cached.cachedAt)}`;
+        }
+        return;
+      }
+
+      cache.set(cacheKey, freshData);
+      const newCachedAt = Date.now();
+
+      if (modal && !modal.classList.contains('is-hidden')) {
+        modalBody.innerHTML = renderContent(freshData, newCachedAt, false);
+        modalFooter.innerHTML = renderFooter(freshData);
+        bindFooterEvents(freshData, modal);
+      }
+    });
+
+    return;
+  }
+
+  modalBody.innerHTML = skeletonHtml;
+  modalFooter.innerHTML = '<button class="btn btn-secondary" data-close-modal>关闭</button>';
+  modalFooter.querySelector('[data-close-modal]')?.addEventListener('click', () => hideModal(modal));
+  showModal(modal);
+
+  fetchData().then(data => {
+    if (!data) {
+      hideModal(modal);
+      showToast('获取详情失败', 'error');
+      return;
+    }
+
+    cache.set(cacheKey, data);
+    modalBody.innerHTML = renderContent(data, Date.now(), false);
+    modalFooter.innerHTML = renderFooter(data);
+    bindFooterEvents(data, modal);
+  });
+}

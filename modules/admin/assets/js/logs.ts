@@ -82,7 +82,6 @@ function renderLogRow(log: AdminLog): string {
 
   return `
     <tr>
-      <td>${log.id}</td>
       <td>${escapeHtml(log.admin_username)}</td>
       <td><span class="action-badge ${log.action}">${actionName}</span></td>
       <td>${details}</td>
@@ -102,12 +101,12 @@ export async function loadLogs(): Promise<void> {
     return;
   }
 
-  logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
+  logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">加载中...</td></tr>';
 
   const data = await getLogs(currentPage);
 
   if (data === 'forbidden') {
-    logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">无权限查看</td></tr>';
+    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">无权限查看</td></tr>';
     if (logsPagination) {
       logsPagination.innerHTML = '';
     }
@@ -115,12 +114,12 @@ export async function loadLogs(): Promise<void> {
   }
 
   if (!data) {
-    logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
+    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">加载失败</td></tr>';
     return;
   }
 
   if (data.logs.length === 0) {
-    logsTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无日志</td></tr>';
+    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">暂无日志</td></tr>';
     if (logsPagination) {
       logsPagination.innerHTML = '';
     }
