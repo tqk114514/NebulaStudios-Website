@@ -230,13 +230,13 @@ func (s *OAuthService) GetClients(ctx context.Context, page, pageSize int, searc
 }
 
 // UpdateClient 更新客户端
-func (s *OAuthService) UpdateClient(ctx context.Context, id int64, name, description, redirectURI string) error {
+func (s *OAuthService) UpdateClient(ctx context.Context, id int64, name string, description *string, redirectURI string) error {
 	updates := map[string]any{}
 	if name != "" {
 		updates["name"] = name
 	}
-	if description != "" {
-		updates["description"] = description
+	if description != nil {
+		updates["description"] = *description
 	}
 	if redirectURI != "" {
 		updates["redirect_uri"] = redirectURI
