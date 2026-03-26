@@ -198,12 +198,41 @@ function bindClientRowEvents(row: HTMLTableRowElement): void {
       const success = await toggleClient(clientId, newEnabled);
       if (success) {
         showToast(`应用已${action}`, 'success');
-        loadOAuthClients();
+        await updateClientRow(clientId);
       } else {
         showToast('操作失败', 'error');
       }
     });
   });
+}
+
+/**
+ * 更新指定客户端的表格行（重新获取数据并刷新显示）
+ * @param clientId - 客户端 ID
+ */
+async function updateClientRow(clientId: number): Promise<void> {
+  if (!oauthTableBody) {
+    console.error('[ADMIN][OAUTH] oauthTableBody element not found in updateClientRow');
+    return;
+  }
+  
+  const oldRow = oauthTableBody.querySelector(`tr[data-client-id="${clientId}"]`) as HTMLTableRowElement;
+  if (!oldRow) return;
+
+  oldRow.classList.add('is-updating');
+
+  const client = await getClient(clientId);
+  if (!client) {
+    oldRow.classList.remove('is-updating');
+    return;
+  }
+
+  const temp = document.createElement('tbody');
+  temp.innerHTML = renderClientRow(client);
+  const newRow = temp.firstElementChild as HTMLTableRowElement;
+
+  oldRow.replaceWith(newRow);
+  bindClientRowEvents(newRow);
 }
 
 /**
@@ -478,7 +507,7 @@ async function handleFormSubmit(): Promise<void> {
     if (success) {
       showToast('应用已更新', 'success');
       hideModal(oauthFormModal);
-      loadOAuthClients();
+      await updateClientRow(editingClientId);
     } else {
       showToast('更新失败', 'error');
     }
@@ -489,7 +518,7 @@ async function handleFormSubmit(): Promise<void> {
       hideModal(oauthFormModal);
       showSecretModal(result.client_secret);
       showToast('应用创建成功', 'success');
-      loadOAuthClients();
+      await loadOAuthClients();
     } else {
       showToast('创建失败', 'error');
     }
