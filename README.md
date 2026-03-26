@@ -4,22 +4,21 @@
 
 **此README仅介绍后端架构，前端请自行查看源代码。**
 
-主要是我自己用来管理网站用户、处理登录认证以及提供一些后台服务的系统。代码开源主要是为了备份和分享，如果你刚好需要一个基于 Go 的身份认证或简单的后端框架，可以参考看看。
+主要是我自己用来管理网站用户、处理登录认证以及提供一些后台服务的系统。代码开源主要是为了备份和审查，如果你刚好需要一个基于 Go 的身份认证或简单的后端框架，可以参考看看。
 
 ## 项目简介
 
-这是一个基于 **Go (Gin)** 编写的应用，集成了用户认证、OAuth 2.0 (Provider & Client)、AI 对话代理以及一个用 **Zig** 编写的高性能图片处理微服务。
+这是一个基于 **Go (Gin)** 编写的应用，集成了用户认证、OAuth 2.0 (Provider & Client)以及一个用 **Zig** 编写的高性能图片处理微服务。
 
-这不是什么企业级的通用解决方案，很多设计都是为了满足我个人的需求。
+这不是什么企业级的通用解决方案，很多设计都是为了满足我们的需求。
 
 ## 技术栈
 
-* **语言**: Go 1.25+ (主逻辑), Zig 0.15+ (图片处理), TypeScript (部分前端逻辑)
+* **语言**: Go 1.26.1 (主逻辑), Zig 0.15+ (图片处理), TypeScript (部分前端逻辑)
 * **Web 框架**: Gin
 * **数据库**: PostgreSQL (使用 `pgx` 驱动)
 * **缓存/限流**: 内存 LRU 缓存 (基于 `hashicorp/golang-lru`)
-* **AI 模型**: 智谱 AI (GLM-4.6v-Flash)
-* **图片处理**: `libwebp` + `stb_image` (通过 Unix Domain Socket 通信)
+* **图片处理**: Zig 调用 `libwebp` 与 `stb_image` (通过 Unix Domain Socket 通信)
 
 ## 功能模块
 
@@ -42,26 +41,24 @@
 * 通过 Unix Socket (`/tmp/img-processor.sock`) 与 Go 主程序通信。
 * 功能很简单：接收图片数据，转码为 WebP 格式返回，主打一个省内存。
 
-### 4. AI 助手
-位于 `internal/handlers/ai.go` 和 `AI.md`。
-* 接入了智谱 AI API。
-* **工具调用**: 实现了一个简单的 Agent 机制，AI 可以在回复中插入标签（如 `<highlight:xx>`、`<goto:xx>`），前端解析后会执行跳转页面或高亮条款的操作。
-
 ## 目录结构
 
 ```text
 .
 ├── cmd/
 │   ├── server/       # Go 后端入口
-│   └── build/        # 静态资源构建工具
+│   └── build/        # 前端构建工具
 ├── img-processor/    # Zig 图片处理服务源码
 ├── internal/
+│   ├── cache/        # 用户数据 LRU 缓存
+│   ├── config/       # 应用配置加载
+│   ├── middleware/   # Gin 中间件 (限流, CORS, Auth)
 │   ├── handlers/     # 业务逻辑控制层
 │   ├── models/       # 数据库模型
 │   ├── services/     # 业务服务 (Token, Email, Session)
-│   ├── middleware/   # Gin 中间件 (限流, CORS, Auth)
 │   └── utils/        # 工具函数
-├── shared/           # 前后端共享资源 (i18n, types)
+├── modules/          # 前端模块
+├── shared/           # 前端共享资源 (i18n, types)
 └── docs/             # 相关文档
 ```
 
@@ -69,7 +66,7 @@
 
 前置要求
 
-* Go 1.25+
+* Go 1.26.1
 * Zig 0.15.2+ (如果不需要图片处理可跳过，但这部分功能将不可用)
 * PostgreSQL 14+
 
