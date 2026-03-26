@@ -614,9 +614,7 @@ func setupLegacyRedirects(r *gin.Engine) {
 		"/dashboard": "/account/dashboard",
 	}
 
-	for old, new := range redirects {
-		oldPath := old
-		newPath := new
+	for oldPath, newPath := range redirects {
 		r.GET(oldPath, func(c *gin.Context) {
 			c.Redirect(http.StatusMovedPermanently, newPath)
 		})
