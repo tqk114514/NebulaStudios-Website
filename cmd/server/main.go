@@ -208,14 +208,23 @@ func initServices(cfg *config.Config) (*Services, error) {
 
 	// 用户日志仓库
 	svcs.userLogRepo = models.NewUserLogRepository()
+	if svcs.userLogRepo == nil {
+		return nil, errors.New("failed to create user log repository")
+	}
 	utils.LogInfo("SERVICES", "UserLogRepository initialized")
 
 	// 扫码登录仓库
 	svcs.qrLoginRepo = models.NewQRLoginRepository()
+	if svcs.qrLoginRepo == nil {
+		return nil, errors.New("failed to create qr login repository")
+	}
 	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
 
 	// 邮箱白名单仓库
 	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository()
+	if svcs.emailWhitelistRepo == nil {
+		return nil, errors.New("failed to create email whitelist repository")
+	}
 	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
 
 	// Token 服务
@@ -282,6 +291,9 @@ func initServices(cfg *config.Config) (*Services, error) {
 
 	// OAuth 服务
 	svcs.oauthService = services.NewOAuthService()
+	if svcs.oauthService == nil {
+		return nil, errors.New("failed to create oauth service")
+	}
 	utils.LogInfo("SERVICES", "OAuthService initialized")
 
 	utils.LogInfo("SERVICES", "All services initialized successfully")
