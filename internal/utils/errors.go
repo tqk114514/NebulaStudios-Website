@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -64,7 +65,7 @@ func LogError(module, operation string, err error, context ...any) error {
 	// 构建日志消息
 	msg := fmt.Sprintf("[%s] ERROR: %s failed", module, operation)
 	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context...)
+		msg += fmt.Sprintf(": %v", context)
 	}
 	msg += fmt.Sprintf(", error=%v", err)
 
@@ -82,7 +83,7 @@ func LogError(module, operation string, err error, context ...any) error {
 func LogWarn(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] WARN: %s", module, message)
 	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context...)
+		msg += fmt.Sprintf(": %v", context)
 	}
 	Log(msg)
 }
@@ -95,7 +96,7 @@ func LogWarn(module, message string, context ...any) {
 func LogInfo(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] %s", module, message)
 	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context...)
+		msg += fmt.Sprintf(": %v", context)
 	}
 	Log(msg)
 }
@@ -108,7 +109,7 @@ func LogInfo(module, message string, context ...any) {
 func LogDebug(module, message string, context ...any) {
 	msg := fmt.Sprintf("[%s] DEBUG: %s", module, message)
 	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context...)
+		msg += fmt.Sprintf(": %v", context)
 	}
 	Log(msg)
 }
@@ -399,8 +400,11 @@ func (ec *ErrorCollector) Error() error {
 
 // RetryConfig 重试配置
 type RetryConfig struct {
-	MaxAttempts int                          // 最大尝试次数
-	OnRetry     func(attempt int, err error) // 重试回调
+	MaxAttempts int           // 最大尝试次数
+	Backoff     time.Duration // 初始退避时间（可选，为 0 时不等待）
+	MaxBackoff  time.Duration // 最大退避时间（可选，用于限制指数退避的上限）
+	Multiplier  float64       // 退避时间倍增系数（可选，默认 2.0，用于指数退避）
+	OnRetry     func(attempt int, err error)
 }
 
 // Retry 重试执行函数
@@ -413,6 +417,13 @@ type RetryConfig struct {
 //   - error: 最后一次的错误
 func Retry(ctx context.Context, config RetryConfig, fn func() error) error {
 	var lastErr error
+	var backoff time.Duration
+
+	// 设置默认倍增系数
+	multiplier := config.Multiplier
+	if multiplier == 0 {
+		multiplier = 2.0
+	}
 
 	for attempt := 1; attempt <= config.MaxAttempts; attempt++ {
 		// 检查上下文是否已取消
@@ -430,9 +441,32 @@ func Retry(ctx context.Context, config RetryConfig, fn func() error) error {
 
 		lastErr = err
 
-		// 如果不是最后一次尝试，调用回调
-		if attempt < config.MaxAttempts && config.OnRetry != nil {
-			config.OnRetry(attempt, err)
+		// 如果不是最后一次尝试，执行退避策略
+		if attempt < config.MaxAttempts {
+			// 计算退避时间
+			if config.Backoff > 0 {
+				if attempt == 1 {
+					backoff = config.Backoff
+				} else {
+					backoff = time.Duration(float64(backoff) * multiplier)
+					// 限制最大退避时间
+					if config.MaxBackoff > 0 && backoff > config.MaxBackoff {
+						backoff = config.MaxBackoff
+					}
+				}
+
+				// 等待退避时间
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(backoff):
+				}
+			}
+
+			// 调用重试回调
+			if config.OnRetry != nil {
+				config.OnRetry(attempt, err)
+			}
 		}
 	}
 
