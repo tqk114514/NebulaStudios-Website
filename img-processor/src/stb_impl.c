@@ -7,4 +7,4 @@
 #define STBI_ONLY_BMP
 #define STBI_ONLY_GIF
 #define STBI_NO_STDIO
-#include "stb_image.h"
+#include "stb_image/stb_image.h"
