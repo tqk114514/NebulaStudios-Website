@@ -3,7 +3,7 @@ const net = std.net;
 const posix = std.posix;
 
 const c = @cImport({
-    @cInclude("stb_image.h");
+    @cInclude("stb_image/stb_image.h");
     @cInclude("src/webp/encode.h");
 });
 
