@@ -991,6 +991,7 @@ func shouldSkipLog(path string) bool {
 
 // gracefulShutdown 优雅关闭服务器
 // 按顺序关闭：WebSocket -> HTTP -> ImgProcessor -> 数据库
+// 为每个步骤分配独立的超时时间，确保各步骤都能正常完成
 func gracefulShutdown(srv *http.Server, svcs *Services) {
 	// 创建信号通道
 	quit := make(chan os.Signal, 1)
@@ -1000,20 +1001,20 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	sig := <-quit
 	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
-	// 创建关闭超时上下文
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
 	// 1. 关闭 WebSocket 服务（停止接受新连接，关闭现有连接）
 	if svcs.wsService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
-		svcs.wsService.Shutdown()
+		wsCtx, wsCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer wsCancel()
+		svcs.wsService.Shutdown(wsCtx)
 		utils.LogInfo("SERVER", "WebSocket connections closed")
 	}
 
 	// 2. 关闭 HTTP 服务器（停止接受新请求，等待现有请求完成）
 	utils.LogInfo("SERVER", "Shutting down HTTP server...")
-	if err := srv.Shutdown(ctx); err != nil {
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer httpCancel()
+	if err := srv.Shutdown(httpCtx); err != nil {
 		utils.LogError("SERVER", "Shutdown", err, "HTTP server shutdown failed")
 	} else {
 		utils.LogInfo("SERVER", "HTTP server stopped")
@@ -1022,7 +1023,9 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	// 3. 关闭图片处理器
 	if svcs.imgProcessor != nil {
 		utils.LogInfo("SERVER", "Shutting down image processor...")
-		svcs.imgProcessor.Shutdown()
+		imgCtx, imgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer imgCancel()
+		svcs.imgProcessor.Shutdown(imgCtx)
 	}
 
 	// 4. 关闭数据库连接
