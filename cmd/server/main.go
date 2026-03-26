@@ -135,7 +135,7 @@ func run() error {
 	srv := createServer(cfg.Port, router)
 	startServer(srv)
 
-	// 10. 等待关闭信号并优雅关闭
+	// 9. 等待关闭信号并优雅关闭
 	gracefulShutdown(srv, svcs)
 
 	return nil
