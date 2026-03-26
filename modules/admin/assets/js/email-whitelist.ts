@@ -21,7 +21,11 @@ import {
   whitelistModalFooter,
   whitelistModalClose,
   showModal,
-  hideModal
+  hideModal,
+  DataCache,
+  updateTableRow,
+  removeTableRow,
+  renderStatusBadge
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -43,36 +47,12 @@ interface EmailWhitelistListResponse {
   totalPages: number;
 }
 
-// 白名单数据缓存（带时间戳）
-interface CachedWhitelistEntry {
-  entry: EmailWhitelistEntry;
-  cachedAt: number;
-}
-
 // ==================== 状态 ====================
 
 let currentPage = 1;
 let currentEntries: EmailWhitelistEntry[] = [];
 let editingEntryId: number | null = null;
-let whitelistCache: Map<number, CachedWhitelistEntry> = new Map();
-
-/** 缓存最大条目数 */
-const CACHE_MAX_SIZE = 100;
-
-/**
- * 添加白名单到缓存（带大小限制）
- * @param entryId - 白名单 ID
- * @param cached - 缓存数据
- */
-function setCacheWhitelist(entryId: number, cached: CachedWhitelistEntry): void {
-  if (whitelistCache.size >= CACHE_MAX_SIZE && !whitelistCache.has(entryId)) {
-    const oldestKey = whitelistCache.keys().next().value;
-    if (oldestKey !== undefined) {
-      whitelistCache.delete(oldestKey);
-    }
-  }
-  whitelistCache.set(entryId, cached);
-}
+const whitelistCache = new DataCache<EmailWhitelistEntry>();
 
 // ==================== DOM 元素 ====================
 
@@ -176,11 +156,7 @@ function renderWhitelistRow(entry: EmailWhitelistEntry): string {
     <tr data-id="${entry.id}">
       <td>${escapeHtml(entry.domain)}</td>
       <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
-      <td>
-        <span class="status-badge ${entry.is_enabled ? 'status-enabled' : 'status-disabled'}">
-          ${entry.is_enabled ? '已启用' : '已禁用'}
-        </span>
-      </td>
+      <td>${renderStatusBadge(entry.is_enabled)}</td>
       <td>${formatDate(entry.created_at)}</td>
       <td>
         <button class="action-btn view" data-id="${entry.id}">查看</button>
@@ -202,30 +178,18 @@ function bindWhitelistRowEvents(row: HTMLTableRowElement): void {
  * @param entryId - 白名单 ID
  */
 async function updateWhitelistRow(entryId: number): Promise<void> {
-  if (!whitelistTableBody) {
-    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found in updateWhitelistRow');
-    return;
-  }
+  if (!whitelistTableBody) return;
   
-  const oldRow = whitelistTableBody.querySelector(`tr[data-id="${entryId}"]`) as HTMLTableRowElement;
-  if (!oldRow) return;
-
-  oldRow.classList.add('is-updating');
-
-  const entry = await getEntry(entryId);
-  if (!entry) {
-    oldRow.classList.remove('is-updating');
-    return;
-  }
-
-  setCacheWhitelist(entryId, { entry, cachedAt: Date.now() });
-
-  const temp = document.createElement('tbody');
-  temp.innerHTML = renderWhitelistRow(entry);
-  const newRow = temp.firstElementChild as HTMLTableRowElement;
-
-  oldRow.replaceWith(newRow);
-  bindWhitelistRowEvents(newRow);
+  await updateTableRow({
+    tableBody: whitelistTableBody,
+    rowId: entryId,
+    rowIdAttr: 'data-id',
+    fetchData: () => getEntry(entryId),
+    renderRow: renderWhitelistRow,
+    bindEvents: bindWhitelistRowEvents,
+    cache: whitelistCache,
+    cacheKey: entryId
+  });
 }
 
 /**
@@ -233,29 +197,16 @@ async function updateWhitelistRow(entryId: number): Promise<void> {
  * @param entryId - 白名单 ID
  */
 function removeWhitelistRow(entryId: number): void {
-  if (!whitelistTableBody) {
-    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found in removeWhitelistRow');
-    return;
-  }
+  if (!whitelistTableBody) return;
   
-  const row = whitelistTableBody.querySelector(`tr[data-id="${entryId}"]`) as HTMLTableRowElement;
-  if (!row) return;
-
-  whitelistCache.delete(entryId);
-  row.classList.add('is-deleting');
-
-  setTimeout(() => {
-    row.style.transition = 'opacity 0.2s, transform 0.2s';
-    row.style.opacity = '0';
-    row.style.transform = 'translateX(-20px)';
-
-    setTimeout(() => {
-      row.remove();
-      if (whitelistTableBody.children.length === 0) {
-        whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
-      }
-    }, 200);
-  }, 600);
+  removeTableRow({
+    tableBody: whitelistTableBody,
+    rowId: entryId,
+    rowIdAttr: 'data-id',
+    cache: whitelistCache as DataCache<unknown>,
+    cacheKey: entryId,
+    colspan: 5
+  });
 }
 
 function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: number, totalPages: number): void {
@@ -270,8 +221,7 @@ function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: nu
     return;
   }
 
-  const now = Date.now();
-  entries.forEach(entry => setCacheWhitelist(entry.id, { entry, cachedAt: now }));
+  entries.forEach(entry => whitelistCache.set(entry.id, entry));
 
   tableBody.innerHTML = entries.map(entry => renderWhitelistRow(entry)).join('');
 
@@ -319,9 +269,7 @@ function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: num
       <div class="user-detail-row">
         <span class="user-detail-label">状态</span>
         <span class="user-detail-value">
-          <span class="status-badge ${entry.is_enabled ? 'status-enabled' : 'status-disabled'}">
-            ${entry.is_enabled ? '已启用' : '已禁用'}
-          </span>
+          ${renderStatusBadge(entry.is_enabled)}
         </span>
       </div>
       <div class="user-detail-row">
@@ -400,7 +348,7 @@ async function showWhitelistDetail(entryId: number): Promise<void> {
   const cached = whitelistCache.get(entryId);
   
   if (cached) {
-    renderWhitelistDetailContent(cached.entry, cached.cachedAt, true);
+    renderWhitelistDetailContent(cached.data, cached.cachedAt, true);
     showModal(whitelistModal);
     
     getEntry(entryId).then(freshEntry => {
@@ -410,8 +358,8 @@ async function showWhitelistDetail(entryId: number): Promise<void> {
         return;
       }
       
+      whitelistCache.set(entryId, freshEntry);
       const newCachedAt = Date.now();
-      setCacheWhitelist(entryId, { entry: freshEntry, cachedAt: newCachedAt });
       
       if (whitelistModal && !whitelistModal.classList.contains('is-hidden')) {
         renderWhitelistDetailContent(freshEntry, newCachedAt, false);
@@ -419,7 +367,7 @@ async function showWhitelistDetail(entryId: number): Promise<void> {
       }
     });
     
-    bindWhitelistDetailButtons(cached.entry);
+    bindWhitelistDetailButtons(cached.data);
     return;
   }
 
@@ -458,9 +406,8 @@ async function showWhitelistDetail(entryId: number): Promise<void> {
     return;
   }
 
-  const cachedAt = Date.now();
-  setCacheWhitelist(entryId, { entry, cachedAt });
-  renderWhitelistDetailContent(entry, cachedAt, false);
+  whitelistCache.set(entryId, entry);
+  renderWhitelistDetailContent(entry, Date.now(), false);
   bindWhitelistDetailButtons(entry);
 }
 
