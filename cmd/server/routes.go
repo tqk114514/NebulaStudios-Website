@@ -326,8 +326,7 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	oauthGroup.Use(middleware.APIBodySizeLimit())
 	{
 		oauthGroup.GET("/authorize",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.OptionalAuthMiddleware(svcs.sessionService),
 			hdlrs.oauthProviderHandler.Authorize)
 		oauthGroup.POST("/authorize",
 			middleware.AuthMiddleware(svcs.sessionService),
