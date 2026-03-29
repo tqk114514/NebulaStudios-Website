@@ -134,6 +134,7 @@ func (h *MicrosoftHandler) isConfigured() bool {
 //
 // 查询参数：
 //   - action: 操作类型（login/link，默认 login）
+//   - return: 登录后重定向地址
 //
 // 响应：
 //   - 重定向到 Microsoft 授权页面
@@ -151,6 +152,8 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		utils.LogWarn("OAUTH-MS", "Invalid action, defaulting to login", fmt.Sprintf("action=%s", action))
 		action = oauth.ActionLogin
 	}
+
+	returnURL := c.Query("return")
 
 	state, err := oauth.GenerateState()
 	if err != nil {
@@ -172,6 +175,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		Timestamp:    time.Now().UnixMilli(),
 		Action:       action,
 		CodeVerifier: codeVerifier,
+		ReturnURL:    returnURL,
 	}
 
 	if action == oauth.ActionLink {
@@ -288,6 +292,7 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	action := stateData.Action
 	currentUserUID := stateData.UserUID
 	codeVerifier := stateData.CodeVerifier
+	returnURL := stateData.ReturnURL
 
 	if action == oauth.ActionLink && currentUserUID == "" {
 		utils.LogWarn("OAUTH-MS", "Link action but no valid userUID in state", "")
@@ -348,7 +353,7 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	h.handleLoginAction(c, ctx, microsoftID, email, displayName, avatarData, avatarContentType)
+	h.handleLoginAction(c, ctx, microsoftID, email, displayName, avatarData, avatarContentType, returnURL)
 }
 
 // Unlink 解绑微软账户

@@ -207,12 +207,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // 更新"创建账户"链接，携带 return 参数
+    // 更新"创建账户"、"忘记密码"和微软登录链接，携带 return 参数
     const returnUrl = urlParams.get('return');
     if (returnUrl) {
       const createAccountLink = document.querySelector('.footer-links a[href="/account/register"]');
       if (createAccountLink) {
         createAccountLink.setAttribute('href', '/account/register?return=' + encodeURIComponent(returnUrl));
+      }
+      const forgotPasswordLink = document.querySelector('.footer-links a[href="/account/forgot"]');
+      if (forgotPasswordLink) {
+        forgotPasswordLink.setAttribute('href', '/account/forgot?return=' + encodeURIComponent(returnUrl));
+      }
+      const microsoftLoginLink = document.querySelector('.oauth-buttons a[href="/api/auth/microsoft"]');
+      if (microsoftLoginLink) {
+        microsoftLoginLink.setAttribute('href', '/api/auth/microsoft?return=' + encodeURIComponent(returnUrl));
       }
     }
 

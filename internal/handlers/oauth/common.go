@@ -103,6 +103,7 @@ type State struct {
 	Action       string // 操作类型：login/link
 	UserUID      string // 用户 UID（仅 link 操作）
 	CodeVerifier string // PKCE code_verifier
+	ReturnURL    string // 登录后重定向地址
 }
 
 // PendingLink 待确认绑定数据
