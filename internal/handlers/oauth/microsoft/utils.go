@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -194,7 +195,7 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 }
 
 // handleLoginAction 处理登录操作
-func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName string, avatarData []byte, avatarContentType string) {
+func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName string, avatarData []byte, avatarContentType string, returnURL string) {
 	user, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
 		utils.LogDebug("OAUTH-MS", "FindByMicrosoftID error in handleLoginAction")
@@ -227,7 +228,11 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 			linkToken, err := oauth.GenerateLinkToken()
 			if err != nil {
 				utils.LogError("OAUTH-MS", "handleLoginAction", err, "Failed to generate link token")
-				oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+				if returnURL != "" {
+					oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "oauth_error")
+				} else {
+					oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+				}
 				return
 			}
 
@@ -254,18 +259,30 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 
 	if user == nil {
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("No linked account found for Microsoft ID: %s", microsoftID))
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "no_linked_account")
+		if returnURL != "" {
+			oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "no_linked_account")
+		} else {
+			oauth.RedirectWithError(c, h.baseURL, "/account/login", "no_linked_account")
+		}
 		return
 	}
 
 	token, err := h.sessionService.GenerateToken(user.UID)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "token_error")
+		if returnURL != "" {
+			oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "token_error")
+		} else {
+			oauth.RedirectWithError(c, h.baseURL, "/account/login", "token_error")
+		}
 		return
 	}
 
 	oauth.SetAuthCookie(c, token)
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft login successful: username=%s, userUID=%s", user.Username, user.UID))
-	c.Redirect(http.StatusFound, h.baseURL+"/account/dashboard")
+	if returnURL != "" {
+		c.Redirect(http.StatusFound, returnURL)
+	} else {
+		c.Redirect(http.StatusFound, h.baseURL+"/account/dashboard")
+	}
 }
