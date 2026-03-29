@@ -158,6 +158,8 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
 
 // ==================== 页面初始化 ====================
 
+let currentScopes: string[] = [];
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 等待翻译加载完成
@@ -169,37 +171,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 获取卡片元素
     const card = document.querySelector('.card') as HTMLElement | null;
 
-    // 保存授权信息，用于语言切换时重新渲染
-    let currentScopes: string[] = [];
-    let currentClientName = '';
-    let currentClientDescription = '';
-    let currentUsername = '';
-    let currentUserAvatar = '';
-
-    // 获取授权信息元素
-    const appNameEl = document.getElementById('app-name');
-    const appDescEl = document.getElementById('app-desc');
-    const userNameEl = document.getElementById('user-name');
-
-    // 重新渲染所有需要翻译的内容
-    function reRenderContent(): void {
+    // 初始化语言切换器
+    initLanguageSwitcher(() => {
       updatePageTitle();
-      if (card) { delayedExecution(() => adjustCardHeight(card)); }
-      // 重新渲染权限列表
       if (currentScopes.length > 0) {
         renderScopes(currentScopes);
       }
-      // 重新设置应用信息（虽然这些不是翻译的，但保持一致性）
-      if (appNameEl) appNameEl.textContent = currentClientName;
-      if (appDescEl) appDescEl.textContent = currentClientDescription || '';
-      if (userNameEl) userNameEl.textContent = currentUsername;
-      if (currentUsername) {
-        setUserAvatar(currentUserAvatar, currentUsername);
-      }
-    }
-
-    // 初始化语言切换器
-    initLanguageSwitcher(reRenderContent);
+      if (card) { delayedExecution(() => adjustCardHeight(card)); }
+    });
 
     // 启用卡片自动调整大小
     if (card) { enableCardAutoResize(card); }
@@ -224,6 +203,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       showError('invalid_request');
       return;
     }
+
+    // 获取授权信息
+    const appNameEl = document.getElementById('app-name');
+    const appDescEl = document.getElementById('app-desc');
+    const userNameEl = document.getElementById('user-name');
 
     try {
       const params = new URLSearchParams({
@@ -251,12 +235,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const { clientName, clientDescription, scopes, username, userAvatar } = result.data;
 
-      // 保存授权信息
+      // 保存 scopes 供语言切换时使用
       currentScopes = scopes;
-      currentClientName = clientName;
-      currentClientDescription = clientDescription || '';
-      currentUsername = username;
-      currentUserAvatar = userAvatar;
 
       // 显示应用信息
       if (appNameEl) appNameEl.textContent = clientName;
