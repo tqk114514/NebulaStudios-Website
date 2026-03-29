@@ -351,8 +351,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (result.success) {
           showAlertWithTranslation(t('register.success'));
-          // 注册成功后跳转到登录页
-          setTimeout(() => { window.location.href = '/account/login'; }, 2000);
+          // 注册成功后跳转到登录页，携带 return 参数
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnUrl = urlParams.get('return');
+          let loginUrl = '/account/login';
+          if (returnUrl) {
+            loginUrl += '?return=' + encodeURIComponent(returnUrl);
+          }
+          setTimeout(() => { window.location.href = loginUrl; }, 2000);
         } else {
           // 显示错误信息
           const translationKey = errorCodeMap[result.errorCode as keyof typeof errorCodeMap] || 'register.failed';
