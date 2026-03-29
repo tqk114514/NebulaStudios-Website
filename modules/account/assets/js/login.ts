@@ -207,6 +207,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    // 更新"创建账户"链接，携带 return 参数
+    const returnUrl = urlParams.get('return');
+    if (returnUrl) {
+      const createAccountLink = document.querySelector('.footer-links a[href="/account/register"]');
+      if (createAccountLink) {
+        createAccountLink.setAttribute('href', '/account/register?return=' + encodeURIComponent(returnUrl));
+      }
+    }
+
     // 更新页面标题
     updatePageTitle();
 
