@@ -109,7 +109,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const result = await login(email, password, token || '', captchaType);
 
         if (result.success) {
-          // token 已通过 httpOnly cookie 存储，直接跳转
+          // token 已通过 httpOnly cookie 存储，跳转
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnUrl = urlParams.get('return');
+          if (returnUrl) {
+            try {
+              const decodedUrl = decodeURIComponent(returnUrl);
+              const url = new URL(decodedUrl, window.location.origin);
+              if (url.origin === window.location.origin) {
+                window.location.href = decodedUrl;
+                return;
+              }
+            } catch {
+              // URL 解析失败，继续使用默认跳转
+            }
+          }
           window.location.href = '/account/dashboard';
         } else {
           const translationKey = errorCodeMap[result.errorCode || ''] || 'login.failed';
