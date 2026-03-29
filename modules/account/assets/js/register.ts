@@ -434,6 +434,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       clearCodeExpiryTimer(codeExpiryTimerElement);
     });
 
+    // 更新"已有帐户？返回登陆"链接，携带 return 参数
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnUrl = urlParams.get('return');
+    if (returnUrl) {
+      const backToLoginLink = document.querySelector('.footer-links a[href="/account/login"]');
+      if (backToLoginLink) {
+        backToLoginLink.setAttribute('href', '/account/login?return=' + encodeURIComponent(returnUrl));
+      }
+    }
+
     // 更新页面标题
     updatePageTitle();
 

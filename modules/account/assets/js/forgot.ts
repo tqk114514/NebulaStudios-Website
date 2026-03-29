@@ -338,9 +338,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (result.success) {
           showAlertWithTranslation(t('forgotPassword.resetSuccess'));
-          // 重置成功后跳转到登录页
+          // 重置成功后跳转到登录页，携带 return 参数
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnUrl = urlParams.get('return');
+          let loginUrl = '/account/login';
+          if (returnUrl) {
+            loginUrl += '?return=' + encodeURIComponent(returnUrl);
+          }
           setTimeout(() => {
-            window.location.href = '/account/login';
+            window.location.href = loginUrl;
           }, 1500);
         } else {
           const errorKey = resetPasswordErrorMap[result.errorCode] || 'forgotPassword.resetFailed';
@@ -360,6 +366,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 绑定表单提交事件
     formEmailStep.addEventListener('submit', handleEmailSubmit);
     resetStep.addEventListener('submit', handleResetSubmit);
+
+    // 更新"返回登陆"链接，携带 return 参数
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnUrl = urlParams.get('return');
+    if (returnUrl) {
+      const backToLoginLink = document.querySelector('.footer-links a[href="/account/login"]');
+      if (backToLoginLink) {
+        backToLoginLink.setAttribute('href', '/account/login?return=' + encodeURIComponent(returnUrl));
+      }
+    }
 
     // 更新页面标题
     updatePageTitle();
