@@ -233,20 +233,20 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 	return authCode, nil
 }
 
-// MarkUsed 标记授权码为已使用
+// MarkUsed 标记授权码为已使用（使用乐观锁防止并发重放）
 // 参数：
 //   - ctx: 上下文
 //   - id: 授权码 ID
 //
 // 返回：
-//   - error: 错误信息
+//   - error: 错误信息（如果已经被使用过，返回 ErrOAuthCodeUsed 或 ErrOAuthCodeNotFound）
 func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error {
 	if err := r.checkDB(); err != nil {
 		return err
 	}
 
 	result, err := pool.Exec(ctx, `
-		UPDATE oauth_auth_codes SET used = true WHERE id = $1
+		UPDATE oauth_auth_codes SET used = true WHERE id = $1 AND used = false
 	`, id)
 
 	if err != nil {
@@ -254,7 +254,7 @@ func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error 
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrOAuthCodeNotFound
+		return ErrOAuthCodeUsed // 如果没有行被更新，说明已经被使用了，返回已使用错误
 	}
 
 	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code marked as used: id=%d", id))
