@@ -145,24 +145,33 @@ fn readExact(fd: posix.socket_t, buf: []u8) !void {
     }
 }
 
+fn writeExact(fd: posix.socket_t, buf: []const u8) !void {
+    var total: usize = 0;
+    while (total < buf.len) {
+        const n = try posix.write(fd, buf[total..]);
+        if (n == 0) return error.ConnectionClosed;
+        total += n;
+    }
+}
+
 fn sendResponse(fd: posix.socket_t, data: []const u8) !void {
     // 状态码 0 = 成功
-    _ = try posix.write(fd, &[_]u8{0});
+    try writeExact(fd, &[_]u8{0});
     // 长度
     var len_buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &len_buf, @intCast(data.len), .big);
-    _ = try posix.write(fd, &len_buf);
+    try writeExact(fd, &len_buf);
     // 数据
-    _ = try posix.write(fd, data);
+    try writeExact(fd, data);
 }
 
 fn sendError(fd: posix.socket_t, msg: []const u8) !void {
     // 状态码 1 = 错误
-    _ = try posix.write(fd, &[_]u8{1});
+    try writeExact(fd, &[_]u8{1});
     // 长度
     var len_buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &len_buf, @intCast(msg.len), .big);
-    _ = try posix.write(fd, &len_buf);
+    try writeExact(fd, &len_buf);
     // 消息
-    _ = try posix.write(fd, msg);
+    try writeExact(fd, msg);
 }
