@@ -327,10 +327,12 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	{
 		oauthGroup.GET("/authorize",
 			middleware.OptionalAuthMiddleware(svcs.sessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.oauthProviderHandler.Authorize)
 		oauthGroup.POST("/authorize",
 			middleware.AuthMiddleware(svcs.sessionService),
 			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.oauthProviderHandler.AuthorizePost)
 
 		oauthGroup.GET("/authorize/info",

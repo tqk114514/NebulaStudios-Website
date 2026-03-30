@@ -234,6 +234,64 @@ func NoCacheHeaders() gin.HandlerFunc {
 	}
 }
 
+// CSRFTokenMiddleware 提供完善的基于 Double Submit Cookie 模式的 CSRF 防护
+// 1. 对于 GET 请求，如果不存在 csrf_token cookie，则生成并设置
+// 2. 对于修改状态的请求（POST, PUT, DELETE, PATCH），必须在 Header (X-CSRF-Token) 或表单中提供与 Cookie 中匹配的 Token
+func CSRFTokenMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 1. 获取 Cookie 中的 Token
+		cookieToken, err := c.Cookie("csrf_token")
+		
+		// 如果是 GET/HEAD/OPTIONS 请求，只需要确保 Cookie 存在，不存在则生成
+		if c.Request.Method == http.MethodGet ||
+			c.Request.Method == http.MethodHead ||
+			c.Request.Method == http.MethodOptions {
+			
+			if err != nil || cookieToken == "" {
+				// 生成新的随机 Token
+				newToken, _ := utils.GenerateSecureToken()
+				// 设置 Cookie：HttpOnly 设为 false，因为前端 JS 需要读取它并放入请求头/表单中
+				// SameSite 设为 Lax
+				c.SetCookie("csrf_token", newToken, 86400, "/", "", false, false)
+			}
+			c.Next()
+			return
+		}
+
+		// 2. 对于 POST/PUT/DELETE 等请求，必须验证 Token
+		if err != nil || cookieToken == "" {
+			utils.LogWarn("SECURITY", "CSRF token missing in cookie", fmt.Sprintf("path=%s", c.Request.URL.Path))
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"success":   false,
+				"errorCode": "CSRF_TOKEN_MISSING",
+				"message":   "CSRF token is missing",
+			})
+			return
+		}
+
+		// 3. 从请求中获取客户端提交的 Token
+		// 优先从 Header 获取 (常用于 AJAX)
+		clientToken := c.GetHeader("X-CSRF-Token")
+		if clientToken == "" {
+			// 其次从表单中获取 (常用于原生 Form 提交)
+			clientToken = c.PostForm("csrf_token")
+		}
+
+		// 4. 对比两个 Token
+		if clientToken == "" || clientToken != cookieToken {
+			utils.LogWarn("SECURITY", "CSRF token mismatch", fmt.Sprintf("path=%s", c.Request.URL.Path))
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"success":   false,
+				"errorCode": "CSRF_TOKEN_MISMATCH",
+				"message":   "CSRF token validation failed",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // ====================  私有函数 ====================
 
 // isHTMLPage 判断是否为 HTML 页面
