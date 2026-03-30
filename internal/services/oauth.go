@@ -366,6 +366,9 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 
 	// 标记为已使用
 	if err := s.authCodeRepo.MarkUsed(ctx, authCode.ID); err != nil {
+		if errors.Is(err, models.ErrOAuthCodeUsed) {
+			return nil, "", ErrOAuthCodeUsed
+		}
 		return nil, "", err
 	}
 
