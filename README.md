@@ -74,7 +74,7 @@
 进入`img-processor`目录并编译Zig服务：
 ```Zig
 cd img-processor
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl
 # 编译产物在 zig-out/bin/img-processor
 ```
 
