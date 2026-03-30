@@ -117,6 +117,14 @@ function setUserAvatar(avatarUrl: string, username: string): void {
 }
 
 /**
+ * 获取 CSRF Token
+ */
+function getCsrfToken(): string {
+  const match = document.cookie.match(/(^|;)\s*csrf_token\s*=\s*([^;]+)/);
+  return match ? match[2] : '';
+}
+
+/**
  * 提交授权决定
  */
 async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
@@ -126,6 +134,7 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
   const state = getUrlParameter('state');
   const codeChallenge = getUrlParameter('code_challenge');
   const codeChallengeMethod = getUrlParameter('code_challenge_method');
+  const csrfToken = getCsrfToken();
 
   // 创建表单并提交
   const form = document.createElement('form');
@@ -139,7 +148,8 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
     state: state,
     code_challenge: codeChallenge,
     code_challenge_method: codeChallengeMethod,
-    decision: decision
+    decision: decision,
+    csrf_token: csrfToken // 将 CSRF Token 添加到表单中
   };
 
   for (const [name, value] of Object.entries(fields)) {
