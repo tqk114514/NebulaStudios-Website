@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,8 +233,17 @@ func buildTranslations() error {
 				return fmt.Errorf("failed to parse %s: %w", filePath, err)
 			}
 
-			// 合并到语言数据
-			maps.Copy(langData, moduleData)
+			// 合并到语言数据，并检查冲突
+			for key, newValue := range moduleData {
+				if existingValue, exists := langData[key]; exists {
+					if existingValue != newValue {
+						return fmt.Errorf("translation conflict: key '%s' in language '%s' has conflicting values (module '%s' has '%s', previous value was '%s')",
+							key, lang, module, newValue, existingValue)
+					}
+					// 值相同，直接覆盖（无所谓）
+				}
+				langData[key] = newValue
+			}
 		}
 
 		if len(langData) == 0 {

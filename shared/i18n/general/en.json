@@ -25,6 +25,7 @@
   "policy.agreeByRegister": "By registering, you agree to our",
   "policy.privacyPolicy": "Privacy Policy",
   "policy.termsOfService": "Terms of Service",
+  "policy.cookiePolicy": "Cookie Policy",
   "policy.and": "and",
 
   "cookieConsent.message": "We use cookies to improve your experience. Rejecting will only affect optional features (like language preference and login state), core features will still work normally.",

@@ -25,6 +25,7 @@
   "policy.agreeByRegister": "登録することで、以下に同意したものとみなされます：",
   "policy.privacyPolicy": "プライバシーポリシー",
   "policy.termsOfService": "利用規約",
+  "policy.cookiePolicy": "Cookieポリシー",
   "policy.and": "および",
 
   "cookieConsent.message": "当サイトはCookieを使用してユーザー体験を向上させています。拒否してもコア機能は正常に動作しますが、言語設定やログイン状態の保存などのオプショナル機能に影響します。",
