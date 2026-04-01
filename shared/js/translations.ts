@@ -111,29 +111,11 @@ function getCookie(name: string): string | null {
 
 /**
  * 立即执行的初始化函数
- * 在 DOM 解析前确定语言，避免内容闪烁
+ * 优先使用内联脚本设置的 __INIT_LANG__，避免内容闪烁
  */
 (function initializeLanguage(): void {
-  // 获取保存的语言或浏览器默认语言
-  const savedLang = getCookie('selectedLanguage');
-  const browserLang = navigator.language || (navigator as unknown as { userLanguage: string }).userLanguage;
-  let lang = savedLang;
-
-  // 如果没有保存的语言，根据浏览器语言自动选择
-  if (!lang) {
-    if (browserLang.startsWith('zh')) {
-      lang = (browserLang.includes('TW') || browserLang.includes('HK')) ? 'zh-TW' : 'zh-CN';
-    } else if (browserLang.startsWith('ja')) {
-      lang = 'ja';
-    } else if (browserLang.startsWith('ko')) {
-      lang = 'ko';
-    } else if (browserLang.startsWith('en')) {
-      lang = 'en';
-    } else {
-      // 其他语言默认使用英语
-      lang = 'en';
-    }
-  }
+  // 优先使用内联脚本已经计算好的语言
+  let lang = (window as any).__INIT_LANG__ || 'zh-CN';
 
   // 确保语言值有效
   if (!validLanguages.includes(lang as ValidLanguage)) {
@@ -141,17 +123,33 @@ function getCookie(name: string): string | null {
     lang = 'zh-CN';
   }
 
-  // 设置 HTML lang 属性
-  document.documentElement.setAttribute('lang', lang);
-
-  // 如果不是默认语言（简体中文），先隐藏内容防止闪烁
-  if (lang !== 'zh-CN') {
-    document.documentElement.style.visibility = 'hidden';
-  }
-
   // 设置当前语言
   currentLanguage = lang;
   window.currentLanguage = lang;
+
+  // 设置 HTML lang 属性（如果还没被内联脚本设置）
+  if (!document.documentElement.getAttribute('lang')) {
+    document.documentElement.setAttribute('lang', lang);
+  }
+
+  // 如果不是默认语言（简体中文），先隐藏内容防止闪烁
+  if (lang !== 'zh-CN' && document.documentElement.style.visibility !== 'hidden') {
+    document.documentElement.style.visibility = 'hidden';
+  }
+
+  // 等待 DOM 解析完成后再设置按钮文字
+  const setBtn = (): void => {
+    const langText = document.querySelector('.language-current .lang-text');
+    if (langText) {
+      langText.textContent = LANG_NAMES[lang] || lang;
+    }
+  };
+
+  if (document.body) {
+    setBtn();
+  } else {
+    document.addEventListener('DOMContentLoaded', setBtn);
+  }
 })();
 
 // ==================== 翻译加载 ====================
