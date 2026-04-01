@@ -250,6 +250,10 @@
   transition: opacity 0.4s ease, visibility 0.4s ease, backdrop-filter 0.4s ease;
 }
 
+.modal-overlay.is-hidden {
+  display: flex !important;
+}
+
 .modal-overlay:not(.is-hidden) {
   opacity: 1;
   visibility: visible;
