@@ -24,7 +24,8 @@
 
   "policy.agreeByRegister": "가입하면 다음에 동의하는 것으로 간주됩니다:",
   "policy.privacyPolicy": "개인정보 처리방침",
-  "policy.termsOfService": "서비스 약관",
+  "policy.termsOfService": "이용약관",
+  "policy.cookiePolicy": "쿠키 정책",
   "policy.and": "및",
 
   "cookieConsent.message": "당사는 쿠키를 사용하여 사용자 경험을 개선하고 있습니다. 거부해도 핵심 기능은 정상적으로 작동하지만, 언어 설정 및 로그인 상태 저장 등의 선택적 기능에 영향을 미칩니다.",
