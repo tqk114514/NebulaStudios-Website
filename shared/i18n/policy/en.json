@@ -1,5 +1,5 @@
 {
-  "nav.privacy": "Privacy Policy",
-  "nav.terms": "Terms of Service",
-  "nav.cookies": "Cookie Policy"
+  "policy.privacyPolicy": "Privacy Policy",
+  "policy.termsOfService": "Terms of Service",
+  "policy.cookiePolicy": "Cookie Policy"
 }
