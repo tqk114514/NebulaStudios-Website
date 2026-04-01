@@ -340,7 +340,9 @@ html, body {
   position: fixed;
   bottom: 24px;
   right: 24px;
+  left: 24px;
   max-width: 360px;
+  margin-left: auto;
   background: var(--bg);
   border: 1px solid var(--line);
   padding: 24px;
