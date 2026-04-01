@@ -9,7 +9,7 @@
  * - 支持扩展新政策类型
  */
 
-import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initLanguageSwitcher, updatePageTitle, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 
 declare const marked: {
   parse: (markdown: string) => string;
@@ -49,11 +49,14 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
   if (policyCache[type]) {
     return policyCache[type];
   }
+  
+  // 检查政策类型是否存在于版本列表中
+  if (!policyVersions[type] || policyVersions[type].length === 0) {
+    return null;
+  }
+  
   try {
-    let version = '2025-12-18';
-    if (policyVersions[type] && policyVersions[type].length > 0) {
-      version = policyVersions[type][0];
-    }
+    const version = policyVersions[type][0];
     const response = await fetch(`/shared/i18n/policy/${type}/${version}.md`);
     if (!response.ok) throw new Error('Failed to load policy markdown');
     const markdown = await response.text();
@@ -87,30 +90,24 @@ function updateNavActive(policy: PolicyType): void {
 
 async function renderPolicy(type: PolicyType): Promise<void> {
   const container = document.querySelector('.policy-container');
-  if (!container) return;
+  const loadingEl = container?.querySelector('.policy-loading');
+  const contentEl = container?.querySelector('.policy-content');
+  if (!container || !loadingEl || !contentEl) return;
 
-  // 先检查缓存，如果有缓存直接渲染
+  // 先检查缓存，如果没有缓存则显示加载动画
   const hasCache = !!policyCache[type];
   if (!hasCache) {
-    container.innerHTML = `
-      <div class="policy-loading">
-        <div class="loader-spinner"></div>
-        <p>加载中...</p>
-      </div>
-    `;
+    loadingEl.classList.remove('is-hidden');
+    contentEl.classList.remove('is-visible');
   }
 
   const markdown = await loadPolicyMarkdown(type);
 
-  // 政策不存在时显示提示
   if (!markdown) {
-    container.innerHTML = `
-      <div class="policy-not-found">
-        <h1>政策未找到</h1>
-        <p>请求的政策页面不存在或正在建设中。</p>
-        <a href="#privacy" class="policy-back-link">返回隐私政策</a>
-      </div>
-    `;
+    loadingEl.classList.add('is-hidden');
+    contentEl.classList.remove('is-visible');
+    contentEl.innerHTML = `<div class="policy-not-found"><h1>404</h1></div>`;
+    contentEl.classList.add('is-visible');
     return;
   }
 
@@ -121,10 +118,14 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   html = DOMPurify.sanitize(html);
 
   // 添加淡入动画
-  container.classList.remove('fade-in');
-  void (container as HTMLElement).offsetWidth; // 触发 reflow
-  container.classList.add('fade-in');
-  container.innerHTML = html;
+  contentEl.classList.remove('fade-in');
+  void (contentEl as HTMLElement).offsetWidth; // 触发 reflow
+  contentEl.classList.add('fade-in');
+  contentEl.innerHTML = html;
+
+  // 隐藏加载动画，显示内容
+  loadingEl.classList.add('is-hidden');
+  contentEl.classList.add('is-visible');
 }
 
 // ==================== 路由处理 ====================
@@ -169,7 +170,6 @@ async function init(): Promise<void> {
       });
     });
 
-    hidePageLoader();
     updatePageTitle();
 
     initLanguageSwitcher(() => {
@@ -179,7 +179,6 @@ async function init(): Promise<void> {
 
   } catch (error) {
     console.error('[POLICY] Init failed:', (error as Error).message);
-    hidePageLoader();
   }
 }
 
