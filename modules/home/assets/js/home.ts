@@ -6,7 +6,10 @@
  * - 自定义光标
  * - 滚动显示动画
  * - Ticker 无限滚动
+ * - 语言切换
  */
+
+import { initLanguageSwitcher, waitForTranslations, updatePageTitle } from '../../../../shared/js/utils/language-switcher.ts';
 
 // ==================== 自定义光标 ====================
 
@@ -94,3 +97,11 @@ reveals.forEach((el) => observer.observe(el));
   }
   requestAnimationFrame(step);
 })();
+
+// ==================== 语言切换初始化 ====================
+
+// 等待翻译准备就绪后初始化语言切换器
+waitForTranslations().then(() => {
+  initLanguageSwitcher();
+  updatePageTitle();
+});

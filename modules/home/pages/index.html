@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;400;700;900&family=Azeret+Mono:wght@300;400&family=Newsreader:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/shared/css/general.css" />
   <link rel="stylesheet" href="/home/assets/css/home.css" />
+  <script type="module" src="/shared/js/translations.js"></script>
   <script type="module" src="/shared/js/cookie-consent.js"></script>
 </head>
 <body>
@@ -205,11 +206,11 @@
   <footer class="home-footer">
     <span class="footer-logo">Nebula Studios</span>
     <div class="footer-links">
-      <a class="footer-link" href="/policy#privacy">隐私政策</a>
-      <a class="footer-link" href="/policy#terms">服务条款</a>
-      <a class="footer-link" href="/policy#cookies">Cookie</a>
+      <a class="footer-link" href="/policy#privacy" data-i18n="policy.privacyPolicy"></a>
+      <a class="footer-link" href="/policy#terms" data-i18n="policy.termsOfService"></a>
+      <a class="footer-link" href="/policy#cookies" data-i18n="policy.cookiePolicy"></a>
     </div>
-    <span class="footer-copy">© 2026 Nebula Studios</span>
+    <div class="page-footer" data-i18n="footer.copyright"></div>
   </footer>
 
   <script type="module" src="/home/assets/js/home.js"></script>

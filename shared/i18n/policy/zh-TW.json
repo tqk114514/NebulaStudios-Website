@@ -1,5 +1,5 @@
 {
-  "nav.privacy": "隱私政策",
-  "nav.terms": "服務條款",
-  "nav.cookies": "Cookie 政策"
+  "policy.privacyPolicy": "隱私政策",
+  "policy.termsOfService": "服務條款",
+  "policy.cookiePolicy": "Cookie 政策"
 }
