@@ -102,6 +102,8 @@ reveals.forEach((el) => observer.observe(el));
 
 // 等待翻译准备就绪后初始化语言切换器
 waitForTranslations().then(() => {
-  initLanguageSwitcher();
+  initLanguageSwitcher(() => {
+    updatePageTitle();
+  });
   updatePageTitle();
 });

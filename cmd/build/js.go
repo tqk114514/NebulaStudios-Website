@@ -204,7 +204,7 @@ func buildTranslations() error {
 	log.Println("[BUILD] Building translations...")
 
 	// i18n 子目录列表
-	i18nModules := []string{"general", "account", "policy"}
+	i18nModules := []string{"general", "account", "policy", "home"}
 
 	// 读取所有语言文件
 	allTranslations := make(map[string]map[string]string)
