@@ -1,5 +1,6 @@
 {
   "policy.privacyPolicy": "隐私政策",
   "policy.termsOfService": "服务条款",
-  "policy.cookiePolicy": "Cookie 政策"
+  "policy.cookiePolicy": "Cookie 政策",
+  "policy.versionFallback": "{policy} 暂未提供 {lang} 版本。"
 }
