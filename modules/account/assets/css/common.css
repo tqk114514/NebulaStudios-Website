@@ -240,24 +240,34 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(0px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 2000;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s, visibility 0.3s;
+  transition: opacity 0.4s ease, visibility 0.4s ease, backdrop-filter 0.4s ease;
 }
 
 .modal-overlay:not(.is-hidden) {
   opacity: 1;
   visibility: visible;
+  backdrop-filter: blur(8px);
 }
 
 .modal-container {
   width: 100%;
   max-width: 400px;
   margin: 24px;
+  transform: scale(0.9);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+
+.modal-overlay:not(.is-hidden) .modal-container {
+  transform: scale(1);
+  opacity: 1;
 }
 
 .modal-content {
