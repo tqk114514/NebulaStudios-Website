@@ -29,22 +29,39 @@ var (
 
 // ====================  HTML 构建 ====================
 
+// loadInitLangScript 加载内联语言初始化脚本
+func loadInitLangScript() (string, error) {
+	scriptPath := filepath.Join(sharedDir, "js", "init-lang-inline.js")
+	data, err := os.ReadFile(scriptPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read init-lang-inline.js: %w", err)
+	}
+	return fmt.Sprintf("<script>%s</script>", string(data)), nil
+}
+
 // buildHTML 构建 HTML 文件
 func buildHTML() error {
 	log.Println("[BUILD] Building HTML...")
 
+	// 加载内联语言初始化脚本
+	initLangScript, err := loadInitLangScript()
+	if err != nil {
+		log.Printf("[BUILD] WARN: Failed to load init-lang script: %v", err)
+		initLangScript = "" // 继续构建，但不注入脚本
+	}
+
 	// 构建 Home 页面
-	if err := buildHTMLModule("modules/home/pages/*.html", "dist/home/pages", "home"); err != nil {
+	if err := buildHTMLModule("modules/home/pages/*.html", "dist/home/pages", "home", initLangScript); err != nil {
 		return err
 	}
 
 	// 构建 Account 页面
-	if err := buildHTMLModule("modules/account/pages/*.html", "dist/account/pages", "account"); err != nil {
+	if err := buildHTMLModule("modules/account/pages/*.html", "dist/account/pages", "account", initLangScript); err != nil {
 		return err
 	}
 
 	// 构建 Policy 页面
-	if err := buildHTMLModule("modules/policy/pages/*.html", "dist/policy/pages", "policy"); err != nil {
+	if err := buildHTMLModule("modules/policy/pages/*.html", "dist/policy/pages", "policy", initLangScript); err != nil {
 		return err
 	}
 
@@ -54,7 +71,7 @@ func buildHTML() error {
 	}
 
 	// 构建 shared/components
-	if err := buildHTMLModule("shared/components/*.html", "dist/shared/components", "components"); err != nil {
+	if err := buildHTMLModule("shared/components/*.html", "dist/shared/components", "components", initLangScript); err != nil {
 		return err
 	}
 
@@ -73,7 +90,7 @@ func loadHeaderComponent() (string, error) {
 }
 
 // buildHTMLModule 构建单个 HTML 模块（支持 header 组件替换）
-func buildHTMLModule(pattern, outdir, moduleName string) error {
+func buildHTMLModule(pattern, outdir, moduleName, initLangScript string) error {
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		return fmt.Errorf("failed to glob %s HTML: %w", moduleName, err)
@@ -100,7 +117,7 @@ func buildHTMLModule(pattern, outdir, moduleName string) error {
 			continue
 		}
 
-		if err := minifyHTMLFileWithHeader(src, outdir, headerContent); err != nil {
+		if err := minifyHTMLFileWithHeader(src, outdir, headerContent, initLangScript); err != nil {
 			return fmt.Errorf("failed to minify %s: %w", src, err)
 		}
 	}
@@ -163,7 +180,7 @@ func minifyHTMLFile(src, outDir string) error {
 }
 
 // minifyHTMLFileWithHeader 压缩 HTML 文件并替换 {{HEADER}} 占位符
-func minifyHTMLFileWithHeader(src, outDir, headerContent string) error {
+func minifyHTMLFileWithHeader(src, outDir, headerContent, initLangScript string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to read: %w", err)
@@ -175,6 +192,12 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent string) error {
 	content := string(data)
 	if headerContent != "" {
 		content = strings.ReplaceAll(content, "{{HEADER}}", headerContent)
+	}
+
+	// 注入内联语言初始化脚本到 <head> 中
+	if initLangScript != "" {
+		// 在 </head> 标签之前注入脚本
+		content = strings.ReplaceAll(content, "</head>", initLangScript+"</head>")
 	}
 
 	// 替换资源引用为哈希化版本
