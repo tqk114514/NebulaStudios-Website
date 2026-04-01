@@ -1,5 +1,6 @@
 {
   "policy.privacyPolicy": "Privacy Policy",
   "policy.termsOfService": "Terms of Service",
-  "policy.cookiePolicy": "Cookie Policy"
+  "policy.cookiePolicy": "Cookie Policy",
+  "policy.versionFallback": "{policy} is not available in {lang}."
 }

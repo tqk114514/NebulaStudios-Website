@@ -24,13 +24,37 @@ declare const DOMPurify: {
 // 支持的政策类型（可扩展）
 type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
+// ==================== 类型定义 ====================
+
+interface LoadPolicyResult {
+  markdown: string | null;
+  isFallback: boolean;
+}
+
 // ==================== 状态管理 ====================
 
 let currentPolicy: PolicyType = 'privacy';
 // 政策版本结构：{ policyType: { lang: [versions] } }
 let policyVersions: Record<string, Record<string, string[]>> = {};
 // 缓存键：{policyType}:{lang}
-let policyCache: Record<string, string> = {};
+let policyCache: Record<string, LoadPolicyResult> = {};
+
+// 语言显示名称映射
+const LANG_NAMES: Record<string, string> = {
+  'zh-CN': '简体中文',
+  'zh-TW': '繁體中文',
+  'en': 'English',
+  'ja': '日本語',
+  'ko': '한국어'
+};
+
+// 政策显示名称映射（从翻译获取）
+function getPolicyDisplayName(type: PolicyType): string {
+  const t = (window as any).t;
+  if (!t) return type;
+  const key = `policy.${type === 'privacy' ? 'privacyPolicy' : type === 'terms' ? 'termsOfService' : 'cookiePolicy'}`;
+  return t(key) || type;
+}
 
 // ==================== 数据加载 ====================
 
@@ -47,30 +71,89 @@ async function loadPolicyVersions(): Promise<void> {
   }
 }
 
-async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
-  const lang = (window as any).currentLanguage || 'zh-CN';
-  const cacheKey = `${type}:${lang}`;
+// 获取政策的最新版本号（所有语言中的最高版本）
+function getLatestVersion(type: PolicyType): string {
+  if (!policyVersions[type]) return '';
+  
+  let latestVersion = '';
+  for (const lang in policyVersions[type]) {
+    const versions = policyVersions[type][lang];
+    if (versions && versions.length > 0 && versions[0] > latestVersion) {
+      latestVersion = versions[0];
+    }
+  }
+  return latestVersion;
+}
+
+// 加载政策 Markdown 文件（带版本回退逻辑）
+async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
+  const currentLang = (window as any).currentLanguage || 'zh-CN';
+  const cacheKey = `${type}:${currentLang}`;
   
   if (policyCache[cacheKey]) {
     return policyCache[cacheKey];
   }
   
-  // 检查政策类型和语言是否存在于版本列表中
-  if (!policyVersions[type] || !policyVersions[type][lang] || policyVersions[type][lang].length === 0) {
-    return null;
+  if (!policyVersions[type]) {
+    return { markdown: null, isFallback: false };
   }
   
-  try {
-    const version = policyVersions[type][lang][0];
-    const response = await fetch(`/shared/i18n/policy/${type}/${lang}/${version}.md`);
-    if (!response.ok) throw new Error('Failed to load policy markdown');
-    const markdown = await response.text();
-    policyCache[cacheKey] = markdown;
-    return markdown;
-  } catch (error) {
-    console.error('[POLICY] Failed to load markdown:', (error as Error).message);
-    return null;
+  const latestVersion = getLatestVersion(type);
+  if (!latestVersion) {
+    return { markdown: null, isFallback: false };
   }
+  
+  // 尝试加载文件的辅助函数
+  const tryLoad = async (lang: string, version: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`/shared/i18n/policy/${type}/${lang}/${version}.md`);
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
+    }
+  };
+  
+  let markdown: string | null = null;
+  let isFallback = false;
+  
+  // 规则1：检查当前语言版本是否等于最新版本
+  if (policyVersions[type][currentLang] && policyVersions[type][currentLang].length > 0) {
+    const currentLangVersion = policyVersions[type][currentLang][0];
+    if (currentLangVersion === latestVersion) {
+      markdown = await tryLoad(currentLang, currentLangVersion);
+    }
+  }
+  
+  // 规则2：如果规则1失败，尝试使用 zh-CN
+  if (!markdown && policyVersions[type]['zh-CN'] && policyVersions[type]['zh-CN'].length > 0) {
+    const zhCnVersion = policyVersions[type]['zh-CN'][0];
+    markdown = await tryLoad('zh-CN', zhCnVersion);
+    if (markdown) {
+      isFallback = true;
+    }
+  }
+  
+  // 规则3：如果规则2也失败，尝试找到有最新版本的任意语言
+  if (!markdown) {
+    for (const lang in policyVersions[type]) {
+      const versions = policyVersions[type][lang];
+      if (versions && versions.length > 0 && versions[0] === latestVersion) {
+        markdown = await tryLoad(lang, latestVersion);
+        if (markdown) {
+          isFallback = true;
+          break;
+        }
+      }
+    }
+  }
+  
+  const result: LoadPolicyResult = { markdown, isFallback };
+  if (markdown) {
+    policyCache[cacheKey] = result;
+  }
+  
+  return result;
 }
 
 // ==================== 路由管理 ====================
@@ -99,8 +182,8 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   const contentEl = container?.querySelector('.policy-content');
   if (!container || !loadingEl || !contentEl) return;
 
-  const lang = (window as any).currentLanguage || 'zh-CN';
-  const cacheKey = `${type}:${lang}`;
+  const currentLang = (window as any).currentLanguage || 'zh-CN';
+  const cacheKey = `${type}:${currentLang}`;
 
   // 先检查缓存，如果没有缓存则显示加载动画
   const hasCache = !!policyCache[cacheKey];
@@ -109,9 +192,9 @@ async function renderPolicy(type: PolicyType): Promise<void> {
     contentEl.classList.remove('is-visible');
   }
 
-  const markdown = await loadPolicyMarkdown(type);
+  const result = await loadPolicyMarkdown(type);
 
-  if (!markdown) {
+  if (!result.markdown) {
     loadingEl.classList.add('is-hidden');
     contentEl.classList.remove('is-visible');
     contentEl.innerHTML = `<div class="policy-not-found"><h1>404</h1></div>`;
@@ -120,10 +203,26 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   }
 
   // 使用 marked.js 转换 Markdown 为 HTML
-  let html = marked.parse(markdown) as string;
+  let html = marked.parse(result.markdown) as string;
 
   // 使用 DOMPurify 净化 HTML
   html = DOMPurify.sanitize(html);
+
+  // 如果是回退显示，添加提示信息
+  if (result.isFallback) {
+    const t = (window as any).t;
+    if (t) {
+      const policyName = getPolicyDisplayName(type);
+      const langName = LANG_NAMES[currentLang] || currentLang;
+      const fallbackMessage = t('policy.versionFallback');
+      const formattedMessage = fallbackMessage
+        .replace('{policy}', policyName)
+        .replace('{lang}', langName);
+      
+      const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: 0.12em; color: var(--mid);">${formattedMessage}</div>`;
+      html = warningDiv + html;
+    }
+  }
 
   // 添加淡入动画
   contentEl.classList.remove('fade-in');
