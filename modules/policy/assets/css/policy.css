@@ -50,7 +50,7 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  padding: 130px 40px 60px;
+  padding: 140px 40px 60px;
   box-sizing: border-box;
 }
 
@@ -61,12 +61,10 @@
 @keyframes policy-fade-in {
   from {
     opacity: 0;
-    transform: translateY(20px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
