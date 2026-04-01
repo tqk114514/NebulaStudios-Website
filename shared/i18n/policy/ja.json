@@ -1,5 +1,6 @@
 {
   "policy.privacyPolicy": "プライバシーポリシー",
   "policy.termsOfService": "利用規約",
-  "policy.cookiePolicy": "Cookieポリシー"
+  "policy.cookiePolicy": "Cookie ポリシー",
+  "policy.versionFallback": "{policy} は {lang} 版が提供されていません。"
 }
