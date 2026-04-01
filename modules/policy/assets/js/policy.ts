@@ -219,7 +219,7 @@ async function renderPolicy(type: PolicyType): Promise<void> {
         .replace('{policy}', policyName)
         .replace('{lang}', langName);
       
-      const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: 0.12em; color: var(--mid);">${formattedMessage}</div>`;
+      const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: 0.12em; color: var(--fg);">${formattedMessage}</div>`;
       html = warningDiv + html;
     }
   }
