@@ -27,7 +27,9 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 // ==================== 状态管理 ====================
 
 let currentPolicy: PolicyType = 'privacy';
-let policyVersions: Record<string, string[]> = {};
+// 政策版本结构：{ policyType: { lang: [versions] } }
+let policyVersions: Record<string, Record<string, string[]>> = {};
+// 缓存键：{policyType}:{lang}
 let policyCache: Record<string, string> = {};
 
 // ==================== 数据加载 ====================
@@ -46,21 +48,24 @@ async function loadPolicyVersions(): Promise<void> {
 }
 
 async function loadPolicyMarkdown(type: PolicyType): Promise<string | null> {
-  if (policyCache[type]) {
-    return policyCache[type];
+  const lang = (window as any).currentLanguage || 'zh-CN';
+  const cacheKey = `${type}:${lang}`;
+  
+  if (policyCache[cacheKey]) {
+    return policyCache[cacheKey];
   }
   
-  // 检查政策类型是否存在于版本列表中
-  if (!policyVersions[type] || policyVersions[type].length === 0) {
+  // 检查政策类型和语言是否存在于版本列表中
+  if (!policyVersions[type] || !policyVersions[type][lang] || policyVersions[type][lang].length === 0) {
     return null;
   }
   
   try {
-    const version = policyVersions[type][0];
-    const response = await fetch(`/shared/i18n/policy/${type}/${version}.md`);
+    const version = policyVersions[type][lang][0];
+    const response = await fetch(`/shared/i18n/policy/${type}/${lang}/${version}.md`);
     if (!response.ok) throw new Error('Failed to load policy markdown');
     const markdown = await response.text();
-    policyCache[type] = markdown;
+    policyCache[cacheKey] = markdown;
     return markdown;
   } catch (error) {
     console.error('[POLICY] Failed to load markdown:', (error as Error).message);
@@ -94,8 +99,11 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   const contentEl = container?.querySelector('.policy-content');
   if (!container || !loadingEl || !contentEl) return;
 
+  const lang = (window as any).currentLanguage || 'zh-CN';
+  const cacheKey = `${type}:${lang}`;
+
   // 先检查缓存，如果没有缓存则显示加载动画
-  const hasCache = !!policyCache[type];
+  const hasCache = !!policyCache[cacheKey];
   if (!hasCache) {
     loadingEl.classList.remove('is-hidden');
     contentEl.classList.remove('is-visible');

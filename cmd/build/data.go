@@ -97,30 +97,37 @@ func buildPolicyMarkdown() error {
 	log.Println("[BUILD] Building policy markdown files...")
 
 	policyTypes := []string{"privacy", "terms", "cookies"}
+	supportedLanguages := []string{"zh-CN", "zh-TW", "en", "ja", "ko"}
 	var processedCount int
 
 	for _, policyType := range policyTypes {
-		srcDir := filepath.Join(sharedDir, "i18n/policy", policyType)
-		dstDir := filepath.Join(distDir, "shared/i18n/policy", policyType)
+		for _, lang := range supportedLanguages {
+			srcDir := filepath.Join(sharedDir, "i18n/policy", policyType, lang)
+			dstDir := filepath.Join(distDir, "shared/i18n/policy", policyType, lang)
 
-		if err := os.MkdirAll(dstDir, dirPerm); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
-		}
+			if err := os.MkdirAll(dstDir, dirPerm); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
+			}
 
-		entries, err := os.ReadDir(srcDir)
-		if err != nil {
-			return fmt.Errorf("failed to read directory %s: %w", srcDir, err)
-		}
-
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".md" {
-				src := filepath.Join(srcDir, entry.Name())
-				dst := filepath.Join(dstDir, entry.Name())
-
-				if err := copyFile(src, dst); err != nil {
-					return fmt.Errorf("failed to copy %s: %w", src, err)
+			entries, err := os.ReadDir(srcDir)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("failed to read directory %s: %w", srcDir, err)
 				}
-				processedCount++
+				// 目录不存在，跳过该语言
+				continue
+			}
+
+			for _, entry := range entries {
+				if !entry.IsDir() && filepath.Ext(entry.Name()) == ".md" {
+					src := filepath.Join(srcDir, entry.Name())
+					dst := filepath.Join(dstDir, entry.Name())
+
+					if err := copyFile(src, dst); err != nil {
+						return fmt.Errorf("failed to copy %s: %w", src, err)
+					}
+					processedCount++
+				}
 			}
 		}
 	}
