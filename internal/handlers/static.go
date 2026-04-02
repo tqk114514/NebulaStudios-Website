@@ -23,8 +23,10 @@
 package handlers
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,6 +38,7 @@ import (
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
+	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 )
 
@@ -286,7 +289,59 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 
 // ====================  页面服务辅助函数 ====================
 
-// serveHTML 服务 HTML 页面（Brotli 压缩）
+// acceptsBrotli 检查浏览器是否支持 Brotli 压缩
+func acceptsBrotli(c *gin.Context) bool {
+	acceptEncoding := c.GetHeader("Accept-Encoding")
+	return strings.Contains(acceptEncoding, "br")
+}
+
+// decompressBrotli 解压 Brotli 压缩数据
+func decompressBrotli(compressedData []byte) ([]byte, error) {
+	reader := brotli.NewReader(bytes.NewReader(compressedData))
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress brotli: %w", err)
+	}
+	return decompressed, nil
+}
+
+// serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
+func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
+	// 读取压缩文件内容
+	compressedData, err := os.ReadFile(brPath)
+	if err != nil {
+		utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
+		serve404Fallback(c)
+		return
+	}
+
+	if acceptsBrotli(c) {
+		// 浏览器支持 Brotli，直接发送压缩文件
+		c.Header("Content-Encoding", ContentEncodingBrotli)
+		c.Header("Content-Type", contentType)
+		if cacheControl != "" {
+			c.Header("Cache-Control", cacheControl)
+		}
+		c.Header("Vary", "Accept-Encoding")
+		c.Data(200, contentType, compressedData)
+	} else {
+		// 浏览器不支持 Brotli，解压后发送
+		decompressedData, err := decompressBrotli(compressedData)
+		if err != nil {
+			utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to decompress: %s", brPath))
+			serve404Fallback(c)
+			return
+		}
+		c.Header("Content-Type", contentType)
+		if cacheControl != "" {
+			c.Header("Cache-Control", cacheControl)
+		}
+		c.Header("Vary", "Accept-Encoding")
+		c.Data(200, contentType, decompressedData)
+	}
+}
+
+// serveHTML 服务 HTML 页面（Brotli 压缩或解压后）
 //
 // 参数：
 //   - c: Gin 上下文
@@ -303,14 +358,14 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 		return
 	}
 
-	// 设置响应头并服务文件
-	c.Header("Content-Encoding", ContentEncodingBrotli)
-	c.Header("Content-Type", ContentTypeHTML)
-	// 只在未设置 Cache-Control 时设置默认值
-	if c.Writer.Header().Get("Cache-Control") == "" {
-		c.Header("Cache-Control", CacheControlNoCache)
+	// 获取缓存控制设置
+	cacheControl := CacheControlNoCache
+	if c.Writer.Header().Get("Cache-Control") != "" {
+		cacheControl = c.Writer.Header().Get("Cache-Control")
 	}
-	c.File(brPath)
+
+	// 根据浏览器支持情况服务内容
+	serveBrotliOrDecompressed(c, brPath, ContentTypeHTML, cacheControl)
 }
 
 // serve404Fallback 服务 404 页面（回退方案）
@@ -324,9 +379,7 @@ func serve404Fallback(c *gin.Context) {
 	// 尝试服务 404 页面
 	brPath := filepath.Join(DistAccountPages, "404.html.br")
 	if _, err := os.Stat(brPath); err == nil {
-		c.Header("Content-Encoding", ContentEncodingBrotli)
-		c.Header("Content-Type", ContentTypeHTML)
-		c.File(brPath)
+		serveBrotliOrDecompressed(c, brPath, ContentTypeHTML, "")
 		return
 	}
 

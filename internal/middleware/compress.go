@@ -15,14 +15,17 @@
 package middleware
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"auth-system/internal/utils"
 
+	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 )
 
@@ -158,12 +161,8 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 			return
 		}
 
-		// 设置响应头
-		setCompressedHeaders(c, contentType, cacheControlImmutable)
-
-		// 发送文件
-		c.File(absBrPath)
-		c.Abort()
+		// 根据浏览器支持情况服务压缩或解压后的内容
+		serveBrotliOrDecompressed(c, absBrPath, contentType, cacheControlImmutable)
 	}
 }
 
@@ -213,11 +212,8 @@ func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 			return
 		}
 
-		// 设置响应头（HTML 不缓存，确保用户获取最新内容）
-		setCompressedHeaders(c, contentTypeMap[".html"], cacheControlNoCache)
-
-		// 发送文件
-		c.File(brPath)
+		// 根据浏览器支持情况服务压缩或解压后的内容
+		serveBrotliOrDecompressed(c, brPath, contentTypeMap[".html"], cacheControlNoCache)
 	}
 }
 
@@ -263,11 +259,8 @@ func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 			return
 		}
 
-		// 设置响应头
-		setCompressedHeaders(c, contentTypeMap[".html"], cacheControlNoCache)
-
-		// 发送文件
-		c.File(brPath)
+		// 根据浏览器支持情况服务压缩或解压后的内容
+		serveBrotliOrDecompressed(c, brPath, contentTypeMap[".html"], cacheControlNoCache)
 	}
 }
 
@@ -339,6 +332,22 @@ func resolveBrotliPath(basePath, reqPath string) (string, error) {
 	return brPath, nil
 }
 
+// acceptsBrotli 检查浏览器是否支持 Brotli 压缩
+func acceptsBrotli(c *gin.Context) bool {
+	acceptEncoding := c.GetHeader("Accept-Encoding")
+	return strings.Contains(acceptEncoding, "br")
+}
+
+// decompressBrotli 解压 Brotli 压缩数据
+func decompressBrotli(compressedData []byte) ([]byte, error) {
+	reader := brotli.NewReader(bytes.NewReader(compressedData))
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress brotli: %w", err)
+	}
+	return decompressed, nil
+}
+
 // setCompressedHeaders 设置压缩文件的响应头
 // 参数：
 //   - c: Gin Context
@@ -350,6 +359,41 @@ func setCompressedHeaders(c *gin.Context, contentType, cacheControl string) {
 	c.Header("Cache-Control", cacheControl)
 	// 添加 Vary 头，告诉缓存服务器根据 Accept-Encoding 区分缓存
 	c.Header("Vary", "Accept-Encoding")
+}
+
+// setUncompressedHeaders 设置未压缩文件的响应头
+func setUncompressedHeaders(c *gin.Context, contentType, cacheControl string) {
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", cacheControl)
+	c.Header("Vary", "Accept-Encoding")
+}
+
+// serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
+func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
+	// 读取压缩文件内容
+	compressedData, err := os.ReadFile(brPath)
+	if err != nil {
+		utils.LogWarn("COMPRESS", "Failed to read brotli file", fmt.Sprintf("path=%s, error=%v", brPath, err))
+		c.Next()
+		return
+	}
+
+	if acceptsBrotli(c) {
+		// 浏览器支持 Brotli，直接发送压缩文件
+		setCompressedHeaders(c, contentType, cacheControl)
+		c.Data(200, contentType, compressedData)
+	} else {
+		// 浏览器不支持 Brotli，解压后发送
+		decompressedData, err := decompressBrotli(compressedData)
+		if err != nil {
+			utils.LogError("COMPRESS", "Failed to decompress", err, fmt.Sprintf("path=%s", brPath))
+			c.String(500, "Internal server error")
+			return
+		}
+		setUncompressedHeaders(c, contentType, cacheControl)
+		c.Data(200, contentType, decompressedData)
+	}
+	c.Abort()
 }
 
 // errorHandler 返回错误处理函数
