@@ -1,5 +1,5 @@
 {
-  "policy.privacyPolicy": "隱私政策",
+  "policy.privacyPolicy": "隱私權政策",
   "policy.termsOfService": "服務條款",
   "policy.cookiePolicy": "Cookie 政策",
   "policy.versionFallback": "{policy} 暫未提供 {lang} 版本。當前版本為：{displayLang}。"
