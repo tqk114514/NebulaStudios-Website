@@ -30,6 +30,7 @@ interface LoadPolicyResult {
   markdown: string | null;
   isFallback: boolean;
   displayLang: string;
+  displayVersion: string;
 }
 
 // ==================== 状态管理 ====================
@@ -96,12 +97,12 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
   }
   
   if (!policyVersions[type]) {
-    return { markdown: null, isFallback: false, displayLang: '' };
+    return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
   }
   
   const latestVersion = getLatestVersion(type);
   if (!latestVersion) {
-    return { markdown: null, isFallback: false, displayLang: '' };
+    return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
   }
   
   // 尝试加载文件的辅助函数
@@ -118,6 +119,7 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
   let markdown: string | null = null;
   let isFallback = false;
   let displayLang = '';
+  let displayVersion = '';
   
   // 规则1：检查当前语言版本是否等于最新版本
   if (policyVersions[type][currentLang] && policyVersions[type][currentLang].length > 0) {
@@ -126,6 +128,7 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
       markdown = await tryLoad(currentLang, currentLangVersion);
       if (markdown) {
         displayLang = currentLang;
+        displayVersion = currentLangVersion;
       }
     }
   }
@@ -137,6 +140,7 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
     if (markdown) {
       isFallback = true;
       displayLang = 'zh-CN';
+      displayVersion = zhCnVersion;
     }
   }
   
@@ -149,13 +153,14 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
         if (markdown) {
           isFallback = true;
           displayLang = lang;
+          displayVersion = latestVersion;
           break;
         }
       }
     }
   }
   
-  const result: LoadPolicyResult = { markdown, isFallback, displayLang };
+  const result: LoadPolicyResult = { markdown, isFallback, displayLang, displayVersion };
   if (markdown) {
     policyCache[cacheKey] = result;
   }
@@ -225,6 +230,7 @@ async function renderPolicy(type: PolicyType): Promise<void> {
       const fallbackMessage = t('policy.versionFallback');
       const formattedMessage = fallbackMessage
         .replace('{policy}', policyName)
+        .replace('{version}', result.displayVersion)
         .replace('{lang}', langName)
         .replace('{displayLang}', displayLangName);
       
