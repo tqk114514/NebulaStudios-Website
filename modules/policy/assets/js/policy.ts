@@ -29,6 +29,7 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 interface LoadPolicyResult {
   markdown: string | null;
   isFallback: boolean;
+  displayLang: string;
 }
 
 // ==================== 状态管理 ====================
@@ -95,12 +96,12 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
   }
   
   if (!policyVersions[type]) {
-    return { markdown: null, isFallback: false };
+    return { markdown: null, isFallback: false, displayLang: '' };
   }
   
   const latestVersion = getLatestVersion(type);
   if (!latestVersion) {
-    return { markdown: null, isFallback: false };
+    return { markdown: null, isFallback: false, displayLang: '' };
   }
   
   // 尝试加载文件的辅助函数
@@ -116,12 +117,16 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
   
   let markdown: string | null = null;
   let isFallback = false;
+  let displayLang = '';
   
   // 规则1：检查当前语言版本是否等于最新版本
   if (policyVersions[type][currentLang] && policyVersions[type][currentLang].length > 0) {
     const currentLangVersion = policyVersions[type][currentLang][0];
     if (currentLangVersion === latestVersion) {
       markdown = await tryLoad(currentLang, currentLangVersion);
+      if (markdown) {
+        displayLang = currentLang;
+      }
     }
   }
   
@@ -131,6 +136,7 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
     markdown = await tryLoad('zh-CN', zhCnVersion);
     if (markdown) {
       isFallback = true;
+      displayLang = 'zh-CN';
     }
   }
   
@@ -142,13 +148,14 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
         markdown = await tryLoad(lang, latestVersion);
         if (markdown) {
           isFallback = true;
+          displayLang = lang;
           break;
         }
       }
     }
   }
   
-  const result: LoadPolicyResult = { markdown, isFallback };
+  const result: LoadPolicyResult = { markdown, isFallback, displayLang };
   if (markdown) {
     policyCache[cacheKey] = result;
   }
@@ -214,10 +221,12 @@ async function renderPolicy(type: PolicyType): Promise<void> {
     if (t) {
       const policyName = getPolicyDisplayName(type);
       const langName = LANG_NAMES[currentLang] || currentLang;
+      const displayLangName = LANG_NAMES[result.displayLang] || result.displayLang;
       const fallbackMessage = t('policy.versionFallback');
       const formattedMessage = fallbackMessage
         .replace('{policy}', policyName)
-        .replace('{lang}', langName);
+        .replace('{lang}', langName)
+        .replace('{displayLang}', displayLangName);
       
       const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: 0.12em; color: var(--fg);">${formattedMessage}</div>`;
       html = warningDiv + html;
