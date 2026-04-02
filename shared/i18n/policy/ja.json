@@ -2,5 +2,5 @@
   "policy.privacyPolicy": "プライバシーポリシー",
   "policy.termsOfService": "利用規約",
   "policy.cookiePolicy": "Cookie ポリシー",
-  "policy.versionFallback": "{policy} は {lang} 版が提供されていません。現在のバージョン：{displayLang}。"
+  "policy.versionFallback": "{policy} [{version}] は {lang} 版が提供されていません。現在のバージョン：{displayLang}"
 }
