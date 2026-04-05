@@ -93,8 +93,8 @@ const (
 	uidLength     = 16 // UID 长度
 )
 
-// UID 字符集（数字 + 小写字母）
-const uidChars = "0123456789abcdefghijklmnopqrstuvwxyz"
+// UID 字符集（Base62: A-Z, a-z, 0-9）
+const uidChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 // ====================  Token 生成 ====================
 
@@ -144,22 +144,21 @@ func GenerateCode() (string, error) {
 	return result, nil
 }
 
-// GenerateUID 生成 16 位用户唯一标识符
-// 由数字和小写字母组成，使用密码学安全的随机数
+// GenerateUID 生成 16 位用户唯一标识符（Base62 编码）
+// 字符集: A-Z, a-z, 0-9, 使用密码学安全的随机数
 //
 // 返回：
-//   - string: 16 位 UID
+//   - string: 16 位 Base62 UID
 //   - error: 随机数生成失败时返回错误
 func GenerateUID() (string, error) {
-	uid := make([]byte, uidLength)
-	charLen := big.NewInt(int64(len(uidChars)))
+	bytes := make([]byte, uidLength)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", LogError("CRYPTO", "GenerateUID", err)
+	}
 
-	for i := range uidLength {
-		n, err := rand.Int(rand.Reader, charLen)
-		if err != nil {
-			return "", LogError("CRYPTO", "GenerateUID", err)
-		}
-		uid[i] = uidChars[n.Int64()]
+	uid := make([]byte, uidLength)
+	for i, b := range bytes {
+		uid[i] = uidChars[b%byte(len(uidChars))]
 	}
 
 	result := string(uid)
