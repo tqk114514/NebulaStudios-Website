@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"auth-system/internal/middleware"
+	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
@@ -96,7 +97,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 			return
 		}
 
-		verifyURL := h.baseURL + "/account/verify?token=" + token
+		verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
 		language := h.getLanguage(req.Language)
 
 		h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")

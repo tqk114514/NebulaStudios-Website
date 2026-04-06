@@ -35,6 +35,7 @@ import (
 	"auth-system/internal/cache"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
+	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
@@ -177,7 +178,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	if !ok || userUID == "" {
 		// 未登录，重定向到登录页面，登录后返回
 		returnURL := h.buildAuthorizeURL(clientID, redirectURI, responseType, scope, state, codeChallenge, codeChallengeMethod)
-		loginURL := h.baseURL + "/account/login?return=" + url.QueryEscape(returnURL)
+		loginURL := h.baseURL + paths.PathAccountLogin + "?return=" + url.QueryEscape(returnURL)
 		c.Redirect(http.StatusFound, loginURL)
 		return
 	}
@@ -697,7 +698,7 @@ func (h *OAuthProviderHandler) redirectToErrorPage(c *gin.Context, errorCode, er
 	if errorDesc != "" {
 		params.Set("error_description", errorDesc)
 	}
-	c.Redirect(http.StatusFound, h.baseURL+"/account/oauth?"+params.Encode())
+	c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountOAuth+"?"+params.Encode())
 }
 
 // buildAuthPageURL 构建授权页面 URL
@@ -715,7 +716,7 @@ func (h *OAuthProviderHandler) buildAuthPageURL(clientID, redirectURI, scope, st
 			params.Set("code_challenge_method", codeChallengeMethod)
 		}
 	}
-	return h.baseURL + "/account/oauth?" + params.Encode()
+	return h.baseURL + paths.PathAccountOAuth + "?" + params.Encode()
 }
 
 // respondTokenError 返回 Token 端点错误响应
