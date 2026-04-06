@@ -16,6 +16,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -61,7 +62,10 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		Language     string `json:"language"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_REQUEST", fmt.Sprintf("Invalid request body: %v", err))
 		return
 	}
@@ -152,7 +156,10 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Invalid request body for VerifyToken")
 		return
 	}
@@ -198,7 +205,10 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 		Email string `json:"email"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for CheckCodeExpiry")
 		return
 	}
@@ -243,7 +253,10 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 		TokenType string `json:"tokenType"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for VerifyCode")
 		return
 	}
@@ -284,7 +297,10 @@ func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 		Email string `json:"email"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for InvalidateCode")
 		return
 	}

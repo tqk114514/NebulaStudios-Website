@@ -240,7 +240,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		VerificationCode string `json:"verificationCode"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body for Register")
 		return
 	}
@@ -371,7 +374,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		CaptchaType  string `json:"captchaType"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for Login")
 		return
 	}
