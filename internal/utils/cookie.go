@@ -39,6 +39,9 @@ const (
 
 	// LinkTokenCookieName 微软账户绑定确认 Token Cookie 名称
 	LinkTokenCookieName = "link_token"
+
+	// CSRFTokenName CSRF Token Cookie 名称
+	CSRFTokenName = "csrf_token"
 )
 
 // ====================  Cookie 配置常量 ====================
@@ -241,4 +244,73 @@ func SetLinkTokenCookieGin(c *gin.Context, token string) {
 //   - c: Gin Context
 func ClearLinkTokenCookieGin(c *gin.Context) {
 	ClearLinkTokenCookie(c.Writer)
+}
+
+// ====================  CSRF Token Cookie ====================
+
+const (
+	// CSRFTokenMaxAge CSRF Token 有效期（秒）
+	CSRFTokenMaxAge = 86400
+)
+
+// SetCSRFCookie 设置 CSRF Token Cookie
+// HttpOnly=false（前端 JS 需要读取并放入请求头/表单）
+// SameSite=Lax
+//
+// 参数：
+//   - w: HTTP 响应写入器
+//   - token: CSRF Token 值
+func SetCSRFCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     CSRFTokenName,
+		Value:    token,
+		Path:     DefaultCookiePath,
+		Domain:   DefaultCookieDomain,
+		MaxAge:   CSRFTokenMaxAge,
+		Secure:   IsSecure(),
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ClearCSRFCookie 清除 CSRF Token Cookie
+// 参数：
+//   - w: HTTP 响应写入器
+func ClearCSRFCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     CSRFTokenName,
+		Value:    "",
+		Path:     DefaultCookiePath,
+		Domain:   DefaultCookieDomain,
+		MaxAge:   -1,
+		Secure:   IsSecure(),
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// GetCSRFCookie 从 Gin Context 获取 CSRF Token Cookie
+// 参数：
+//   - c: Gin Context
+//
+// 返回：
+//   - string: Token 值（如果存在）
+//   - error: 错误（如果 Cookie 不存在或解析失败）
+func GetCSRFCookie(c *gin.Context) (string, error) {
+	return c.Cookie(CSRFTokenName)
+}
+
+// SetCSRFCookieGin 设置 CSRF Token Cookie（GIN 版本）
+// 参数：
+//   - c: Gin Context
+//   - token: CSRF Token 值
+func SetCSRFCookieGin(c *gin.Context, token string) {
+	SetCSRFCookie(c.Writer, token)
+}
+
+// ClearCSRFCookieGin 清除 CSRF Token Cookie（GIN 版本）
+// 参数：
+//   - c: Gin Context
+func ClearCSRFCookieGin(c *gin.Context) {
+	ClearCSRFCookie(c.Writer)
 }
