@@ -329,11 +329,6 @@ func isHTMLPage(path string) bool {
 		return true
 	}
 
-	// Policy SPA 页面
-	if path == "/policy" {
-		return true
-	}
-
 	return false
 }
 
