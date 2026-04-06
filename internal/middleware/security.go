@@ -264,10 +264,10 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			if err != nil || cookieToken == "" {
 				newToken, genErr := utils.GenerateSecureToken()
 				if genErr != nil {
-				utils.LogError("SECURITY", "CSRFTokenMiddleware", genErr, "Failed to generate CSRF token")
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-				return
-			}
+					utils.LogError("SECURITY", "CSRFTokenMiddleware", genErr, "Failed to generate CSRF token")
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+					return
+				}
 				utils.SetCSRFCookieGin(c, newToken)
 			}
 			c.Next()
