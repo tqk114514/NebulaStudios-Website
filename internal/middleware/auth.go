@@ -45,9 +45,6 @@ const (
 	// authHeaderPrefix Authorization Header 前缀
 	authHeaderPrefix = "Bearer "
 
-	// authHeaderPrefixLen Authorization Header 前缀长度
-	authHeaderPrefixLen = 7
-
 	// tokenCookieName Token Cookie 名称
 	tokenCookieName = utils.TokenCookieName
 )
@@ -221,10 +218,9 @@ func ExtractToken(c *gin.Context) string {
 	}
 
 	// 优先从 Authorization Header 获取
-	// 使用切片操作避免字符串分配
 	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) > authHeaderPrefixLen && authHeader[:authHeaderPrefixLen] == authHeaderPrefix {
-		return authHeader[authHeaderPrefixLen:]
+	if len(authHeader) > len(authHeaderPrefix) && authHeader[:len(authHeaderPrefix)] == authHeaderPrefix {
+		return authHeader[len(authHeaderPrefix):]
 	}
 
 	// 其次从 Cookie 获取
