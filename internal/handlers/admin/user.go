@@ -155,7 +155,10 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	// 解析请求
 	var req setRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
@@ -311,7 +314,10 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	// 解析请求
 	var req banUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
