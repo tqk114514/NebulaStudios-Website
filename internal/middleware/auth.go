@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
@@ -299,7 +300,7 @@ func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFun
 
 		// Token 有效且用户 UID 有效，重定向到 dashboard
 		if claims != nil && claims.UID != "" {
-			c.Redirect(http.StatusFound, "/account/dashboard")
+			c.Redirect(http.StatusFound, paths.PathAccountDashboard)
 			c.Abort()
 			return
 		}

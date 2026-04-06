@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"auth-system/internal/handlers/oauth"
+	"auth-system/internal/paths"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -166,7 +167,7 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 
 	if existingUser != nil && existingUser.UID != currentUserUID {
 		utils.LogWarn("OAUTH-MS", "Microsoft account already linked to another user", fmt.Sprintf("msID=%s, existingUserUID=%s, currentUserUID=%s", microsoftID, existingUser.UID, currentUserUID))
-		oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "microsoft_already_linked")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "microsoft_already_linked")
 		return
 	}
 
@@ -176,7 +177,7 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 	})
 	if err != nil {
 		utils.LogError("OAUTH-MS", "handleLinkAction", err, fmt.Sprintf("Failed to update user with Microsoft info: userUID=%s", currentUserUID))
-		oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "link_failed")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "link_failed")
 		return
 	}
 
@@ -191,7 +192,7 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 	go h.processAvatarAsync(currentUserUID, "", avatarData, avatarContentType)
 
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account linked: userUID=%s, msID=%s", currentUserUID, microsoftID))
-	oauth.RedirectWithSuccess(c, h.baseURL, "/account/dashboard", "microsoft_linked")
+	oauth.RedirectWithSuccess(c, h.baseURL, paths.PathAccountDashboard, "microsoft_linked")
 }
 
 // handleLoginAction 处理登录操作
@@ -229,9 +230,9 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 			if err != nil {
 				utils.LogError("OAUTH-MS", "handleLoginAction", err, "Failed to generate link token")
 				if returnURL != "" {
-					oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "oauth_error")
+					oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "oauth_error")
 				} else {
-					oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+					oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_error")
 				}
 				return
 			}
@@ -252,7 +253,7 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 
 			utils.LogInfo("OAUTH-MS", fmt.Sprintf("Found existing user with same email, redirecting to confirm: email=%s, userUID=%s", email, existingUser.UID))
 			utils.SetLinkTokenCookieGin(c, linkToken)
-			c.Redirect(http.StatusFound, h.baseURL+"/account/link")
+			c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountLink)
 			return
 		}
 	}
@@ -260,9 +261,9 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 	if user == nil {
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("No linked account found for Microsoft ID: %s", microsoftID))
 		if returnURL != "" {
-			oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "no_linked_account")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "no_linked_account")
 		} else {
-			oauth.RedirectWithError(c, h.baseURL, "/account/login", "no_linked_account")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "no_linked_account")
 		}
 		return
 	}
@@ -271,9 +272,9 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 	if err != nil {
 		utils.LogError("OAUTH-MS", "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		if returnURL != "" {
-			oauth.RedirectWithError(c, h.baseURL, "/account/login?return="+url.QueryEscape(returnURL), "token_error")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "token_error")
 		} else {
-			oauth.RedirectWithError(c, h.baseURL, "/account/login", "token_error")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "token_error")
 		}
 		return
 	}
@@ -283,6 +284,6 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 	if returnURL != "" {
 		c.Redirect(http.StatusFound, returnURL)
 	} else {
-		c.Redirect(http.StatusFound, h.baseURL+"/account/dashboard")
+		c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountDashboard)
 	}
 }

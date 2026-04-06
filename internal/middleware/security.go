@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"strings"
 
+	"auth-system/internal/paths"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -95,23 +96,25 @@ type SecurityConfig struct {
 }
 
 // htmlPages HTML 页面路径映射
-// 用于判断是否需要添加 CSP 头
+// 用于判断是否需要添加 CSP 头（实际页面 + 旧版别名 + 模块根路径）
 var htmlPages = map[string]bool{
-	"/":                  true,
-	"/login":             true,
-	"/register":          true,
-	"/verify":            true,
-	"/forgot":            true,
-	"/dashboard":         true,
-	"/link":              true,
-	"/account":           true,
-	"/account/login":     true,
-	"/account/register":  true,
-	"/account/verify":    true,
-	"/account/forgot":    true,
-	"/account/dashboard": true,
-	"/account/link":      true,
-	"/policy":            true,
+	paths.PathHome:             true,
+	paths.PathAdmin:            true,
+	paths.PathPolicy:           true,
+	paths.AliasPathLogin:       true,
+	paths.AliasPathRegister:    true,
+	paths.AliasPathVerify:      true,
+	paths.AliasPathForgot:      true,
+	paths.AliasPathDashboard:   true,
+	paths.AliasPathLink:        true,
+	paths.PathAccount:          true,
+	paths.PathAccountLogin:     true,
+	paths.PathAccountRegister:  true,
+	paths.PathAccountVerify:    true,
+	paths.PathAccountForgot:    true,
+	paths.PathAccountDashboard: true,
+	paths.PathAccountLink:      true,
+	paths.PathAccountOAuth:     true,
 }
 
 // ====================  公开函数 ====================
