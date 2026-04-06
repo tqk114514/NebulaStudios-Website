@@ -13,7 +13,7 @@
  * - X-Content-Type-Options: 防止 MIME 类型嗅探攻击
  * - Referrer-Policy: 控制 Referrer 信息泄露
  * - Permissions-Policy: 限制浏览器功能（地理位置、麦克风、摄像头）
- * - Content-Security-Policy: 防止 XSS 和点击劫持
+ * - Content-Security-Policy: 防止 XSS、点击劫持、数据注入
  * - Cache-Control: 控制缓存行为
  */
 
@@ -42,8 +42,18 @@ const (
 	// headerPermissionsPolicy 权限策略
 	headerPermissionsPolicy = "geolocation=(), microphone=(), camera=()"
 
-	// headerCSPFrameAncestors CSP frame-ancestors 策略
-	headerCSPFrameAncestors = "frame-ancestors 'self'"
+	// defaultCSP 默认 Content-Security-Policy
+	// 防护范围：XSS、点击劫持、数据注入、混合内容
+	defaultCSP = "default-src 'none'; " +
+		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://js.hcaptcha.com; " +
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " + // unsafe-inline: Google Fonts 回退 + HTML 属性级 style (如 display:none)
+		"font-src 'self' https://fonts.gstatic.com; " +
+		"connect-src 'self'; " +
+		"img-src 'self' data: blob:; " +
+		"frame-ancestors 'self'; " +
+		"frame-src 'none'; " +
+		"base-uri 'self'; " +
+		"form-action 'self'"
 
 	// headerCacheControlNoStore 禁止缓存
 	headerCacheControlNoStore = "no-store, no-cache, must-revalidate, private"
@@ -142,9 +152,9 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 
 		path := c.Request.URL.Path
 
-		// 只对 HTML 页面添加 CSP（防止点击劫持）
+		// 只对 HTML 页面添加 CSP（防止 XSS、点击劫持等攻击）
 		if config.EnableCSP && isHTMLPage(path) {
-			csp := headerCSPFrameAncestors
+			csp := defaultCSP
 			if config.CustomCSP != "" {
 				csp = config.CustomCSP
 			}
