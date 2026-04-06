@@ -259,7 +259,12 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			c.Request.Method == http.MethodOptions {
 
 			if err != nil || cookieToken == "" {
-				newToken, _ := utils.GenerateSecureToken()
+				newToken, genErr := utils.GenerateSecureToken()
+				if genErr != nil {
+					utils.LogError("SECURITY", "CSRFTokenMiddleware", genErr, "Failed to generate CSRF token")
+					c.Next()
+					return
+				}
 				utils.SetCSRFCookieGin(c, newToken)
 			}
 			c.Next()
