@@ -54,6 +54,20 @@ const (
 	DefaultCookieDomain = "www.nebulastudios.top"
 )
 
+// secureFlag Cookie Secure 标志（由 InitSecure 在启动时设置）
+var secureFlag bool
+
+// InitSecure 初始化 Cookie Secure 标志
+// 应在应用启动时调用一次，根据 BaseURL 判断是否为 HTTPS 环境
+func InitSecure(secure bool) {
+	secureFlag = secure
+}
+
+// IsSecure 返回当前 Cookie Secure 标志状态
+func IsSecure() bool {
+	return secureFlag
+}
+
 // ====================  Cookie 写入函数 ====================
 
 // SetTokenCookie 设置认证 Token Cookie
@@ -67,7 +81,7 @@ func SetTokenCookie(w http.ResponseWriter, token string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   DefaultCookieMaxAge,
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -84,7 +98,7 @@ func ClearTokenCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -101,7 +115,7 @@ func SetLanguageCookie(w http.ResponseWriter, language string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   int(365 * 24 * time.Hour / time.Second),
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -117,7 +131,7 @@ func ClearLanguageCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -181,7 +195,7 @@ func SetLinkTokenCookie(w http.ResponseWriter, token string) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   int(StateExpiryDuration.Seconds()),
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -197,7 +211,7 @@ func ClearLinkTokenCookie(w http.ResponseWriter) {
 		Path:     DefaultCookiePath,
 		Domain:   DefaultCookieDomain,
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   IsSecure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})

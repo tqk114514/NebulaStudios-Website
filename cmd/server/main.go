@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -89,6 +90,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("config load failed: %w", err)
 	}
+
+	utils.InitSecure(strings.HasPrefix(cfg.BaseURL, "https"))
 
 	gin.SetMode(gin.ReleaseMode)
 
