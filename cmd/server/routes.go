@@ -24,6 +24,7 @@ import (
 	"auth-system/internal/handlers"
 	"auth-system/internal/middleware"
 	adminmw "auth-system/internal/middleware/admin"
+	"auth-system/internal/paths"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -91,7 +92,7 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 	accountPages := r.Group("/account")
 	{
 		accountPages.GET("", func(c *gin.Context) {
-			c.Redirect(http.StatusFound, "/account/login")
+			c.Redirect(http.StatusFound, paths.PathAccountLogin)
 		})
 		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeLoginPage)
 		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeRegisterPage)
@@ -117,44 +118,24 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 
 // setupLegacyRedirects 配置旧路由重定向
 func setupLegacyRedirects(r *gin.Engine) {
-	redirects := map[string]string{
-		"/login":     "/account/login",
-		"/register":  "/account/register",
-		"/forgot":    "/account/forgot",
-		"/dashboard": "/account/dashboard",
-	}
-
-	for oldPath, newPath := range redirects {
+	for oldPath, newPath := range paths.LegacyRedirects {
 		r.GET(oldPath, func(c *gin.Context) {
 			c.Redirect(http.StatusMovedPermanently, newPath)
 		})
 	}
 
-	policyRedirects := map[string]string{
-		"/policy/privacy": "/policy#privacy",
-		"/policy/terms":   "/policy#terms",
-		"/policy/cookies": "/policy#cookies",
-	}
-	for old, new := range policyRedirects {
-		oldPath := old
-		newPath := new
-		r.GET(oldPath, func(c *gin.Context) {
-			c.Redirect(http.StatusMovedPermanently, newPath)
-		})
-	}
-
-	r.GET("/verify", func(c *gin.Context) {
+	r.GET(paths.AliasPathVerify, func(c *gin.Context) {
 		query := c.Request.URL.RawQuery
-		target := "/account/verify"
+		target := paths.PathAccountVerify
 		if query != "" {
 			target += "?" + query
 		}
 		c.Redirect(http.StatusMovedPermanently, target)
 	})
 
-	r.GET("/link", func(c *gin.Context) {
+	r.GET(paths.AliasPathLink, func(c *gin.Context) {
 		query := c.Request.URL.RawQuery
-		target := "/account/link"
+		target := paths.PathAccountLink
 		if query != "" {
 			target += "?" + query
 		}

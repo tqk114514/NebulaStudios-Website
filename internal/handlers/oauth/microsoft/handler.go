@@ -30,6 +30,7 @@ import (
 	"auth-system/internal/handlers/oauth"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
+	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
@@ -158,14 +159,14 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	state, err := oauth.GenerateState()
 	if err != nil {
 		utils.LogError("OAUTH-MS", "Login", err, "Failed to generate state")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_error")
 		return
 	}
 
 	codeVerifier, err := oauth.GenerateCodeVerifier()
 	if err != nil {
 		utils.LogError("OAUTH-MS", "Login", err, "Failed to generate code verifier")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_error")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_error")
 		return
 	}
 
@@ -182,20 +183,20 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		token, err := utils.GetTokenCookie(c)
 		if err != nil || token == "" {
 			utils.LogWarn("OAUTH-MS", "Link action but no token cookie", "")
-			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
 
 		claims, err := h.sessionService.VerifyToken(token)
 		if err != nil {
 			utils.LogWarn("OAUTH-MS", "Link action but invalid session", "")
-			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
 
 		if claims == nil || claims.UID == "" {
 			utils.LogWarn("OAUTH-MS", "Link action but invalid claims", "")
-			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
 
@@ -204,12 +205,12 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		user, err := h.userCache.GetOrLoad(ctx, claims.UID, h.userRepo.FindByUID)
 		if err != nil {
 			utils.LogError("OAUTH-MS", "Auth", err, fmt.Sprintf("Failed to get user for ban check: userUID=%s", claims.UID))
-			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "oauth_error")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "oauth_error")
 			return
 		}
 		if user.CheckBanned() {
 			utils.LogWarn("OAUTH-MS", "Banned user attempted to link Microsoft", fmt.Sprintf("userUID=%s", claims.UID))
-			oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "user_banned")
+			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "user_banned")
 			return
 		}
 
@@ -254,38 +255,38 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 
 	if errorParam != "" {
 		utils.LogWarn("OAUTH-MS", "Microsoft auth denied", fmt.Sprintf("error=%s, desc=%s", errorParam, errorDesc))
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_denied")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_denied")
 		return
 	}
 
 	if code == "" {
 		utils.LogWarn("OAUTH-MS", "Missing code parameter in callback", "")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if state == "" {
 		utils.LogWarn("OAUTH-MS", "Missing state parameter in callback", "")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	stateData, exists := oauth.GetAndDeleteState(state)
 	if !exists {
 		utils.LogWarn("OAUTH-MS", "Invalid state - not found in storage (may be duplicate request)", "")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if stateData == nil {
 		utils.LogError("OAUTH-MS", "Callback", fmt.Errorf("state data is nil"), "State data is nil")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if time.Now().UnixMilli()-stateData.Timestamp > oauth.StateExpiryMS {
 		utils.LogWarn("OAUTH-MS", "State expired", "")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_expired")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_expired")
 		return
 	}
 
@@ -296,20 +297,20 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 
 	if action == oauth.ActionLink && currentUserUID == "" {
 		utils.LogWarn("OAUTH-MS", "Link action but no valid userUID in state", "")
-		oauth.RedirectWithError(c, h.baseURL, "/account/dashboard", "session_expired")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "session_expired")
 		return
 	}
 
 	if codeVerifier == "" {
 		utils.LogError("OAUTH-MS", "Callback", fmt.Errorf("missing code_verifier"), "Code verifier not found in state")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_invalid")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	tokenData, err := h.exchangeCodeForToken(code, codeVerifier)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "Callback", err, "Failed to exchange code for token")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_failed")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
@@ -319,21 +320,21 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		if errMsg, ok := tokenData["error"].(string); ok {
 			utils.LogError("OAUTH-MS", "Callback", fmt.Errorf("token error: %s", errMsg), "Token error")
 		}
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_failed")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
 	msUser, err := h.getUserInfo(accessToken)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "Callback", err, "Failed to get Microsoft user info")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_failed")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
 	microsoftID, ok := msUser["id"].(string)
 	if !ok || microsoftID == "" {
 		utils.LogError("OAUTH-MS", "Callback", fmt.Errorf("no id in user info"), "No id in Microsoft user info")
-		oauth.RedirectWithError(c, h.baseURL, "/account/login", "oauth_failed")
+		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
