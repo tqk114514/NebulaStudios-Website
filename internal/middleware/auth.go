@@ -206,7 +206,8 @@ func IsAuthenticated(c *gin.Context) bool {
 // ====================  公开函数 ====================
 
 // ExtractToken 从请求中提取 Token
-// 优先从 Authorization Header 获取，其次从 Cookie 获取
+// 优先从 Cookie 获取（Cookie 比 Header 更难被 XSS 注入伪造），
+// 其次从 Authorization Header 获取（供 API 客户端使用）
 //
 // 参数：
 //   - c: Gin Context
@@ -218,19 +219,19 @@ func ExtractToken(c *gin.Context) string {
 		return ""
 	}
 
-	// 优先从 Authorization Header 获取
+	// 优先从 Cookie 获取（同源 Cookie 无法被跨域脚本篡改 Header）
+	token, err := c.Cookie(tokenCookieName)
+	if err == nil && token != "" {
+		return token
+	}
+
+	// 其次从 Authorization Header 获取（API 客户端备选方案）
 	authHeader := c.GetHeader("Authorization")
 	if len(authHeader) > len(authHeaderPrefix) && authHeader[:len(authHeaderPrefix)] == authHeaderPrefix {
 		return authHeader[len(authHeaderPrefix):]
 	}
 
-	// 其次从 Cookie 获取
-	token, err := c.Cookie(tokenCookieName)
-	if err != nil {
-		return ""
-	}
-
-	return token
+	return ""
 }
 
 // respondUnauthorized 返回 401 未授权响应
