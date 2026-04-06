@@ -20,6 +20,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -241,18 +242,20 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 获取 Cookie 中的 Token
 		cookieToken, err := c.Cookie("csrf_token")
-		
+
 		// 如果是 GET/HEAD/OPTIONS 请求，只需要确保 Cookie 存在，不存在则生成
 		if c.Request.Method == http.MethodGet ||
 			c.Request.Method == http.MethodHead ||
 			c.Request.Method == http.MethodOptions {
-			
+
 			if err != nil || cookieToken == "" {
 				// 生成新的随机 Token
 				newToken, _ := utils.GenerateSecureToken()
-				// 设置 Cookie：HttpOnly 设为 false，因为前端 JS 需要读取它并放入请求头/表单中
+				// 设置 Cookie：HttpOnly 设为 false（前端 JS 需要读取）
+				// Secure 根据 BaseURL 动态设置（HTTPS 时为 true）
 				// SameSite 设为 Lax
-				c.SetCookie("csrf_token", newToken, 86400, "/", "", false, false)
+				// Secure 根据环境动态设置（HTTPS 时为 true）
+				c.SetCookie("csrf_token", newToken, 86400, "/", "", utils.IsSecure(), false)
 			}
 			c.Next()
 			return
@@ -277,8 +280,8 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			clientToken = c.PostForm("csrf_token")
 		}
 
-		// 4. 对比两个 Token
-		if clientToken == "" || clientToken != cookieToken {
+		// 4. 使用常量时间比较防止时序攻击
+		if clientToken == "" || subtle.ConstantTimeCompare([]byte(clientToken), []byte(cookieToken)) != 1 {
 			utils.LogWarn("SECURITY", "CSRF token mismatch", fmt.Sprintf("path=%s", c.Request.URL.Path))
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,
@@ -320,7 +323,7 @@ func isHTMLPage(path string) bool {
 	if strings.HasPrefix(path, "/account/") && !strings.Contains(path, "/assets/") && !strings.Contains(path, "/data/") {
 		return true
 	}
-	
+
 	// Policy SPA 页面
 	if path == "/policy" {
 		return true
