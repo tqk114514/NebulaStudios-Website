@@ -13,6 +13,7 @@
 package qrlogin
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -47,7 +48,10 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Invalid request body for Scan")
 		return
 	}
@@ -137,7 +141,10 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Invalid request body for MobileConfirm")
 		return
 	}
@@ -232,7 +239,10 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Invalid request body for MobileCancel")
 		return
 	}

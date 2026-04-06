@@ -16,6 +16,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -58,7 +59,10 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 		Language     string `json:"language"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for SendResetCode")
 		return
 	}
@@ -134,7 +138,10 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		Password string `json:"password"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for ResetPassword")
 		return
 	}
@@ -231,7 +238,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		CaptchaType     string `json:"captchaType"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for ChangePassword")
 		return
 	}

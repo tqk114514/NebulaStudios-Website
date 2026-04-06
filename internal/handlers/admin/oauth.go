@@ -10,6 +10,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -149,7 +150,10 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 	operatorUID, _ := middleware.GetUID(c)
 
 	var req createOAuthClientRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
@@ -195,7 +199,10 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 	}
 
 	var req updateOAuthClientRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
@@ -330,7 +337,10 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 	}
 
 	var req toggleOAuthClientRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}

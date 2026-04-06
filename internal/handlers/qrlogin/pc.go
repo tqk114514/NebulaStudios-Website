@@ -14,6 +14,7 @@ package qrlogin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -117,7 +118,10 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.LogDebug("QR-LOGIN", "Invalid request body for Cancel")
 		utils.RespondSuccess(c, gin.H{})
 		return
@@ -170,7 +174,10 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		Token        string `json:"token"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Invalid request body for SetSession")
 		return
 	}

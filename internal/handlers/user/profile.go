@@ -13,6 +13,7 @@
 package user
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -48,7 +49,10 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	}
 
 	var req updateUsernameRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
@@ -113,7 +117,10 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	}
 
 	var req updateAvatarRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := utils.BindJSON(c, &req); err != nil {
+		if errors.Is(err, utils.ErrBodyTooLarge) {
+			return
+		}
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
