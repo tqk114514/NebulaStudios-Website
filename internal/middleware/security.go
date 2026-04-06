@@ -329,8 +329,11 @@ func isHTMLPage(path string) bool {
 		return true
 	}
 
-	// 检查是否为 account 模块的页面路由
-	if strings.HasPrefix(path, "/account/") && !strings.Contains(path, "/assets/") && !strings.Contains(path, "/data/") {
+	// 检查是否为 account 模块的页面路由（排除 assets/data/api 等非页面路径）
+	if strings.HasPrefix(path, "/account/") &&
+		!strings.Contains(path, "/assets/") &&
+		!strings.Contains(path, "/data/") &&
+		!strings.Contains(path, "/api/") {
 		return true
 	}
 
@@ -347,7 +350,9 @@ func isAPIPath(path string) bool {
 	if path == "" {
 		return false
 	}
-	return strings.HasPrefix(path, "/api/")
+	return strings.HasPrefix(path, "/api/") ||
+		strings.HasPrefix(path, "/admin/api/") ||
+		strings.HasPrefix(path, "/oauth/")
 }
 
 // isValidMaxAge 验证 maxAge 是否为有效的数字字符串
