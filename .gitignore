@@ -42,3 +42,5 @@ img-processor/.zig-cache/
 .eslint.config.mjs
 .stylelintrc.json
 index.js
+
+/server
