@@ -96,7 +96,8 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 
 		// 验证用户 UID 有效性
 		if claims.UID == "" {
-			utils.LogWarn("AUTH-MW", "Invalid user UID in claims", fmt.Sprintf("uid=%s", claims.UID))
+			utils.LogWarn("AUTH-MW", "Token valid but claims contains empty UID",
+				fmt.Sprintf("path=%s, ip=%s", c.Request.URL.Path, utils.GetClientIP(c)))
 			respondUnauthorized(c, "INVALID_UID")
 			return
 		}
