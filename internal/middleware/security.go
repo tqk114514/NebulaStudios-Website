@@ -241,7 +241,7 @@ func NoCacheHeaders() gin.HandlerFunc {
 func CSRFTokenMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 获取 Cookie 中的 Token
-		cookieToken, err := c.Cookie("csrf_token")
+		cookieToken, err := utils.GetCSRFCookie(c)
 
 		// 如果是 GET/HEAD/OPTIONS 请求，只需要确保 Cookie 存在，不存在则生成
 		if c.Request.Method == http.MethodGet ||
@@ -249,13 +249,8 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			c.Request.Method == http.MethodOptions {
 
 			if err != nil || cookieToken == "" {
-				// 生成新的随机 Token
 				newToken, _ := utils.GenerateSecureToken()
-				// 设置 Cookie：HttpOnly 设为 false（前端 JS 需要读取）
-				// Secure 根据 BaseURL 动态设置（HTTPS 时为 true）
-				// SameSite 设为 Lax
-				// Secure 根据环境动态设置（HTTPS 时为 true）
-				c.SetCookie("csrf_token", newToken, 86400, "/", "", utils.IsSecure(), false)
+				utils.SetCSRFCookieGin(c, newToken)
 			}
 			c.Next()
 			return
