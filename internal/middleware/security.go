@@ -46,11 +46,11 @@ const (
 	// defaultCSP 默认 Content-Security-Policy
 	// 防护范围：XSS、点击劫持、数据注入、混合内容
 	defaultCSP = "default-src 'none'; " +
-		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://js.hcaptcha.com; " +
+		"script-src 'self' https://cdn.jsdelivr.net https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://js.hcaptcha.com https://static.cloudflareinsights.com; " +
 		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " + // unsafe-inline: Google Fonts 回退 + HTML 属性级 style (如 display:none)
 		"font-src 'self' https://fonts.gstatic.com; " +
-		"connect-src 'self'; " +
-		"img-src 'self' data: blob:; " +
+		"connect-src 'self' https://static.cloudflareinsights.com; " +
+		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
 		"frame-ancestors 'self'; " +
 		"frame-src 'none'; " +
 		"base-uri 'self'; " +
