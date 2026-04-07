@@ -34,6 +34,7 @@ import (
 
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
+	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -348,24 +349,45 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 //   - basePath: 页面目录
 //   - pageName: 页面文件名（如 login.html）
 func serveHTML(c *gin.Context, basePath, pageName string) {
-	// 构建 Brotli 文件路径
 	brPath := filepath.Join(basePath, pageName+".br")
 
-	// 检查文件是否存在
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
 		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Brotli file not found: %s", brPath))
 		serve404Fallback(c)
 		return
 	}
 
-	// 获取缓存控制设置
+	compressedData, err := os.ReadFile(brPath)
+	if err != nil {
+		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
+		serve404Fallback(c)
+		return
+	}
+
+	decompressedData, err := decompressBrotli(compressedData)
+	if err != nil {
+		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to decompress: %s", brPath))
+		serve404Fallback(c)
+		return
+	}
+
+	// 替换 CSP nonce 占位符
+	html := string(decompressedData)
+	nonce := middleware.GetCSPNonce(c)
+	if nonce != "" {
+		html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
+	}
+
 	cacheControl := CacheControlNoCache
 	if c.Writer.Header().Get("Cache-Control") != "" {
 		cacheControl = c.Writer.Header().Get("Cache-Control")
 	}
 
-	// 根据浏览器支持情况服务内容
-	serveBrotliOrDecompressed(c, brPath, ContentTypeHTML, cacheControl)
+	c.Header("Content-Type", ContentTypeHTML)
+	if cacheControl != "" {
+		c.Header("Cache-Control", cacheControl)
+	}
+	c.Data(200, ContentTypeHTML, []byte(html))
 }
 
 // serve404Fallback 服务 404 页面（回退方案）
