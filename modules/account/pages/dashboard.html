@@ -305,6 +305,7 @@
     <div class="modal-container">
       <div class="modal-content change-password-modal-content">
         <h2 class="modal-title" data-i18n="dashboard.changePassword"></h2>
+        <form id="change-password-form" autocomplete="off">
         <div class="modal-body">
           <div class="form-group">
             <label for="current-password-input" class="sr-only" data-i18n="dashboard.currentPasswordPlaceholder"></label>
@@ -329,6 +330,7 @@
           
           <div id="change-password-captcha-container" class="captcha-wrapper is-hidden"></div>
         </div>
+        </form>
         <div class="modal-footer modal-footer-buttons">
           <button id="change-password-confirm-btn" class="button-primary" disabled data-i18n="modal.confirm"></button>
           <button id="change-password-cancel-btn" class="button-secondary" data-i18n="modal.cancel"></button>
@@ -364,6 +366,7 @@
     <div class="modal-container">
       <div class="modal-content delete-account-modal-content">
         <h2 class="modal-title delete-title" data-i18n="dashboard.deleteAccount"></h2>
+        <form id="delete-account-form" autocomplete="off">
         <div class="modal-body">
           <p class="delete-warning" data-i18n="dashboard.deleteAccountWarning"></p>
           
@@ -384,6 +387,7 @@
             <p id="delete-password-error" class="form-error is-hidden"></p>
           </div>
         </div>
+        </form>
         <div class="modal-footer modal-footer-buttons">
           <button id="delete-confirm-btn" class="button-primary button-danger" disabled data-i18n="dashboard.confirmDelete"></button>
           <button id="delete-cancel-btn" class="button-secondary" data-i18n="modal.cancel"></button>
