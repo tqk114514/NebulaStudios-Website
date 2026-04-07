@@ -32,6 +32,12 @@ interface AuthorizeInfoResponse {
   };
 }
 
+interface AuthorizePostResponse {
+  success: boolean;
+  errorCode?: string;
+  redirect_url?: string;
+}
+
 // Scope 图标映射
 const scopeIcons: Record<string, string> = {
   openid: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>',
@@ -126,6 +132,8 @@ function getCsrfToken(): string {
 
 /**
  * 提交授权决定
+ * 使用 fetch() 替代表单提交，规避 CSP form-action 限制
+ * fetch() 受 connect-src（而非 form-action）管控
  */
 async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
   const clientId = getUrlParameter('client_id');
@@ -136,34 +144,40 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
   const codeChallengeMethod = getUrlParameter('code_challenge_method');
   const csrfToken = getCsrfToken();
 
-  // 创建表单并提交
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = '/oauth/authorize';
+  const params = new URLSearchParams();
+  if (clientId) params.append('client_id', clientId);
+  if (redirectUri) params.append('redirect_uri', redirectUri);
+  if (scope) params.append('scope', scope);
+  if (state) params.append('state', state);
+  if (codeChallenge) params.append('code_challenge', codeChallenge);
+  if (codeChallengeMethod) params.append('code_challenge_method', codeChallengeMethod);
+  params.append('decision', decision);
+  params.append('csrf_token', csrfToken);
 
-  const fields = {
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope: scope,
-    state: state,
-    code_challenge: codeChallenge,
-    code_challenge_method: codeChallengeMethod,
-    decision: decision,
-    csrf_token: csrfToken // 将 CSRF Token 添加到表单中
-  };
+  try {
+    const response = await fetch('/oauth/authorize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: params.toString(),
+      credentials: 'include',
+    });
 
-  for (const [name, value] of Object.entries(fields)) {
-    if (value) {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
+    const result: AuthorizePostResponse = await response.json();
+
+    if (result.redirect_url) {
+      window.location.href = result.redirect_url;
+    } else if (result.errorCode) {
+      showError(result.errorCode);
+    } else {
+      showAlert(t('error.networkError'));
     }
+  } catch {
+    showAlert(t('error.networkError'));
   }
-
-  document.body.appendChild(form);
-  form.submit();
 }
 
 // ==================== 页面初始化 ====================
