@@ -20,7 +20,9 @@
 package middleware
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,18 +45,24 @@ const (
 	// headerPermissionsPolicy 权限策略
 	headerPermissionsPolicy = "geolocation=(), microphone=(), camera=()"
 
-	// defaultCSP 默认 Content-Security-Policy
+	// defaultCSP 默认 Content-Security-Policy（不含 nonce，运行时动态拼接）
 	// 防护范围：XSS、点击劫持、数据注入、混合内容
 	defaultCSP = "default-src 'none'; " +
 		"script-src 'self' https://cdn.jsdelivr.net https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://js.hcaptcha.com https://static.cloudflareinsights.com; " +
-		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " + // unsafe-inline: Google Fonts 回退 + HTML 属性级 style (如 display:none)
+		"style-src 'self' https://fonts.googleapis.com; " +
 		"font-src 'self' https://fonts.gstatic.com; " +
-		"connect-src 'self' https://static.cloudflareinsights.com; " +
+		"connect-src 'self' https://static.cloudflareinsights.com https://newassets.hcaptcha.com; " +
 		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
 		"frame-ancestors 'self'; " +
 		"frame-src 'none'; " +
 		"base-uri 'self'; " +
 		"form-action 'self'"
+
+	// cspNonceKey Gin Context 中存储 CSP nonce 的键
+	cspNonceKey = "csp-nonce"
+
+	// cspNonceLength nonce 字节长度（16 字节 → Base64 后 22 字符）
+	cspNonceLength = 16
 
 	// headerCacheControlNoStore 禁止缓存
 	headerCacheControlNoStore = "no-store, no-cache, must-revalidate, private"
@@ -157,7 +165,8 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 
 		// 只对 HTML 页面添加 CSP（防止 XSS、点击劫持等攻击）
 		if config.EnableCSP && isHTMLPage(path) {
-			csp := defaultCSP
+			nonce := GenerateCSPNonce(c)
+			csp := buildCSPWithNonce(nonce)
 			if config.CustomCSP != "" {
 				csp = config.CustomCSP
 			}
@@ -394,6 +403,58 @@ func AddSecurityHeader(c *gin.Context, key, value string) {
 		return
 	}
 	c.Header(key, value)
+}
+
+// ====================  CSP Nonce ====================
+
+// GenerateCSPNonce 生成 CSP nonce 并存入 Gin Context
+// 每个请求生成唯一 nonce，用于 script-src 和 style-src 的 nonce 指令
+//
+// 参数：
+//   - c: Gin Context
+//
+// 返回：
+//   - string: Base64 编码的 nonce 值
+func GenerateCSPNonce(c *gin.Context) string {
+	b := make([]byte, cspNonceLength)
+	if _, err := rand.Read(b); err != nil {
+		utils.LogError("SECURITY", "GenerateCSPNonce", err, "Failed to generate CSP nonce")
+		b = []byte("fallback-nonce-value")
+	}
+	nonce := base64.StdEncoding.EncodeToString(b)
+	c.Set(cspNonceKey, nonce)
+	return nonce
+}
+
+// GetCSPNonce 从 Gin Context 获取 CSP nonce
+//
+// 参数：
+//   - c: Gin Context
+//
+// 返回：
+//   - string: nonce 值，未设置时返回空字符串
+func GetCSPNonce(c *gin.Context) string {
+	nonce, _ := c.Get(cspNonceKey)
+	if n, ok := nonce.(string); ok {
+		return n
+	}
+	return ""
+}
+
+// buildCSPWithNonce 构建带 nonce 的 CSP 字符串
+// 在 defaultCSP 基础上为 script-src 和 style-src 注入 nonce 指令
+//
+// 参数：
+//   - nonce: CSP nonce 值
+//
+// 返回：
+//   - string: 完整的 CSP 字符串
+func buildCSPWithNonce(nonce string) string {
+	nonceDirective := "'nonce-" + nonce + "'"
+	csp := defaultCSP
+	csp = strings.Replace(csp, "script-src ", "script-src "+nonceDirective+" ", 1)
+	csp = strings.Replace(csp, "style-src ", "style-src "+nonceDirective+" ", 1)
+	return csp
 }
 
 // ====================  请求体大小限制 ====================
