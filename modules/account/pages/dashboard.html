@@ -306,6 +306,8 @@
       <div class="modal-content change-password-modal-content">
         <h2 class="modal-title" data-i18n="dashboard.changePassword"></h2>
         <form id="change-password-form" autocomplete="off">
+        <!-- 隐藏的 username 字段：Chrome 要求密码表单必须包含 username 字段，此弹窗无用户名输入故隐藏 -->
+        <input type="text" name="username" autocomplete="username" class="sr-only" tabindex="-1">
         <div class="modal-body">
           <div class="form-group">
             <label for="current-password-input" class="sr-only" data-i18n="dashboard.currentPasswordPlaceholder"></label>
@@ -367,6 +369,8 @@
       <div class="modal-content delete-account-modal-content">
         <h2 class="modal-title delete-title" data-i18n="dashboard.deleteAccount"></h2>
         <form id="delete-account-form" autocomplete="off">
+        <!-- 隐藏的 username 字段：Chrome 要求密码表单必须包含 username 字段，此弹窗无用户名输入故隐藏 -->
+        <input type="text" name="username" autocomplete="username" class="sr-only" tabindex="-1">
         <div class="modal-body">
           <p class="delete-warning" data-i18n="dashboard.deleteAccountWarning"></p>
           
