@@ -48,13 +48,13 @@ const (
 	// defaultCSP 默认 Content-Security-Policy（不含 nonce，运行时动态拼接）
 	// 防护范围：XSS、点击劫持、数据注入、混合内容
 	defaultCSP = "default-src 'none'; " +
-		"script-src 'self' https://cdn.jsdelivr.net https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://js.hcaptcha.com https://static.cloudflareinsights.com; " +
+		"script-src 'self' https://cdn.jsdelivr.net https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com https://static.cloudflareinsights.com; " +
 		"style-src 'self' https://fonts.googleapis.com; " +
 		"font-src 'self' https://fonts.gstatic.com; " +
-		"connect-src 'self' https://static.cloudflareinsights.com https://newassets.hcaptcha.com; " +
+		"connect-src 'self' https://static.cloudflareinsights.com https://*.hcaptcha.com https://cdn.jsdelivr.net; " +
 		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
 		"frame-ancestors 'self'; " +
-		"frame-src 'none'; " +
+		"frame-src 'self' https://challenges.cloudflare.com https://*.hcaptcha.com; " +
 		"base-uri 'self'; " +
 		"form-action 'self'"
 
