@@ -58,6 +58,28 @@ var validScopes = map[string]bool{
 	ScopeEmail:   true,
 }
 
+// acceptsJSON 判断请求是否期望 JSON 响应
+func acceptsJSON(c *gin.Context) bool {
+	accept := c.GetHeader("Accept")
+	return strings.Contains(accept, "application/json")
+}
+
+// authorizeErrorStatus 根据 OAuth 错误码返回 HTTP 状态码
+func authorizeErrorStatus(errorCode string) int {
+	switch errorCode {
+	case "invalid_request", "invalid_client", "invalid_scope":
+		return http.StatusBadRequest
+	case "unauthorized":
+		return http.StatusUnauthorized
+	case "access_denied":
+		return http.StatusForbidden
+	case "server_error":
+		return http.StatusInternalServerError
+	default:
+		return http.StatusBadRequest
+	}
+}
+
 // ====================  Handler 结构 ====================
 
 // OAuthProviderHandler OAuth Provider Handler
@@ -300,9 +322,11 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 //   - decision: 用户决定，"approve" 或 "deny"（必需）
 //
 // 响应：
-//   - 重定向到 redirect_uri（带 code 或 error）
+//   - Accept: application/json → JSON（含 redirect_url，由前端 fetch 调用）
+//   - 否则 → 302 重定向到 redirect_uri（带 code 或 error）
 func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
-	// 获取表单参数
+	isJSON := acceptsJSON(c)
+
 	clientID := c.PostForm("client_id")
 	redirectURI := c.PostForm("redirect_uri")
 	scope := c.PostForm("scope")
@@ -311,81 +335,71 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	codeChallengeMethod := c.PostForm("code_challenge_method")
 	decision := c.PostForm("decision")
 
-	// 验证必需参数
 	if clientID == "" || redirectURI == "" || scope == "" {
-		h.redirectToErrorPage(c, "invalid_request", "Missing required parameters")
+		h.respondAuthorizeError(c, isJSON, "invalid_request", "", "", "Missing required parameters")
 		return
 	}
 
-	// 验证 client_id
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id in POST", fmt.Sprintf("clientID=%s", clientID))
-		h.redirectToErrorPage(c, "invalid_client", "Invalid client_id")
+		h.respondAuthorizeError(c, isJSON, "invalid_client", "", "", "Invalid client_id")
 		return
 	}
 
-	// 验证 redirect_uri
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
 		utils.LogWarn("OAUTH-PROVIDER", "Invalid redirect_uri in POST", fmt.Sprintf("redirectURI=%s", redirectURI))
-		h.redirectToErrorPage(c, "invalid_request", "Invalid redirect_uri")
+		h.respondAuthorizeError(c, isJSON, "invalid_request", "", "", "Invalid redirect_uri")
 		return
 	}
 
-	// 检查用户登录状态
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
-		h.redirectWithError(c, redirectURI, state, "access_denied", "User not logged in")
+		h.respondAuthorizeError(c, isJSON, "access_denied", redirectURI, state, "User not logged in")
 		return
 	}
 
-	// 获取用户信息并检查封禁状态
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
 		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to get user in POST: userUID=%s", userUID))
-		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
+		h.respondAuthorizeError(c, isJSON, "server_error", redirectURI, state, "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
 		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize in POST", fmt.Sprintf("userUID=%s", userUID))
-		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
+		h.respondAuthorizeError(c, isJSON, "access_denied", redirectURI, state, "User is banned")
 		return
 	}
 
-	// 处理用户决定
 	if decision != "approve" {
 		utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("User denied authorization: userUID=%s, clientID=%s", userUID, clientID))
-		h.redirectWithError(c, redirectURI, state, "access_denied", "User denied authorization")
+		h.respondAuthorizeError(c, isJSON, "access_denied", redirectURI, state, "User denied authorization")
 		return
 	}
 
-	// 规范化 scope
 	normalizedScope := h.normalizeScope(scope)
 	if normalizedScope == "" {
-		h.redirectWithError(c, redirectURI, state, "invalid_scope", "Invalid scope")
+		h.respondAuthorizeError(c, isJSON, "invalid_scope", redirectURI, state, "Invalid scope")
 		return
 	}
 
-	// 生成授权码
 	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userUID, redirectURI, normalizedScope, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userUID=%s, clientID=%s", userUID, clientID))
-		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to create authorization code")
+		h.respondAuthorizeError(c, isJSON, "server_error", redirectURI, state, "Failed to create authorization code")
 		return
 	}
 
-	// 记录用户操作日志
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogOAuthAuthorize(c.Request.Context(), userUID, clientID, client.Name, normalizedScope); err != nil {
 			utils.LogWarn("OAUTH-PROVIDER", "Failed to log OAuth authorize", fmt.Sprintf("userUID=%s", userUID))
 		}
 	}
 
-	// 重定向到回调地址
 	redirectURL := h.buildRedirectURL(redirectURI, code, state)
 	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Authorization granted: userUID=%s, clientID=%s", userUID, clientID))
-	c.Redirect(http.StatusFound, redirectURL)
+	h.respondAuthorizeSuccess(c, isJSON, redirectURL)
 }
 
 // ====================  Token 端点 ====================
@@ -671,6 +685,51 @@ func (h *OAuthProviderHandler) buildRedirectURL(redirectURI, code, state string)
 	}
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// buildErrorRedirectURL 构建错误重定向 URL
+func (h *OAuthProviderHandler) buildErrorRedirectURL(redirectURI, state, errorCode, errorDesc string) string {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return redirectURI + "?error=" + errorCode
+	}
+
+	q := u.Query()
+	q.Set("error", errorCode)
+	q.Set("error_description", errorDesc)
+	if state != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// respondAuthorizeError 授权端点错误响应
+// JSON 模式返回 JSON，否则执行重定向
+func (h *OAuthProviderHandler) respondAuthorizeError(c *gin.Context, isJSON bool, errorCode, redirectURI, state, errorDesc string) {
+	if isJSON {
+		response := gin.H{"success": false, "errorCode": errorCode}
+		if redirectURI != "" {
+			response["redirect_url"] = h.buildErrorRedirectURL(redirectURI, state, errorCode, errorDesc)
+		}
+		c.JSON(authorizeErrorStatus(errorCode), response)
+		return
+	}
+	if redirectURI != "" {
+		h.redirectWithError(c, redirectURI, state, errorCode, errorDesc)
+		return
+	}
+	h.redirectToErrorPage(c, errorCode, errorDesc)
+}
+
+// respondAuthorizeSuccess 授权端点成功响应
+// JSON 模式返回含 redirect_url 的 JSON，否则执行 302 重定向
+func (h *OAuthProviderHandler) respondAuthorizeSuccess(c *gin.Context, isJSON bool, redirectURL string) {
+	if isJSON {
+		c.JSON(http.StatusOK, gin.H{"success": true, "redirect_url": redirectURL})
+		return
+	}
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 // redirectWithError 重定向并附带错误参数
