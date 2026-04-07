@@ -36,7 +36,7 @@ func loadInitLangScript() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read init-lang-inline.js: %w", err)
 	}
-	return fmt.Sprintf("<script>%s</script>", string(data)), nil
+	return fmt.Sprintf("<script nonce=\"{{CSP_NONCE}}\">%s</script>", string(data)), nil
 }
 
 // buildHTML 构建 HTML 文件
