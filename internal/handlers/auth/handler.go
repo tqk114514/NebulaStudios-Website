@@ -477,11 +477,13 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 
 	user, err := h.userCache.GetOrLoad(ctx, claims.UID, h.userRepo.FindByUID)
 	if err != nil {
+		h.clearAuthCookie(c)
 		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
+		h.clearAuthCookie(c)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user: userUID=%s", claims.UID))
 		return
 	}
