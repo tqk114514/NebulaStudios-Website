@@ -94,8 +94,8 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 		accountPages.GET("", func(c *gin.Context) {
 			c.Redirect(http.StatusFound, paths.PathAccountLogin)
 		})
-		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeLoginPage)
-		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.sessionService), handlers.ServeRegisterPage)
+		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.sessionService, svcs.userCache, svcs.userRepo), handlers.ServeLoginPage)
+		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.sessionService, svcs.userCache, svcs.userRepo), handlers.ServeRegisterPage)
 		accountPages.GET("/verify", handlers.ServeVerifyPage)
 		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
 		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
