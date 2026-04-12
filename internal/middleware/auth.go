@@ -6,18 +6,25 @@
  * - 从 Cookie 或 Authorization Header 提取 JWT
  * - 验证 JWT 并将用户信息挂载到 Context
  * - 提供强制认证和可选认证两种模式
+ * - 访客专用中间件（含用户存在性验证，防止数据库重置后的重定向循环）
  *
  * 依赖：
  * - SessionService: 会话验证服务
+ * - UserCache: 用户缓存
+ * - UserRepository: 用户数据访问
  */
 
 package middleware
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
+	"auth-system/internal/cache"
+	"auth-system/internal/models"
 	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -267,15 +274,21 @@ func errorMiddleware(err error) gin.HandlerFunc {
 	}
 }
 
+// guestOnlyCheckTimeout 用户存在性检查超时时间
+const guestOnlyCheckTimeout = 3 * time.Second
+
 // GuestOnlyMiddleware 仅限未登录用户访问的中间件
 // 用于登录、注册等页面，已登录用户会被重定向到 dashboard
+// 当 JWT 有效但用户在数据库中不存在时（如数据库重置），清除 Cookie 并放行
 //
 // 参数：
 //   - sessionService: 会话服务，用于验证 Token
+//   - userCache: 用户缓存
+//   - userRepo: 用户数据仓库（缓存未命中时回源）
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
+func GuestOnlyMiddleware(sessionService *services.SessionService, userCache *cache.UserCache, userRepo *models.UserRepository) gin.HandlerFunc {
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check", "")
 		return func(c *gin.Context) {
@@ -283,24 +296,68 @@ func GuestOnlyMiddleware(sessionService *services.SessionService) gin.HandlerFun
 		}
 	}
 
+	if userCache == nil || userRepo == nil {
+		utils.LogWarn("AUTH-MW", "UserCache or UserRepo is nil for guest-only, using token-only check", "")
+		return guestOnlyTokenCheck(sessionService)
+	}
+
 	return func(c *gin.Context) {
-		// 提取 Token
 		token := ExtractToken(c)
 		if token == "" {
-			// 没有 Token，是访客，继续
 			c.Next()
 			return
 		}
 
-		// 验证 Token
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			// Token 无效，视为访客，继续
 			c.Next()
 			return
 		}
 
-		// Token 有效且用户 UID 有效，重定向到 dashboard
+		if claims == nil || claims.UID == "" {
+			c.Next()
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), guestOnlyCheckTimeout)
+		defer cancel()
+
+		user, err := userCache.GetOrLoad(ctx, claims.UID, userRepo.FindByUID)
+		if err != nil || user == nil {
+			utils.LogWarn("AUTH-MW", "Valid token but user not found, clearing cookie and treating as guest",
+				fmt.Sprintf("userUID=%s", claims.UID))
+			utils.ClearTokenCookieGin(c)
+			c.Next()
+			return
+		}
+
+		c.Redirect(http.StatusFound, paths.PathAccountDashboard)
+		c.Abort()
+	}
+}
+
+// guestOnlyTokenCheck 仅基于 Token 的访客检查（降级模式）
+// 当 UserCache 或 UserRepo 不可用时使用，仅验证 JWT 有效性
+//
+// 参数：
+//   - sessionService: 会话服务，用于验证 Token
+//
+// 返回：
+//   - gin.HandlerFunc: Gin 中间件函数
+func guestOnlyTokenCheck(sessionService *services.SessionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := ExtractToken(c)
+		if token == "" {
+			c.Next()
+			return
+		}
+
+		claims, err := sessionService.VerifyToken(token)
+		if err != nil {
+			c.Next()
+			return
+		}
+
 		if claims != nil && claims.UID != "" {
 			c.Redirect(http.StatusFound, paths.PathAccountDashboard)
 			c.Abort()
