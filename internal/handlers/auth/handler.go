@@ -415,6 +415,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// NOTE(Intentional): 此处未调用 user.CheckBanned() 是有意为之的设计决策。
+	// 被封禁的用户允许正常登录，以便其在 Dashboard 页面查看封禁信息与解封时间。
+	// 封禁用户的其他所有操作已在业务层（中间件/服务层）冻结，因此无需在登录阶段拦截。
+
 	token, err := h.sessionService.GenerateToken(user.UID)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
