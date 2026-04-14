@@ -470,13 +470,13 @@ func (ws *WebSocketService) sendToClient(client *WSClient, message []byte) error
 		client.mu.Unlock()
 		return ErrWSClientNotFound
 	}
-	client.mu.Unlock()
 
 	select {
 	case client.send <- message:
+		client.mu.Unlock()
 		return nil
 	default:
-		// 发送缓冲区满，移除客户端
+		client.mu.Unlock()
 		ws.unregister(client)
 		return ErrWSSendBufferFull
 	}
