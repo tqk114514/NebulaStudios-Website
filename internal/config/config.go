@@ -86,7 +86,8 @@ type Config struct {
 	MicrosoftRedirectURI  string // OAuth 回调地址
 
 	// QR 登录加密密钥
-	QREncryptionKey string // QR 登录数据加密密钥
+	QREncryptionKey     string // QR 登录数据加密密钥
+	QRKeyDerivationSalt string // QR 密钥派生 Salt（必需，用于确定性派生 AES 密钥）
 
 	// AI 配置
 	AIAPIKey  string // AI API 密钥
@@ -211,6 +212,7 @@ func loadConfig() error {
 
 	// 加载 QR 登录加密密钥
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
+	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")
 
 	// 加载 R2 配置
 	newCfg.R2URL = getEnv("R2_URL", "")
@@ -258,6 +260,10 @@ func validateConfig(c *Config) error {
 
 	if c.JWTSecret == "" {
 		missingKeys = append(missingKeys, "JWT_SECRET")
+	}
+
+	if c.QRKeyDerivationSalt == "" {
+		missingKeys = append(missingKeys, "QR_KEY_DERIVATION_SALT")
 	}
 
 	// 可选但建议配置
