@@ -112,6 +112,7 @@ type QRLoginHandler struct {
 //   - wsService: WebSocket 服务（必需）
 //   - qrLoginRepo: 扫码登录仓库（必需）
 //   - encryptKey: AES-256-GCM 加密密钥（必需，用于加密 Token）
+//   - derivationSalt: 密钥派生 Salt（必需，来自环境变量 QR_KEY_DERIVATION_SALT）
 //
 // 返回：
 //   - *QRLoginHandler: Handler 实例
@@ -121,6 +122,7 @@ func NewQRLoginHandler(
 	wsService *services.WebSocketService,
 	qrLoginRepo *models.QRLoginRepository,
 	encryptKey string,
+	derivationSalt string,
 ) (*QRLoginHandler, error) {
 	if sessionService == nil {
 		return nil, errors.New("sessionService is required")
@@ -131,6 +133,10 @@ func NewQRLoginHandler(
 	if qrLoginRepo == nil {
 		return nil, errors.New("qrLoginRepo is required")
 	}
+	if derivationSalt == "" {
+		utils.LogError("QR-LOGIN", "NewQRLoginHandler", nil, "FATAL: QR_KEY_DERIVATION_SALT is required but not configured")
+		panic("QR login initialization failed: QR_KEY_DERIVATION_SALT is required but not configured")
+	}
 
 	isConfigured := encryptKey != ""
 	if !isConfigured {
@@ -140,7 +146,7 @@ func NewQRLoginHandler(
 	var derivedKey []byte
 	if isConfigured {
 		var err error
-		derivedKey, err = utils.DeriveKeyFromString(encryptKey)
+		derivedKey, err = utils.DeriveKeyFromString(encryptKey, derivationSalt)
 		if err != nil {
 			utils.LogError("QR-LOGIN", "NewQRLoginHandler", err, "Failed to derive encryption key")
 			return nil, fmt.Errorf("failed to derive encryption key: %w", err)

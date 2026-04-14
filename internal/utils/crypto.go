@@ -459,34 +459,33 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 
 // ====================  密钥派生 ====================
 
-// DeriveKeyFromString 使用 Argon2id 从字符串派生 32 字节密钥
-// 每次调用生成随机 salt，确保相同输入产生不同输出（防止彩虹表攻击）
+// DeriveKeyFromString 使用 Argon2id 从字符串确定性派生 32 字节密钥
+// 相同输入始终产生相同输出，确保服务器重启后密钥一致
+// Salt 由 derivationSalt + keyStr 的 SHA-256 哈希确定性生成
 //
 // 参数：
 //   - keyStr: 密钥字符串
+//   - derivationSalt: 密钥派生 Salt（来自环境变量，不可为空）
 //
 // 返回：
 //   - []byte: 32 字节的密钥
-//   - error: 密钥字符串为空时返回错误
-func DeriveKeyFromString(keyStr string) ([]byte, error) {
-	// 参数验证
+//   - error: 参数为空时返回错误
+func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
 	if keyStr == "" {
 		LogWarn("CRYPTO", "Attempted to derive key from empty string")
 		return nil, errors.New("key string cannot be empty")
 	}
-
-	// 生成随机 salt
-	salt := make([]byte, argon2SaltLen)
-	if _, err := rand.Read(salt); err != nil {
-		LogError("CRYPTO", "DeriveKeyFromString", err, "Failed to generate salt")
-		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	if derivationSalt == "" {
+		LogWarn("CRYPTO", "Attempted to derive key with empty derivation salt")
+		return nil, errors.New("derivation salt cannot be empty")
 	}
 
-	// 使用 Argon2id 派生密钥
-	// 使用固定的 key 作为额外输入，增加安全性
+	saltHash := sha256.Sum256([]byte(derivationSalt + ":" + keyStr))
+	salt := saltHash[:argon2SaltLen]
+
 	key := argon2.IDKey([]byte(keyStr), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 
-	LogDebug("CRYPTO", fmt.Sprintf("Key derived using Argon2id: salt=%s", hex.EncodeToString(salt)[:16]+"..."))
+	LogDebug("CRYPTO", fmt.Sprintf("Key derived using Argon2id (deterministic salt): salt=%s", hex.EncodeToString(salt)[:16]+"..."))
 	return key, nil
 }
 
