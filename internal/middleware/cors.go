@@ -36,7 +36,7 @@ const (
 	corsAllowMethods = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
 
 	// corsAllowHeaders 允许的请求头
-	corsAllowHeaders = "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control"
+	corsAllowHeaders = "Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-CSRF-Token"
 
 	// corsExposeHeaders 允许客户端访问的响应头
 	corsExposeHeaders = "Content-Length, Content-Type"
