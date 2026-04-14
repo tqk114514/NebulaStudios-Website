@@ -343,6 +343,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 		svcs.wsService,
 		svcs.qrLoginRepo,
 		cfg.QREncryptionKey,
+		cfg.QRKeyDerivationSalt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create qr login handler: %w", err)
