@@ -188,6 +188,10 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// NOTE(Intentional): 重置密码后未使现有 JWT 会话失效。
+	// 当前 JWT 为无状态令牌，未引入 Token 黑名单/撤销机制。
+	// 这意味着已发出的 Token 在自然过期前仍可使用。
+
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
 
 	h.userCache.Invalidate(user.UID)
@@ -304,6 +308,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Password update failed in ChangePassword: userUID=%s", userUID))
 		return
 	}
+
+	// NOTE(Intentional): 修改密码后未使现有 JWT 会话失效。
+	// 当前 JWT 为无状态令牌，未引入 Token 黑名单/撤销机制。
+	// 这意味着已发出的 Token 在自然过期前仍可使用。
 
 	h.userCache.Invalidate(userUID)
 
