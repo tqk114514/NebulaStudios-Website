@@ -3,30 +3,26 @@
  * Brotli 预压缩静态文件中间件
  *
  * 功能：
- * - 直接服务 .br 预压缩文件（dist 目录只有压缩文件）
- * - 零运行时压缩开销
+ * - 直接服务 .br 预压缩文件或原文件（构建时同时输出两份）
+ * - 零运行时压缩/解压开销
  * - 支持 JS、CSS、HTML、JSON 文件类型
  * - 自动设置正确的 Content-Type 和缓存头
  *
  * 依赖：
- * - 构建系统生成的 .br 文件
+ * - 构建系统生成的 .br 文件和原文件
  */
 
 package middleware
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"auth-system/internal/utils"
 
-	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 )
 
@@ -64,15 +60,6 @@ var contentTypeMap = map[string]string{
 	".html": "text/html; charset=utf-8",
 	".json": "application/json; charset=utf-8",
 	".md":   "text/markdown; charset=utf-8",
-}
-
-// brotliCache 缓存解压后的文件内容，避免每次请求重复读文件和解压
-var brotliCache sync.Map
-
-// brotliCacheEntry 缓存条目
-type brotliCacheEntry struct {
-	compressed   []byte
-	decompressed []byte
 }
 
 // ====================  公开函数 ====================
@@ -343,21 +330,12 @@ func resolveBrotliPath(basePath, reqPath string) (string, error) {
 }
 
 // acceptsBrotli 检查浏览器是否支持 Brotli 压缩
-func acceptsBrotli(c *gin.Context) bool {
+func AcceptsBrotli(c *gin.Context) bool {
 	acceptEncoding := c.GetHeader("Accept-Encoding")
 	return strings.Contains(acceptEncoding, "br")
 }
 
 // decompressBrotli 解压 Brotli 压缩数据
-func decompressBrotli(compressedData []byte) ([]byte, error) {
-	reader := brotli.NewReader(bytes.NewReader(compressedData))
-	decompressed, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress brotli: %w", err)
-	}
-	return decompressed, nil
-}
-
 // setCompressedHeaders 设置压缩文件的响应头
 // 参数：
 //   - c: Gin Context
@@ -378,47 +356,28 @@ func setUncompressedHeaders(c *gin.Context, contentType, cacheControl string) {
 	c.Header("Vary", "Accept-Encoding")
 }
 
-// serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
+// serveBrotliOrDecompressed 根据浏览器支持发送 .br 压缩文件或原文件
+// 构建时同时输出原文件和 .br 文件，运行时无需解压
 func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
-	if cached, ok := brotliCache.Load(brPath); ok {
-		entry := cached.(*brotliCacheEntry)
-		if acceptsBrotli(c) {
+	if AcceptsBrotli(c) {
+		if _, err := os.Stat(brPath); err == nil {
 			setCompressedHeaders(c, contentType, cacheControl)
-			c.Data(200, contentType, entry.compressed)
-		} else {
-			setUncompressedHeaders(c, contentType, cacheControl)
-			c.Data(200, contentType, entry.decompressed)
+			c.File(brPath)
+			c.Abort()
+			return
 		}
+	}
+
+	origPath := strings.TrimSuffix(brPath, ".br")
+	if _, err := os.Stat(origPath); err == nil {
+		setUncompressedHeaders(c, contentType, cacheControl)
+		c.File(origPath)
 		c.Abort()
 		return
 	}
 
-	compressedData, err := os.ReadFile(brPath)
-	if err != nil {
-		utils.LogWarn("COMPRESS", "Failed to read brotli file", fmt.Sprintf("path=%s, error=%v", brPath, err))
-		c.Next()
-		return
-	}
-
-	decompressedData, err := decompressBrotli(compressedData)
-	if err != nil {
-		utils.LogError("COMPRESS", "Failed to decompress", err, fmt.Sprintf("path=%s", brPath))
-		c.String(500, "Internal server error")
-		return
-	}
-
-	brotliCache.Store(brPath, &brotliCacheEntry{
-		compressed:   compressedData,
-		decompressed: decompressedData,
-	})
-
-	if acceptsBrotli(c) {
-		setCompressedHeaders(c, contentType, cacheControl)
-		c.Data(200, contentType, compressedData)
-	} else {
-		setUncompressedHeaders(c, contentType, cacheControl)
-		c.Data(200, contentType, decompressedData)
-	}
+	utils.LogError("COMPRESS", "serveBrotliOrDecompressed", nil, fmt.Sprintf("Neither .br nor original file found: brPath=%s", brPath))
+	c.String(500, "Internal server error")
 	c.Abort()
 }
 
