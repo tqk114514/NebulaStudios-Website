@@ -38,6 +38,7 @@ import (
 	msauth "auth-system/internal/handlers/oauth/microsoft"
 	"auth-system/internal/handlers/qrlogin"
 	userhandler "auth-system/internal/handlers/user"
+	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -412,6 +413,13 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
 	userhandler.StopDataExportCleanup()
+
+	middleware.LoginLimiter.Stop()
+	middleware.RegisterLimiter.Stop()
+	middleware.ResetPasswordLimiter.Stop()
+	middleware.OAuthTokenLimiter.Stop()
+	middleware.EmailLimiter.Stop()
+	middleware.DataExportLimiter.Stop()
 
 	if svcs.wsService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
