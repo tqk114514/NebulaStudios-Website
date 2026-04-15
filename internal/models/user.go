@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ====================  错误定义 ====================
@@ -35,6 +37,15 @@ var (
 	// ErrMicrosoftIDExists Microsoft ID 已存在
 	ErrMicrosoftIDExists = errors.New("MICROSOFT_ID_EXISTS")
 )
+
+// IsUniqueViolation 检查错误是否为指定列的唯一约束冲突
+func IsUniqueViolation(err error, column string) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return strings.Contains(pgErr.ConstraintName, column)
+	}
+	return false
+}
 
 // ====================  常量定义 ====================
 
@@ -486,16 +497,41 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		user.Role = RoleUser
 	}
 
-	// 生成 UID
+	// 生成 UID（碰撞时重试）
 	if user.UID == "" {
-		var err error
-		user.UID, err = utils.GenerateUID()
-		if err != nil {
-			return utils.LogError("USER", "Create", err, "Failed to generate UID")
+		const maxUIDRetries = 3
+		for attempt := 0; attempt < maxUIDRetries; attempt++ {
+			var err error
+			user.UID, err = utils.GenerateUID()
+			if err != nil {
+				return utils.LogError("USER", "Create", err, "Failed to generate UID")
+			}
+
+			err = pool.QueryRow(ctx, `
+				INSERT INTO users (uid, username, email, password, avatar_url, microsoft_id, role)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				RETURNING id, created_at, updated_at
+			`, user.UID, user.Username, user.Email, user.Password, user.AvatarURL, user.MicrosoftID, user.Role).Scan(
+				&user.ID, &user.CreatedAt, &user.UpdatedAt,
+			)
+
+			if err == nil {
+				utils.LogInfo("USER", fmt.Sprintf("User created: id=%d, email=%s", user.ID, user.Email))
+				return nil
+			}
+
+			if IsUniqueViolation(err, "uid") {
+				utils.LogWarn("USER", "UID collision, retrying", fmt.Sprintf("attempt=%d, uid=%s", attempt+1, user.UID))
+				user.UID = ""
+				continue
+			}
+
+			return r.handleWriteError(err, "Create", user.Email)
 		}
+		return fmt.Errorf("failed to generate unique UID after %d attempts", maxUIDRetries)
 	}
 
-	// 执行插入
+	// UID 已指定，直接插入
 	err := pool.QueryRow(ctx, `
 		INSERT INTO users (uid, username, email, password, avatar_url, microsoft_id, role)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
