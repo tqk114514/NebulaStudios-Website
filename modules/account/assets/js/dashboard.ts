@@ -1860,12 +1860,12 @@ function createLogItemElement(log: UserLogItem): HTMLElement {
   item.innerHTML = `
     <div class="user-log-icon ${iconInfo.type}">${iconInfo.svg}</div>
     <div class="user-log-content">
-      <span class="user-log-action">${actionText}</span>
+      <span class="user-log-action">${escapeHtml(actionText)}</span>
       ${details ? `<span class="user-log-details">${details}</span>` : ''}
     </div>
     <span class="user-log-time">
-      <span class="user-log-time-relative">${relativeTime}</span>
-      <span class="user-log-time-absolute">${absoluteTime}</span>
+      <span class="user-log-time-relative">${escapeHtml(relativeTime)}</span>
+      <span class="user-log-time-absolute">${escapeHtml(absoluteTime)}</span>
     </span>
   `;
 
