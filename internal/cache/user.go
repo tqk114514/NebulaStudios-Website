@@ -157,8 +157,12 @@ func (c *UserCache) Get(uid string) (*models.User, bool) {
 
 	// 检查 TTL 是否过期
 	if time.Since(entry.CachedAt) > c.ttl {
-		// 缓存已过期，删除并返回未命中
 		c.mu.Lock()
+		if current, ok := c.cache.Get(uid); ok && current != nil && time.Since(current.CachedAt) <= c.ttl {
+			c.mu.Unlock()
+			atomic.AddUint64(&c.hits, 1)
+			return current.User, true
+		}
 		c.cache.Remove(uid)
 		c.mu.Unlock()
 		atomic.AddUint64(&c.misses, 1)
