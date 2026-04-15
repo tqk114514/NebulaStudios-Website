@@ -448,13 +448,7 @@ func (ws *WebSocketService) closeClient(client *WSClient) {
 	}
 	client.closed = true
 
-	// 关闭发送通道
 	close(client.send)
-
-	// 关闭连接
-	if client.conn != nil {
-		_ = client.conn.Close()
-	}
 }
 
 // sendToClient 发送消息到客户端
@@ -533,7 +527,6 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 func (ws *WebSocketService) readPump(client *WSClient) {
 	defer func() {
 		ws.unregister(client)
-		_ = client.conn.Close()
 	}()
 
 	// 设置读取限制
