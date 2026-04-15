@@ -569,7 +569,7 @@ func ValidateCodeVerifier(codeVerifier string) bool {
 //   - bool: 是否有效
 func ValidateCodeChallenge(codeChallenge, codeChallengeMethod string) bool {
 	if codeChallenge == "" {
-		return true
+		return false
 	}
 
 	switch codeChallengeMethod {
