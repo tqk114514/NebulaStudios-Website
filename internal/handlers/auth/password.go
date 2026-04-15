@@ -108,6 +108,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 		utils.LogInfo("AUTH", fmt.Sprintf("Reset password code sent (async): email=%s", normalizedEmail))
 	} else {
+		_, _, _ = h.tokenService.CreateToken(ctx, "timing-constant-dummy@invalid", services.TokenTypeResetPassword)
 		utils.LogInfo("AUTH", fmt.Sprintf("Reset password requested for non-existent email: email=%s", normalizedEmail))
 	}
 
