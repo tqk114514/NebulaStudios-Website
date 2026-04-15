@@ -786,9 +786,20 @@ func (h *OAuthProviderHandler) respondTokenError(c *gin.Context, status int, err
 	})
 }
 
+// sanitizeHeaderValue 清除 HTTP Header 值中的危险字符，防止 Header 注入
+// 移除换行符（\r, \n）并转义双引号
+func sanitizeHeaderValue(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	value = strings.ReplaceAll(value, "\n", "")
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return value
+}
+
 // respondUserInfoError 返回 UserInfo 端点错误响应
 func (h *OAuthProviderHandler) respondUserInfoError(c *gin.Context, status int, errorCode, errorDesc string) {
-	c.Header("WWW-Authenticate", "Bearer error=\""+errorCode+"\", error_description=\""+errorDesc+"\"")
+	safeCode := sanitizeHeaderValue(errorCode)
+	safeDesc := sanitizeHeaderValue(errorDesc)
+	c.Header("WWW-Authenticate", "Bearer error=\""+safeCode+"\", error_description=\""+safeDesc+"\"")
 	c.JSON(status, gin.H{
 		"error":             errorCode,
 		"error_description": errorDesc,
