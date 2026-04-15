@@ -5,7 +5,8 @@
  * 功能：
  * - 使用 Brotli 预压缩静态文件
  * - 并行压缩提高效率
- * - 压缩后删除原文件
+ * - 保留原文件，同时输出 .br 压缩版本
+ *   运行时根据浏览器支持选择发送原文件或压缩文件，无需实时解压
  */
 
 package main
@@ -133,7 +134,7 @@ func brotliCompressDir(dir string) error {
 	return nil
 }
 
-// brotliFile 使用 Brotli 压缩单个文件，压缩后删除原文件
+// brotliFile 使用 Brotli 压缩单个文件，保留原文件
 // 返回原始大小和压缩后大小
 func brotliFile(src string) (int64, int64, error) {
 	// 读取原文件
@@ -162,7 +163,7 @@ func brotliFile(src string) (int64, int64, error) {
 	_, err = brWriter.Write(data)
 	if err != nil {
 		_ = brFile.Close()
-		_ = os.Remove(brPath) // 清理失败的文件
+		_ = os.Remove(brPath)
 		return 0, 0, fmt.Errorf("failed to write compressed data: %w", err)
 	}
 
@@ -183,11 +184,6 @@ func brotliFile(src string) (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to stat .br file: %w", err)
 	}
 	compressedSize := brInfo.Size()
-
-	// 删除原文件，只保留 .br
-	if err := os.Remove(src); err != nil {
-		log.Printf("[BUILD] WARN: Failed to remove original file %s: %v", src, err)
-	}
 
 	return originalSize, compressedSize, nil
 }

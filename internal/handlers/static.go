@@ -23,15 +23,12 @@
 package handlers
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
@@ -40,7 +37,6 @@ import (
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
-	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,15 +79,6 @@ const (
 )
 
 // ====================  Handler 结构 ====================
-
-// staticBrotliCache 缓存解压后的文件内容，避免每次请求重复读文件和解压
-var staticBrotliCache sync.Map
-
-// staticBrotliCacheEntry 缓存条目
-type staticBrotliCacheEntry struct {
-	compressed   []byte
-	decompressed []byte
-}
 
 // StaticHandler 静态文件 Handler
 // 处理静态文件服务和配置 API
@@ -300,133 +287,74 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 
 // ====================  页面服务辅助函数 ====================
 
-// acceptsBrotli 检查浏览器是否支持 Brotli 压缩
-func acceptsBrotli(c *gin.Context) bool {
-	acceptEncoding := c.GetHeader("Accept-Encoding")
-	return strings.Contains(acceptEncoding, "br")
-}
-
-// decompressBrotli 解压 Brotli 压缩数据
-func decompressBrotli(compressedData []byte) ([]byte, error) {
-	reader := brotli.NewReader(bytes.NewReader(compressedData))
-	decompressed, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress brotli: %w", err)
-	}
-	return decompressed, nil
-}
-
-// serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
+// serveBrotliOrDecompressed 根据浏览器支持发送 .br 压缩文件或原文件
+// 构建时同时输出原文件和 .br 文件，运行时无需解压
 func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
-	if cached, ok := staticBrotliCache.Load(brPath); ok {
-		entry := cached.(*staticBrotliCacheEntry)
-		if acceptsBrotli(c) {
+	if middleware.AcceptsBrotli(c) {
+		if _, err := os.Stat(brPath); err == nil {
 			c.Header("Content-Encoding", ContentEncodingBrotli)
 			c.Header("Content-Type", contentType)
 			if cacheControl != "" {
 				c.Header("Cache-Control", cacheControl)
 			}
 			c.Header("Vary", "Accept-Encoding")
-			c.Data(200, contentType, entry.compressed)
-		} else {
-			c.Header("Content-Type", contentType)
-			if cacheControl != "" {
-				c.Header("Cache-Control", cacheControl)
-			}
-			c.Header("Vary", "Accept-Encoding")
-			c.Data(200, contentType, entry.decompressed)
+			c.File(brPath)
+			return
 		}
-		return
 	}
 
-	compressedData, err := os.ReadFile(brPath)
-	if err != nil {
-		utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
-		serve404Fallback(c)
-		return
-	}
-
-	decompressedData, err := decompressBrotli(compressedData)
-	if err != nil {
-		utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to decompress: %s", brPath))
-		serve404Fallback(c)
-		return
-	}
-
-	staticBrotliCache.Store(brPath, &staticBrotliCacheEntry{
-		compressed:   compressedData,
-		decompressed: decompressedData,
-	})
-
-	if acceptsBrotli(c) {
-		c.Header("Content-Encoding", ContentEncodingBrotli)
+	origPath := strings.TrimSuffix(brPath, ".br")
+	if _, err := os.Stat(origPath); err == nil {
 		c.Header("Content-Type", contentType)
 		if cacheControl != "" {
 			c.Header("Cache-Control", cacheControl)
 		}
-		c.Header("Vary", "Accept-Encoding")
-		c.Data(200, contentType, compressedData)
-	} else {
-		c.Header("Content-Type", contentType)
-		if cacheControl != "" {
-			c.Header("Cache-Control", cacheControl)
-		}
-		c.Header("Vary", "Accept-Encoding")
-		c.Data(200, contentType, decompressedData)
+		c.File(origPath)
+		return
 	}
+
+	utils.LogError("STATIC", "serveBrotliOrDecompressed", nil, fmt.Sprintf("Neither .br nor original file found: brPath=%s", brPath))
+	serve404Fallback(c)
 }
 
-// serveHTML 服务 HTML 页面（Brotli 压缩或解压后）
+// serveHTML 服务 HTML 页面
+// 优先读取原文件（用于 CSP nonce 替换），支持 Brotli 时发送 .br 版本
 //
 // 参数：
 //   - c: Gin 上下文
 //   - basePath: 页面目录
 //   - pageName: 页面文件名（如 login.html）
 func serveHTML(c *gin.Context, basePath, pageName string) {
-	brPath := filepath.Join(basePath, pageName+".br")
-
-	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Brotli file not found: %s", brPath))
-		serve404Fallback(c)
-		return
-	}
-
-	var decompressedData []byte
-
-	if cached, ok := staticBrotliCache.Load(brPath); ok {
-		entry := cached.(*staticBrotliCacheEntry)
-		decompressedData = entry.decompressed
-	} else {
-		compressedData, err := os.ReadFile(brPath)
-		if err != nil {
-			utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
-			serve404Fallback(c)
-			return
-		}
-
-		decompressed, err := decompressBrotli(compressedData)
-		if err != nil {
-			utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to decompress: %s", brPath))
-			serve404Fallback(c)
-			return
-		}
-
-		staticBrotliCache.Store(brPath, &staticBrotliCacheEntry{
-			compressed:   compressedData,
-			decompressed: decompressed,
-		})
-		decompressedData = decompressed
-	}
-
-	html := string(decompressedData)
-	nonce := middleware.GetCSPNonce(c)
-	if nonce != "" {
-		html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
-	}
+	origPath := filepath.Join(basePath, pageName)
+	brPath := origPath + ".br"
 
 	cacheControl := CacheControlNoCache
 	if c.Writer.Header().Get("Cache-Control") != "" {
 		cacheControl = c.Writer.Header().Get("Cache-Control")
+	}
+
+	if middleware.AcceptsBrotli(c) {
+		if _, err := os.Stat(brPath); err == nil {
+			c.Header("Content-Encoding", "br")
+			c.Header("Content-Type", ContentTypeHTML)
+			c.Header("Cache-Control", cacheControl)
+			c.Header("Vary", "Accept-Encoding")
+			c.File(brPath)
+			return
+		}
+	}
+
+	htmlData, err := os.ReadFile(origPath)
+	if err != nil {
+		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("HTML file not found: %s", origPath))
+		serve404Fallback(c)
+		return
+	}
+
+	html := string(htmlData)
+	nonce := middleware.GetCSPNonce(c)
+	if nonce != "" {
+		html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
 	}
 
 	c.Header("Content-Type", ContentTypeHTML)
