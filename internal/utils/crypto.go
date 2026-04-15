@@ -151,14 +151,15 @@ func GenerateCode() (string, error) {
 //   - string: 16 位 Base62 UID
 //   - error: 随机数生成失败时返回错误
 func GenerateUID() (string, error) {
-	bytes := make([]byte, uidLength)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", LogError("CRYPTO", "GenerateUID", err)
-	}
-
 	uid := make([]byte, uidLength)
-	for i, b := range bytes {
-		uid[i] = uidChars[b%byte(len(uidChars))]
+	charsetLen := big.NewInt(int64(len(uidChars)))
+
+	for i := range uid {
+		idx, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			return "", LogError("CRYPTO", "GenerateUID", err)
+		}
+		uid[i] = uidChars[idx.Int64()]
 	}
 
 	result := string(uid)
