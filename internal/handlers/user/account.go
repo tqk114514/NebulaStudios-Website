@@ -155,6 +155,12 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 		return
 	}
 
+	if h.oauthService != nil {
+		if err := h.oauthService.RevokeUserTokens(ctx, userUID); err != nil {
+			utils.LogWarn("USER", "Failed to revoke OAuth tokens after account deletion", fmt.Sprintf("userUID=%s", userUID))
+		}
+	}
+
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogDeleteAccount(ctx, userUID); err != nil {
 			utils.LogWarn("USER", "Failed to log delete account", fmt.Sprintf("userUID=%s", userUID))
