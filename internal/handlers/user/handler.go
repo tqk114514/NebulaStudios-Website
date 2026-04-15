@@ -79,6 +79,7 @@ var (
 	dataExportCleanupOnce  sync.Once
 	dataExportTokenIndex   = make(map[string]int64)
 	dataExportTokenCounter int64
+	dataExportStopChan     chan struct{}
 )
 
 const (
@@ -192,20 +193,38 @@ func generateExportToken() (string, error) {
 }
 
 // StartDataExportCleanup 启动数据导出 Token 清理任务
-// 定期清理过期的导出 Token
+// 定期清理过期的导出 Token，可通过 StopDataExportCleanup 优雅停止
 func StartDataExportCleanup() {
 	dataExportCleanupOnce.Do(func() {
+		dataExportStopChan = make(chan struct{})
 		go func() {
 			ticker := time.NewTicker(DataExportCleanupInterval)
 			defer ticker.Stop()
 
 			utils.LogInfo("USER", "Data export cleanup task started")
 
-			for range ticker.C {
-				CleanupExpiredExportTokens()
+			for {
+				select {
+				case <-ticker.C:
+					CleanupExpiredExportTokens()
+				case <-dataExportStopChan:
+					utils.LogInfo("USER", "Data export cleanup task stopped")
+					return
+				}
 			}
 		}()
 	})
+}
+
+// StopDataExportCleanup 停止数据导出 Token 清理任务
+func StopDataExportCleanup() {
+	if dataExportStopChan != nil {
+		select {
+		case <-dataExportStopChan:
+		default:
+			close(dataExportStopChan)
+		}
+	}
 }
 
 // CleanupExpiredExportTokens 清理过期的导出 Token（应定期调用）

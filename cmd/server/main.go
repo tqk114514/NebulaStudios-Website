@@ -411,6 +411,8 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	sig := <-quit
 	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
+	userhandler.StopDataExportCleanup()
+
 	if svcs.wsService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
 		wsCtx, wsCancel := context.WithTimeout(context.Background(), 5*time.Second)
