@@ -396,8 +396,8 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 // 返回：
 //   - error: 错误信息
 func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, tokenType *string) error {
-	// 空邮箱直接返回
 	if email == "" {
+		utils.LogWarn("TOKEN", "InvalidateCodeByEmail called with empty email", "")
 		return nil
 	}
 
