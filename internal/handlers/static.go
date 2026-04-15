@@ -31,6 +31,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"auth-system/internal/cache"
 	"auth-system/internal/config"
@@ -82,6 +83,15 @@ const (
 )
 
 // ====================  Handler 结构 ====================
+
+// staticBrotliCache 缓存解压后的文件内容，避免每次请求重复读文件和解压
+var staticBrotliCache sync.Map
+
+// staticBrotliCacheEntry 缓存条目
+type staticBrotliCacheEntry struct {
+	compressed   []byte
+	decompressed []byte
+}
 
 // StaticHandler 静态文件 Handler
 // 处理静态文件服务和配置 API
@@ -308,7 +318,27 @@ func decompressBrotli(compressedData []byte) ([]byte, error) {
 
 // serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
 func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
-	// 读取压缩文件内容
+	if cached, ok := staticBrotliCache.Load(brPath); ok {
+		entry := cached.(*staticBrotliCacheEntry)
+		if acceptsBrotli(c) {
+			c.Header("Content-Encoding", ContentEncodingBrotli)
+			c.Header("Content-Type", contentType)
+			if cacheControl != "" {
+				c.Header("Cache-Control", cacheControl)
+			}
+			c.Header("Vary", "Accept-Encoding")
+			c.Data(200, contentType, entry.compressed)
+		} else {
+			c.Header("Content-Type", contentType)
+			if cacheControl != "" {
+				c.Header("Cache-Control", cacheControl)
+			}
+			c.Header("Vary", "Accept-Encoding")
+			c.Data(200, contentType, entry.decompressed)
+		}
+		return
+	}
+
 	compressedData, err := os.ReadFile(brPath)
 	if err != nil {
 		utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
@@ -316,8 +346,19 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 		return
 	}
 
+	decompressedData, err := decompressBrotli(compressedData)
+	if err != nil {
+		utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to decompress: %s", brPath))
+		serve404Fallback(c)
+		return
+	}
+
+	staticBrotliCache.Store(brPath, &staticBrotliCacheEntry{
+		compressed:   compressedData,
+		decompressed: decompressedData,
+	})
+
 	if acceptsBrotli(c) {
-		// 浏览器支持 Brotli，直接发送压缩文件
 		c.Header("Content-Encoding", ContentEncodingBrotli)
 		c.Header("Content-Type", contentType)
 		if cacheControl != "" {
@@ -326,13 +367,6 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 		c.Header("Vary", "Accept-Encoding")
 		c.Data(200, contentType, compressedData)
 	} else {
-		// 浏览器不支持 Brotli，解压后发送
-		decompressedData, err := decompressBrotli(compressedData)
-		if err != nil {
-			utils.LogError("STATIC", "serveBrotliOrDecompressed", err, fmt.Sprintf("Failed to decompress: %s", brPath))
-			serve404Fallback(c)
-			return
-		}
 		c.Header("Content-Type", contentType)
 		if cacheControl != "" {
 			c.Header("Cache-Control", cacheControl)
@@ -357,21 +391,33 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 		return
 	}
 
-	compressedData, err := os.ReadFile(brPath)
-	if err != nil {
-		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
-		serve404Fallback(c)
-		return
+	var decompressedData []byte
+
+	if cached, ok := staticBrotliCache.Load(brPath); ok {
+		entry := cached.(*staticBrotliCacheEntry)
+		decompressedData = entry.decompressed
+	} else {
+		compressedData, err := os.ReadFile(brPath)
+		if err != nil {
+			utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to read brotli file: %s", brPath))
+			serve404Fallback(c)
+			return
+		}
+
+		decompressed, err := decompressBrotli(compressedData)
+		if err != nil {
+			utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to decompress: %s", brPath))
+			serve404Fallback(c)
+			return
+		}
+
+		staticBrotliCache.Store(brPath, &staticBrotliCacheEntry{
+			compressed:   compressedData,
+			decompressed: decompressed,
+		})
+		decompressedData = decompressed
 	}
 
-	decompressedData, err := decompressBrotli(compressedData)
-	if err != nil {
-		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("Failed to decompress: %s", brPath))
-		serve404Fallback(c)
-		return
-	}
-
-	// 替换 CSP nonce 占位符
 	html := string(decompressedData)
 	nonce := middleware.GetCSPNonce(c)
 	if nonce != "" {

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"auth-system/internal/utils"
 
@@ -63,6 +64,15 @@ var contentTypeMap = map[string]string{
 	".html": "text/html; charset=utf-8",
 	".json": "application/json; charset=utf-8",
 	".md":   "text/markdown; charset=utf-8",
+}
+
+// brotliCache 缓存解压后的文件内容，避免每次请求重复读文件和解压
+var brotliCache sync.Map
+
+// brotliCacheEntry 缓存条目
+type brotliCacheEntry struct {
+	compressed   []byte
+	decompressed []byte
 }
 
 // ====================  公开函数 ====================
@@ -370,7 +380,19 @@ func setUncompressedHeaders(c *gin.Context, contentType, cacheControl string) {
 
 // serveBrotliOrDecompressed 根据浏览器支持情况服务压缩或解压后的内容
 func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
-	// 读取压缩文件内容
+	if cached, ok := brotliCache.Load(brPath); ok {
+		entry := cached.(*brotliCacheEntry)
+		if acceptsBrotli(c) {
+			setCompressedHeaders(c, contentType, cacheControl)
+			c.Data(200, contentType, entry.compressed)
+		} else {
+			setUncompressedHeaders(c, contentType, cacheControl)
+			c.Data(200, contentType, entry.decompressed)
+		}
+		c.Abort()
+		return
+	}
+
 	compressedData, err := os.ReadFile(brPath)
 	if err != nil {
 		utils.LogWarn("COMPRESS", "Failed to read brotli file", fmt.Sprintf("path=%s, error=%v", brPath, err))
@@ -378,18 +400,22 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 		return
 	}
 
+	decompressedData, err := decompressBrotli(compressedData)
+	if err != nil {
+		utils.LogError("COMPRESS", "Failed to decompress", err, fmt.Sprintf("path=%s", brPath))
+		c.String(500, "Internal server error")
+		return
+	}
+
+	brotliCache.Store(brPath, &brotliCacheEntry{
+		compressed:   compressedData,
+		decompressed: decompressedData,
+	})
+
 	if acceptsBrotli(c) {
-		// 浏览器支持 Brotli，直接发送压缩文件
 		setCompressedHeaders(c, contentType, cacheControl)
 		c.Data(200, contentType, compressedData)
 	} else {
-		// 浏览器不支持 Brotli，解压后发送
-		decompressedData, err := decompressBrotli(compressedData)
-		if err != nil {
-			utils.LogError("COMPRESS", "Failed to decompress", err, fmt.Sprintf("path=%s", brPath))
-			c.String(500, "Internal server error")
-			return
-		}
 		setUncompressedHeaders(c, contentType, cacheControl)
 		c.Data(200, contentType, decompressedData)
 	}
