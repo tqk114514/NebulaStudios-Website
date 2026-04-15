@@ -43,7 +43,8 @@ export function setCookie(name: string, value: unknown, seconds: number, require
     const date = new Date();
     date.setTime(date.getTime() + ((seconds || 0) * 1000));
     const expires = 'expires=' + date.toUTCString();
-    document.cookie = name + '=' + (value ?? '') + ';' + expires + ';path=/';
+    const encodedValue = encodeURIComponent(String(value ?? ''));
+    document.cookie = name + '=' + encodedValue + ';' + expires + ';path=/;SameSite=Lax;Secure';
   } catch (error) {
     console.error('[COOKIE] ERROR: Failed to set cookie:', (error as Error).message);
   }
@@ -66,7 +67,7 @@ export function getCookie(name: string): string | null {
     for (let i = 0; i < ca.length; i++) {
       let c = ca[i];
       while (c.charAt(0) === ' ') {c = c.substring(1, c.length);}
-      if (c.indexOf(nameEQ) === 0) {return c.substring(nameEQ.length, c.length);}
+      if (c.indexOf(nameEQ) === 0) {return decodeURIComponent(c.substring(nameEQ.length, c.length));}
     }
     return null;
   } catch (error) {
@@ -86,7 +87,7 @@ export function deleteCookie(name: string): void {
   }
 
   try {
-    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
+    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;SameSite=Lax;Secure';
   } catch (error) {
     console.error('[COOKIE] ERROR: Failed to delete cookie:', (error as Error).message);
   }
