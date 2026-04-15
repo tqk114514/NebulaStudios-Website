@@ -89,7 +89,10 @@ type CodeResult struct {
 }
 
 // TokenService Token 服务
-type TokenService struct{}
+type TokenService struct {
+	tokenRepo *models.TokenRepository
+	codeRepo  *models.CodeRepository
+}
 
 // ====================  构造函数 ====================
 
@@ -98,7 +101,10 @@ type TokenService struct{}
 //   - *TokenService: Token 服务实例
 func NewTokenService() *TokenService {
 	utils.LogInfo("TOKEN", "Token service initialized")
-	return &TokenService{}
+	return &TokenService{
+		tokenRepo: models.NewTokenRepository(),
+		codeRepo:  models.NewCodeRepository(),
+	}
 }
 
 // ====================  公开方法 ====================
@@ -145,8 +151,7 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 	}
 
 	// 保存到数据库
-	repo := models.NewTokenRepository()
-	if err := repo.Create(ctx, token); err != nil {
+	if err := s.tokenRepo.Create(ctx, token); err != nil {
 		return "", 0, err
 	}
 
@@ -167,11 +172,8 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 		return nil, models.ErrInvalidToken
 	}
 
-	tokenRepo := models.NewTokenRepository()
-	codeRepo := models.NewCodeRepository()
-
 	// 查询 Token
-	token, err := tokenRepo.FindByToken(ctx, tokenStr)
+	token, err := s.tokenRepo.FindByToken(ctx, tokenStr)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
 			utils.LogDebug("TOKEN", "Token not found", tokenStr)
@@ -182,7 +184,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 
 	// 检查过期
 	if token.IsExpired() {
-		tokenRepo.DeleteByToken(ctx, tokenStr)
+		s.tokenRepo.DeleteByToken(ctx, tokenStr)
 		return nil, models.ErrTokenExpired
 	}
 
@@ -202,7 +204,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 		}
 
 		// 更新 Token 的验证码
-		tokenRepo.UpdateCode(ctx, tokenStr, codeStr)
+		s.tokenRepo.UpdateCode(ctx, tokenStr, codeStr)
 
 		// 创建验证码记录
 		code := &models.Code{
@@ -212,13 +214,13 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 			CreatedAt:  now,
 			ExpireTime: now + int64(tokenExpiry.Milliseconds()),
 		}
-		codeRepo.Create(ctx, code)
+		s.codeRepo.Create(ctx, code)
 	} else {
 		codeStr = *token.Code
 	}
 
 	// 标记 Token 已使用
-	tokenRepo.MarkUsed(ctx, tokenStr)
+	s.tokenRepo.MarkUsed(ctx, tokenStr)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Token validated: email=%s, type=%s", token.Email, token.Type))
 
@@ -249,10 +251,9 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	code, err := repo.FindByCode(ctx, codeStr)
+	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
 			utils.LogDebug("TOKEN", "Code not found", codeStr)
@@ -275,7 +276,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 
 	// 检查过期
 	if code.IsExpired() {
-		repo.DeleteByCode(ctx, codeStr)
+		s.codeRepo.DeleteByCode(ctx, codeStr)
 		return nil, models.ErrCodeExpired
 	}
 
@@ -287,14 +288,14 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 	// 检查尝试次数
 	newAttempts := code.Attempts + 1
 	if newAttempts > maxCodeAttempts {
-		repo.DeleteByCode(ctx, codeStr)
+		s.codeRepo.DeleteByCode(ctx, codeStr)
 		utils.LogWarn("TOKEN", fmt.Sprintf("Too many attempts for code: email=%s", normalizedEmail))
 		return nil, models.ErrTooManyAttempts
 	}
 
 	// 更新验证状态
 	now := time.Now().UnixMilli()
-	repo.UpdateVerification(ctx, codeStr, newAttempts, now)
+	s.codeRepo.UpdateVerification(ctx, codeStr, newAttempts, now)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, code.Type, newAttempts))
 
@@ -320,10 +321,9 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	code, err := repo.FindByCode(ctx, codeStr)
+	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return false, models.ErrInvalidCode
 	}
@@ -335,7 +335,7 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string
 
 	// 检查过期
 	if code.IsExpired() {
-		repo.DeleteByCode(ctx, codeStr)
+		s.codeRepo.DeleteByCode(ctx, codeStr)
 		return false, models.ErrCodeExpired
 	}
 
@@ -365,10 +365,9 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	code, err := repo.FindByCode(ctx, codeStr)
+	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return models.ErrInvalidCode
 	}
@@ -382,7 +381,7 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 	}
 
 	// 删除验证码
-	repo.DeleteByCode(ctx, codeStr)
+	s.codeRepo.DeleteByCode(ctx, codeStr)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Code used and removed: email=%s", normalizedEmail))
 	return nil
@@ -403,9 +402,7 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
-
-	return repo.DeleteByEmail(ctx, normalizedEmail, tokenType)
+	return s.codeRepo.DeleteByEmail(ctx, normalizedEmail, tokenType)
 }
 
 // GetCodeExpiry 获取验证码过期时间
@@ -427,10 +424,9 @@ func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string)
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
 
 	// 查询验证码
-	code, err := repo.FindByCode(ctx, codeStr)
+	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return 0, models.ErrInvalidCode
 	}
@@ -459,10 +455,9 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 	}
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	repo := models.NewCodeRepository()
 
 	now := time.Now().UnixMilli()
-	expireTime, err := repo.GetLatestExpiryByEmail(ctx, normalizedEmail, now)
+	expireTime, err := s.codeRepo.GetLatestExpiryByEmail(ctx, normalizedEmail, now)
 	if err != nil {
 		return true, 0, err
 	}
@@ -482,9 +477,6 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 func (s *TokenService) CleanupExpired(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	tokenRepo := models.NewTokenRepository()
-	codeRepo := models.NewCodeRepository()
-
 	// 清理过期 Token（异步）
 	wg.Go(func() {
 		defer func() {
@@ -494,7 +486,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}()
 
 		now := time.Now().UnixMilli()
-		count, err := tokenRepo.DeleteExpired(ctx, now)
+		count, err := s.tokenRepo.DeleteExpired(ctx, now)
 		if err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup expired tokens", err)
 			return
@@ -513,7 +505,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}()
 
 		now := time.Now().UnixMilli()
-		count, err := codeRepo.DeleteExpired(ctx, now)
+		count, err := s.codeRepo.DeleteExpired(ctx, now)
 		if err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup expired codes", err)
 			return
