@@ -283,9 +283,18 @@ export async function initCaptcha(
 
   container.classList.remove('is-hidden');
 
-  const ready = await waitForAPI();
+  let ready = await waitForAPI();
   if (!ready) {
-    console.error('[CAPTCHA] ERROR: API not ready');
+    console.warn('[CAPTCHA] WARN: API not ready, retrying SDK load...');
+    try {
+      await loadSDK(captchaType);
+      ready = await waitForAPI(8000);
+    } catch (err) {
+      console.error('[CAPTCHA] ERROR: SDK reload failed:', (err as Error).message);
+    }
+  }
+  if (!ready) {
+    console.error('[CAPTCHA] ERROR: API not ready after retry');
     if (onError) {onError();}
     return null;
   }
