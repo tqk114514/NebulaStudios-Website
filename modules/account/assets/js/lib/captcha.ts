@@ -119,7 +119,9 @@ export async function loadCaptchaConfig(): Promise<boolean> {
     captchaType = selected.type;
     siteKey = selected.siteKey;
 
-    await loadSDK(captchaType);
+    loadSDK(captchaType).catch((err) => {
+      console.warn('[CAPTCHA] WARN: SDK background load failed:', (err as Error).message);
+    });
 
     return true;
   } catch (error) {
@@ -144,9 +146,14 @@ function loadSDK(type: CaptchaType): Promise<void> {
       return;
     }
 
-    const existingScript = document.querySelector(`script[src^="${url.split('?')[0]}"]`);
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src^="${url.split('?')[0]}"]`);
     if (existingScript) {
-      resolve();
+      if (existingScript.dataset.loaded === 'true') {
+        resolve();
+        return;
+      }
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error(`Failed to load SDK: ${type}`)), { once: true });
       return;
     }
 
@@ -155,6 +162,7 @@ function loadSDK(type: CaptchaType): Promise<void> {
     script.async = true;
     script.defer = true;
     script.onload = (): void => {
+      script.dataset.loaded = 'true';
       resolve();
     };
     script.onerror = (): void => {
