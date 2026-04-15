@@ -313,7 +313,7 @@ function renderUserDetailContent(user: UserPublic, cachedAt?: number, isRefreshi
       </div>
       <div class="detail-row">
         <span class="detail-label">微软账户</span>
-        <span class="detail-value">${user.microsoft_name || '未绑定'}</span>
+        <span class="detail-value">${user.microsoft_name ? escapeHtml(user.microsoft_name) : '未绑定'}</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">注册时间</span>
