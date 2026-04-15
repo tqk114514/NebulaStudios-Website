@@ -18,6 +18,12 @@ import { getUrlParameter } from './lib/utils/url.ts';
 // 翻译函数
 const t = window.t || ((key: string): string => key);
 
+function escapeHtml(str: string): string {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ==================== 类型定义 ====================
 
 interface AuthorizeInfoResponse {
@@ -95,8 +101,8 @@ function renderScopes(scopes: string[]): void {
     li.innerHTML = `
       <div class="oauth-scope-icon">${icon}</div>
       <div class="oauth-scope-text">
-        <div class="oauth-scope-name">${scopeName}</div>
-        <div class="oauth-scope-desc">${scopeDesc}</div>
+        <div class="oauth-scope-name">${escapeHtml(scopeName)}</div>
+        <div class="oauth-scope-desc">${escapeHtml(scopeDesc)}</div>
       </div>
     `;
 
