@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function handleSendCode(): Promise<void> {
       try {
         const email = pendingEmail;
-        const token = getCaptchaToken();
+        const token = getCaptchaToken('captcha-container');
         const captchaType = getCaptchaType();
 
         const result = await sendVerificationCode(email, token || '', captchaType || '');
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateSendCodeButtonState();
       } finally {
         // 清理验证组件
-        clearCaptcha();
+        clearCaptcha('captcha-container');
       }
     }
 
@@ -271,6 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           // 初始化人机验证
           await initCaptcha(
+            'captcha-container',
             // 验证成功回调
             async () => {
               await handleSendCode();
@@ -284,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateSendCodeButtonState();
               }
               pendingEmail = '';
-              clearCaptcha();
+              clearCaptcha('captcha-container');
               hideCaptcha(captchaContainer, card);
             },
             // 验证过期回调
@@ -294,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateSendCodeButtonState();
               }
               pendingEmail = '';
-              clearCaptcha();
+              clearCaptcha('captcha-container');
               hideCaptcha(captchaContainer, card);
             }
           );

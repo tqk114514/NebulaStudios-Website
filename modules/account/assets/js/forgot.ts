@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     async function sendResetCode(): Promise<void> {
       const email = inputEmail.value.trim().toLowerCase();
-      const token = getCaptchaToken();
+      const token = getCaptchaToken('captcha-container');
       const captchaType = getCaptchaType();
 
       const result = await fetchApi('/api/auth/send-reset-code', {
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       submitEmailBtn.disabled = false;
-      clearCaptcha();
+      clearCaptcha('captcha-container');
       hideCaptcha(captchaContainer, card);
     }
 
@@ -271,16 +271,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
 
           await initCaptcha(
+            'captcha-container',
             async () => { await sendResetCode(); },
             () => {
               showAlertWithTranslation(t('register.humanVerifyFailed'));
               submitEmailBtn.disabled = false;
-              clearCaptcha();
+              clearCaptcha('captcha-container');
               hideCaptcha(captchaContainer, card);
             },
             () => {
               submitEmailBtn.disabled = false;
-              clearCaptcha();
+              clearCaptcha('captcha-container');
               hideCaptcha(captchaContainer, card);
             }
           );
