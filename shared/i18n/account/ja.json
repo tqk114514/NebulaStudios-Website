@@ -23,6 +23,7 @@
   "login.qrLoginSuccess": "ログイン成功",
   "login.qrLoginFailed": "ログインに失敗しました。もう一度お試しください",
   "login.qrLoginCancelled": "ログインがキャンセルされました",
+  "login.qrSessionFailed": "セッションの設定に失敗しました。もう一度お試しください",
   "login.qrTokenGenerateFailed": "QRコードの生成に失敗しました。後でもう一度お試しください",
   "login.qrCodeGenerateFailed": "QRコードの生成に失敗しました。後でもう一度お試しください",
   "login.oauthError": "サードパーティログインに失敗しました。再試行してください",

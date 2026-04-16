@@ -256,10 +256,19 @@ function handleStatusChange(status: string, data: WSMessage = { type: 'status' }
  * 设置会话并跳转
  */
 async function setSessionAndRedirect(sessionToken: string): Promise<void> {
-  await fetchApi('/api/qr-login/set-session', {
+  const result = await fetchApi('/api/qr-login/set-session', {
     method: 'POST',
     body: JSON.stringify({ sessionToken, token: state.currentToken })
   });
+
+  if (!result.success) {
+    console.error('[QR-LOGIN] ERROR: Set session failed:', result.errorCode);
+    closeQrLoginModal();
+    if (state.showAlertCallback) {
+      state.showAlertCallback(state.translateFn('login.qrSessionFailed'));
+    }
+    return;
+  }
 
   closeQrLoginModal();
   window.location.href = '/account/dashboard';

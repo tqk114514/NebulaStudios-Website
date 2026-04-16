@@ -23,6 +23,7 @@
   "login.qrLoginSuccess": "登入成功",
   "login.qrLoginFailed": "登入失敗，請重試",
   "login.qrLoginCancelled": "已取消登入",
+  "login.qrSessionFailed": "工作階段設定失敗，請重試",
   "login.qrTokenGenerateFailed": "生成登入二維碼失敗，請稍後重試",
   "login.qrCodeGenerateFailed": "二維碼生成失敗，請稍後重試",
   "login.oauthError": "第三方登入失敗，請重試",
