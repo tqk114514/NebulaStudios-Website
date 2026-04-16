@@ -23,6 +23,7 @@
   "login.qrLoginSuccess": "Sign in successful",
   "login.qrLoginFailed": "Sign in failed, please try again",
   "login.qrLoginCancelled": "Login cancelled",
+  "login.qrSessionFailed": "Session setup failed, please try again",
   "login.qrTokenGenerateFailed": "Failed to generate QR code, please try again",
   "login.qrCodeGenerateFailed": "QR code generation failed, please try again",
   "login.oauthError": "Third-party login failed, please try again",
