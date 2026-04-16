@@ -38,7 +38,7 @@ let pendingLogin: PendingLoginData | null = null;
  */
 function resetCaptchaState(container: HTMLElement | null, card: HTMLElement | null, button: HTMLButtonElement | null): void {
   pendingLogin = null;
-  clearCaptcha();
+  clearCaptcha('captcha-container');
   
   if (button) {
     button.disabled = false;
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       try {
         const { email, password } = pendingLogin;
-        const token = getCaptchaToken();
+        const token = getCaptchaToken('captcha-container');
         const captchaType = getCaptchaType();
 
         // 禁用按钮，显示加载状态
@@ -169,6 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
 
           await initCaptcha(
+            'captcha-container',
             async () => { await performLogin(); },
             () => {
               // 验证失败
