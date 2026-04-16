@@ -206,7 +206,6 @@ body:has(button:hover) #cursor-ring {
   width: 80px;
   height: 80px;
   border-color: rgba(240,237,232,0.6);
-  animation: spin 8s linear infinite;
 }
 
 .nebula-ring:nth-child(2) {
@@ -214,21 +213,18 @@ body:has(button:hover) #cursor-ring {
   height: 160px;
   border-color: rgba(240,237,232,0.15);
   border-style: dashed;
-  animation: spin 20s linear infinite reverse;
 }
 
 .nebula-ring:nth-child(3) {
   width: 260px;
   height: 260px;
   border-color: rgba(240,237,232,0.06);
-  animation: spin 40s linear infinite;
 }
 
 .nebula-ring:nth-child(4) {
   width: 340px;
   height: 340px;
   border-color: rgba(240,237,232,0.03);
-  animation: spin 60s linear infinite reverse;
 }
 
 .nebula-dot {
@@ -639,15 +635,6 @@ body:has(button:hover) #cursor-ring {
   }
   to {
     opacity: 1;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 

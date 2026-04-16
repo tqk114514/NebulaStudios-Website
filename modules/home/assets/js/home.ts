@@ -20,9 +20,11 @@ document.addEventListener('visibilitychange', () => {
   if (pageVisible) {
     startCursorAnimation();
     startTickerAnimation();
+    resumeNebulaAnimation();
   } else {
     stopCursorAnimation();
     stopTickerAnimation();
+    pauseNebulaAnimation();
   }
 });
 
@@ -72,6 +74,73 @@ function stopCursorAnimation(): void {
 }
 
 startCursorAnimation();
+
+// ==================== 星云环动画 ====================
+
+const nebulaGraphic = document.querySelector('.nebula-graphic');
+const nebulaRings = nebulaGraphic?.querySelectorAll('.nebula-ring') as NodeListOf<HTMLElement> | undefined;
+let nebulaAnimFrameId: number | null = null;
+let nebulaVisible = true;
+let lastNebulaTime = 0;
+const ringAngles = [0, 0, 0, 0];
+const ringSpeeds = [45, -18, 9, -6];
+
+function nebulaStep(timestamp: number): void {
+  if (lastNebulaTime === 0) lastNebulaTime = timestamp;
+  const delta = (timestamp - lastNebulaTime) / 1000;
+  lastNebulaTime = timestamp;
+
+  if (nebulaRings) {
+    nebulaRings.forEach((ring, i) => {
+      ringAngles[i] += ringSpeeds[i] * delta;
+      ring.style.transform = `translate(-50%, -50%) rotate(${ringAngles[i]}deg)`;
+    });
+  }
+
+  nebulaAnimFrameId = requestAnimationFrame(nebulaStep);
+}
+
+function startNebulaAnimation(): void {
+  if (nebulaAnimFrameId === null && pageVisible && nebulaVisible) {
+    lastNebulaTime = 0;
+    nebulaAnimFrameId = requestAnimationFrame(nebulaStep);
+  }
+}
+
+function stopNebulaAnimation(): void {
+  if (nebulaAnimFrameId !== null) {
+    cancelAnimationFrame(nebulaAnimFrameId);
+    nebulaAnimFrameId = null;
+  }
+}
+
+function pauseNebulaAnimation(): void {
+  stopNebulaAnimation();
+}
+
+function resumeNebulaAnimation(): void {
+  startNebulaAnimation();
+}
+
+if (nebulaGraphic) {
+  const nebulaObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          nebulaVisible = true;
+          startNebulaAnimation();
+        } else {
+          nebulaVisible = false;
+          stopNebulaAnimation();
+        }
+      });
+    },
+    { threshold: 0 }
+  );
+
+  nebulaObserver.observe(nebulaGraphic);
+  startNebulaAnimation();
+}
 
 // ==================== 滚动显示动画 ====================
 
