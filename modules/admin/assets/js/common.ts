@@ -114,6 +114,8 @@ export const confirmTitle = document.getElementById('confirm-title') as HTMLElem
 export const confirmMessage = document.getElementById('confirm-message') as HTMLElement | null;
 export const confirmCancel = document.getElementById('confirm-cancel') as HTMLButtonElement | null;
 export const confirmOk = document.getElementById('confirm-ok') as HTMLButtonElement | null;
+
+let currentConfirmHandler: (() => void) | null = null;
 export const banModal = document.getElementById('ban-modal') as HTMLElement | null;
 export const banReason = document.getElementById('ban-reason') as HTMLSelectElement | null;
 export const banCustomReasonGroup = document.getElementById('ban-custom-reason-group') as HTMLElement | null;
@@ -230,12 +232,17 @@ export function showConfirm(title: string, message: string, onConfirm: () => voi
   localConfirmMessage.textContent = message;
   showModal(localConfirmModal);
 
+  if (currentConfirmHandler) {
+    localConfirmOk.removeEventListener('click', currentConfirmHandler);
+  }
+
   const handleConfirm = (): void => {
     hideModal(localConfirmModal);
-    localConfirmOk.removeEventListener('click', handleConfirm);
+    currentConfirmHandler = null;
     onConfirm();
   };
 
+  currentConfirmHandler = handleConfirm;
   localConfirmOk.addEventListener('click', handleConfirm);
 }
 
