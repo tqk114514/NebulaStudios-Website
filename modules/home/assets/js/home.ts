@@ -3,13 +3,28 @@
  * 主页交互逻辑
  *
  * 功能：
- * - 自定义光标
+ * - 自定义光标（页面可见时运行）
  * - 滚动显示动画
- * - Ticker 无限滚动
+ * - Ticker 无限滚动（可见时运行）
  * - 语言切换
  */
 
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle } from '../../../../shared/js/utils/language-switcher.ts';
+
+// ==================== 页面可见性管理 ====================
+
+let pageVisible = true;
+
+document.addEventListener('visibilitychange', () => {
+  pageVisible = !document.hidden;
+  if (pageVisible) {
+    startCursorAnimation();
+    startTickerAnimation();
+  } else {
+    stopCursorAnimation();
+    stopTickerAnimation();
+  }
+});
 
 // ==================== 自定义光标 ====================
 
@@ -19,6 +34,7 @@ let mouseX = 0;
 let mouseY = 0;
 let ringX = 0;
 let ringY = 0;
+let cursorAnimFrameId: number | null = null;
 
 document.addEventListener('mousemove', (e) => {
   mouseX = e.clientX;
@@ -39,30 +55,71 @@ function animateRing(): void {
     ring.style.top = ringY + 'px';
   }
 
-  requestAnimationFrame(animateRing);
+  cursorAnimFrameId = requestAnimationFrame(animateRing);
 }
 
-animateRing();
+function startCursorAnimation(): void {
+  if (cursorAnimFrameId === null) {
+    cursorAnimFrameId = requestAnimationFrame(animateRing);
+  }
+}
+
+function stopCursorAnimation(): void {
+  if (cursorAnimFrameId !== null) {
+    cancelAnimationFrame(cursorAnimFrameId);
+    cursorAnimFrameId = null;
+  }
+}
+
+startCursorAnimation();
 
 // ==================== 滚动显示动画 ====================
 
 const reveals = document.querySelectorAll('.reveal');
 
-const observer = new IntersectionObserver(
+const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
       if (entry.isIntersecting) {
         entry.target.classList.add('visible');
-        observer.unobserve(entry.target);
+        revealObserver.unobserve(entry.target);
       }
     });
   },
   { threshold: 0.12 }
 );
 
-reveals.forEach((el) => observer.observe(el));
+reveals.forEach((el) => revealObserver.observe(el));
 
 // ==================== Ticker 无限滚动 ====================
+
+let tickerAnimFrameId: number | null = null;
+let tickerX = 0;
+let tickerTrackW = 0;
+let tickerRunner: HTMLElement | null = null;
+const tickerSpeed = 0.6;
+
+function tickerStep(): void {
+  tickerX -= tickerSpeed;
+  if (tickerX <= -tickerTrackW) tickerX += tickerTrackW;
+  if (tickerRunner) {
+    tickerRunner.style.transform = `translateX(${tickerX}px)`;
+  }
+  tickerAnimFrameId = requestAnimationFrame(tickerStep);
+}
+
+function startTickerAnimation(): void {
+  if (tickerAnimFrameId === null && pageVisible) {
+    tickerAnimFrameId = requestAnimationFrame(tickerStep);
+  }
+}
+
+function stopTickerAnimation(): void {
+  if (tickerAnimFrameId !== null) {
+    cancelAnimationFrame(tickerAnimFrameId);
+    tickerAnimFrameId = null;
+  }
+}
 
 (function initTicker() {
   const inner = document.getElementById('ticker-inner') as HTMLElement | null;
@@ -74,33 +131,40 @@ reveals.forEach((el) => observer.observe(el));
     inner.appendChild(seed.cloneNode(true));
   }
 
-  const trackW = inner.offsetWidth;
+  tickerTrackW = inner.offsetWidth;
 
   const clone = inner.cloneNode(true) as HTMLElement;
   clone.removeAttribute('id');
 
   const tickerEl = document.getElementById('ticker') as HTMLElement | null;
-  const runner = document.createElement('div');
-  runner.style.cssText = 'display:inline-flex;will-change:transform;';
-  tickerEl?.appendChild(runner);
-  runner.appendChild(inner);
-  runner.appendChild(clone);
+  tickerRunner = document.createElement('div');
+  tickerRunner.style.cssText = 'display:inline-flex;will-change:transform;';
+  tickerEl?.appendChild(tickerRunner);
+  tickerRunner.appendChild(inner);
+  tickerRunner.appendChild(clone);
 
-  let x = 0;
-  const speed = 0.6;
+  const tickerObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          startTickerAnimation();
+        } else {
+          stopTickerAnimation();
+        }
+      });
+    },
+    { threshold: 0 }
+  );
 
-  function step() {
-    x -= speed;
-    if (x <= -trackW) x += trackW;
-    runner.style.transform = `translateX(${x}px)`;
-    requestAnimationFrame(step);
+  if (tickerEl) {
+    tickerObserver.observe(tickerEl);
   }
-  requestAnimationFrame(step);
+
+  startTickerAnimation();
 })();
 
 // ==================== 语言切换初始化 ====================
 
-// 等待翻译准备就绪后初始化语言切换器
 waitForTranslations().then(() => {
   initLanguageSwitcher(() => {
     updatePageTitle();
