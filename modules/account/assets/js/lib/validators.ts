@@ -8,6 +8,7 @@
  */
 
 import type { ValidationResult, LoadResult, EmailProviders, RegisterFormData } from '../../../../../shared/js/types/auth.js';
+import { fetchApi } from './api/fetch.ts';
 
 // ==================== 邮箱验证 ====================
 
@@ -19,10 +20,12 @@ let EMAIL_PROVIDERS: EmailProviders = {};
  */
 export async function loadEmailWhitelist(): Promise<LoadResult> {
   try {
-    const response = await fetch('/api/email-whitelist');
-    if (!response.ok) {throw new Error('Failed to load email whitelist');}
-    const data = await response.json();
-    EMAIL_PROVIDERS = data.data?.domains || {};
+    const result = await fetchApi<{ data: { domains: EmailProviders } }>('/api/email-whitelist');
+    if (result.success && result.data) {
+      EMAIL_PROVIDERS = result.data.domains || {};
+    } else {
+      EMAIL_PROVIDERS = {};
+    }
     return { success: true };
   } catch (error) {
     console.error('[VALIDATOR] ERROR: Failed to load email whitelist:', (error as Error).message);

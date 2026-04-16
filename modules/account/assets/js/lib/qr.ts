@@ -10,6 +10,7 @@
  */
 
 import { createModalController, type ModalController } from './ui/feedback.ts';
+import { fetchApi } from './api/fetch.ts';
 
 // ==================== 类型定义 ====================
 
@@ -89,24 +90,16 @@ export function isMobileDevice(): boolean {
  * 从后端获取安全的扫码登录 Token
  */
 export async function fetchLoginToken(): Promise<TokenResult> {
-  try {
-    const response = await fetch('/api/qr-login/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const result = await fetchApi<{ token: string; expireTime: number }>('/api/qr-login/generate', {
+    method: 'POST'
+  });
 
-    const result = await response.json();
-
-    if (result.success) {
-      console.log('[QR-LOGIN] Token fetched from server');
-      return { success: true, token: result.token, expireTime: result.expireTime };
-    } else {
-      console.error('[QR-LOGIN] ERROR: Server returned error:', result.errorCode);
-      return { success: false, error: result.errorCode };
-    }
-  } catch (error) {
-    console.error('[QR-LOGIN] ERROR: Failed to fetch token:', (error as Error).message);
-    return { success: false, error: 'NETWORK_ERROR' };
+  if (result.success) {
+    console.log('[QR-LOGIN] Token fetched from server');
+    return { success: true, token: result.token, expireTime: result.expireTime };
+  } else {
+    console.error('[QR-LOGIN] ERROR: Server returned error:', result.errorCode);
+    return { success: false, error: result.errorCode };
   }
 }
 
@@ -263,16 +256,10 @@ function handleStatusChange(status: string, data: WSMessage = { type: 'status' }
  * 设置会话并跳转
  */
 async function setSessionAndRedirect(sessionToken: string): Promise<void> {
-  try {
-    await fetch('/api/qr-login/set-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ sessionToken, token: state.currentToken })
-    });
-  } catch (e) {
-    console.error('[QR-LOGIN] ERROR: Set session failed:', e);
-  }
+  await fetchApi('/api/qr-login/set-session', {
+    method: 'POST',
+    body: JSON.stringify({ sessionToken, token: state.currentToken })
+  });
 
   closeQrLoginModal();
   window.location.href = '/account/dashboard';
@@ -306,6 +293,8 @@ export async function showQrLoginModal(): Promise<void> {
 
     if (result.error === 'NETWORK_ERROR') {
       showError('error.networkError');
+    } else if (result.error === 'SERVER_ERROR') {
+      showError('error.serverError');
     } else {
       showError('login.qrTokenGenerateFailed');
     }
@@ -318,16 +307,11 @@ export async function showQrLoginModal(): Promise<void> {
 async function cancelCurrentToken(): Promise<void> {
   if (!state.currentToken) {return;}
 
-  try {
-    await fetch('/api/qr-login/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: state.currentToken })
-    });
-    console.log('[QR-LOGIN] Token cancelled');
-  } catch (error) {
-    console.error('[QR-LOGIN] ERROR: Failed to cancel token:', (error as Error).message);
-  }
+  await fetchApi('/api/qr-login/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ token: state.currentToken })
+  });
+  console.log('[QR-LOGIN] Token cancelled');
 
   state.currentToken = null;
 }

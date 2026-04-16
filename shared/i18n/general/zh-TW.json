@@ -60,5 +60,6 @@
   "error.unlinkFailed": "解綁失敗，請稍後重試",
   "error.microsoftAlreadyLinked": "該 Microsoft 帳戶已被其他用戶綁定",
   "error.fetchFailed": "獲取數據失敗，請稍後重試",
-  "error.linkFailed": "綁定失敗，請稍後重試"
+  "error.linkFailed": "綁定失敗，請稍後重試",
+  "error.serverError": "伺服器錯誤，請稍後重試"
 }
