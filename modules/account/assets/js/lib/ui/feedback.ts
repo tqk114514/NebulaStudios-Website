@@ -97,6 +97,8 @@ export function hideLoading(container: HTMLElement | null): void {
 /** Toast 容器 */
 let toastContainer: HTMLElement | null = null;
 
+let currentConfirmCleanup: (() => void) | null = null;
+
 /**
  * 初始化 Toast 容器
  */
@@ -210,8 +212,14 @@ export function showConfirm(message: string, title: string | null = null, t: Tra
     messageEl.textContent = message;
     modal.classList.remove('is-hidden');
 
+    if (currentConfirmCleanup) {
+      currentConfirmCleanup();
+      currentConfirmCleanup = null;
+    }
+
     const cleanup = (): void => {
       modal.classList.add('is-hidden');
+      currentConfirmCleanup = null;
       confirmBtn?.removeEventListener('click', handleConfirm);
       cancelBtn?.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleOverlayClick);
@@ -220,6 +228,8 @@ export function showConfirm(message: string, title: string | null = null, t: Tra
     const handleConfirm = (): void => { cleanup(); resolve(true); };
     const handleCancel = (): void => { cleanup(); resolve(false); };
     const handleOverlayClick = (e: Event): void => { if (e.target === modal) { cleanup(); resolve(false); } };
+
+    currentConfirmCleanup = cleanup;
 
     confirmBtn?.addEventListener('click', handleConfirm);
     cancelBtn?.addEventListener('click', handleCancel);
