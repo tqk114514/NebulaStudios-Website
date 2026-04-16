@@ -23,6 +23,7 @@
   "login.qrLoginSuccess": "로그인 성공",
   "login.qrLoginFailed": "로그인 실패. 다시 시도하세요",
   "login.qrLoginCancelled": "로그인이 취소되었습니다",
+  "login.qrSessionFailed": "세션 설정에 실패했습니다. 다시 시도하세요",
   "login.qrTokenGenerateFailed": "QR 코드 생성에 실패했습니다. 나중에 다시 시도하세요",
   "login.qrCodeGenerateFailed": "QR 코드 생성에 실패했습니다. 나중에 다시 시도하세요",
   "login.oauthError": "타사 로그인에 실패했습니다. 나중에 다시 시도하세요",
