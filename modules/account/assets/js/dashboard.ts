@@ -14,6 +14,7 @@
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { verifySession, logout } from './lib/api/auth.ts';
+import { fetchApi } from './lib/api/fetch.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModalController } from './lib/ui/feedback.ts';
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
@@ -256,32 +257,23 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     if (!validatedUrl || controller.isCleanedUp()) { return; }
 
     confirmBtn!.disabled = true;
-    try {
-      const response = await fetch('/api/user/avatar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ avatar_url: validatedUrl })
-      });
-      const result = await response.json();
+    const result = await fetchApi<{ avatar_url: string }>('/api/user/avatar', {
+      method: 'POST',
+      body: JSON.stringify({ avatar_url: validatedUrl })
+    });
 
-      if (result.success) {
-        controller.close();
-        onSuccess(result.avatar_url);
-        showAlert(t('dashboard.avatarUpdateSuccess'));
-      } else {
-        const errorMessages: Record<string, string> = {
-          'INVALID_IMAGE_URL': 'dashboard.invalidImageUrl',
-          'INVALID_URL': 'dashboard.invalidUrl',
-          'URL_TOO_LONG': 'dashboard.invalidUrl'
-        };
-        const errorKey = errorMessages[result.errorCode] || 'dashboard.avatarUpdateFailed';
-        errorEl!.textContent = t(errorKey);
-        errorEl!.classList.remove('is-hidden');
-        confirmBtn!.disabled = false;
-      }
-    } catch {
-      errorEl!.textContent = t('dashboard.avatarUpdateFailed');
+    if (result.success) {
+      controller.close();
+      onSuccess(result.avatar_url);
+      showAlert(t('dashboard.avatarUpdateSuccess'));
+    } else {
+      const errorMessages: Record<string, string> = {
+        'INVALID_IMAGE_URL': 'dashboard.invalidImageUrl',
+        'INVALID_URL': 'dashboard.invalidUrl',
+        'URL_TOO_LONG': 'dashboard.invalidUrl'
+      };
+      const errorKey = errorMessages[result.errorCode] || 'dashboard.avatarUpdateFailed';
+      errorEl!.textContent = t(errorKey);
       errorEl!.classList.remove('is-hidden');
       confirmBtn!.disabled = false;
     }
@@ -489,22 +481,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           const confirmed = await showConfirm(t('dashboard.confirmUnlink'), t('dashboard.unlinkThirdParty'));
           if (!confirmed) { return; }
 
-          try {
-            const response = await fetch('/api/auth/microsoft/unlink', {
-              method: 'POST',
-              credentials: 'include'
-            });
-            const result = await response.json();
+          const result = await fetchApi('/api/auth/microsoft/unlink', {
+            method: 'POST'
+          });
 
-            if (result.success) {
-              user.microsoft_id = null;
-              user.microsoft_name = null;
-              updateMicrosoftStatus(false, null);
-              showAlert(t('dashboard.unlinkSuccess'));
-            } else {
-              showAlert(t('dashboard.unlinkFailed'));
-            }
-          } catch {
+          if (result.success) {
+            user.microsoft_id = null;
+            user.microsoft_name = null;
+            updateMicrosoftStatus(false, null);
+            showAlert(t('dashboard.unlinkSuccess'));
+          } else {
             showAlert(t('dashboard.unlinkFailed'));
           }
         } else {
@@ -742,43 +728,38 @@ function showDeleteAccountModal(): void {
   async function handleSendCode(): Promise<void> {
     if (controller.isCleanedUp()) { return; }
 
-    try {
-      const response = await fetch('/api/auth/send-delete-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          captchaToken: getCaptchaToken(),
-          captchaType: getCaptchaType(),
-          language: document.documentElement.lang || 'zh-CN'
-        })
+    const result = await fetchApi('/api/auth/send-delete-code', {
+      method: 'POST',
+      body: JSON.stringify({
+        captchaToken: getCaptchaToken(),
+        captchaType: getCaptchaType(),
+        language: document.documentElement.lang || 'zh-CN'
+      })
+    });
+
+    if (controller.isCleanedUp()) { return; }
+
+    if (result.success) {
+      codeSent = true;
+      showAlert(t('dashboard.codeSent'));
+      startCountdown(sendCodeBtn!, {
+        seconds: 60,
+        cookieKey: DELETE_COUNTDOWN_KEY,
+        completeText: t('dashboard.sendCode')
       });
-      const result = await response.json();
-
-      if (controller.isCleanedUp()) { return; }
-
-      if (result.success) {
-        codeSent = true;
-        showAlert(t('dashboard.codeSent'));
-        startCountdown(sendCodeBtn!, {
-          seconds: 60,
-          cookieKey: DELETE_COUNTDOWN_KEY,
-          completeText: t('dashboard.sendCode')
-        });
-      } else {
-        sendCodeBtn!.disabled = false;
-        if (result.errorCode === 'CAPTCHA_FAILED') {
-          showAlert(t('register.humanVerifyFailed'));
-        } else if (result.errorCode === 'RATE_LIMIT') {
-          showAlert(t('error.rateLimitExceeded'));
-        } else {
-          showAlert(t('dashboard.sendCodeFailed'));
-        }
-      }
-    } catch {
-      if (controller.isCleanedUp()) { return; }
+    } else {
       sendCodeBtn!.disabled = false;
-      showAlert(t('error.networkError'));
+      if (result.errorCode === 'CAPTCHA_FAILED') {
+        showAlert(t('register.humanVerifyFailed'));
+      } else if (result.errorCode === 'RATE_LIMIT') {
+        showAlert(t('error.rateLimitExceeded'));
+      } else if (result.errorCode === 'NETWORK_ERROR') {
+        showAlert(t('error.networkError'));
+      } else if (result.errorCode === 'SERVER_ERROR') {
+        showAlert(t('error.serverError'));
+      } else {
+        showAlert(t('dashboard.sendCodeFailed'));
+      }
     }
 
     resetCaptchaState(null, 'delete-captcha-container');
@@ -840,36 +821,32 @@ function showDeleteAccountModal(): void {
 
     confirmBtn!.disabled = true;
 
-    try {
-      const response = await fetch('/api/auth/delete-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ code, password })
-      });
-      const result = await response.json();
+    const result = await fetchApi('/api/auth/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ code, password })
+    });
 
-      if (result.success) {
-        showAlert(t('dashboard.deleteSuccess'));
-        setTimeout(() => {
-          window.location.href = '/account/login';
-        }, 1500);
+    if (result.success) {
+      showAlert(t('dashboard.deleteSuccess'));
+      setTimeout(() => {
+        window.location.href = '/account/login';
+      }, 1500);
+    } else {
+      if (result.errorCode === 'INVALID_CODE' || result.errorCode === 'CODE_EXPIRED') {
+        codeError!.textContent = t(result.errorCode === 'CODE_EXPIRED' ? 'dashboard.codeExpired' : 'dashboard.invalidCode');
+        codeError!.classList.remove('is-hidden');
+        codeInput!.classList.add('is-error');
+      } else if (result.errorCode === 'WRONG_PASSWORD') {
+        passwordError!.textContent = t('dashboard.wrongPassword');
+        passwordError!.classList.remove('is-hidden');
+        passwordInput!.classList.add('is-error');
+      } else if (result.errorCode === 'NETWORK_ERROR') {
+        showAlert(t('error.networkError'));
+      } else if (result.errorCode === 'SERVER_ERROR') {
+        showAlert(t('error.serverError'));
       } else {
-        if (result.errorCode === 'INVALID_CODE' || result.errorCode === 'CODE_EXPIRED') {
-          codeError!.textContent = t(result.errorCode === 'CODE_EXPIRED' ? 'dashboard.codeExpired' : 'dashboard.invalidCode');
-          codeError!.classList.remove('is-hidden');
-          codeInput!.classList.add('is-error');
-        } else if (result.errorCode === 'WRONG_PASSWORD') {
-          passwordError!.textContent = t('dashboard.wrongPassword');
-          passwordError!.classList.remove('is-hidden');
-          passwordInput!.classList.add('is-error');
-        } else {
-          showAlert(t('dashboard.deleteFailed'));
-        }
-        confirmBtn!.disabled = false;
+        showAlert(t('dashboard.deleteFailed'));
       }
-    } catch {
-      showAlert(t('error.networkError'));
       confirmBtn!.disabled = false;
     }
   });
@@ -998,43 +975,38 @@ function showChangePasswordModal(): void {
     const currentPassword = currentPasswordInput!.value;
     const newPassword = newPasswordInput!.value;
 
-    try {
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-          captchaToken: getCaptchaToken(),
-          captchaType: getCaptchaType()
-        })
-      });
-      const result = await response.json();
+    const result = await fetchApi('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+        captchaToken: getCaptchaToken(),
+        captchaType: getCaptchaType()
+      })
+    });
 
-      if (controller.isCleanedUp()) { return; }
+    if (controller.isCleanedUp()) { return; }
 
-      if (result.success) {
-        controller.close();
-        showAlert(t('dashboard.changePasswordSuccess'));
+    if (result.success) {
+      controller.close();
+      showAlert(t('dashboard.changePasswordSuccess'));
+    } else {
+      if (result.errorCode === 'WRONG_PASSWORD') {
+        currentPasswordError!.textContent = t('dashboard.wrongPassword');
+        currentPasswordError!.classList.remove('is-hidden');
+        currentPasswordInput!.classList.add('is-error');
+      } else if (result.errorCode === 'SAME_PASSWORD') {
+        confirmPasswordError!.textContent = t('dashboard.samePassword');
+        confirmPasswordError!.classList.remove('is-hidden');
+      } else if (result.errorCode === 'CAPTCHA_FAILED') {
+        showAlert(t('register.humanVerifyFailed'));
+      } else if (result.errorCode === 'NETWORK_ERROR') {
+        showAlert(t('error.networkError'));
+      } else if (result.errorCode === 'SERVER_ERROR') {
+        showAlert(t('error.serverError'));
       } else {
-        if (result.errorCode === 'WRONG_PASSWORD') {
-          currentPasswordError!.textContent = t('dashboard.wrongPassword');
-          currentPasswordError!.classList.remove('is-hidden');
-          currentPasswordInput!.classList.add('is-error');
-        } else if (result.errorCode === 'SAME_PASSWORD') {
-          confirmPasswordError!.textContent = t('dashboard.samePassword');
-          confirmPasswordError!.classList.remove('is-hidden');
-        } else if (result.errorCode === 'CAPTCHA_FAILED') {
-          showAlert(t('register.humanVerifyFailed'));
-        } else {
-          showAlert(t('dashboard.changePasswordFailed'));
-        }
-        confirmBtn!.disabled = false;
+        showAlert(t('dashboard.changePasswordFailed'));
       }
-    } catch {
-      if (controller.isCleanedUp()) { return; }
-      showAlert(t('error.networkError'));
       confirmBtn!.disabled = false;
     }
 
@@ -1166,44 +1138,39 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
 
     const newUsername = usernameInput!.value.trim();
 
-    try {
-      const response = await fetch('/api/user/username', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          username: newUsername,
-          captchaToken: getCaptchaToken(),
-          captchaType: getCaptchaType()
-        })
-      });
-      const result = await response.json();
+    const result = await fetchApi<{ username: string }>('/api/user/username', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: newUsername,
+        captchaToken: getCaptchaToken(),
+        captchaType: getCaptchaType()
+      })
+    });
 
-      if (controller.isCleanedUp()) { return; }
+    if (controller.isCleanedUp()) { return; }
 
-      if (result.success) {
-        controller.close();
-        onSuccess(result.username);
-        showAlert(t('dashboard.usernameUpdateSuccess'));
+    if (result.success) {
+      controller.close();
+      onSuccess(result.username);
+      showAlert(t('dashboard.usernameUpdateSuccess'));
+    } else {
+      if (result.errorCode === 'USERNAME_ALREADY_EXISTS') {
+        usernameError!.textContent = t('register.usernameExists');
+        usernameError!.classList.remove('is-hidden');
+        usernameInput!.classList.add('is-error');
+      } else if (result.errorCode === 'USERNAME_TOO_LONG') {
+        usernameError!.textContent = t('register.usernameTooLong');
+        usernameError!.classList.remove('is-hidden');
+        usernameInput!.classList.add('is-error');
+      } else if (result.errorCode === 'CAPTCHA_FAILED') {
+        showAlert(t('register.humanVerifyFailed'));
+      } else if (result.errorCode === 'NETWORK_ERROR') {
+        showAlert(t('error.networkError'));
+      } else if (result.errorCode === 'SERVER_ERROR') {
+        showAlert(t('error.serverError'));
       } else {
-        if (result.errorCode === 'USERNAME_ALREADY_EXISTS') {
-          usernameError!.textContent = t('register.usernameExists');
-          usernameError!.classList.remove('is-hidden');
-          usernameInput!.classList.add('is-error');
-        } else if (result.errorCode === 'USERNAME_TOO_LONG') {
-          usernameError!.textContent = t('register.usernameTooLong');
-          usernameError!.classList.remove('is-hidden');
-          usernameInput!.classList.add('is-error');
-        } else if (result.errorCode === 'CAPTCHA_FAILED') {
-          showAlert(t('register.humanVerifyFailed'));
-        } else {
-          showAlert(t('dashboard.usernameUpdateFailed'));
-        }
-        confirmBtn!.disabled = false;
+        showAlert(t('dashboard.usernameUpdateFailed'));
       }
-    } catch {
-      if (controller.isCleanedUp()) { return; }
-      showAlert(t('error.networkError'));
       confirmBtn!.disabled = false;
     }
 
@@ -1551,29 +1518,17 @@ function showQrScanModal(onClose: () => void): void {
     updateStatus('dashboard.scanQrProcessing', 'normal');
     console.log('[QR-SCAN] Scanned data:', data.substring(0, 50) + '...');
 
-    try {
-      const scanResponse = await fetch('/api/qr-login/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token: data })
-      });
+    const scanResult = await fetchApi<{ pcInfo: PcInfo }>('/api/qr-login/scan', {
+      method: 'POST',
+      body: JSON.stringify({ token: data })
+    });
 
-      const scanResult = await scanResponse.json();
-
-      if (!scanResult.success) {
-        console.error('[QR-SCAN] Scan failed:', scanResult.errorCode);
-        updateStatus('dashboard.scanQrInvalid', 'error');
-        setTimeout(() => controller.close(), 2000);
-        return;
-      }
-
+    if (scanResult.success) {
       controller.close();
       showQrLoginConfirmModal(data, scanResult.pcInfo);
-
-    } catch (error) {
-      console.error('[QR-SCAN] ERROR:', error);
-      updateStatus('dashboard.scanQrFailed', 'error');
+    } else {
+      console.error('[QR-SCAN] Scan failed:', scanResult.errorCode);
+      updateStatus('dashboard.scanQrInvalid', 'error');
       setTimeout(() => controller.close(), 2000);
     }
   }
@@ -1656,27 +1611,23 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
   controller.onConfirm(async () => {
     if (confirmBtn) { confirmBtn.disabled = true; }
 
-    try {
-      const response = await fetch('/api/qr-login/mobile-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token })
-      });
+    const result = await fetchApi('/api/qr-login/mobile-confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token })
+    });
 
-      const result = await response.json();
-
-      if (result.success) {
-        controller.close();
-        showAlert(t('dashboard.qrLoginSuccess'));
+    if (result.success) {
+      controller.close();
+      showAlert(t('dashboard.qrLoginSuccess'));
+    } else {
+      if (confirmBtn) { confirmBtn.disabled = false; }
+      if (result.errorCode === 'NETWORK_ERROR') {
+        showAlert(t('error.networkError'));
+      } else if (result.errorCode === 'SERVER_ERROR') {
+        showAlert(t('error.serverError'));
       } else {
-        if (confirmBtn) { confirmBtn.disabled = false; }
         showAlert(t('dashboard.qrLoginFailed'));
       }
-    } catch (error) {
-      console.error('[QR-LOGIN] ERROR:', error);
-      if (confirmBtn) { confirmBtn.disabled = false; }
-      showAlert(t('error.networkError'));
     }
   });
 
@@ -1684,16 +1635,10 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
   controller.onCancel(async () => {
     if (cancelBtn) { cancelBtn.disabled = true; }
 
-    try {
-      await fetch('/api/qr-login/mobile-cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token })
-      });
-    } catch (error) {
-      console.error('[QR-LOGIN] Cancel error:', error);
-    }
+    await fetchApi('/api/qr-login/mobile-cancel', {
+      method: 'POST',
+      body: JSON.stringify({ token })
+    });
   });
 
   // 显示弹窗
@@ -1716,15 +1661,6 @@ interface UserLogItem {
     microsoft_name?: string;
   };
   created_at: string;
-}
-
-/** 日志响应类型 */
-interface UserLogsResponse {
-  success: boolean;
-  logs?: UserLogItem[];
-  total?: number;
-  page?: number;
-  pageSize?: number;
 }
 
 /**
@@ -1917,50 +1853,38 @@ function showUserLogsModal(): void {
     }
     loadMoreBtn!.disabled = true;
 
-    try {
-      const response = await fetch(`/api/user/logs?page=${page}&pageSize=${pageSize}`, {
-        method: 'GET',
-        credentials: 'include'
-      });
-      const result: UserLogsResponse = await response.json();
+    const result = await fetchApi<{ logs: UserLogItem[]; total: number; page: number; pageSize: number }>(`/api/user/logs?page=${page}&pageSize=${pageSize}`);
 
-      if (controller.isCleanedUp()) { return; }
+    if (controller.isCleanedUp()) { return; }
 
-      if (result.success && result.logs) {
-        totalLogs = result.total || 0;
+    if (result.success && result.logs) {
+      totalLogs = result.total || 0;
 
-        if (page === 1 && result.logs.length === 0) {
-          emptyEl!.classList.remove('is-hidden');
-        } else {
-          emptyEl!.classList.add('is-hidden');
-          result.logs.forEach(log => {
-            const itemEl = createLogItemElement(log);
-            listEl!.appendChild(itemEl);
-          });
-        }
-
-        // 检查是否还有更多
-        const loadedCount = listEl!.children.length;
-        if (loadedCount < totalLogs) {
-          loadMoreBtn!.classList.remove('is-hidden');
-        } else {
-          loadMoreBtn!.classList.add('is-hidden');
-        }
+      if (page === 1 && result.logs.length === 0) {
+        emptyEl!.classList.remove('is-hidden');
       } else {
-        if (page === 1) {
-          emptyEl!.classList.remove('is-hidden');
-        }
+        emptyEl!.classList.add('is-hidden');
+        result.logs.forEach(log => {
+          const itemEl = createLogItemElement(log);
+          listEl!.appendChild(itemEl);
+        });
       }
-    } catch (error) {
-      console.error('[USER_LOGS] ERROR:', error);
+
+      const loadedCount = listEl!.children.length;
+      if (loadedCount < totalLogs) {
+        loadMoreBtn!.classList.remove('is-hidden');
+      } else {
+        loadMoreBtn!.classList.add('is-hidden');
+      }
+    } else {
       if (page === 1) {
         emptyEl!.classList.remove('is-hidden');
       }
-    } finally {
-      isLoading = false;
-      loadingEl!.classList.add('is-hidden');
-      loadMoreBtn!.disabled = false;
     }
+
+    isLoading = false;
+    loadingEl!.classList.add('is-hidden');
+    loadMoreBtn!.disabled = false;
   }
 
   /**
@@ -1985,41 +1909,34 @@ function showUserLogsModal(): void {
  * 先请求生成一次性 token，然后使用 token 下载数据
  */
 async function handleDataExport(): Promise<void> {
-  // 确认导出
   const confirmed = await showConfirm(t('dashboard.dataExportConfirm'), t('dashboard.dataExport'));
   if (!confirmed) { return; }
 
-  try {
-    // 请求生成下载 token
-    const response = await fetch('/api/user/export/request', {
-      method: 'POST',
-      credentials: 'include'
-    });
-    const result = await response.json();
+  const result = await fetchApi<{ token: string }>('/api/user/export/request', {
+    method: 'POST'
+  });
 
-    if (result.success && result.token) {
-      // 使用 token 触发下载
-      const downloadUrl = `/api/user/export/download?token=${encodeURIComponent(result.token)}`;
+  if (result.success && result.token) {
+    const downloadUrl = `/api/user/export/download?token=${encodeURIComponent(result.token)}`;
 
-      // 创建隐藏的 a 标签触发下载
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = 'user-data.txt';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'user-data.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-      showAlert(t('dashboard.dataExportSuccess'));
+    showAlert(t('dashboard.dataExportSuccess'));
+  } else {
+    if (result.errorCode === 'RATE_LIMIT') {
+      showAlert(t('dashboard.dataExportRateLimit'));
+    } else if (result.errorCode === 'NETWORK_ERROR') {
+      showAlert(t('error.networkError'));
+    } else if (result.errorCode === 'SERVER_ERROR') {
+      showAlert(t('error.serverError'));
     } else {
-      // 处理错误
-      if (result.errorCode === 'RATE_LIMIT') {
-        showAlert(t('dashboard.dataExportRateLimit'));
-      } else {
-        showAlert(t('dashboard.dataExportFailed'));
-      }
+      showAlert(t('dashboard.dataExportFailed'));
     }
-  } catch {
-    showAlert(t('error.networkError'));
   }
 }
 
@@ -2035,15 +1952,6 @@ interface OAuthGrant {
   scope: string;
   created_at: string;
   updated_at: string;
-}
-
-/**
- * OAuth 授权列表响应接口
- */
-interface OAuthGrantsResponse {
-  success: boolean;
-  grants?: OAuthGrant[];
-  errorCode?: string;
 }
 
 /**
@@ -2139,26 +2047,25 @@ function showOAuthGrantsModal(): void {
       if (!confirmed) { return; }
 
       revokeBtn.disabled = true;
-      try {
-        const response = await fetch(`/api/user/oauth/grants/${encodeURIComponent(grant.client_id)}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
-        const result = await response.json();
 
-        if (result.success) {
-          itemEl.remove();
-          // 检查是否还有授权
-          if (listEl!.children.length === 0) {
-            emptyEl!.classList.remove('is-hidden');
-          }
-          showAlert(t('dashboard.oauthRevokeSuccess'));
+      const result = await fetchApi(`/api/user/oauth/grants/${encodeURIComponent(grant.client_id)}`, {
+        method: 'DELETE'
+      });
+
+      if (result.success) {
+        itemEl.remove();
+        if (listEl!.children.length === 0) {
+          emptyEl!.classList.remove('is-hidden');
+        }
+        showAlert(t('dashboard.oauthRevokeSuccess'));
+      } else {
+        if (result.errorCode === 'NETWORK_ERROR') {
+          showAlert(t('error.networkError'));
+        } else if (result.errorCode === 'SERVER_ERROR') {
+          showAlert(t('error.serverError'));
         } else {
           showAlert(t('dashboard.oauthRevokeFailed'));
-          revokeBtn.disabled = false;
         }
-      } catch {
-        showAlert(t('error.networkError'));
         revokeBtn.disabled = false;
       }
     });
@@ -2171,33 +2078,24 @@ function showOAuthGrantsModal(): void {
    * 加载授权列表
    */
   async function loadGrants(): Promise<void> {
-    try {
-      const response = await fetch('/api/user/oauth/grants', {
-        method: 'GET',
-        credentials: 'include'
-      });
-      const result: OAuthGrantsResponse = await response.json();
+    const result = await fetchApi<{ grants: OAuthGrant[] }>('/api/user/oauth/grants');
 
-      if (controller.isCleanedUp()) { return; }
+    if (controller.isCleanedUp()) { return; }
 
-      if (result.success && result.grants) {
-        if (result.grants.length === 0) {
-          emptyEl!.classList.remove('is-hidden');
-        } else {
-          result.grants.forEach(grant => {
-            const itemEl = createGrantItemElement(grant);
-            listEl!.appendChild(itemEl);
-          });
-        }
-      } else {
+    if (result.success && result.grants) {
+      if (result.grants.length === 0) {
         emptyEl!.classList.remove('is-hidden');
+      } else {
+        result.grants.forEach(grant => {
+          const itemEl = createGrantItemElement(grant);
+          listEl!.appendChild(itemEl);
+        });
       }
-    } catch (error) {
-      console.error('[OAUTH_GRANTS] ERROR:', error);
+    } else {
       emptyEl!.classList.remove('is-hidden');
-    } finally {
-      loadingEl!.classList.add('is-hidden');
     }
+
+    loadingEl!.classList.add('is-hidden');
   }
 
   // 显示弹窗并加载数据

@@ -11,18 +11,11 @@
 import { initLanguageSwitcher, applyTranslations, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { getUrlParameter } from './lib/utils/url.ts';
+import { fetchApi } from './lib/api/fetch.ts';
 
 // ==================== 类型定义 ====================
 
 type PageState = 'loading' | 'success' | 'error';
-
-/** API 响应（验证结果） */
-interface VerifyResponse {
-  success: boolean;
-  code?: string;
-  email?: string;
-  errorCode?: string;
-}
 
 // ==================== 错误码映射 ====================
 
@@ -35,6 +28,7 @@ const errorCodeMap: Record<string, string> = {
   'TOKEN_USED': 'verify.errorTokenUsed',
   'NO_TOKEN': 'verify.errorNoToken',
   'NETWORK_ERROR': 'verify.errorNetwork',
+  'SERVER_ERROR': 'verify.errorDefault',
   'VERIFY_FAILED': 'verify.errorDefault'
 };
 
@@ -43,24 +37,16 @@ const errorCodeMap: Record<string, string> = {
 /**
  * 验证 token 并获取验证码
  */
-async function verifyToken(token: string): Promise<VerifyResponse> {
-  try {
-    const response = await fetch('/api/auth/verify-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
+async function verifyToken(token: string): Promise<{ success: boolean; code?: string; email?: string; errorCode?: string }> {
+  const result = await fetchApi<{ code: string; email: string }>('/api/auth/verify-token', {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  });
 
-    const data: VerifyResponse = await response.json();
-
-    if (response.ok && data.success) {
-      return { success: true, code: data.code, email: data.email };
-    } else {
-      return { success: false, errorCode: data.errorCode || 'VERIFY_FAILED' };
-    }
-  } catch (error) {
-    console.error('[VERIFY] ERROR: Token verification request failed:', (error as Error).message);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+  if (result.success) {
+    return { success: true, code: result.code, email: result.email };
+  } else {
+    return { success: false, errorCode: result.errorCode || 'VERIFY_FAILED' };
   }
 }
 

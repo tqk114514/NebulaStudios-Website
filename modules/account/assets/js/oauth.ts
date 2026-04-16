@@ -10,8 +10,9 @@
  */
 
 // ==================== 模块导入 ====================
-import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initLanguageSwitcher, applyTranslations, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
+import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { getUrlParameter } from './lib/utils/url.ts';
 
@@ -25,18 +26,6 @@ function escapeHtml(str: string): string {
 }
 
 // ==================== 类型定义 ====================
-
-interface AuthorizeInfoResponse {
-  success: boolean;
-  errorCode?: string;
-  data?: {
-    clientName: string;
-    clientDescription: string;
-    scopes: string[];
-    username: string;
-    userAvatar: string;
-  };
-}
 
 interface AuthorizePostResponse {
   success: boolean;
@@ -172,6 +161,13 @@ async function submitDecision(decision: 'approve' | 'deny'): Promise<void> {
       credentials: 'include',
     });
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.error('[OAUTH] Server returned non-JSON response:', response.status, contentType);
+      showAlert(t('error.networkError'));
+      return;
+    }
+
     const result: AuthorizePostResponse = await response.json();
 
     if (result.redirect_url) {
@@ -246,18 +242,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         scope: scope
       });
 
-      const response = await fetch(`/oauth/authorize/info?${params.toString()}`, {
-        credentials: 'include'
-      });
-
-      const result: AuthorizeInfoResponse = await response.json();
+      const result = await fetchApi<{ data: { clientName: string; clientDescription?: string; scopes: string[]; username: string; userAvatar?: string } }>(`/oauth/authorize/info?${params.toString()}`);
 
       if (!result.success) {
         showError(result.errorCode || 'unknown_error');
         return;
       }
 
-      // 检查 data 是否存在
       if (!result.data) {
         showError('server_error');
         return;

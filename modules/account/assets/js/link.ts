@@ -13,6 +13,7 @@ import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslati
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { getUrlParameter } from './lib/utils/url.ts';
+import { fetchApi } from './lib/api/fetch.ts';
 
 // 翻译函数
 const t = window.t || ((key: string): string => key);
@@ -24,7 +25,9 @@ const t = window.t || ((key: string): string => key);
  */
 const pendingLinkErrorMap: Record<string, string> = {
   'INVALID_TOKEN': 'linkConfirm.invalidLink',
-  'TOKEN_EXPIRED': 'linkConfirm.linkExpired'
+  'TOKEN_EXPIRED': 'linkConfirm.linkExpired',
+  'NETWORK_ERROR': 'error.networkError',
+  'SERVER_ERROR': 'error.serverError'
 };
 
 /**
@@ -35,25 +38,18 @@ const confirmLinkErrorMap: Record<string, string> = {
   'TOKEN_EXPIRED': 'linkConfirm.linkExpired',
   'MICROSOFT_ALREADY_LINKED': 'dashboard.microsoftAlreadyLinked',
   'USER_NOT_FOUND': 'error.sessionError',
-  'USER_BANNED': 'linkConfirm.userBanned'
+  'USER_BANNED': 'linkConfirm.userBanned',
+  'NETWORK_ERROR': 'error.networkError',
+  'SERVER_ERROR': 'error.serverError'
 };
 
-// ==================== 类型定义 ====================
+// ==================== 类型定义 =======================
 
-interface PendingLinkResponse {
-  success: boolean;
-  errorCode?: string;
-  data?: {
-    microsoftName: string;
-    microsoftAvatar?: string;
-    username: string;
-    userAvatar?: string;
-  };
-}
-
-interface ConfirmLinkResponse {
-  success: boolean;
-  errorCode?: string;
+interface PendingLinkData {
+  microsoftName: string;
+  microsoftAvatar?: string;
+  username: string;
+  userAvatar?: string;
 }
 
 // ==================== 弹窗封装 ====================
@@ -97,10 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userAvatarEl = document.getElementById('user-avatar');
 
     try {
-      const response = await fetch('/api/auth/microsoft/pending-link', {
-        credentials: 'include'
-      });
-      const result: PendingLinkResponse = await response.json();
+      const result = await fetchApi<{ data: PendingLinkData }>('/api/auth/microsoft/pending-link');
 
       if (!result.success) {
         showAlert(t(pendingLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed'));
@@ -110,7 +103,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // 检查 data 是否存在
       if (!result.data) {
         showAlert(t('linkConfirm.linkFailed'));
         setTimeout(() => {
@@ -168,26 +160,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       confirmBtn.addEventListener('click', async () => {
         confirmBtn.disabled = true;
 
-        try {
-          const response = await fetch('/api/auth/microsoft/confirm-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include'
-          });
+        const result = await fetchApi('/api/auth/microsoft/confirm-link', {
+          method: 'POST'
+        });
 
-          const result: ConfirmLinkResponse = await response.json();
-
-          if (result.success) {
-            // 绑定成功，跳转到 dashboard
-            window.location.href = '/account/dashboard';
-          } else {
-            // 显示错误
-            const errorKey = confirmLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed';
-            showAlert(t(errorKey));
-            confirmBtn.disabled = false;
-          }
-        } catch {
-          showAlert(t('error.networkError'));
+        if (result.success) {
+          window.location.href = '/account/dashboard';
+        } else {
+          const errorKey = confirmLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed';
+          showAlert(t(errorKey));
           confirmBtn.disabled = false;
         }
       });
