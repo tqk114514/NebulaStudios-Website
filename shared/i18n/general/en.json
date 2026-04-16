@@ -60,5 +60,6 @@
   "error.unlinkFailed": "Unlink failed, please try again later",
   "error.microsoftAlreadyLinked": "This Microsoft account is already linked to another user",
   "error.fetchFailed": "Failed to fetch data, please try again later",
-  "error.linkFailed": "Link failed, please try again later"
+  "error.linkFailed": "Link failed, please try again later",
+  "error.serverError": "Server error, please try again later"
 }

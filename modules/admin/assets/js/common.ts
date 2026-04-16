@@ -145,11 +145,20 @@ export async function fetchApi<T>(url: string, options?: RequestInit): Promise<A
       return { success: false, errorCode: 'FORBIDDEN' };
     }
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.error('[ADMIN] Server returned non-JSON response:', response.status, contentType);
+      return { success: false, errorCode: 'SERVER_ERROR' };
+    }
+
     const data = await response.json();
     return data;
   } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return { success: false, errorCode: 'NETWORK_ERROR' };
+    }
     console.error('[ADMIN] API Error:', error);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+    return { success: false, errorCode: 'SERVER_ERROR' };
   }
 }
 

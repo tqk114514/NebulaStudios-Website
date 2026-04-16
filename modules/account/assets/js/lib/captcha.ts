@@ -14,6 +14,8 @@
 
 // ==================== 类型定义 ====================
 
+import { fetchApi } from './api/fetch.ts';
+
 /** 验证器类型 */
 type CaptchaType = 'turnstile' | 'hcaptcha' | 'recaptcha' | '';
 
@@ -23,12 +25,7 @@ interface CaptchaProvider {
   siteKey: string;
 }
 
-/** 验证码配置响应 */
-interface CaptchaConfigResponse {
-  success: boolean;
-  data?: CaptchaConfig;
-}
-
+/** 验证码配置 */
 interface CaptchaConfig {
   providers: CaptchaProvider[];
 }
@@ -104,11 +101,7 @@ const SDK_URLS: Record<string, string> = {
  */
 export async function loadCaptchaConfig(): Promise<boolean> {
   try {
-    const response = await fetch('/api/config/captcha');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    const result: CaptchaConfigResponse = await response.json();
+    const result = await fetchApi<{ data: CaptchaConfig }>('/api/config/captcha');
     if (!result.success || !result.data || !result.data.providers || result.data.providers.length === 0) {
       throw new Error('Invalid config: no providers available');
     }

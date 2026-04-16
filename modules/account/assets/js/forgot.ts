@@ -15,6 +15,7 @@ import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/
 import { loadEmailWhitelist, validateEmail, validatePassword, getEmailProviders } from './lib/validators.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
+import { fetchApi } from './lib/api/fetch.ts';
 
 // ==================== 全局变量 ====================
 
@@ -33,7 +34,9 @@ const sendCodeErrorMap: Record<string, string> = {
   'EMAIL_NOT_FOUND': 'forgotPassword.emailNotFound',
   'CAPTCHA_FAILED': 'register.humanVerifyFailed',
   'RATE_LIMIT': 'error.rateLimitExceeded',
-  'SEND_FAILED': 'forgotPassword.sendFailed'
+  'SEND_FAILED': 'forgotPassword.sendFailed',
+  'NETWORK_ERROR': 'error.networkError',
+  'SERVER_ERROR': 'error.serverError'
 };
 
 /**
@@ -43,7 +46,9 @@ const resetPasswordErrorMap: Record<string, string> = {
   'INVALID_CODE': 'forgotPassword.invalidCode',
   'CODE_EXPIRED': 'forgotPassword.codeExpired',
   'USER_NOT_FOUND': 'forgotPassword.emailNotFound',
-  'RESET_FAILED': 'forgotPassword.resetFailed'
+  'RESET_FAILED': 'forgotPassword.resetFailed',
+  'NETWORK_ERROR': 'error.networkError',
+  'SERVER_ERROR': 'error.serverError'
 };
 
 // ==================== 工具函数 ====================
@@ -213,30 +218,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const token = getCaptchaToken();
       const captchaType = getCaptchaType();
 
-      try {
-        const response = await fetch('/api/auth/send-reset-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            captchaToken: token,
-            captchaType: captchaType,
-            language: document.documentElement.lang || 'zh-CN'
-          })
-        });
-        const result = await response.json();
+      const result = await fetchApi('/api/auth/send-reset-code', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          captchaToken: token,
+          captchaType: captchaType,
+          language: document.documentElement.lang || 'zh-CN'
+        })
+      });
 
-        if (result.success) {
-          currentEmail = email;
-          showAlertWithTranslation(t('forgotPassword.codeSent'));
-          showResetStep();
-        } else {
-          // 根据错误码显示对应提示
-          const errorKey = sendCodeErrorMap[result.errorCode] || 'forgotPassword.sendFailed';
-          showAlertWithTranslation(t(errorKey));
-        }
-      } catch {
-        showAlertWithTranslation(t('error.networkError'));
+      if (result.success) {
+        currentEmail = email;
+        showAlertWithTranslation(t('forgotPassword.codeSent'));
+        showResetStep();
+      } else {
+        const errorKey = sendCodeErrorMap[result.errorCode] || 'forgotPassword.sendFailed';
+        showAlertWithTranslation(t(errorKey));
       }
 
       submitEmailBtn.disabled = false;
@@ -328,34 +326,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       submitResetBtn.disabled = true;
       submitResetBtn.textContent = t('forgotPassword.resetting');
 
-      try {
-        const response = await fetch('/api/auth/reset-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: currentEmail, code, password })
-        });
-        const result = await response.json();
+      const result = await fetchApi('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: currentEmail, code, password })
+      });
 
-        if (result.success) {
-          showAlertWithTranslation(t('forgotPassword.resetSuccess'));
-          // 重置成功后跳转到登录页，携带 return 参数
-          const urlParams = new URLSearchParams(window.location.search);
-          const returnUrl = urlParams.get('return');
-          let loginUrl = '/account/login';
-          if (returnUrl) {
-            loginUrl += '?return=' + encodeURIComponent(returnUrl);
-          }
-          setTimeout(() => {
-            window.location.href = loginUrl;
-          }, 1500);
-        } else {
-          const errorKey = resetPasswordErrorMap[result.errorCode] || 'forgotPassword.resetFailed';
-          showAlertWithTranslation(t(errorKey));
-          submitResetBtn.disabled = false;
-          submitResetBtn.textContent = t('forgotPassword.resetPassword');
+      if (result.success) {
+        showAlertWithTranslation(t('forgotPassword.resetSuccess'));
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnUrl = urlParams.get('return');
+        let loginUrl = '/account/login';
+        if (returnUrl) {
+          loginUrl += '?return=' + encodeURIComponent(returnUrl);
         }
-      } catch {
-        showAlertWithTranslation(t('error.networkError'));
+        setTimeout(() => {
+          window.location.href = loginUrl;
+        }, 1500);
+      } else {
+        const errorKey = resetPasswordErrorMap[result.errorCode] || 'forgotPassword.resetFailed';
+        showAlertWithTranslation(t(errorKey));
         submitResetBtn.disabled = false;
         submitResetBtn.textContent = t('forgotPassword.resetPassword');
       }
