@@ -271,7 +271,7 @@ async function checkCodeExpiry(onExpired?: ExpiredCallback): Promise<void> {
       }
     }
   } else {
-    if (onExpired) {onExpired();}
+    console.warn('[COUNTDOWN] WARN: Check code expiry failed:', result.errorCode);
   }
 }
 
