@@ -731,7 +731,7 @@ function showDeleteAccountModal(): void {
     const result = await fetchApi('/api/auth/send-delete-code', {
       method: 'POST',
       body: JSON.stringify({
-        captchaToken: getCaptchaToken(),
+        captchaToken: getCaptchaToken('delete-captcha-container'),
         captchaType: getCaptchaType(),
         language: document.documentElement.lang || 'zh-CN'
       })
@@ -777,6 +777,7 @@ function showDeleteAccountModal(): void {
     } else {
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
+        'delete-captcha-container',
         async () => {
           if (controller.isCleanedUp()) { return; }
           captchaContainer!.classList.add('is-hidden');
@@ -792,8 +793,7 @@ function showDeleteAccountModal(): void {
           if (controller.isCleanedUp()) { return; }
           sendCodeBtn!.disabled = false;
           resetCaptchaState(null, 'delete-captcha-container');
-        },
-        'delete-captcha-container'
+        }
       );
     }
   };
@@ -980,7 +980,7 @@ function showChangePasswordModal(): void {
       body: JSON.stringify({
         currentPassword,
         newPassword,
-        captchaToken: getCaptchaToken(),
+        captchaToken: getCaptchaToken('change-password-captcha-container'),
         captchaType: getCaptchaType()
       })
     });
@@ -1042,6 +1042,7 @@ function showChangePasswordModal(): void {
     } else {
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
+        'change-password-captcha-container',
         async () => {
           if (controller.isCleanedUp()) { return; }
           await doChangePassword();
@@ -1054,8 +1055,7 @@ function showChangePasswordModal(): void {
         () => {
           if (controller.isCleanedUp()) { return; }
           resetCaptchaState(confirmBtn, 'change-password-captcha-container');
-        },
-        'change-password-captcha-container'
+        }
       );
     }
   });
@@ -1142,7 +1142,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
       method: 'POST',
       body: JSON.stringify({
         username: newUsername,
-        captchaToken: getCaptchaToken(),
+        captchaToken: getCaptchaToken('change-username-captcha-container'),
         captchaType: getCaptchaType()
       })
     });
@@ -1198,6 +1198,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
     } else {
       captchaContainer!.classList.remove('is-hidden');
       await initCaptcha(
+        'change-username-captcha-container',
         async () => {
           if (controller.isCleanedUp()) { return; }
           await doChangeUsername();
@@ -1210,8 +1211,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
         () => {
           if (controller.isCleanedUp()) { return; }
           resetCaptchaState(confirmBtn, 'change-username-captcha-container');
-        },
-        'change-username-captcha-container'
+        }
       );
     }
   });

@@ -6,6 +6,7 @@
  * - 统一接口，调用方无需关心具体验证器
  * - 自动加载配置和初始化
  * - 多验证器随机选择（50/50）
+ * - 支持多实例（基于容器 ID 隔离状态）
  *
  * 当前支持：
  * - Turnstile (Cloudflare)
@@ -32,6 +33,12 @@ interface CaptchaConfig {
 
 /** 回调函数类型 */
 type CaptchaCallback = (token?: string) => void;
+
+/** 单个验证码实例的状态 */
+interface CaptchaInstance {
+  widgetId: string | null;
+  token: string | null;
+}
 
 /** Turnstile API */
 interface TurnstileAPI {
@@ -71,28 +78,39 @@ declare global {
   }
 }
 
-// ==================== 状态变量 ====================
+// ==================== 全局共享状态 ====================
 
-/** 所有可用的验证器配置 */
+/** 所有可用的验证器配置（全局共享，只加载一次） */
 let providers: CaptchaProvider[] = [];
 
-/** 当前选中的验证器类型 */
+/** 当前选中的验证器类型（全局共享） */
 let captchaType: CaptchaType = '';
 
-/** 当前选中的站点密钥 */
+/** 当前选中的站点密钥（全局共享） */
 let siteKey: string = '';
-
-/** 当前 Widget ID */
-let widgetId: string | null = null;
-
-/** 当前验证 Token */
-let captchaToken: string | null = null;
 
 /** SDK 脚本 URL 映射 */
 const SDK_URLS: Record<string, string> = {
   turnstile: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
   hcaptcha: 'https://js.hcaptcha.com/1/api.js?render=explicit'
 };
+
+// ==================== 实例状态（按容器 ID 隔离） ====================
+
+/** 各容器的验证码实例状态 */
+const instances = new Map<string, CaptchaInstance>();
+
+/**
+ * 获取指定容器的实例状态
+ */
+function getInstance(containerId: string): CaptchaInstance {
+  let instance = instances.get(containerId);
+  if (!instance) {
+    instance = { widgetId: null, token: null };
+    instances.set(containerId, instance);
+  }
+  return instance;
+}
 
 // ==================== 配置加载 ====================
 
@@ -228,16 +246,18 @@ function waitForAPI(timeout: number = 5000): Promise<boolean> {
 // ==================== 辅助函数 ====================
 
 /**
- * 构建验证器回调函数
+ * 构建验证器回调函数（绑定到指定容器实例）
  */
 function buildCallbacks(
+  containerId: string,
   onSuccess?: CaptchaCallback,
   onError?: CaptchaCallback,
   onExpired?: CaptchaCallback
 ) {
+  const instance = getInstance(containerId);
   return {
     callback: (token: string) => {
-      captchaToken = token;
+      instance.token = token;
       if (onSuccess) {onSuccess(token);}
     },
     'error-callback': () => {
@@ -246,7 +266,7 @@ function buildCallbacks(
     },
     'expired-callback': () => {
       console.warn('[CAPTCHA] WARN: Token expired');
-      captchaToken = null;
+      instance.token = null;
       if (onExpired) {onExpired();}
     }
   };
@@ -258,10 +278,10 @@ function buildCallbacks(
  * 初始化验证组件
  */
 export async function initCaptcha(
+  containerId: string,
   onSuccess?: CaptchaCallback,
   onError?: CaptchaCallback,
-  onExpired?: CaptchaCallback,
-  containerId: string = 'captcha-container'
+  onExpired?: CaptchaCallback
 ): Promise<string | null> {
   if (!siteKey) {
     console.warn('[CAPTCHA] WARN: Site key not loaded');
@@ -292,16 +312,18 @@ export async function initCaptcha(
     return null;
   }
 
-  removeWidget();
+  removeWidget(containerId);
   container.innerHTML = '';
+
+  const instance = getInstance(containerId);
 
   try {
     switch (captchaType) {
       case 'turnstile':
-        widgetId = renderTurnstile(containerId, onSuccess, onError, onExpired);
+        instance.widgetId = renderTurnstile(containerId, onSuccess, onError, onExpired);
         break;
       case 'hcaptcha':
-        widgetId = renderHCaptcha(containerId, onSuccess, onError, onExpired);
+        instance.widgetId = renderHCaptcha(containerId, onSuccess, onError, onExpired);
         break;
       default:
         console.error('[CAPTCHA] ERROR: Unknown captcha type:', captchaType);
@@ -314,7 +336,7 @@ export async function initCaptcha(
     return null;
   }
 
-  return widgetId;
+  return instance.widgetId;
 }
 
 /**
@@ -330,7 +352,7 @@ function renderTurnstile(
     throw new Error('Turnstile API not loaded');
   }
 
-  const options = buildCallbacks(onSuccess, onError, onExpired);
+  const options = buildCallbacks(containerId, onSuccess, onError, onExpired);
 
   return window.turnstile.render(`#${containerId}`, {
     sitekey: siteKey,
@@ -353,7 +375,7 @@ function renderHCaptcha(
     throw new Error('hCaptcha API not loaded');
   }
 
-  const options = buildCallbacks(onSuccess, onError, onExpired);
+  const options = buildCallbacks(containerId, onSuccess, onError, onExpired);
 
   return window.hcaptcha.render(containerId, {
     sitekey: siteKey,
@@ -363,30 +385,31 @@ function renderHCaptcha(
 }
 
 /**
- * 移除当前 widget
+ * 移除指定容器的 widget
  */
-function removeWidget(): void {
-  if (widgetId === null) {return;}
+function removeWidget(containerId: string): void {
+  const instance = getInstance(containerId);
+  if (instance.widgetId === null) {return;}
 
   try {
     switch (captchaType) {
       case 'turnstile':
-        if (window.turnstile) {window.turnstile.remove(widgetId);}
+        if (window.turnstile) {window.turnstile.remove(instance.widgetId);}
         break;
       case 'hcaptcha':
-        if (window.hcaptcha) {window.hcaptcha.remove(widgetId);}
+        if (window.hcaptcha) {window.hcaptcha.remove(instance.widgetId);}
         break;
     }
   } catch (error) {
     console.warn('[CAPTCHA] WARN: Failed to remove widget:', (error as Error).message);
   }
-  widgetId = null;
+  instance.widgetId = null;
 }
 
 /**
  * 隐藏验证容器
  */
-export function hideCaptcha(containerId: string = 'captcha-container'): void {
+export function hideCaptcha(containerId: string): void {
   const container = document.getElementById(containerId);
   if (container) {
     container.classList.add('is-hidden');
@@ -397,24 +420,25 @@ export function hideCaptcha(containerId: string = 'captcha-container'): void {
 /**
  * 清除验证组件
  */
-export function clearCaptcha(containerId: string = 'captcha-container'): void {
-  removeWidget();
-  captchaToken = null;
+export function clearCaptcha(containerId: string): void {
+  removeWidget(containerId);
+  const instance = getInstance(containerId);
+  instance.token = null;
   hideCaptcha(containerId);
 }
 
 // ==================== Token 管理 ====================
 
 /**
- * 获取当前的验证 Token
+ * 获取指定容器的验证 Token
  */
-export function getCaptchaToken(): string | null {
-  return captchaToken;
+export function getCaptchaToken(containerId: string): string | null {
+  return getInstance(containerId).token;
 }
 
 /**
- * 重置验证 Token
+ * 重置指定容器的验证 Token
  */
-export function resetCaptchaToken(): void {
-  captchaToken = null;
+export function resetCaptchaToken(containerId: string): void {
+  getInstance(containerId).token = null;
 }
