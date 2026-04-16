@@ -9,6 +9,7 @@
  */
 
 import { setCookie, getCookie, deleteCookie } from '../../../../../../shared/js/utils/cookie.ts';
+import { fetchApi } from '../api/fetch.ts';
 
 // ==================== 类型定义 ====================
 
@@ -17,13 +18,6 @@ type TranslateFunction = (key: string) => string;
 
 /** 过期回调函数类型 */
 type ExpiredCallback = () => void;
-
-/** 检查过期响应 */
-interface CheckExpiryResponse {
-  success: boolean;
-  expired?: boolean;
-  expireTime?: number;
-}
 
 /** 倒计时配置 */
 export interface CountdownConfig {
@@ -262,27 +256,21 @@ async function checkCodeExpiry(onExpired?: ExpiredCallback): Promise<void> {
     return;
   }
 
-  try {
-    const response = await fetch('/api/auth/check-code-expiry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
+  const result = await fetchApi<{ expired: boolean; expireTime?: number }>('/api/auth/check-code-expiry', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
 
-    const result: CheckExpiryResponse = await response.json();
-
-    if (result.success) {
-      if (result.expired) {
-        if (onExpired) {onExpired();}
-      } else {
-        if (result.expireTime) {
-          const timerElement = document.getElementById('code-expiry-timer');
-          startCodeExpiryTimer(result.expireTime, email, timerElement, onExpired);
-        }
+  if (result.success) {
+    if (result.expired) {
+      if (onExpired) {onExpired();}
+    } else {
+      if (result.expireTime) {
+        const timerElement = document.getElementById('code-expiry-timer');
+        startCodeExpiryTimer(result.expireTime, email, timerElement, onExpired);
       }
     }
-  } catch (error) {
-    console.error('[COUNTDOWN] Check code expiry failed:', (error as Error).message);
+  } else {
     if (onExpired) {onExpired();}
   }
 }

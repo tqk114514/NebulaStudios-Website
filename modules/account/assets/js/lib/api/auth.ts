@@ -10,7 +10,8 @@
  * - 错误码映射
  */
 
-import type { ApiResponse, User, RegisterFormData, AuthResponse, SendCodeResponse } from '../../../../../../shared/js/types/auth.ts';
+import { fetchApi } from './fetch.ts';
+import type { User, RegisterFormData, AuthResponse, SendCodeResponse } from '../../../../../../shared/js/types/auth.ts';
 
 // ==================== API 调用 ====================
 
@@ -22,38 +23,27 @@ export async function sendVerificationCode(
   captchaToken: string,
   captchaType: string
 ): Promise<SendCodeResponse> {
-  try {
-    const currentLanguage = window.currentLanguage || 'zh-CN';
+  const currentLanguage = window.currentLanguage || 'zh-CN';
 
-    const response = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: email,
-        captchaToken: captchaToken,
-        captchaType: captchaType,
-        language: currentLanguage
-      })
-    });
+  const result = await fetchApi<{ expireTime?: number; email?: string }>('/api/auth/send-code', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email,
+      captchaToken: captchaToken,
+      captchaType: captchaType,
+      language: currentLanguage
+    })
+  });
 
-    const data: ApiResponse<{ expireTime?: number; email?: string }> = await response.json();
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        message: data.message,
-        expireTime: data.data?.expireTime,
-        email: data.data?.email
-      };
-    } else {
-      return {
-        success: false,
-        errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR'
-      };
-    }
-  } catch (error) {
-    console.error('[AUTH] ERROR: Send verification code failed:', (error as Error).message);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+  if (result.success) {
+    return {
+      success: true,
+      message: result.message,
+      expireTime: result.expireTime,
+      email: result.email
+    };
+  } else {
+    return { success: false, errorCode: result.errorCode };
   }
 }
 
@@ -61,23 +51,15 @@ export async function sendVerificationCode(
  * 用户注册
  */
 export async function register(formData: RegisterFormData): Promise<AuthResponse> {
-  try {
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
-    });
+  const result = await fetchApi<{ message?: string }>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(formData)
+  });
 
-    const data: ApiResponse<User> = await response.json();
-
-    if (response.ok && data.success) {
-      return { success: true, data: data.data };
-    } else {
-      return { success: false, errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR' };
-    }
-  } catch (error) {
-    console.error('[AUTH] ERROR: Registration failed:', (error as Error).message);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+  if (result.success) {
+    return { success: true };
+  } else {
+    return { success: false, errorCode: result.errorCode };
   }
 }
 
@@ -90,29 +72,20 @@ export async function login(
   captchaToken: string,
   captchaType: string
 ): Promise<AuthResponse> {
-  try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: email,
-        password: password,
-        captchaToken: captchaToken,
-        captchaType: captchaType
-      })
-    });
+  const result = await fetchApi<{ data: User }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email,
+      password: password,
+      captchaToken: captchaToken,
+      captchaType: captchaType
+    })
+  });
 
-    const data: ApiResponse<User> = await response.json();
-
-    if (response.ok && data.success) {
-      return { success: true, data: data.data };
-    } else {
-      return { success: false, errorCode: data.success === false ? data.errorCode : 'UNKNOWN_ERROR' };
-    }
-  } catch (error) {
-    console.error('[AUTH] ERROR: Login failed:', (error as Error).message);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+  if (result.success) {
+    return { success: true, data: result.data };
+  } else {
+    return { success: false, errorCode: result.errorCode };
   }
 }
 
@@ -120,23 +93,14 @@ export async function login(
  * 验证会话有效性（从 cookie 读取 token）
  */
 export async function verifySession(): Promise<AuthResponse> {
-  try {
-    const response = await fetch('/api/auth/verify-session', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const result = await fetchApi<{ data: User }>('/api/auth/verify-session', {
+    method: 'POST'
+  });
 
-    const data: ApiResponse<User> = await response.json();
-
-    if (response.ok && data.success) {
-      return { success: true, data: data.data };
-    } else {
-      return { success: false, errorCode: data.success === false ? data.errorCode : 'INVALID_SESSION' };
-    }
-  } catch (error) {
-    console.error('[AUTH] ERROR: Session verification failed:', (error as Error).message);
-    return { success: false, errorCode: 'NETWORK_ERROR' };
+  if (result.success) {
+    return { success: true, data: result.data };
+  } else {
+    return { success: false, errorCode: result.errorCode === 'SESSION_EXPIRED' ? result.errorCode : 'INVALID_SESSION' };
   }
 }
 
@@ -166,6 +130,7 @@ export const errorCodeMap: Record<string, string> = {
   'LOGIN_RATE_LIMIT': 'login.rateLimitExceeded',
   'CAPTCHA_FAILED': 'login.humanVerifyFailed',
   'NETWORK_ERROR': 'error.networkError',
+  'SERVER_ERROR': 'error.serverError',
   'UNKNOWN_ERROR': 'register.sendFailed',
   'MISSING_PARAMETERS': 'register.fillAllFields',
   'CONFIG_FAILED': 'error.configFailed',
@@ -214,6 +179,7 @@ export const errorCodeMap: Record<string, string> = {
   'INVALID_TOKEN': 'error.sessionInvalid',
   'TOKEN_ERROR': 'error.sessionError',
   'INVALID_SESSION': 'error.sessionInvalid',
+  'SESSION_EXPIRED': 'error.sessionExpired',
   'SESSION_VERIFY_FAILED': 'error.sessionVerifyFailed',
   'GET_USER_FAILED': 'error.getUserFailed',
   'LOGOUT_FAILED': 'error.logoutFailed',
