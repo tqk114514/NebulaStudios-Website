@@ -49,6 +49,59 @@ declare function jsQR(
   options?: { inversionAttempts?: string }
 ): JsQRResult | null;
 
+/** UAParser.js 库类型（CDN 全局加载） */
+interface UAParserDevice {
+  vendor?: string;
+  model?: string;
+  type?: string;
+}
+
+interface UAParserBrowser {
+  name?: string;
+  version?: string;
+  major?: string;
+  type?: string;
+}
+
+interface UAParserOS {
+  name?: string;
+  version?: string;
+}
+
+interface UAParserCPU {
+  architecture?: string;
+}
+
+interface UAParserEngine {
+  name?: string;
+  version?: string;
+}
+
+interface UAParserResult {
+  ua: string;
+  browser: UAParserBrowser;
+  cpu: UAParserCPU;
+  device: UAParserDevice;
+  engine: UAParserEngine;
+  os: UAParserOS;
+}
+
+interface UAParserConstructor {
+  new (ua?: string, extensions?: Record<string, unknown>): UAParserConstructor;
+  getResult(): UAParserResult;
+  getBrowser(): UAParserBrowser;
+  getCPU(): UAParserCPU;
+  getDevice(): UAParserDevice;
+  getEngine(): UAParserEngine;
+  getOS(): UAParserOS;
+  getUA(): string;
+  setUA(ua: string): UAParserConstructor;
+  DEVICE_TYPE: Record<string, string>;
+  BROWSER: Record<string, string>;
+  CPU: Record<string, string>;
+  OS: Record<string, string>;
+}
+
 /** 扩展 Window 接口 */
 interface Window {
   /** 翻译函数 */
@@ -67,4 +120,6 @@ interface Window {
   BarcodeDetector?: BarcodeDetector;
   /** jsQR 库 */
   jsQR?: typeof jsQR;
+  /** UAParser.js 库 */
+  UAParser?: UAParserConstructor;
 }
