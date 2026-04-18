@@ -8,7 +8,9 @@
   };
   var validLangs = Object.keys(LANG_NAMES);
 
-  function getCookie(name) {
+  // 内联 getCookie（此脚本直接注入 HTML <script> 标签，无法 import 任何模块）
+  // 重复实现是有意为之，详见 shared/js/utils/cookie.ts 中的完整版本
+function getCookie(name) {
     var match = document.cookie.match('(?:^|;)\\s*' + name + '=([^;]*)');
     return match ? match[1] : null;
   }
