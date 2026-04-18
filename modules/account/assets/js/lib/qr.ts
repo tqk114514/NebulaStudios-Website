@@ -11,6 +11,7 @@
 
 import { createModalController, type ModalController } from './ui/feedback.ts';
 import { fetchApi } from './api/fetch.ts';
+import { isMobileDevice } from './utils/device.ts';
 
 // ==================== 类型定义 ====================
 
@@ -71,18 +72,6 @@ const state = {
   /** 翻译函数 */
   translateFn: ((key: string) => key) as TranslateFunction
 };
-
-// ==================== 移动端检测 ====================
-
-/**
- * 检测是否为移动端设备
- */
-export function isMobileDevice(): boolean {
-  const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent);
-  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const smallScreen = window.innerWidth <= 768;
-  return mobileUA || (hasTouch && smallScreen);
-}
 
 // ==================== Token 获取 ====================
 
