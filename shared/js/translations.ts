@@ -57,6 +57,8 @@ type ValidLanguage = typeof validLanguages[number];
 let currentLanguage: string = 'zh-CN';
 
 // ==================== Cookie 操作 ====================
+// 内联实现（此文件单独构建为 ESModule 且未启用 bundling，无法 import shared/js/utils/cookie.ts）
+// 重复实现 hasCookieConsent / setCookie / getCookie 是有意为之，详见 shared/js/utils/cookie.ts 中的完整版本
 
 /**
  * 检查用户是否同意使用 Cookie
