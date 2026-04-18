@@ -19,24 +19,11 @@ import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clea
 import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModalController } from './lib/ui/feedback.ts';
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
+import { isMobileDevice } from './lib/utils/device.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 
 // 翻译函数（从全局获取，若不存在则返回原始 key）
 const t = window.t || ((key: string): string => key);
-
-// ==================== 设备检测 ====================
-
-/**
- * 检测是否为移动设备
- */
-function isMobileDevice(): boolean {
-  const userAgent = navigator.userAgent.toLowerCase();
-  const mobileKeywords = [
-    'android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry',
-    'windows phone', 'opera mini', 'iemobile', 'mobile'
-  ];
-  return mobileKeywords.some(keyword => userAgent.includes(keyword));
-}
 
 // ==================== 工具函数 ====================
 
