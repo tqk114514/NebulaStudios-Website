@@ -8,7 +8,8 @@
  * - 提供检查函数供其他模块使用
  */
 
-// Cookie 函数内联（因为此文件单独构建为 IIFE）
+// Cookie 函数内联（此文件单独构建为 IIFE，无法 import shared/js/utils/cookie.ts）
+// 重复实现 getCookie / setCookie / deleteCookie 是有意为之，详见 shared/js/utils/cookie.ts 中的完整版本
 function getCookie(name: string): string | null {
   const nameEQ = name + '=';
   const ca = document.cookie.split(';');
