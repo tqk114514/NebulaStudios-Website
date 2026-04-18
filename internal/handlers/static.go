@@ -326,22 +326,10 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 //   - pageName: 页面文件名（如 login.html）
 func serveHTML(c *gin.Context, basePath, pageName string) {
 	origPath := filepath.Join(basePath, pageName)
-	brPath := origPath + ".br"
 
 	cacheControl := CacheControlNoCache
 	if c.Writer.Header().Get("Cache-Control") != "" {
 		cacheControl = c.Writer.Header().Get("Cache-Control")
-	}
-
-	if middleware.AcceptsBrotli(c) {
-		if _, err := os.Stat(brPath); err == nil {
-			c.Header("Content-Encoding", "br")
-			c.Header("Content-Type", ContentTypeHTML)
-			c.Header("Cache-Control", cacheControl)
-			c.Header("Vary", "Accept-Encoding")
-			c.File(brPath)
-			return
-		}
 	}
 
 	htmlData, err := os.ReadFile(origPath)
@@ -372,14 +360,19 @@ func serve404Fallback(c *gin.Context) {
 	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
 	c.Status(http.StatusNotFound)
 
-	// 尝试服务 404 页面
-	brPath := filepath.Join(DistAccountPages, "404.html.br")
-	if _, err := os.Stat(brPath); err == nil {
-		serveBrotliOrDecompressed(c, brPath, ContentTypeHTML, "")
+	origPath := filepath.Join(DistAccountPages, "404.html")
+	htmlData, err := os.ReadFile(origPath)
+	if err == nil {
+		html := string(htmlData)
+		nonce := middleware.GetCSPNonce(c)
+		if nonce != "" {
+			html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
+		}
+		c.Header("Content-Type", ContentTypeHTML)
+		c.Data(http.StatusNotFound, ContentTypeHTML, []byte(html))
 		return
 	}
 
-	// 最终回退：返回简单的 404 文本
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusNotFound, "404 Not Found")
 }
