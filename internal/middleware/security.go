@@ -49,8 +49,8 @@ const (
 	// 防护范围：XSS、点击劫持、数据注入、混合内容
 	defaultCSP = "default-src 'none'; " +
 		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com https://static.cloudflareinsights.com; " +
-		"style-src 'self' https://fonts.googleapis.com; " +
-		"font-src 'self' https://fonts.gstatic.com; " +
+		"style-src 'self' https://cdn01.nebulastudios.top; " +
+		"font-src 'self' https://cdn01.nebulastudios.top; " +
 		"connect-src 'self' https://static.cloudflareinsights.com https://*.hcaptcha.com https://cdn01.nebulastudios.top; " +
 		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
 		"frame-ancestors 'self'; " +
