@@ -25,6 +25,8 @@ var (
 	htmlCommentRe    = regexp.MustCompile(`<!--[\s\S]*?-->`)
 	htmlWhitespaceRe = regexp.MustCompile(`\s+`)
 	htmlTagSpaceRe   = regexp.MustCompile(`>\s+<`)
+	scriptBlockRe    = regexp.MustCompile(`(?i)<script\b[^>]*>[\s\S]*?</script>`)
+	styleBlockRe     = regexp.MustCompile(`(?i)<style\b[^>]*>[\s\S]*?</style>`)
 )
 
 // ====================  HTML 构建 ====================
@@ -247,6 +249,26 @@ func minifyHTML(html string) string {
 		return ""
 	}
 
+	// 提取 <script> 和 <style> 块，用占位符替换以保护其内容不被压缩
+	var preservedBlocks []string
+	saveBlock := func(re *regexp.Regexp) *regexp.Regexp {
+		return re
+	}
+	_ = saveBlock
+
+	placeholder := func(block string) string {
+		idx := len(preservedBlocks)
+		preservedBlocks = append(preservedBlocks, block)
+		return fmt.Sprintf("\x00PRESERVE%d\x00", idx)
+	}
+
+	html = scriptBlockRe.ReplaceAllStringFunc(html, func(match string) string {
+		return placeholder(match)
+	})
+	html = styleBlockRe.ReplaceAllStringFunc(html, func(match string) string {
+		return placeholder(match)
+	})
+
 	// 移除 HTML 注释
 	html = htmlCommentRe.ReplaceAllString(html, "")
 
@@ -258,6 +280,11 @@ func minifyHTML(html string) string {
 
 	// 移除首尾空白
 	html = strings.TrimSpace(html)
+
+	// 还原 <script> 和 <style> 块
+	for i, block := range preservedBlocks {
+		html = strings.Replace(html, fmt.Sprintf("\x00PRESERVE%d\x00", i), block, 1)
+	}
 
 	return html
 }
