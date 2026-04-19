@@ -22,8 +22,8 @@ import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoa
 
 // ==================== 全局变量 ====================
 
-// 翻译函数（从全局获取，若不存在则返回原始 key）
-const t = window.t || ((key: string): string => key);
+// 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
+const t = (key: string): string => window.t ? window.t(key) : key;
 
 /**
  * 显示带翻译的提示弹窗

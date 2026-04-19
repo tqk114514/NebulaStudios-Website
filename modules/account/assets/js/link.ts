@@ -12,11 +12,10 @@
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
-import { getUrlParameter } from './lib/utils/url.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 
-// 翻译函数
-const t = window.t || ((key: string): string => key);
+// 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
+const t = (key: string): string => window.t ? window.t(key) : key;
 
 // ==================== 错误码映射 ====================
 
