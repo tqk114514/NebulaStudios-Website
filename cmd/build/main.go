@@ -202,7 +202,6 @@ func setupDistDir() error {
 		"dist/account/assets/js",
 		"dist/account/assets/css",
 		"dist/account/pages",
-		"dist/account/data",
 		"dist/policy/assets/js",
 		"dist/policy/assets/css",
 		"dist/policy/pages",
