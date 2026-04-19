@@ -16,11 +16,20 @@ const LANG_NAMES: Record<string, string> = {
   'ko': '한국어'
 };
 
+let prevDestroy: (() => void) | null = null;
+
 /**
  * 初始化语言切换器（下拉列表式）
  * @param onLanguageChange - 语言切换后的回调函数
+ * @returns 销毁函数，调用后移除所有事件监听器
  */
-export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void): void {
+export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void): () => void {
+  // 销毁上一次实例的所有事件监听器
+  if (prevDestroy) {
+    prevDestroy();
+    prevDestroy = null;
+  }
+
   const languageSwitcher = document.querySelector('.language-switcher');
   const currentBtn = document.querySelector('.language-current');
   const langText = document.querySelector('.language-current .lang-text');
@@ -28,7 +37,7 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
 
   if (!languageSwitcher || !currentBtn || !languageOptions.length) {
     console.warn('[I18N] WARN: Language switcher elements not found');
-    return;
+    return () => {};
   }
 
   // 设置当前语言状态
@@ -44,16 +53,18 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   });
 
   // 点击当前按钮切换下拉菜单
-  currentBtn.addEventListener('click', (e) => {
+  const handleCurrentBtnClick = (e: Event) => {
     e.preventDefault();
     e.stopPropagation();
     const isOpen = languageSwitcher.classList.toggle('is-open');
     currentBtn.setAttribute('aria-expanded', String(isOpen));
-  });
+  };
 
   // 点击选项切换语言
+  const handleOptionClicks: Map<Element, (e: Event) => void> = new Map();
+
   languageOptions.forEach(option => {
-    option.addEventListener('click', async (e) => {
+    const handler = async (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -84,28 +95,47 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
       if (typeof onLanguageChange === 'function') {
         onLanguageChange(selectedLang);
       }
-    });
+    };
+    handleOptionClicks.set(option, handler);
+    option.addEventListener('click', handler);
   });
 
   // 点击外部关闭下拉菜单
-  document.addEventListener('click', (e) => {
+  const handleDocumentClick = (e: MouseEvent) => {
     if (!languageSwitcher.contains(e.target as Node)) {
       languageSwitcher.classList.remove('is-open');
       currentBtn.setAttribute('aria-expanded', 'false');
     }
-  });
+  };
 
   // ESC 键关闭下拉菜单
-  document.addEventListener('keydown', (e) => {
+  const handleDocumentKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && languageSwitcher.classList.contains('is-open')) {
       languageSwitcher.classList.remove('is-open');
       currentBtn.setAttribute('aria-expanded', 'false');
     }
-  });
+  };
 
-  /**
-   * 更新当前显示的语言文本
-   */
+  currentBtn.addEventListener('click', handleCurrentBtnClick);
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
+
+  // 销毁函数：移除所有事件监听器
+  const destroy = () => {
+    currentBtn.removeEventListener('click', handleCurrentBtnClick);
+    handleOptionClicks.forEach((handler, option) => {
+      option.removeEventListener('click', handler);
+    });
+    handleOptionClicks.clear();
+    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('keydown', handleDocumentKeydown);
+    prevDestroy = null;
+  };
+
+  prevDestroy = destroy;
+
+  return destroy;
+
   function updateCurrentDisplay(lang: string): void {
     if (langText) {
       langText.textContent = LANG_NAMES[lang] || lang;
