@@ -16,8 +16,8 @@ import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { getUrlParameter } from './lib/utils/url.ts';
 
-// 翻译函数
-const t = window.t || ((key: string): string => key);
+// 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
+const t = (key: string): string => window.t ? window.t(key) : key;
 
 function escapeHtml(str: string): string {
   const div = document.createElement('div');
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (userNameEl) userNameEl.textContent = username;
 
       // 设置用户头像
-      setUserAvatar(userAvatar, username);
+      setUserAvatar(userAvatar || '', username);
 
       // 渲染权限列表
       renderScopes(scopes);
