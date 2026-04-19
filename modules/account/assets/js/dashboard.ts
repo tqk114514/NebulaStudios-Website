@@ -22,8 +22,8 @@ import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/cou
 import { isMobileDevice } from './lib/utils/device.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 
-// 翻译函数（从全局获取，若不存在则返回原始 key）
-const t = window.t || ((key: string): string => key);
+// 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
+const t = (key: string): string => window.t ? window.t(key) : key;
 
 // ==================== 工具函数 ====================
 

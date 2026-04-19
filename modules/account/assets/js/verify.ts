@@ -13,6 +13,9 @@ import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/
 import { getUrlParameter } from './lib/utils/url.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 
+// 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
+const t = (key: string): string => window.t ? window.t(key) : key;
+
 // ==================== 类型定义 ====================
 
 type PageState = 'loading' | 'success' | 'error';
@@ -72,7 +75,7 @@ function showState(state: PageState, card: HTMLElement | null): void {
  */
 function showError(errorCode: string, card: HTMLElement | null): void {
   const translationKey = errorCodeMap[errorCode] || 'verify.errorDefault';
-  const errorMessage = window.t ? window.t(translationKey) : translationKey;
+  const errorMessage = t(translationKey);
 
   const errorElement = document.getElementById('error-message') as HTMLElement | null;
   if (errorElement) {
