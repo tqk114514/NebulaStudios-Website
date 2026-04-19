@@ -407,9 +407,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 显示头像
     if (avatarEl) {
-      if (user.avatar_url) {
+      const displayUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
+      if (displayUrl) {
         const img = document.createElement('img');
-        img.src = user.avatar_url;
+        img.src = displayUrl;
         img.alt = user.username;
         img.className = 'avatar-img';
         avatarEl.textContent = '';
