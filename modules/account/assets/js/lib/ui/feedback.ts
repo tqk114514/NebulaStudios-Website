@@ -146,7 +146,7 @@ export const showWarning = (msg: string, duration?: number): void => showToast(m
 /**
  * 显示通用提示弹窗
  */
-export function showAlert(message: string, title: string = '', t: TranslateFunction = window.t || ((key: string) => key)): void {
+export function showAlert(message: string, title: string = '', t: TranslateFunction = (key) => window.t ? window.t(key) : key): void {
   const alertModal = document.getElementById('alert-modal');
   const alertTitle = document.getElementById('alert-title');
   const alertMessage = document.getElementById('alert-message');
@@ -186,7 +186,7 @@ export function closeAlert(): void {
 /**
  * 显示确认弹窗
  */
-export function showConfirm(message: string, title: string | null = null, t: TranslateFunction = window.t || ((key: string) => key)): Promise<boolean> {
+export function showConfirm(message: string, title: string | null = null, t: TranslateFunction = (key) => window.t ? window.t(key) : key): Promise<boolean> {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirm-modal');
     const titleEl = document.getElementById('confirm-title');
@@ -240,7 +240,7 @@ export function showConfirm(message: string, title: string | null = null, t: Tra
 /**
  * 显示外部链接确认弹窗
  */
-export function showExternalLinkConfirm(url: string, t: TranslateFunction = window.t || ((key: string) => key)): void {
+export function showExternalLinkConfirm(url: string, t: TranslateFunction = (key) => window.t ? window.t(key) : key): void {
   const modal = document.getElementById('external-link-modal');
 
   if (!modal) {
@@ -339,7 +339,7 @@ let modalsInitialized = false;
 /**
  * 初始化弹窗事件监听
  */
-export function initializeModals(t: TranslateFunction = window.t || ((key: string) => key)): void {
+export function initializeModals(t: TranslateFunction = (key) => window.t ? window.t(key) : key): void {
   // 只在第一次调用时注册事件监听
   if (!modalsInitialized) {
     const alertModal = document.getElementById('alert-modal');
@@ -385,7 +385,7 @@ export function initializeModals(t: TranslateFunction = window.t || ((key: strin
 /**
  * 初始化弹窗翻译
  */
-export function initializeModalTranslations(t: TranslateFunction = window.t || ((key: string) => key)): void {
+export function initializeModalTranslations(t: TranslateFunction = (key) => window.t ? window.t(key) : key): void {
   document.querySelectorAll('.modal-close').forEach(btn => {
     if (btn.hasAttribute('data-i18n')) {
       const key = btn.getAttribute('data-i18n');

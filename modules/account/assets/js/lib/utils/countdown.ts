@@ -65,7 +65,7 @@ export function startCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t = window.t || ((key: string) => key),
+    t = (key: string) => window.t ? window.t(key) : key,
     onComplete
   } = config;
 
@@ -120,7 +120,7 @@ export function resumeCountdown(
     cookieKey = 'countdown_end',
     completeText,
     input,
-    t = window.t || ((key: string) => key),
+    t = (key: string) => window.t ? window.t(key) : key,
     onComplete
   } = config;
 

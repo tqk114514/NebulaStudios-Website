@@ -25,7 +25,7 @@ interface PendingLoginData {
 
 // ==================== 全局变量 ====================
 
-const t = window.t || ((key: string): string => key);
+const t = (key: string): string => window.t ? window.t(key) : key;
 const showAlertWithTranslation = (message: string, title?: string): void => showAlert(message, title || '', t);
 
 /** 待处理的登录请求 */
