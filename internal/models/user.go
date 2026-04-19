@@ -129,18 +129,12 @@ func (u *User) ToPublic() *UserPublic {
 		return nil
 	}
 
-	// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
-	avatarURL := u.AvatarURL
-	if avatarURL == "microsoft" && u.MicrosoftAvatarURL.Valid {
-		avatarURL = u.MicrosoftAvatarURL.String
-	}
-
 	pub := &UserPublic{
 		ID:        u.ID,
 		UID:       u.UID,
 		Username:  u.Username,
 		Email:     u.Email,
-		AvatarURL: avatarURL,
+		AvatarURL: u.AvatarURL,
 		Role:      u.Role,
 		IsBanned:  u.IsBanned,
 		CreatedAt: u.CreatedAt,
