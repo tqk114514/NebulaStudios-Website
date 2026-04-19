@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 隐藏页面加载遮罩
     hidePageLoader();
 
-    const user = sessionResult.data as unknown as User;
+    const user = sessionResult.data;
 
     // 检查 URL 参数（处理绑定结果提示）
     const urlParams = new URLSearchParams(window.location.search);
