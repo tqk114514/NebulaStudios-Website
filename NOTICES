@@ -51,6 +51,18 @@ License: Apache-2.0
     https://github.com/cozmo/jsQR/blob/master/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
     https://github.com/cure53/DOMPurify/blob/3.4.0/LICENSE
+  github.com/bytedance/gopkg
+    https://github.com/bytedance/gopkg/blob/v0.1.4/LICENSE
+  github.com/bytedance/sonic
+    https://github.com/bytedance/sonic/tree/v1.15.0
+  github.com/bytedance/sonic/loader
+    https://github.com/bytedance/sonic/tree/v1.15.0
+  github.com/cloudwego/base64x
+    https://github.com/cloudwego/base64x/blob/v0.1.6/LICENSE
+  github.com/modern-go/concurrent
+    https://github.com/modern-go/concurrent/blob/1.0.3/LICENSE
+  github.com/modern-go/reflect2
+    https://github.com/modern-go/reflect2/blob/v1.0.2/LICENSE
 
 ------------------------------------------------------------
 License: BSD-2-Clause
@@ -83,6 +95,10 @@ License: BSD-3-Clause
     https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
   google.golang.org/protobuf
     https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+  github.com/twitchyliquid64/golang-asm
+    https://github.com/twitchyliquid64/golang-asm/blob/v0.15.1/LICENSE
+  golang.org/x/arch
+    https://cs.opensource.google/go/x/arch/+/master:LICENSE
 
 ------------------------------------------------------------
 License: MIT
@@ -143,9 +159,25 @@ License: MIT
     https://github.com/markedjs/marked/blob/v18.0.2/LICENSE.md
   github.com/faisalman/ua-parser-js
     https://github.com/faisalman/ua-parser-js/blob/1.0.41/LICENSE
+  github.com/goccy/go-json
+    https://github.com/goccy/go-json/blob/v0.10.6/LICENSE
+  github.com/json-iterator/go
+    https://github.com/json-iterator/go/blob/v1.1.12/LICENSE
+  github.com/klauspost/cpuid/v2
+    https://github.com/klauspost/cpuid/blob/v2.3.0/LICENSE
 
 ------------------------------------------------------------
 License: MPL-2.0
 ------------------------------------------------------------
   github.com/hashicorp/golang-lru/v2
     https://github.com/hashicorp/golang-lru/blob/v2.0.7/LICENSE
+
+------------------------------------------------------------
+License: OFL-1.1
+------------------------------------------------------------
+  Unbounded
+    https://github.com/googlefonts/unbounded/blob/main/OFL.txt
+  Newsreader
+    https://github.com/productiontype/Newsreader/blob/master/OFL.txt
+  Azeret Mono
+    https://github.com/displaay/Azeret/blob/main/OFL.txt
