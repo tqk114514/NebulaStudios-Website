@@ -73,11 +73,9 @@ export interface LoginFormData {
 // ==================== 认证响应 ====================
 
 /** 认证响应 */
-export interface AuthResponse {
-  success: boolean;
-  data?: User;
-  errorCode?: string;
-}
+export type AuthResponse =
+  | { success: true; data: User; message?: string }
+  | { success: false; errorCode: string; message?: string };
 
 /** 发送验证码响应 */
 export interface SendCodeResponse {

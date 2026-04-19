@@ -50,14 +50,14 @@ export async function sendVerificationCode(
 /**
  * 用户注册
  */
-export async function register(formData: RegisterFormData): Promise<AuthResponse> {
+export async function register(formData: RegisterFormData): Promise<{ success: true; message?: string } | { success: false; errorCode: string | undefined }> {
   const result = await fetchApi<{ message?: string }>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(formData)
   });
 
   if (result.success) {
-    return { success: true };
+    return { success: true, message: result.message };
   } else {
     return { success: false, errorCode: result.errorCode };
   }
