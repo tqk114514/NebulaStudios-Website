@@ -473,8 +473,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           });
 
           if (result.success) {
-            user.microsoft_id = null;
-            user.microsoft_name = null;
+            const freshSession = await verifySession();
+            if (freshSession.success) {
+              Object.assign(user, freshSession.data);
+            }
             updateMicrosoftStatus(false, null);
             showAlert(t('dashboard.unlinkSuccess'));
           } else {
@@ -541,10 +543,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const changeAvatarItem = document.getElementById('change-avatar-item');
     if (changeAvatarItem) {
       changeAvatarItem.addEventListener('click', () => {
-        showAvatarModal(user, (newAvatarUrl) => {
-          // 更新用户数据和页面显示
-          user.avatar_url = newAvatarUrl;
-          // 如果是 "microsoft"，用实际的微软头像 URL 显示
+        showAvatarModal(user, async (newAvatarUrl) => {
+          const freshSession = await verifySession();
+          if (freshSession.success) {
+            Object.assign(user, freshSession.data);
+          }
           const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url : newAvatarUrl;
           updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
         });
@@ -555,14 +558,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const changeUsernameItem = document.getElementById('change-username-item');
     if (changeUsernameItem) {
       changeUsernameItem.addEventListener('click', () => {
-        showChangeUsernameModal(user, (newUsername) => {
-          // 更新用户数据和页面显示
-          user.username = newUsername;
-          if (usernameEl) { usernameEl.textContent = newUsername; }
-          if (infoUsername) { infoUsername.textContent = newUsername; }
-          // 更新头像显示（如果是首字母头像）
+        showChangeUsernameModal(user, async (newUsername) => {
+          const freshSession = await verifySession();
+          if (freshSession.success) {
+            Object.assign(user, freshSession.data);
+          }
+          if (usernameEl) { usernameEl.textContent = user.username; }
+          if (infoUsername) { infoUsername.textContent = user.username; }
           if (!user.avatar_url && avatarEl) {
-            avatarEl.textContent = newUsername.charAt(0).toUpperCase();
+            avatarEl.textContent = user.username.charAt(0).toUpperCase();
           }
         });
       });
