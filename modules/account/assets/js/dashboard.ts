@@ -1343,7 +1343,7 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
   try {
     // 创建 QRCanvas（用于解码）
     const canvas = new QRCanvas({}, {
-      cropToSquare: true
+      cropToSquare: false
     });
 
     // 启动摄像头（使用合理分辨率，避免放大问题）

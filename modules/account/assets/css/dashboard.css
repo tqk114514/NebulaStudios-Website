@@ -385,19 +385,11 @@
 }
 
 .qr-scanner-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
+  display: none;
 }
 
 .qr-scanner-frame {
-  width: 60%;
-  aspect-ratio: 1;
-  border: 2px solid var(--fg);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  display: none;
 }
 
 .qr-scan-status {
