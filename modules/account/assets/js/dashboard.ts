@@ -20,7 +20,7 @@ import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModal
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
 import { isMobileDevice } from './lib/utils/device.ts';
-import { QRCanvas, frontalCamera, frameLoop } from './lib/paulmillr-qr@5.5.0/src/dom.ts';
+import { QRCanvas, QRCamera, frameLoop } from './lib/paulmillr-qr@5.5.0/src/dom.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
@@ -1247,7 +1247,7 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
     return;
   }
 
-  let camera: Awaited<ReturnType<typeof frontalCamera>> | null = null;
+  let camera: QRCamera | null = null;
   let cancelFrameLoop: (() => void) | null = null;
 
   /**
@@ -1346,10 +1346,26 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
       cropToSquare: true
     });
 
-    // 启动摄像头（自动选择后置摄像头）
+    // 启动摄像头（使用合理分辨率，避免放大问题）
     updateStatus('dashboard.scanQrRequesting');
-    camera = await frontalCamera(video);
-    console.log('[QR-SCAN] Camera started successfully');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      updateStatus('dashboard.scanQrNotSupported', 'error');
+      return;
+    }
+
+    // 使用 1280x720 分辨率（和之前 BarcodeDetector/jsQR 方案一致）
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    camera = new QRCamera(stream, video);
+    console.log('[QR-SCAN] Camera started successfully, resolution:', video.videoWidth, 'x', video.videoHeight);
 
     updateStatus('dashboard.scanQrHint');
 
