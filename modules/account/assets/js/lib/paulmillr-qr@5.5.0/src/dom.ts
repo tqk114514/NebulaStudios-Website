@@ -208,7 +208,7 @@ export class QRCanvas {
   }
 }
 
-class QRCamera {
+export class QRCamera {
   private stream: MediaStream;
   private player: HTMLVideoElement;
   constructor(stream: MediaStream, player: HTMLVideoElement) {
