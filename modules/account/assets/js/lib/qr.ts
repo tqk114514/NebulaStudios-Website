@@ -12,6 +12,7 @@
 import { createModalController, type ModalController } from './ui/feedback.ts';
 import { fetchApi } from './api/fetch.ts';
 import { isMobileDevice } from './utils/device.ts';
+import encodeQR from './paulmillr-qr@5.5.0/src/index.ts';
 
 // ==================== 类型定义 ====================
 
@@ -98,20 +99,20 @@ export async function fetchLoginToken(): Promise<TokenResult> {
  * 生成二维码到容器
  */
 export function generateQRCode(data: string, container: HTMLElement, size: number = 200): boolean {
-  if (!window.QRCode) {
-    console.error('[QR-LOGIN] ERROR: QRCode library not loaded');
-    return false;
-  }
-
   try {
-    new window.QRCode(container, {
-      text: data,
-      width: size,
-      height: size,
-      colorDark: '#000000',
-      colorLight: '#ffffff',
-      correctLevel: window.QRCode.CorrectLevel.M
+    const svgString = encodeQR(data, 'svg', {
+      ecc: 'medium',
+      border: 2,
+      scale: Math.max(4, Math.floor(size / 25))
     });
+    container.innerHTML = svgString;
+    const svgElement = container.querySelector('svg');
+    if (svgElement) {
+      svgElement.setAttribute('width', String(size));
+      svgElement.setAttribute('height', String(size));
+      svgElement.style.width = `${size}px`;
+      svgElement.style.height = `${size}px`;
+    }
     return true;
   } catch (error) {
     console.error('[QR-LOGIN] ERROR: QR code generation failed:', error);

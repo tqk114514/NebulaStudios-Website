@@ -20,6 +20,7 @@ import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModal
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
 import { isMobileDevice } from './lib/utils/device.ts';
+import { QRCanvas, frontalCamera, frameLoop } from './lib/paulmillr-qr@5.5.0/src/dom.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
@@ -1218,9 +1219,9 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
 
 /**
  * 显示扫码登录弹窗
- * 优先使用 BarcodeDetector API，不支持时使用 jsQR 库
+ * 使用 paulmillr-qr 库的 QRCanvas 和 QRCamera
  */
-function showQrScanModal(onClose: () => void): void {
+async function showQrScanModal(onClose: () => void): Promise<void> {
   const video = document.getElementById('qr-scanner-video') as HTMLVideoElement | null;
   const statusEl = document.getElementById('qr-scan-status');
 
@@ -1229,24 +1230,12 @@ function showQrScanModal(onClose: () => void): void {
     return;
   }
 
-  let stream: MediaStream | null = null;
-  let animationId: number | null = null;
-  let detectionStarted = false;
-  let canvas: HTMLCanvasElement | null = null;
-  let canvasCtx: CanvasRenderingContext2D | null = null;
-
-  // 检查浏览器是否支持 BarcodeDetector
-  const hasBarcodeDetector = typeof window.BarcodeDetector === 'function';
-  const hasJsQR = typeof window.jsQR === 'function';
-
-  console.log('[QR-SCAN] BarcodeDetector:', hasBarcodeDetector, 'jsQR:', hasJsQR);
-
   // 创建弹窗控制器
   const controller = createModalController({
     modalId: 'qr-scan-modal',
     cancelBtnId: 'qr-scan-close-btn',
     onCleanup: () => {
-      stopCamera();
+      stopScanning();
       setTimeout(() => {
         if (onClose) { onClose(); }
       }, 300);
@@ -1258,6 +1247,9 @@ function showQrScanModal(onClose: () => void): void {
     return;
   }
 
+  let camera: Awaited<ReturnType<typeof frontalCamera>> | null = null;
+  let cancelFrameLoop: (() => void) | null = null;
+
   /**
    * 更新状态文本
    */
@@ -1268,204 +1260,6 @@ function showQrScanModal(onClose: () => void): void {
       if (type === 'error') { statusEl.classList.add('error'); }
       if (type === 'success') { statusEl.classList.add('success'); }
     }
-  }
-
-  /**
-   * 获取后置摄像头设备 ID
-   */
-  async function getBackCameraId(): Promise<string | null> {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cameras = devices.filter(d => d.kind === 'videoinput');
-      console.log('[QR-SCAN] Available cameras:', cameras.map(c => ({ id: c.deviceId.substring(0, 8), label: c.label })));
-
-      const backCamera = cameras.find(c => {
-        const label = c.label.toLowerCase();
-        return label.includes('back') || label.includes('rear') || label.includes('environment');
-      });
-
-      if (backCamera) {
-        console.log('[QR-SCAN] Found back camera:', backCamera.label);
-        return backCamera.deviceId;
-      }
-
-      if (cameras.length > 1) {
-        console.log('[QR-SCAN] Using last camera as back camera');
-        return cameras[cameras.length - 1].deviceId;
-      }
-
-      return null;
-    } catch (e) {
-      console.warn('[QR-SCAN] Cannot enumerate devices:', e);
-      return null;
-    }
-  }
-
-  /**
-   * 启动摄像头
-   */
-  async function startCamera(): Promise<void> {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      updateStatus('dashboard.scanQrNotSupported', 'error');
-      return;
-    }
-
-    try {
-      updateStatus('dashboard.scanQrRequesting');
-
-      const backCameraId = await getBackCameraId();
-
-      let constraints: MediaStreamConstraints;
-      if (backCameraId) {
-        constraints = {
-          video: { deviceId: { exact: backCameraId }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        };
-      } else {
-        constraints = {
-          video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        };
-      }
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        console.log('[QR-SCAN] Got stream with preferred constraints');
-      } catch (e) {
-        console.warn('[QR-SCAN] Preferred constraints failed:', (e as Error).name, '- trying facingMode ideal');
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-        } catch (e2) {
-          console.warn('[QR-SCAN] facingMode ideal failed:', (e2 as Error).name, '- trying any camera');
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        }
-      }
-
-      video!.setAttribute('playsinline', 'true');
-      video!.setAttribute('autoplay', 'true');
-      video!.muted = true;
-      video!.srcObject = stream;
-
-      await new Promise<void>((resolve, reject) => {
-        video!.onloadedmetadata = (): void => {
-          video!.play().then(resolve).catch(reject);
-        };
-        setTimeout(() => reject(new Error('Video load timeout')), 5000);
-      });
-
-      console.log('[QR-SCAN] Camera started, dimensions:', video!.videoWidth, 'x', video!.videoHeight);
-
-      if (video!.videoWidth === 0 || video!.videoHeight === 0) {
-        throw new Error('Video dimensions are zero');
-      }
-
-      updateStatus('dashboard.scanQrHint');
-
-      if (hasBarcodeDetector) {
-        startBarcodeDetection();
-      } else if (hasJsQR) {
-        startJsQRDetection();
-      } else {
-        updateStatus('dashboard.scanQrNotSupported', 'error');
-      }
-    } catch (error) {
-      console.error('[QR-SCAN] Camera error:', (error as Error).name, (error as Error).message);
-      updateStatus('dashboard.scanQrCameraError', 'error');
-    }
-  }
-
-  /**
-   * 使用 BarcodeDetector API 扫描
-   */
-  async function startBarcodeDetection(): Promise<void> {
-    if (controller.isCleanedUp() || detectionStarted) { return; }
-    detectionStarted = true;
-
-    try {
-      const barcodeDetector = new window.BarcodeDetector!({ formats: ['qr_code'] });
-      console.log('[QR-SCAN] Using BarcodeDetector');
-
-      const detectFrame = async (): Promise<void> => {
-        if (controller.isCleanedUp()) { return; }
-
-        if (!video!.videoWidth || !video!.videoHeight || video!.paused || video!.ended) {
-          animationId = requestAnimationFrame(detectFrame);
-          return;
-        }
-
-        try {
-          const barcodes = await barcodeDetector.detect(video!);
-          if (barcodes.length > 0) {
-            const qrData = barcodes[0].rawValue;
-            console.log('[QR-SCAN] QR detected (BarcodeDetector)');
-            handleQrCodeScanned(qrData);
-            return;
-          }
-        } catch {
-          // 继续下一帧
-        }
-
-        animationId = requestAnimationFrame(detectFrame);
-      };
-
-      setTimeout(() => {
-        if (!controller.isCleanedUp()) {
-          animationId = requestAnimationFrame(detectFrame);
-        }
-      }, 500);
-
-    } catch (error) {
-      console.error('[QR-SCAN] BarcodeDetector failed:', error);
-      if (hasJsQR) {
-        detectionStarted = false;
-        startJsQRDetection();
-      } else {
-        updateStatus('dashboard.scanQrNotSupported', 'error');
-      }
-    }
-  }
-
-  /**
-   * 使用 jsQR 库扫描
-   */
-  function startJsQRDetection(): void {
-    if (controller.isCleanedUp() || detectionStarted) { return; }
-    detectionStarted = true;
-
-    console.log('[QR-SCAN] Using jsQR library');
-
-    canvas = document.createElement('canvas');
-    canvasCtx = canvas.getContext('2d', { willReadFrequently: true });
-
-    const detectFrame = (): void => {
-      if (controller.isCleanedUp()) { return; }
-
-      if (!video!.videoWidth || !video!.videoHeight || video!.paused || video!.ended) {
-        animationId = requestAnimationFrame(detectFrame);
-        return;
-      }
-
-      canvas!.width = video!.videoWidth;
-      canvas!.height = video!.videoHeight;
-      canvasCtx!.drawImage(video!, 0, 0, canvas!.width, canvas!.height);
-
-      const imageData = canvasCtx!.getImageData(0, 0, canvas!.width, canvas!.height);
-      const code = window.jsQR!(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-
-      if (code) {
-        console.log('[QR-SCAN] QR detected (jsQR)');
-        handleQrCodeScanned(code.data);
-        return;
-      }
-
-      animationId = requestAnimationFrame(detectFrame);
-    };
-
-    setTimeout(() => {
-      if (!controller.isCleanedUp()) {
-        animationId = requestAnimationFrame(detectFrame);
-      }
-    }, 500);
   }
 
   /**
@@ -1526,46 +1320,59 @@ function showQrScanModal(onClose: () => void): void {
   }
 
   /**
-   * 停止摄像头
+   * 停止扫描
    */
-  function stopCamera(): void {
-    console.log('[QR-SCAN] Stopping camera');
-
-    if (animationId) {
-      cancelAnimationFrame(animationId);
-      animationId = null;
+  function stopScanning(): void {
+    console.log('[QR-SCAN] Stopping scanner');
+    
+    if (cancelFrameLoop) {
+      cancelFrameLoop();
+      cancelFrameLoop = null;
     }
 
-    if (video) {
-      video.pause();
-      video.srcObject = null;
-      video.onloadedmetadata = null;
-      video.onerror = null;
+    if (camera) {
+      camera.stop();
+      camera = null;
     }
-
-    if (stream) {
-      const tracks = stream.getTracks();
-      tracks.forEach(track => {
-        track.stop();
-        console.log('[QR-SCAN] Track stopped:', track.kind, track.readyState);
-      });
-      stream = null;
-    }
-
-    canvas = null;
-    canvasCtx = null;
-    detectionStarted = false;
   }
 
-  // 显示弹窗
+  // 显示弹窗并启动扫描
   controller.open();
   updateStatus('dashboard.scanQrHint');
 
-  setTimeout(() => {
-    if (!controller.isCleanedUp()) {
-      startCamera();
-    }
-  }, 100);
+  try {
+    // 创建 QRCanvas（用于解码）
+    const canvas = new QRCanvas({}, {
+      cropToSquare: true
+    });
+
+    // 启动摄像头（自动选择后置摄像头）
+    updateStatus('dashboard.scanQrRequesting');
+    camera = await frontalCamera(video);
+    console.log('[QR-SCAN] Camera started successfully');
+
+    updateStatus('dashboard.scanQrHint');
+
+    // 开始逐帧扫描
+    cancelFrameLoop = frameLoop(() => {
+      if (controller.isCleanedUp() || !camera) { return; }
+
+      try {
+        const result = camera.readFrame(canvas);
+        if (result) {
+          console.log('[QR-SCAN] QR detected:', result.substring(0, 50) + '...');
+          handleQrCodeScanned(result);
+          stopScanning();
+        }
+      } catch (e) {
+        // 忽略单帧错误，继续扫描
+      }
+    });
+
+  } catch (error) {
+    console.error('[QR-SCAN] Camera error:', error);
+    updateStatus('dashboard.scanQrCameraError', 'error');
+  }
 }
 
 // ==================== 扫码登录确认弹窗 ====================

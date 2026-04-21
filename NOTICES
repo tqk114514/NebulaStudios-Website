@@ -47,8 +47,6 @@ License: Apache-2.0
     https://github.com/aws/smithy-go/blob/v1.24.2/LICENSE
   go.mongodb.org/mongo-driver/v2
     https://github.com/mongodb/mongo-go-driver/blob/v2.5.0/LICENSE
-  github.com/cozmo/jsQR
-    https://github.com/cozmo/jsQR/blob/master/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
     https://github.com/cure53/DOMPurify/blob/3.4.0/LICENSE
   github.com/bytedance/gopkg
@@ -153,8 +151,6 @@ License: MIT
     https://github.com/uber-go/multierr/blob/v1.11.0/LICENSE.txt
   go.uber.org/zap
     https://github.com/uber-go/zap/blob/v1.27.1/LICENSE
-  github.com/llyys/qrcodejs
-    https://github.com/llyys/qrcodejs/blob/master/LICENSE
   github.com/markedjs/marked
     https://github.com/markedjs/marked/blob/v18.0.2/LICENSE.md
   github.com/faisalman/ua-parser-js
@@ -165,6 +161,8 @@ License: MIT
     https://github.com/json-iterator/go/blob/v1.1.12/LICENSE
   github.com/klauspost/cpuid/v2
     https://github.com/klauspost/cpuid/blob/v2.3.0/LICENSE
+  github.com/paulmillr/qr(MIT OR Apache-2.0)
+    https://github.com/paulmillr/qr/blob/0.5.5/LICENSE-MIT
 
 ------------------------------------------------------------
 License: MPL-2.0
