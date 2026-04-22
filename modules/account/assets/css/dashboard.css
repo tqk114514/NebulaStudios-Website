@@ -573,30 +573,12 @@
   width: auto;
   min-width: 60px;
   padding: 6px 12px;
-  background: var(--error);
-  border: none;
-  color: var(--bg);
-  font-family: var(--font-display);
-  font-weight: 700;
   font-size: var(--text-xs);
   letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
 }
 
 .oauth-grant-revoke::after {
   display: none;
-}
-
-.oauth-grant-revoke:hover {
-  background: var(--error);
-  filter: brightness(1.15);
-}
-
-.oauth-grant-revoke:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .oauth-grants-loading,
