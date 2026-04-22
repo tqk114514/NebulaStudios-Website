@@ -10,17 +10,15 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
         }),
     });
 
-    exe.linkLibC();
-
-    // stb_image
-    exe.addCSourceFile(.{
+    exe.root_module.addCSourceFile(.{
         .file = b.path("src/stb_impl.c"),
         .flags = &.{"-O2"},
     });
-    exe.addIncludePath(b.path("vendor"));
+    exe.root_module.addIncludePath(b.path("vendor"));
 
     // libwebp - 编译源码
     const webp_flags = &[_][]const u8{
@@ -143,32 +141,29 @@ pub fn build(b: *std.Build) void {
 
     // 添加所有源文件
     inline for (sharpyuv_sources) |src| {
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
     }
     inline for (utils_sources) |src| {
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
     }
     inline for (dsp_sources) |src| {
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
     }
     inline for (dsp_sse41_sources) |src| {
-        // SSE4.1 文件需要 -msse4.1 标志
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-msse4.1" } });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-msse4.1" } });
     }
     inline for (dsp_avx2_sources) |src| {
-        // AVX2 文件需要 -mavx2 标志
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-mavx2" } });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-mavx2" } });
     }
     inline for (enc_sources) |src| {
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
     }
     inline for (dec_sources) |src| {
-        exe.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+        exe.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
     }
 
-    // Include paths
-    exe.addIncludePath(b.path("vendor/libwebp"));
-    exe.addIncludePath(b.path("vendor/libwebp/src"));
+    exe.root_module.addIncludePath(b.path("vendor/libwebp"));
+    exe.root_module.addIncludePath(b.path("vendor/libwebp/src"));
 
     b.installArtifact(exe);
 
