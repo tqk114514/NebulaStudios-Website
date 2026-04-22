@@ -1267,7 +1267,7 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
    */
   function isValidQrToken(data: string): boolean {
     if (typeof data !== 'string' || !data.trim()) { return false; }
-    if (data.length < 50 || data.length > 500) { return false; }
+    if (data.length < 30 || data.length > 200) { return false; }
 
     const parts = data.split('.');
     if (parts.length !== 3) { return false; }
