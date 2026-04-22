@@ -506,19 +506,11 @@
   color: var(--fg);
 }
 
-.oauth-grant-desc {
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  color: var(--mid);
-  margin-top: 2px;
-}
-
 .oauth-grant-scopes {
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
   color: var(--mid);
-  flex-shrink: 0;
-  min-width: 80px;
+  margin-top: 2px;
 }
 
 .oauth-grant-time {
