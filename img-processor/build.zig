@@ -171,4 +171,48 @@ pub fn build(b: *std.Build) void {
     run_cmd.step.dependOn(b.getInstallStep());
     const run_step = b.step("run", "Run the image processor");
     run_step.dependOn(&run_cmd.step);
+
+    const exe_unit_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+
+    exe_unit_tests.root_module.addCSourceFile(.{
+        .file = b.path("src/stb_impl.c"),
+        .flags = &.{"-O2"},
+    });
+    exe_unit_tests.root_module.addIncludePath(b.path("vendor"));
+
+    inline for (sharpyuv_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+    }
+    inline for (utils_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+    }
+    inline for (dsp_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+    }
+    inline for (dsp_sse41_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-msse4.1" } });
+    }
+    inline for (dsp_avx2_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = &.{ "-O2", "-DWEBP_USE_THREAD", "-mavx2" } });
+    }
+    inline for (enc_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+    }
+    inline for (dec_sources) |src| {
+        exe_unit_tests.root_module.addCSourceFile(.{ .file = b.path(src), .flags = webp_flags });
+    }
+
+    exe_unit_tests.root_module.addIncludePath(b.path("vendor/libwebp"));
+    exe_unit_tests.root_module.addIncludePath(b.path("vendor/libwebp/src"));
+
+    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_exe_unit_tests.step);
 }
