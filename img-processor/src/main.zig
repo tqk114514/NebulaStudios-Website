@@ -139,3 +139,115 @@ fn sendError(writer: *std.Io.Writer, msg: []const u8) !void {
     try std.Io.Writer.writeAll(writer, &len_buf);
     try std.Io.Writer.writeAll(writer, msg);
 }
+
+const minimal_bmp = [_]u8{
+    0x42, 0x4D, 0x3A, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00,
+    0x28, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00,
+    0x01, 0x00,
+    0x18, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x04, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0x00,
+};
+
+test "processImage - valid BMP returns WebP data" {
+    const result = try processImage(&minimal_bmp, std.testing.allocator);
+    defer std.testing.allocator.free(result);
+
+    try std.testing.expect(result.len > 0);
+    try std.testing.expect(result[0] == 'R');
+    try std.testing.expect(result[1] == 'I');
+    try std.testing.expect(result[2] == 'F');
+    try std.testing.expect(result[3] == 'F');
+    try std.testing.expect(result[8] == 'W');
+    try std.testing.expect(result[9] == 'E');
+    try std.testing.expect(result[10] == 'B');
+    try std.testing.expect(result[11] == 'P');
+}
+
+test "processImage - invalid data returns DecodeError" {
+    const invalid_data = [_]u8{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    const result = processImage(&invalid_data, std.testing.allocator);
+    try std.testing.expectError(error.DecodeError, result);
+}
+
+test "processImage - empty data returns DecodeError" {
+    const empty_data = [_]u8{};
+    const result = processImage(&empty_data, std.testing.allocator);
+    try std.testing.expectError(error.DecodeError, result);
+}
+
+test "processImage - truncated BMP returns DecodeError" {
+    const truncated = minimal_bmp[0..20];
+    const result = processImage(truncated, std.testing.allocator);
+    try std.testing.expectError(error.DecodeError, result);
+}
+
+test "processImage - WebP output size is reasonable" {
+    const result = try processImage(&minimal_bmp, std.testing.allocator);
+    defer std.testing.allocator.free(result);
+
+    try std.testing.expect(result.len < minimal_bmp.len * 100);
+    try std.testing.expect(result.len >= 20);
+}
+
+test "protocol - sendResponse format matches Go client" {
+    var allocating = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer {
+        var list = allocating.toArrayList();
+        list.deinit(std.testing.allocator);
+    }
+    const writer = &allocating.writer;
+
+    const test_data = "hello webp";
+    try sendResponse(writer, test_data);
+
+    const written = allocating.written();
+    try std.testing.expect(written[0] == 0);
+    const len = std.mem.readInt(u32, written[1..5], .big);
+    try std.testing.expect(len == test_data.len);
+    try std.testing.expectEqualSlices(u8, written[5..], test_data);
+}
+
+test "protocol - sendError format matches Go client" {
+    var allocating = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer {
+        var list = allocating.toArrayList();
+        list.deinit(std.testing.allocator);
+    }
+    const writer = &allocating.writer;
+
+    const test_msg = "DecodeError";
+    try sendError(writer, test_msg);
+
+    const written = allocating.written();
+    try std.testing.expect(written[0] == 1);
+    const len = std.mem.readInt(u32, written[1..5], .big);
+    try std.testing.expect(len == test_msg.len);
+    try std.testing.expectEqualSlices(u8, written[5..], test_msg);
+}
+
+test "protocol - length encoding uses big-endian (Go binary.BigEndian)" {
+    var allocating = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer {
+        var list = allocating.toArrayList();
+        list.deinit(std.testing.allocator);
+    }
+    const writer = &allocating.writer;
+
+    const test_data = "abc";
+    try sendResponse(writer, test_data);
+
+    const written = allocating.written();
+    try std.testing.expect(written[1] == 0);
+    try std.testing.expect(written[2] == 0);
+    try std.testing.expect(written[3] == 0);
+    try std.testing.expect(written[4] == 3);
+}
