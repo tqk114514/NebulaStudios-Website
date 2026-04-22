@@ -574,12 +574,21 @@
   color: var(--error);
   text-transform: uppercase;
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 8px;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
 .oauth-grant-revoke:hover {
   border-color: var(--error);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.oauth-grant-revoke:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .oauth-grants-loading,
