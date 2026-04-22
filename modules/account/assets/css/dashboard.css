@@ -468,12 +468,10 @@
 }
 
 .oauth-grant-item {
-  display: grid;
-  grid-template-columns: 24px 1fr auto auto auto;
-  grid-template-rows: auto auto;
-  gap: 4px 16px;
+  display: flex;
   align-items: center;
-  padding: 10px 0;
+  gap: 16px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -489,7 +487,7 @@
   align-items: center;
   justify-content: center;
   color: var(--mid);
-  grid-row: 1 / span 2;
+  flex-shrink: 0;
 }
 
 .oauth-grant-icon svg {
@@ -498,12 +496,7 @@
 }
 
 .oauth-grant-content {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -513,10 +506,19 @@
   color: var(--fg);
 }
 
+.oauth-grant-desc {
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--mid);
+  margin-top: 2px;
+}
+
 .oauth-grant-scopes {
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
   color: var(--mid);
+  flex-shrink: 0;
+  min-width: 80px;
 }
 
 .oauth-grant-time {
@@ -524,14 +526,13 @@
   letter-spacing: 0.08em;
   color: var(--mid);
   font-family: var(--font-mono);
-  grid-column: 3;
-  grid-row: 1;
-  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 100px;
+  text-align: right;
 }
 
 .oauth-grant-revoke {
-  grid-column: 5;
-  grid-row: 1;
+  flex-shrink: 0;
   font-size: var(--text-xs);
   letter-spacing: 0.12em;
   color: var(--error);
@@ -539,7 +540,6 @@
   cursor: pointer;
   border-bottom: 1px solid transparent;
   transition: border-color 0.2s;
-  white-space: nowrap;
 }
 
 .oauth-grant-revoke:hover {
