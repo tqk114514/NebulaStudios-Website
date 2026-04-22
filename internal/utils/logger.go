@@ -48,6 +48,10 @@ var (
 	// 匹配格式：192.168.1.100
 	logIPv4Regex = regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b`)
 
+	// IPv6 正则（用于检测日志中的 IPv6 地址）
+	// 匹配完整和缩写格式：2001:0db8:85a3:0000:0000:8a2e:0370:7334 / 2001:db8:85a3::8a2e:370:7334 / ::1
+	logIPv6Regex = regexp.MustCompile(`(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::(?:[fF]{4}:)?(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|::`)
+
 	// Token 正则（用于检测日志中的 JWT 或长字符串 Token）
 	// 匹配格式：eyJhbGciOiJIUzI1NiIs... 或其他 32+ 字符的 base64 字符串
 	// 通过 key=value 模式匹配，避免误伤普通文本
@@ -173,7 +177,13 @@ func maskSensitiveData(message string) string {
 		message = logIPv4Regex.ReplaceAllStringFunc(message, maskIPv4)
 	}
 
-	// 3. 脱敏 Token
+	// 3. 脱敏 IPv6 地址
+	// IPv6 地址包含冒号，用冒号预检查
+	if len(message) > 5 && strings.Contains(message, ":") {
+		message = logIPv6Regex.ReplaceAllStringFunc(message, maskIPv6)
+	}
+
+	// 4. 脱敏 Token
 	// 截断首字母实现忽略大小写匹配，避免 ToLower 内存分配
 	if strings.Contains(message, "oken") || strings.Contains(message, "OKEN") ||
 		strings.Contains(message, "earer") || strings.Contains(message, "EARER") ||
@@ -233,8 +243,56 @@ func maskIPv4(ip string) string {
 		return "***.***.***"
 	}
 
-	// 保留前两段，隐藏后两段
 	return parts[0] + "." + parts[1] + ".***.***"
+}
+
+// maskIPv6 对 IPv6 地址进行脱敏处理
+// 将 2001:0db8:85a3:0000:8a2e:0370:7334 转换为 2001:0db8:****:****:****:****:****:****
+// 保留前两段用于定位网段，隐藏其余部分保护具体主机
+func maskIPv6(ip string) string {
+	if ip == "" {
+		return ""
+	}
+
+	// 处理 :: 缩写格式，展开为完整格式再脱敏
+	if strings.Contains(ip, "::") {
+		// 计算需要补充的段数
+		colonCount := strings.Count(ip, ":")
+		// 完整 IPv6 有 7 个冒号，缺少的冒号数 = 需要补充的零段数 - 1
+		missingSegments := 8 - (colonCount - 1)
+		if missingSegments < 1 {
+			missingSegments = 1
+		}
+
+		// 构造零段字符串
+		zeros := "0"
+		for i := 1; i < missingSegments; i++ {
+			zeros += ":0"
+		}
+
+		// 替换 :: 为零段
+		if ip == "::" {
+			ip = "0:0:0:0:0:0:0:0"
+		} else if strings.HasPrefix(ip, "::") {
+			ip = zeros + ip[1:]
+		} else if strings.HasSuffix(ip, "::") {
+			ip = ip[:len(ip)-1] + zeros
+		} else {
+			ip = strings.Replace(ip, "::", ":"+zeros+":", 1)
+		}
+	}
+
+	parts := strings.Split(ip, ":")
+	if len(parts) < 3 {
+		return "****:****"
+	}
+
+	// 保留前两段，其余用 **** 替代
+	result := parts[0] + ":" + parts[1]
+	for i := 2; i < len(parts); i++ {
+		result += ":****"
+	}
+	return result
 }
 
 // maskToken 对 Token 进行脱敏处理
