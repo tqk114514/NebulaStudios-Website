@@ -567,6 +567,7 @@
   padding: 6px 12px;
   font-size: var(--text-xs);
   letter-spacing: 0.12em;
+  justify-content: center;
 }
 
 .oauth-grant-revoke::after {
