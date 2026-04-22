@@ -310,6 +310,12 @@
   width: 100%;
 }
 
+/* 确认弹窗和提示弹窗层级高于普通弹窗 */
+#confirm-modal,
+#alert-modal {
+  z-index: 2100;
+}
+
 /* ==================== 支持的邮箱列表 ==================== */
 
 #supported-emails-list {
