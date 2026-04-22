@@ -1870,7 +1870,7 @@ function showOAuthGrantsModal(): void {
 
     // 撤销按钮
     const revokeBtn = document.createElement('button');
-    revokeBtn.className = 'oauth-grant-revoke';
+    revokeBtn.className = 'button-primary oauth-grant-revoke';
     revokeBtn.textContent = t('dashboard.oauthRevoke');
     revokeBtn.addEventListener('click', async () => {
       const confirmed = await showConfirm(
