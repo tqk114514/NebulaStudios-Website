@@ -88,7 +88,7 @@ const (
 
 // Token 参数
 const (
-	tokenByteSize = 32 // Token 字节长度（hex 编码后 64 字符）
+	tokenByteSize = 8 // Token 字节长度（hex 编码后 16 字符）
 	codeLength    = 6  // 验证码长度
 	uidLength     = 16 // UID 长度
 )
@@ -98,11 +98,11 @@ const uidChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 
 // ====================  Token 生成 ====================
 
-// GenerateSecureToken 生成 64 字符的安全 Token（32 字节 hex 编码）
+// GenerateSecureToken 生成 16 字符的安全 Token（8 字节 hex 编码）
 // 使用 crypto/rand 生成密码学安全的随机数
 //
 // 返回：
-//   - string: 64 字符的十六进制 Token
+//   - string: 16 字符的十六进制 Token
 //   - error: 随机数生成失败时返回错误
 func GenerateSecureToken() (string, error) {
 	bytes := make([]byte, tokenByteSize)
