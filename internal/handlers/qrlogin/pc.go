@@ -77,8 +77,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"t":  token,
-		"ts": now,
+		"t": token,
 	})
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to marshal payload")

@@ -73,10 +73,10 @@ const (
 	QRCookieMaxAge = 60 * 24 * 60 * 60
 
 	// QRTokenMinLength Token 最小长度
-	QRTokenMinLength = 50
+	QRTokenMinLength = 30
 
 	// QRTokenMaxLength Token 最大长度
-	QRTokenMaxLength = 500
+	QRTokenMaxLength = 200
 
 	// QRStatusPending 待扫描状态
 	QRStatusPending = "pending"
