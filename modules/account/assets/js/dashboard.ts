@@ -1607,6 +1607,7 @@ function createLogItemElement(log: UserLogItem): HTMLElement {
   const details = formatLogDetails(log.action, log.details);
   const relativeTime = formatLogTime(log.created_at);
   const absoluteTime = formatAbsoluteTime(log.created_at);
+  const isAlreadyAbsolute = relativeTime === absoluteTime;
 
   item.innerHTML = `
     <div class="user-log-icon ${iconInfo.type}">${iconInfo.svg}</div>
@@ -1615,8 +1616,10 @@ function createLogItemElement(log: UserLogItem): HTMLElement {
       ${details ? `<span class="user-log-details">${details}</span>` : ''}
     </div>
     <span class="user-log-time">
-      <span class="user-log-time-relative">${escapeHtml(relativeTime)}</span>
-      <span class="user-log-time-absolute">${escapeHtml(absoluteTime)}</span>
+      ${isAlreadyAbsolute
+        ? `<span class="user-log-time-static">${escapeHtml(relativeTime)}</span>`
+        : `<span class="user-log-time-relative">${escapeHtml(relativeTime)}</span><span class="user-log-time-absolute">${escapeHtml(absoluteTime)}</span>`
+      }
     </span>
   `;
 

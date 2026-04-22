@@ -649,6 +649,13 @@
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+.user-log-time-static {
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--mid);
+  transition: color 0.2s ease;
+}
+
 .user-log-time-absolute {
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
@@ -664,6 +671,10 @@
 .user-log-item:hover .user-log-time-relative {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+.user-log-item:hover .user-log-time-static {
+  color: var(--fg);
 }
 
 .user-log-item:hover .user-log-time-absolute {
