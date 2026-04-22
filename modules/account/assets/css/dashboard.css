@@ -524,11 +524,47 @@
 .oauth-grant-time {
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
-  color: var(--mid);
   font-family: var(--font-mono);
   flex-shrink: 0;
   min-width: 100px;
   text-align: right;
+  position: relative;
+}
+
+.oauth-grant-time-relative {
+  color: var(--mid);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.oauth-grant-time-static {
+  color: var(--mid);
+  transition: color 0.2s ease;
+}
+
+.oauth-grant-time-absolute {
+  color: var(--fg);
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.oauth-grant-item:hover .oauth-grant-time-relative {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.oauth-grant-item:hover .oauth-grant-time-static {
+  color: var(--fg);
+}
+
+.oauth-grant-item:hover .oauth-grant-time-absolute {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .oauth-grant-revoke {

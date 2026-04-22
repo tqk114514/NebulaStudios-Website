@@ -1856,10 +1856,16 @@ function showOAuthGrantsModal(): void {
     scopesEl.textContent = formatScopes(grant.scope);
     itemEl.appendChild(scopesEl);
 
-    // 授权时间
+    // 授权时间（与操作日志相同的 hover 动画）
+    const relativeTime = formatLogTime(grant.created_at);
+    const absoluteTime = formatAbsoluteTime(grant.created_at);
+    const isAlreadyAbsolute = relativeTime === absoluteTime;
+
     const timeEl = document.createElement('div');
     timeEl.className = 'oauth-grant-time';
-    timeEl.textContent = formatAuthorizedTime(grant.created_at);
+    timeEl.innerHTML = isAlreadyAbsolute
+      ? `<span class="oauth-grant-time-static">${escapeHtml(relativeTime)}</span>`
+      : `<span class="oauth-grant-time-relative">${escapeHtml(relativeTime)}</span><span class="oauth-grant-time-absolute">${escapeHtml(absoluteTime)}</span>`;
     itemEl.appendChild(timeEl);
 
     // 撤销按钮
