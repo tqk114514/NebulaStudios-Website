@@ -190,7 +190,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		authAPI.POST("/verify-token", hdlrs.authHandler.VerifyToken)
 		authAPI.POST("/check-code-expiry", hdlrs.authHandler.CheckCodeExpiry)
 		authAPI.POST("/verify-code", hdlrs.authHandler.VerifyCode)
-		authAPI.POST("/invalidate-code", hdlrs.authHandler.InvalidateCode)
+		authAPI.POST("/invalidate-code", middleware.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
 
 		authAPI.POST("/register", middleware.RegisterRateLimit(), hdlrs.authHandler.Register)
 		authAPI.POST("/login", middleware.LoginRateLimit(), hdlrs.authHandler.Login)
