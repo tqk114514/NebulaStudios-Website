@@ -4,26 +4,8 @@
 
 ## 依赖
 
-### 1. stb_image (header-only)
-
-下载到 `vendor/` 目录：
-
-```bash
-mkdir -p vendor
-curl -o vendor/stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
-```
-
-### 2. libwebp
-
-Ubuntu/Debian:
-```bash
-sudo apt install libwebp-dev
-```
-
-macOS:
-```bash
-brew install webp
-```
+1. stb_image (header-only)
+2. libwebp
 
 ## 编译
 
