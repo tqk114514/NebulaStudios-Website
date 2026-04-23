@@ -218,10 +218,12 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 		return
 	}
 
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
 	ctx := c.Request.Context()
-	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, req.Email)
+	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, email)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("GetCodeExpiryByEmail failed: email=%s", req.Email))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("GetCodeExpiryByEmail failed: email=%s", email))
 		return
 	}
 
@@ -262,7 +264,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	}
 
 	code := strings.TrimSpace(req.Code)
-	email := strings.TrimSpace(req.Email)
+	email := strings.ToLower(strings.TrimSpace(req.Email))
 	tokenType := strings.TrimSpace(req.TokenType)
 
 	if code == "" || email == "" || tokenType == "" {
