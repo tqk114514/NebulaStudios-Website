@@ -428,8 +428,8 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 		return
 	}
 
-	// 检查是否已被封禁
-	if !targetUser.CheckBanned() {
+	// 检查是否已被封禁（检查数据库标记，而非 CheckBanned 逻辑判断）
+	if !targetUser.IsBanned {
 		utils.RespondError(c, http.StatusBadRequest, "NOT_BANNED")
 		return
 	}
