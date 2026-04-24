@@ -294,7 +294,7 @@ func createIndexes(ctx context.Context) error {
 		sql  string
 	}{
 		{"idx_users_email", "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"},
-		{"idx_users_username", "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"},
+		{"idx_users_username", "CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))"},
 		{"idx_users_microsoft_id", "CREATE INDEX IF NOT EXISTS idx_users_microsoft_id ON users(microsoft_id)"},
 		{"idx_tokens_email_type", "CREATE INDEX IF NOT EXISTS idx_tokens_email_type ON tokens(email, type)"},
 		{"idx_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_tokens_expire ON tokens(expire_time)"},
