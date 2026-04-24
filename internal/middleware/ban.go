@@ -136,6 +136,20 @@ func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserReposit
 			return
 		}
 
+		// 临时封禁已过期但数据库未更新，自动解封
+		if user.IsBanned && !user.CheckBanned() {
+			go func() {
+				unbanCtx, unbanCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer unbanCancel()
+				if err := userRepo.Unban(unbanCtx, userUID); err != nil {
+					utils.LogError("BAN-MW", "AutoUnban", err, fmt.Sprintf("Failed to auto-unban expired ban: userUID=%s", userUID))
+				} else {
+					userCache.Invalidate(userUID)
+					utils.LogInfo("BAN-MW", fmt.Sprintf("Auto-unbanned expired ban: userUID=%s", userUID))
+				}
+			}()
+		}
+
 		c.Next()
 	}
 }

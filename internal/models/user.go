@@ -827,7 +827,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 
 	// 封禁用户数
 	err = pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM users WHERE is_banned = true
+		SELECT COUNT(*) FROM users WHERE is_banned = true AND (unban_at IS NULL OR unban_at > CURRENT_TIMESTAMP)
 	`).Scan(&stats.BannedCount)
 	if err != nil {
 		return nil, utils.LogError("USER", "CountBannedUsers", err)
