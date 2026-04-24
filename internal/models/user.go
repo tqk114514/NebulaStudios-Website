@@ -329,7 +329,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
-		FROM users WHERE email = $1 OR username = $1
+		FROM users WHERE email = $1 OR LOWER(username) = LOWER($1)
 		LIMIT 1
 	`, identifier).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
@@ -406,7 +406,7 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
 		       created_at, updated_at
-		FROM users WHERE username = $1
+		FROM users WHERE LOWER(username) = LOWER($1)
 	`, username).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
