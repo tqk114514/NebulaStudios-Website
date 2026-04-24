@@ -418,6 +418,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	middleware.RegisterLimiter.Stop()
 	middleware.ResetPasswordLimiter.Stop()
 	middleware.OAuthTokenLimiter.Stop()
+	middleware.InvalidateCodeLimiter.Stop()
 	middleware.EmailLimiter.Stop()
 	middleware.DataExportLimiter.Stop()
 
@@ -443,6 +444,12 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 		imgCtx, imgCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer imgCancel()
 		svcs.imgProcessor.Shutdown(imgCtx)
+	}
+
+	if svcs.emailService != nil {
+		utils.LogInfo("SERVER", "Closing email service...")
+		svcs.emailService.Close()
+		utils.LogInfo("SERVER", "Email service closed")
 	}
 
 	utils.LogInfo("SERVER", "Closing database connections...")
