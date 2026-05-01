@@ -1381,7 +1381,7 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
           stopScanning();
         }
       } catch (e) {
-        // 忽略单帧错误，继续扫描
+        console.warn('[QR-SCAN] Frame error:', e instanceof Error ? e.message : e);
       }
     });
 
