@@ -10,7 +10,7 @@
 
 import { initLanguageSwitcher, applyTranslations, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
-import { getUrlParameter } from './lib/utils/url.ts';
+import { getHashParameter } from './lib/utils/url.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
@@ -118,7 +118,11 @@ function copyCode(): void {
  */
 async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
   try {
-    const token = getUrlParameter('token');
+    const token = getHashParameter('token');
+
+    if (token) {
+      window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    }
 
     if (!token) {
       showError('NO_TOKEN', card);
