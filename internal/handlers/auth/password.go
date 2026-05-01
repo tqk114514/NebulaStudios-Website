@@ -101,7 +101,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 			return
 		}
 
-		verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
+		verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
 		language := h.getLanguage(req.Language)
 
 		h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")

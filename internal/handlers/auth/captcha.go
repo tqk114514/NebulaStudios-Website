@@ -122,7 +122,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
+	verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
 	language := h.getLanguage(req.Language)
 
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()

@@ -24,6 +24,7 @@ import (
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
+	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
@@ -88,7 +89,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 		return
 	}
 
-	verifyURL := fmt.Sprintf("%s/account/verify?token=%s", h.baseURL, token)
+	verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
 
 	language := req.Language
 	if language == "" {
