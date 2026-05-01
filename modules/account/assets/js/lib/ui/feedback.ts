@@ -8,6 +8,8 @@
  * - 通用弹窗控制器
  */
 
+import type { EmailProviders } from '../../../../../../shared/js/types/auth.js';
+
 // ==================== 类型定义 ====================
 
 /** Toast 类型 */
@@ -15,9 +17,6 @@ type ToastType = 'info' | 'success' | 'error' | 'warning';
 
 /** 翻译函数类型 */
 type TranslateFunction = (key: string) => string;
-
-/** 邮箱服务商类型 */
-type EmailProviders = Record<string, string> | string[];
 
 /** 弹窗控制器配置 */
 export interface ModalControllerConfig {
