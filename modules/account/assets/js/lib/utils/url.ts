@@ -17,6 +17,15 @@ export function getUrlParameter(name: string): string | null {
 }
 
 /**
+ * 获取 URL Hash 参数（Fragment）
+ * Hash 不会被发送到服务器，不会出现在日志中
+ */
+export function getHashParameter(name: string): string | null {
+  const hash = window.location.hash.substring(1);
+  return new URLSearchParams(hash).get(name);
+}
+
+/**
  * 获取所有 URL 查询参数
  */
 export function getAllUrlParameters(): Record<string, string> {
