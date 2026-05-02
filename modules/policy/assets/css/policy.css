@@ -219,3 +219,20 @@
   font-size: var(--text-lg);
   color: var(--fg);
 }
+
+/* --- 版本信息 --- */
+.version-info {
+  margin-top: 48px;
+  padding: 16px 20px;
+  background: var(--dim);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--mid);
+  letter-spacing: 0.08em;
+  line-height: 1.8;
+}
+
+.version-info strong {
+  color: var(--fg);
+}

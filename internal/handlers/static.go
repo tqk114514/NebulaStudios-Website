@@ -36,6 +36,7 @@ import (
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
+	"auth-system/internal/version"
 
 	"github.com/gin-gonic/gin"
 )
@@ -212,6 +213,20 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	}
 
 	utils.RespondSuccessWithData(c, result)
+}
+
+// GetVersion 获取服务端版本与代码库版本
+// GET /api/version
+//
+// 响应：
+//   - success: 是否成功
+//   - data.serverCommit: 当前运行的服务端 Git commit（编译时注入）
+//   - data.repoCommit: GitHub 仓库最新 commit（缓存 10 分钟）
+func (h *StaticHandler) GetVersion(c *gin.Context) {
+	utils.RespondSuccessWithData(c, gin.H{
+		"serverCommit": version.ServerCommit,
+		"repoCommit":   version.GetRepoCommit(),
+	})
 }
 
 // GetHealth 健康检查（增强版）
