@@ -117,7 +117,7 @@ function getCookie(name: string): string | null {
  */
 (function initializeLanguage(): void {
   // 优先使用内联脚本已经计算好的语言
-  let lang = (window as any).__INIT_LANG__ || 'zh-CN';
+  let lang = window.__INIT_LANG__ || 'zh-CN';
 
   // 确保语言值有效
   if (!validLanguages.includes(lang as ValidLanguage)) {
