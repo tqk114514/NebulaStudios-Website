@@ -190,13 +190,11 @@ async function fetchVersionInfo(): Promise<VersionInfo | null> {
 }
 
 function createVersionElement(info: VersionInfo): string {
-  const t = (window as any).t;
-  const label = t ? t('policy.versionInfo') : '服务器版本';
-  const hint = t ? t('policy.versionHint') : '部分更新将在累积后应用';
+  const same = info.serverCommit === info.repoCommit;
+  const pendingHint = same ? '' : '，部分更新将在累积后应用';
 
   return `<div class="version-info">
-    <p><strong>${label}</strong>：${info.serverCommit}，${hint}。</p>
-    <p style="font-size: 0.85em; opacity: 0.7;">(服务器版本：${info.serverCommit}，代码库版本：${info.repoCommit}，部分更新将在累积后应用)</p>
+    <p>服务器版本：${info.serverCommit}，代码库版本：${info.repoCommit}${pendingHint}，数据可能存在滞后</p>
   </div>`;
 }
 
