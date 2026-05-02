@@ -39,7 +39,7 @@ export async function fetchApi<T = Record<string, unknown>>(url: string, options
     const data = await response.json();
     return data as FetchResult<T>;
   } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    if (error instanceof TypeError) {
       return { success: false, errorCode: 'NETWORK_ERROR' } as FetchResult<T>;
     }
     console.error('[ACCOUNT] API Error:', error);
