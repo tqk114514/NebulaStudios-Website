@@ -148,6 +148,7 @@ func setupLegacyRedirects(r *gin.Engine) {
 // setupAPIRoutes 配置 API 路由
 func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 	r.GET("/health", hdlrs.staticHandler.GetHealth)
+	r.GET("/api/version", hdlrs.staticHandler.GetVersion)
 
 	apiGroup := r.Group("")
 	apiGroup.Use(middleware.APIBodySizeLimit())
