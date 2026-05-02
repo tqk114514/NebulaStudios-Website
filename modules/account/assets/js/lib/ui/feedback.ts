@@ -391,13 +391,6 @@ export function initializeModalTranslations(t: TranslateFunction = (key) => wind
       if (key) {btn.textContent = t(key);}
     }
   });
-
-  document.querySelectorAll('[data-i18n]').forEach(element => {
-    if (element.closest('.modal-overlay')) {
-      const key = element.getAttribute('data-i18n');
-      if (key) {element.textContent = t(key);}
-    }
-  });
 }
 
 // ==================== 通用弹窗控制器 ====================
