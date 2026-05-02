@@ -26,7 +26,7 @@ type cachedCommit struct {
 var (
 	repoCommitCache   *cachedCommit
 	repoCommitCacheMu sync.Mutex
-	cacheTTL          = 10 * time.Minute
+	cacheTTL          = 1 * time.Minute
 )
 
 type githubCommit struct {
