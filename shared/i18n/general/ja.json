@@ -27,8 +27,10 @@
   "policy.termsOfService": "利用規約",
   "policy.cookiePolicy": "Cookie ポリシー",
   "policy.and": "および",
-  "policy.versionInfo": "現在の実行バージョン",
-  "policy.versionHint": "更新は蓄積後に適用されます",
+  "policy.versionServer": "サーバーバージョン",
+  "policy.versionRepo": "リポジトリバージョン",
+  "policy.versionPending": "更新は蓄積後に適用されます",
+  "policy.versionLag": "データに遅延が生じる可能性があります",
 
   "cookieConsent.message": "当サイトはCookieを使用してユーザー体験を向上させています。拒否してもコア機能は正常に動作しますが、言語設定やログイン状態の保存などのオプショナル機能に影響します。",
   "cookieConsent.accept": "同意",
