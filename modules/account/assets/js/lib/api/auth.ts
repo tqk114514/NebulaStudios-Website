@@ -108,14 +108,7 @@ export async function verifySession(): Promise<AuthResponse> {
  * 登出（调用后端清除 cookie 并跳转登录页）
  */
 export async function logout(): Promise<void> {
-  try {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include'
-    });
-  } catch (error) {
-    console.error('[AUTH] ERROR: Logout failed:', (error as Error).message);
-  }
+  await fetchApi('/api/auth/logout', { method: 'POST' });
   window.location.href = '/account/login';
 }
 
