@@ -27,8 +27,10 @@
   "policy.termsOfService": "服务条款",
   "policy.cookiePolicy": "Cookie 政策",
   "policy.and": "和",
-  "policy.versionInfo": "当前运行版本",
-  "policy.versionHint": "部分更新将在累积后应用",
+  "policy.versionServer": "服务器版本",
+  "policy.versionRepo": "代码库版本",
+  "policy.versionPending": "部分更新将在累积后应用",
+  "policy.versionLag": "数据可能存在滞后",
 
   "cookieConsent.message": "我们使用 Cookie 来改善您的体验。拒绝后仅影响可选功能（如语言偏好和登录状态保存），核心功能仍可正常使用。",
   "cookieConsent.accept": "同意",

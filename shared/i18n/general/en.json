@@ -27,8 +27,10 @@
   "policy.termsOfService": "Terms of Service",
   "policy.cookiePolicy": "Cookie Policy",
   "policy.and": "and",
-  "policy.versionInfo": "Running Version",
-  "policy.versionHint": "Updates are applied after accumulation",
+  "policy.versionServer": "Server Version",
+  "policy.versionRepo": "Repository Version",
+  "policy.versionPending": "Updates will be applied after accumulation",
+  "policy.versionLag": "Data may be outdated",
 
   "cookieConsent.message": "We use cookies to improve your experience. Rejecting will only affect optional features (like language preference and login state), core features will still work normally.",
   "cookieConsent.accept": "Accept",

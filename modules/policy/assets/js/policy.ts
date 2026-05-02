@@ -175,13 +175,18 @@ interface VersionInfo {
   repoCommit: string;
 }
 
+let cachedVersionInfo: VersionInfo | null = null;
+
 async function fetchVersionInfo(): Promise<VersionInfo | null> {
+  if (cachedVersionInfo) return cachedVersionInfo;
+
   try {
     const response = await fetch('/api/version');
     if (!response.ok) return null;
     const data = await response.json();
     if (data.success && data.data) {
-      return data.data as VersionInfo;
+      cachedVersionInfo = data.data as VersionInfo;
+      return cachedVersionInfo;
     }
     return null;
   } catch {
@@ -190,11 +195,12 @@ async function fetchVersionInfo(): Promise<VersionInfo | null> {
 }
 
 function createVersionElement(info: VersionInfo): string {
+  const t = (window as any).t || ((k: string) => k);
   const same = info.serverCommit === info.repoCommit;
-  const pendingHint = same ? '' : '，部分更新将在累积后应用';
+  const pendingHint = same ? '' : `，${t('policy.versionPending')}`;
 
   return `<div class="version-info">
-    <p>服务器版本：${info.serverCommit}，代码库版本：${info.repoCommit}${pendingHint}，数据可能存在滞后</p>
+    <p>${t('policy.versionServer')}：${info.serverCommit}，${t('policy.versionRepo')}：${info.repoCommit}${pendingHint}，${t('policy.versionLag')}</p>
   </div>`;
 }
 
