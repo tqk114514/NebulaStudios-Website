@@ -70,6 +70,8 @@ interface Window {
   t?: TranslateFunction;
   /** 当前语言 */
   currentLanguage?: string;
+  /** 内联脚本初始化的语言 */
+  __INIT_LANG__?: string;
   /** 切换语言函数 */
   switchLanguage?: SwitchLanguageFunction;
   /** 更新页面翻译 */

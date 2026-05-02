@@ -251,47 +251,4 @@ export function hidePageLoader(delay: number = 500): void {
   }, delay);
 }
 
-/**
- * 初始化弹窗翻译（用于动态创建的弹窗）
- * 注意：静态 HTML 中的弹窗由 applyTranslations() 统一处理
- */
-export function initializeModalTranslations(): void {
-  if (!window.t || typeof window.t !== 'function') {
-    console.warn('[I18N] WARN: Translation function not available for modal translations');
-    return;
-  }
-
-  // 翻译关闭按钮
-  document.querySelectorAll('.modal-close').forEach(btn => {
-    if (btn.hasAttribute('data-i18n')) {
-      const key = btn.getAttribute('data-i18n');
-      if (!key) {return;}
-
-      try {
-        const translation = window.t?.(key);
-        if (translation && translation !== key) {
-          btn.textContent = translation;
-        }
-      } catch {
-        console.warn(`[I18N] WARN: Failed to translate modal button key "${key}"`);
-      }
-    }
-  });
-
-  // 翻译弹窗内元素
-  document.querySelectorAll('[data-i18n]').forEach(element => {
-    if (element.closest('.modal-overlay')) {
-      const key = element.getAttribute('data-i18n');
-      if (!key) {return;}
-
-      try {
-        const translation = window.t?.(key);
-        if (translation && translation !== key) {
-          element.textContent = translation;
-        }
-      } catch {
-        console.warn(`[I18N] WARN: Failed to translate modal element key "${key}"`);
-      }
-    }
-  });
-}
+/** 延迟执行工具函数 */
