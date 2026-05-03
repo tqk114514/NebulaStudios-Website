@@ -108,9 +108,10 @@ type Config struct {
 // ====================  全局配置实例 ====================
 
 var (
-	cfg     *Config      // 全局配置实例
-	cfgOnce sync.Once    // 确保只加载一次
-	cfgMu   sync.RWMutex // 配置读写锁
+	cfg      *Config      // 全局配置实例
+	cfgOnce  sync.Once    // 确保只加载一次
+	cfgMu    sync.RWMutex // 配置读写锁
+	reloadMu sync.Mutex   // Reload 互斥锁，防止并发重置 cfgOnce 导致竞态
 )
 
 // ====================  配置加载 ====================
@@ -506,9 +507,11 @@ func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
 //   - 此方法会重置 sync.Once，允许重新加载
 //   - 生产环境慎用，可能导致配置不一致
 func Reload() error {
+	reloadMu.Lock()
+	defer reloadMu.Unlock()
+
 	utils.LogInfo("CONFIG", "Reloading configuration...")
 
-	// 重置 once（允许重新加载）
 	cfgOnce = sync.Once{}
 
 	_, err := Load()
