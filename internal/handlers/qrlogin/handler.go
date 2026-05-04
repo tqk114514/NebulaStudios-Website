@@ -260,10 +260,10 @@ func parseUserAgent(userAgent string) (browser, os string) {
 		os = "Chrome OS"
 	case strings.Contains(userAgent, "FreeBSD"):
 		os = "FreeBSD"
-	case strings.Contains(userAgent, "X11"):
-		os = "UNIX"
 	case strings.Contains(userAgent, "Linux"):
 		os = "Linux"
+	case strings.Contains(userAgent, "X11"):
+		os = "UNIX"
 	}
 
 	return
