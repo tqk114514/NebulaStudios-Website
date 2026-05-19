@@ -14,19 +14,27 @@ export type FetchResult<T = Record<string, unknown>> =
   | (T & { success: true; message?: string; errorCode?: undefined })
   | ApiErrorResponse;
 
-export async function fetchApi<T = Record<string, unknown>>(url: string, options?: RequestInit): Promise<FetchResult<T>> {
+export interface FetchOptions extends RequestInit {
+  skipAuthRedirect?: boolean;
+}
+
+export async function fetchApi<T = Record<string, unknown>>(url: string, options?: FetchOptions): Promise<FetchResult<T>> {
   try {
+    const { skipAuthRedirect, ...fetchOptions } = options || {};
+
     const response = await fetch(url, {
       credentials: 'include',
-      ...options,
+      ...fetchOptions,
       headers: {
         'Content-Type': 'application/json',
-        ...options?.headers,
+        ...fetchOptions.headers,
       },
     });
 
     if (response.status === 401) {
-      window.location.href = '/account/login';
+      if (!skipAuthRedirect) {
+        window.location.href = '/account/login';
+      }
       return { success: false, errorCode: 'SESSION_EXPIRED' } as FetchResult<T>;
     }
 
