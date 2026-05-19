@@ -91,10 +91,12 @@ export async function login(
 
 /**
  * 验证会话有效性（从 cookie 读取 token）
+ * 401 响应表示未登录，属于预期行为，不会触发页面跳转
  */
 export async function verifySession(): Promise<AuthResponse> {
   const result = await fetchApi<{ data: User }>('/api/auth/verify-session', {
-    method: 'POST'
+    method: 'POST',
+    skipAuthRedirect: true
   });
 
   if (result.success) {
