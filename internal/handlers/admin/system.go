@@ -289,6 +289,11 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		isEnabled = *req.IsEnabled
 	}
 
+	if domain == existing.Domain && signupURL == existing.SignupURL && isEnabled == existing.IsEnabled {
+		utils.RespondSuccess(c, gin.H{"message": "No change"})
+		return
+	}
+
 	item, err := h.emailWhitelistRepo.Update(ctx, id, domain, signupURL, isEnabled)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
