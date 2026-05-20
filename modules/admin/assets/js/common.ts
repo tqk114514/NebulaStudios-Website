@@ -230,6 +230,7 @@ export function showConfirm(title: string, message: string, onConfirm: () => voi
   
   localConfirmTitle.textContent = title;
   localConfirmMessage.textContent = message;
+  localConfirmOk.disabled = false;
   showModal(localConfirmModal);
 
   if (currentConfirmHandler) {
@@ -237,6 +238,8 @@ export function showConfirm(title: string, message: string, onConfirm: () => voi
   }
 
   const handleConfirm = (): void => {
+    if (localConfirmOk.disabled) return;
+    localConfirmOk.disabled = true;
     hideModal(localConfirmModal);
     currentConfirmHandler = null;
     onConfirm();

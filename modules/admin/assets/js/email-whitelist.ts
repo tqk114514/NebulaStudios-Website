@@ -407,8 +407,9 @@ async function handleSubmit(e: Event): Promise<void> {
 
   const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
   const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+  const submitBtn = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
 
-  if (!domainInput || !urlInput) return;
+  if (!domainInput || !urlInput || !submitBtn) return;
 
   const domain = domainInput.value.trim();
   const signupUrl = urlInput.value.trim();
@@ -423,6 +424,8 @@ async function handleSubmit(e: Event): Promise<void> {
     return;
   }
 
+  submitBtn.disabled = true;
+
   try {
     if (editingEntryId) {
       const entry = currentEntries.find(e => e.id === editingEntryId);
@@ -436,6 +439,8 @@ async function handleSubmit(e: Event): Promise<void> {
     await loadWhitelist();
   } catch {
     showToast('操作失败', 'error');
+  } finally {
+    submitBtn.disabled = false;
   }
 }
 

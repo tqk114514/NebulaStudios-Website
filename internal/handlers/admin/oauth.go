@@ -354,6 +354,15 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 		return
 	}
 
+	if client.IsEnabled == req.Enabled {
+		status := "disabled"
+		if req.Enabled {
+			status = "enabled"
+		}
+		utils.RespondSuccess(c, gin.H{"message": "No change: client already " + status})
+		return
+	}
+
 	err = h.oauthService.ToggleClient(ctx, clientID, req.Enabled)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "TOGGLE_FAILED", err.Error())
