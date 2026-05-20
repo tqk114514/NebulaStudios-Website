@@ -196,6 +196,12 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		return
 	}
 
+	// 角色未变化则跳过
+	if targetUser.Role == req.Role {
+		utils.RespondSuccess(c, gin.H{"message": "No change: role already set"})
+		return
+	}
+
 	// 执行更新
 	err = h.userRepo.Update(ctx, targetUserUID, map[string]any{
 		"role": req.Role,
@@ -360,7 +366,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	// 检查是否已被封禁
 	if targetUser.CheckBanned() {
-		utils.RespondError(c, http.StatusBadRequest, "ALREADY_BANNED")
+		utils.RespondSuccess(c, gin.H{"message": "No change: user already banned"})
 		return
 	}
 
@@ -430,7 +436,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 
 	// 检查是否已被封禁（检查数据库标记，而非 CheckBanned 逻辑判断）
 	if !targetUser.IsBanned {
-		utils.RespondError(c, http.StatusBadRequest, "NOT_BANNED")
+		utils.RespondSuccess(c, gin.H{"message": "No change: user is not banned"})
 		return
 	}
 
