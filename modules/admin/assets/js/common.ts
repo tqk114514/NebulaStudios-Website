@@ -96,7 +96,15 @@ export const ACTION_NAMES: Record<string, string> = {
   'set_role': '修改角色',
   'delete_user': '删除用户',
   'ban_user': '封禁用户',
-  'unban_user': '解封用户'
+  'unban_user': '解封用户',
+  'oauth_client_create': '创建OAuth应用',
+  'oauth_client_update': '更新OAuth应用',
+  'oauth_client_delete': '删除OAuth应用',
+  'oauth_client_regenerate_secret': '重新生成密钥',
+  'oauth_client_toggle': '启用/禁用应用',
+  'email_whitelist_create': '创建白名单',
+  'email_whitelist_update': '更新白名单',
+  'email_whitelist_delete': '删除白名单'
 };
 
 // ==================== DOM 元素 ====================
