@@ -70,6 +70,17 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
     return username;
   }
 
+  if (action.startsWith('oauth_client_')) {
+    const clientName = escapeHtml(details.client_name as string || '');
+    const clientId = escapeHtml(details.client_id as string || '');
+    return `${clientName} (${clientId})`;
+  }
+
+  if (action.startsWith('email_whitelist_')) {
+    const domain = escapeHtml(details.domain as string || '');
+    return domain || JSON.stringify(details);
+  }
+
   return JSON.stringify(details);
 }
 
@@ -83,7 +94,7 @@ function renderLogRow(log: AdminLog): string {
   return `
     <tr>
       <td>${escapeHtml(log.admin_username)}</td>
-      <td><span class="action-badge ${log.action}">${actionName}</span></td>
+      <td>${actionName}</td>
       <td>${details}</td>
       <td>${formatDate(log.created_at)}</td>
     </tr>
