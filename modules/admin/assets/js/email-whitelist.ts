@@ -16,7 +16,7 @@ import {
   formatDate,
   formatRelativeTime,
   escapeHtml,
-  renderPagination,
+  renderList,
   whitelistModal,
   whitelistModalBody,
   whitelistModalFooter,
@@ -27,7 +27,8 @@ import {
   updateTableRow,
   removeTableRow,
   renderStatusBadge,
-  showDetailWithCache
+  showDetailWithCache,
+  initModalCloseEvents
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -211,40 +212,37 @@ function removeWhitelistRow(entryId: number): void {
   });
 }
 
-function renderWhitelist(entries: EmailWhitelistEntry[], total: number, page: number, totalPages: number): void {
-  const tableBody = document.getElementById('whitelist-table-body') as HTMLTableSectionElement | null;
-  if (!tableBody) return;
+async function loadWhitelist(): Promise<void> {
+  console.log('[ADMIN][WHITELIST] loadWhitelist called');
 
-  if (entries.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
-    if (whitelistPagination) {
-      whitelistPagination.innerHTML = '';
-    }
+  if (!whitelistTableBody) {
+    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found');
     return;
   }
 
-  entries.forEach(entry => whitelistCache.set(entry.id, entry));
-
-  tableBody.innerHTML = entries.map(entry => renderWhitelistRow(entry)).join('');
-
-  tableBody.querySelectorAll('tr[data-id]').forEach(row => {
-    bindWhitelistRowEvents(row as HTMLTableRowElement);
+  const items = await renderList({
+    tableBody: whitelistTableBody,
+    pagination: whitelistPagination,
+    fetchData: async () => {
+      const data = await getWhitelist(currentPage);
+      if (!data) return null;
+      return { items: data.whitelist, total: data.total, page: data.page, totalPages: data.totalPages };
+    },
+    renderRow: renderWhitelistRow,
+    bindEvents: bindWhitelistRowEvents,
+    cache: whitelistCache,
+    getCacheKey: (entry) => entry.id,
+    colspan: 5,
+    onPageChange: (newPage) => {
+      currentPage = newPage;
+      loadWhitelist();
+    }
   });
 
-  if (whitelistPagination) {
-    renderPagination({
-      container: whitelistPagination,
-      current: page,
-      total: totalPages,
-      onPageChange: (newPage) => {
-        currentPage = newPage;
-        loadWhitelist();
-      }
-    });
+  if (items) {
+    currentEntries = items;
   }
 }
-
-// ==================== 白名单详情 ====================
 
 const whitelistDetailSkeleton = `
   <div class="detail">
@@ -428,15 +426,18 @@ async function handleSubmit(e: Event): Promise<void> {
 
   try {
     if (editingEntryId) {
-      const entry = currentEntries.find(e => e.id === editingEntryId);
-      await updateEntry(editingEntryId, domain, signupUrl, entry?.is_enabled ?? true);
+      const entryId = editingEntryId;
+      const entry = currentEntries.find(e => e.id === entryId);
+      await updateEntry(entryId, domain, signupUrl, entry?.is_enabled ?? true);
       showToast('更新成功', 'success');
+      closeFormModal();
+      await updateWhitelistRow(entryId);
     } else {
       await createEntry(domain, signupUrl);
       showToast('添加成功', 'success');
+      closeFormModal();
+      await loadWhitelist();
     }
-    closeFormModal();
-    await loadWhitelist();
   } catch {
     showToast('操作失败', 'error');
   } finally {
@@ -446,35 +447,15 @@ async function handleSubmit(e: Event): Promise<void> {
 
 // ==================== 初始化 ====================
 
-async function loadWhitelist(): Promise<void> {
-  console.log('[ADMIN][WHITELIST] loadWhitelist called');
-
-  if (!whitelistTableBody) {
-    console.error('[ADMIN][WHITELIST] whitelistTableBody element not found');
-    return;
-  }
-
-  whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
-
-  const data = await getWhitelist(currentPage);
-  if (!data) {
-    whitelistTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
-    return;
-  }
-
-  currentEntries = data.whitelist;
-  renderWhitelist(data.whitelist, data.total, data.page, data.totalPages);
-}
-
 export function initWhitelistPage(): void {
   const createBtn = document.getElementById('create-whitelist-btn');
   const form = document.getElementById('whitelist-form') as HTMLFormElement | null;
   const formCancel = document.getElementById('whitelist-form-cancel');
   const formClose = document.getElementById('whitelist-form-close');
+  const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
 
-  if (whitelistModalClose) {
-    whitelistModalClose.addEventListener('click', () => hideModal(whitelistModal));
-  }
+  initModalCloseEvents(whitelistModal, whitelistModalClose);
+  initModalCloseEvents(formModal, null);
 
   if (createBtn) {
     createBtn.addEventListener('click', openCreateModal);

@@ -61,6 +61,8 @@ type AdminHandler struct {
 	userLogRepo        *models.UserLogRepository
 	oauthService       *services.OAuthService
 	emailWhitelistRepo *models.EmailWhitelistRepository
+	exportService      *services.ExportService
+	dataExportSalt     string
 }
 
 // ====================  构造函数 ====================
@@ -77,7 +79,7 @@ type AdminHandler struct {
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService, emailWhitelistRepo *models.EmailWhitelistRepository) (*AdminHandler, error) {
+func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService, emailWhitelistRepo *models.EmailWhitelistRepository, exportService *services.ExportService, dataExportSalt string) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -97,5 +99,7 @@ func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache
 		userLogRepo:        userLogRepo,
 		oauthService:       oauthService,
 		emailWhitelistRepo: emailWhitelistRepo,
+		exportService:      exportService,
+		dataExportSalt:     dataExportSalt,
 	}, nil
 }

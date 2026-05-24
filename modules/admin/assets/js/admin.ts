@@ -21,6 +21,7 @@ import { loadUsers, setCurrentUserRole, initUsersPage } from './users';
 import { loadLogs } from './logs';
 import { loadOAuthClients, initOAuthPage } from './oauth';
 import { initWhitelistPage } from './email-whitelist';
+import { initDataPage } from './data';
 
 // ==================== DOM 元素 ====================
 
@@ -34,6 +35,7 @@ const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement | n
 const navLogs = document.getElementById('nav-logs') as HTMLAnchorElement | null;
 const navOAuth = document.getElementById('nav-oauth') as HTMLAnchorElement | null;
 const navWhitelist = document.getElementById('nav-whitelist') as HTMLAnchorElement | null;
+const navData = document.getElementById('nav-data') as HTMLAnchorElement | null;
 
 // ==================== 页面路由 ====================
 
@@ -44,15 +46,6 @@ function navigateTo(page: string): void {
   navItems.forEach(item => {
     item.classList.toggle('active', item.dataset.page === page);
   });
-
-  // 更新页面显示
-  const titles: Record<string, string> = {
-    dashboard: '仪表盘',
-    users: '用户管理',
-    logs: '操作日志',
-    oauth: 'OAuth 应用',
-    whitelist: '邮箱白名单'
-  };
 
   // 更新页面显示
   document.querySelectorAll('.page').forEach(p => {
@@ -66,7 +59,8 @@ function navigateTo(page: string): void {
       users: '用户管理',
       logs: '操作日志',
       oauth: 'OAuth 应用',
-      whitelist: '邮箱白名单'
+      whitelist: '邮箱白名单',
+      data: '数据管理'
     };
     pageTitle.textContent = titles[page] || page;
   }
@@ -82,6 +76,8 @@ function navigateTo(page: string): void {
     loadOAuthClients();
   } else if (page === 'whitelist') {
     initWhitelistPage();
+  } else if (page === 'data') {
+    initDataPage();
   }
 }
 
@@ -138,6 +134,11 @@ async function init(): Promise<void> {
   // 显示白名单导航（超级管理员可见）
   if (user.role >= 2 && navWhitelist) {
     navWhitelist.classList.remove('is-hidden');
+  }
+
+  // 显示数据管理导航（超级管理员可见）
+  if (user.role >= 2 && navData) {
+    navData.classList.remove('is-hidden');
   }
 
   // 显示头像
