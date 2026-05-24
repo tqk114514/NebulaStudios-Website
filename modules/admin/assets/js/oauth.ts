@@ -19,12 +19,14 @@ import {
   formatDate,
   formatRelativeTime,
   escapeHtml,
-  renderPagination,
+  renderList,
   initSearch,
   copyToClipboard,
   renderStatusBadge,
   DataCache,
-  showDetailWithCache
+  updateTableRow,
+  showDetailWithCache,
+  initModalCloseEvents
 } from './common';
 
 // ==================== 类型定义 ====================
@@ -159,9 +161,6 @@ async function toggleClient(id: number, enabled: boolean): Promise<boolean> {
  * 渲染客户端表格行
  */
 function renderClientRow(client: OAuthClient): string {
-  const toggleText = client.is_enabled ? '禁用' : '启用';
-  const toggleClass = client.is_enabled ? '' : 'off';
-
   return `
     <tr data-client-id="${client.id}">
       <td>
@@ -174,7 +173,6 @@ function renderClientRow(client: OAuthClient): string {
       <td>
         <div class="action-btns">
           <button class="action-btn view" data-client-id="${client.id}">查看</button>
-          <button class="action-btn toggle ${toggleClass}" data-client-id="${client.id}" data-enabled="${client.is_enabled}">${toggleText}</button>
         </div>
       </td>
     </tr>
@@ -186,28 +184,10 @@ function renderClientRow(client: OAuthClient): string {
  */
 function bindClientRowEvents(row: HTMLTableRowElement): void {
   const viewBtn = row.querySelector('.action-btn.view') as HTMLButtonElement;
-  const toggleBtn = row.querySelector('.action-btn.toggle') as HTMLButtonElement;
 
   viewBtn?.addEventListener('click', () => {
     const clientId = Number(viewBtn.dataset.clientId);
     showClientDetail(clientId);
-  });
-
-  toggleBtn?.addEventListener('click', async () => {
-    const clientId = Number(toggleBtn.dataset.clientId);
-    const currentEnabled = toggleBtn.dataset.enabled === 'true';
-    const newEnabled = !currentEnabled;
-    const action = newEnabled ? '启用' : '禁用';
-
-    showConfirm('确认操作', `确定要${action}此应用吗？`, async () => {
-      const success = await toggleClient(clientId, newEnabled);
-      if (success) {
-        showToast(`应用已${action}`, 'success');
-        await updateClientRow(clientId);
-      } else {
-        showToast('操作失败', 'error');
-      }
-    });
   });
 }
 
@@ -216,30 +196,18 @@ function bindClientRowEvents(row: HTMLTableRowElement): void {
  * @param clientId - 客户端 ID
  */
 async function updateClientRow(clientId: number): Promise<void> {
-  if (!oauthTableBody) {
-    console.error('[ADMIN][OAUTH] oauthTableBody element not found in updateClientRow');
-    return;
-  }
-  
-  const oldRow = oauthTableBody.querySelector(`tr[data-client-id="${clientId}"]`) as HTMLTableRowElement;
-  if (!oldRow) return;
+  if (!oauthTableBody) return;
 
-  oldRow.classList.add('is-updating');
-
-  const client = await getClient(clientId);
-  if (!client) {
-    oldRow.classList.remove('is-updating');
-    return;
-  }
-
-  clientsCache.set(clientId, client);
-
-  const temp = document.createElement('tbody');
-  temp.innerHTML = renderClientRow(client);
-  const newRow = temp.firstElementChild as HTMLTableRowElement;
-
-  oldRow.replaceWith(newRow);
-  bindClientRowEvents(newRow);
+  await updateTableRow({
+    tableBody: oauthTableBody,
+    rowId: clientId,
+    rowIdAttr: 'data-client-id',
+    fetchData: () => getClient(clientId),
+    renderRow: renderClientRow,
+    bindEvents: bindClientRowEvents,
+    cache: clientsCache,
+    cacheKey: clientId
+  });
 }
 
 /**
@@ -247,50 +215,30 @@ async function updateClientRow(clientId: number): Promise<void> {
  */
 export async function loadOAuthClients(): Promise<void> {
   console.log('[ADMIN][OAUTH] loadOAuthClients called');
-  
-  const localOauthTableBody = oauthTableBody;
-  const localOauthPagination = oauthPagination;
-  
-  if (!localOauthTableBody) {
+
+  if (!oauthTableBody) {
     console.error('[ADMIN][OAUTH] oauthTableBody element not found');
     return;
   }
-  
-  localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载中...</td></tr>';
 
-  const data = await getClients(currentPage, currentSearch);
-  if (!data) {
-    localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">加载失败</td></tr>';
-    return;
-  }
-
-  if (data.clients.length === 0) {
-    localOauthTableBody.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无数据</td></tr>';
-    if (localOauthPagination) {
-      localOauthPagination.innerHTML = '';
+  await renderList({
+    tableBody: oauthTableBody,
+    pagination: oauthPagination,
+    fetchData: async () => {
+      const data = await getClients(currentPage, currentSearch);
+      if (!data) return null;
+      return { items: data.clients, total: data.total, page: data.page, totalPages: data.totalPages };
+    },
+    renderRow: renderClientRow,
+    bindEvents: bindClientRowEvents,
+    cache: clientsCache,
+    getCacheKey: (client) => client.id,
+    colspan: 5,
+    onPageChange: (page) => {
+      currentPage = page;
+      loadOAuthClients();
     }
-    return;
-  }
-
-  localOauthTableBody.innerHTML = data.clients.map(client => renderClientRow(client)).join('');
-
-  data.clients.forEach(client => clientsCache.set(client.id, client));
-
-  localOauthTableBody.querySelectorAll('tr[data-client-id]').forEach(row => {
-    bindClientRowEvents(row as HTMLTableRowElement);
   });
-
-  if (localOauthPagination) {
-    renderPagination({
-      container: localOauthPagination,
-      current: data.page,
-      total: data.totalPages,
-      onPageChange: (page) => {
-        currentPage = page;
-        loadOAuthClients();
-      }
-    });
-  }
 }
 
 // ==================== 客户端详情 ====================
@@ -367,8 +315,11 @@ function renderClientDetailContent(client: OAuthClient, cachedAt?: number, isRef
 }
 
 function renderClientDetailFooter(client: OAuthClient): string {
+  const toggleClass = client.is_enabled ? 'btn-warning' : 'btn-success';
+  const toggleText = client.is_enabled ? '禁用' : '启用';
   return `
     <button class="btn btn-secondary" data-close-modal>关闭</button>
+    <button class="btn ${toggleClass}" id="toggle-oauth-btn" data-id="${client.id}">${toggleText}</button>
     <button class="btn btn-secondary" id="edit-oauth-btn" data-client-id="${client.id}">编辑</button>
     <button class="btn btn-warning" id="regenerate-secret-btn" data-client-id="${client.id}">重新生成密钥</button>
     <button class="btn btn-danger" id="delete-oauth-btn" data-client-id="${client.id}">删除</button>
@@ -377,6 +328,19 @@ function renderClientDetailFooter(client: OAuthClient): string {
 
 function bindClientDetailEvents(client: OAuthClient, modal: HTMLElement): void {
   modal.querySelector('[data-close-modal]')?.addEventListener('click', () => hideModal(modal));
+
+  document.getElementById('toggle-oauth-btn')?.addEventListener('click', async () => {
+    showConfirm(client.is_enabled ? '禁用应用' : '启用应用', `确定要${client.is_enabled ? '禁用' : '启用'}应用「${client.name}」吗？`, async () => {
+      const success = await toggleClient(client.id, !client.is_enabled);
+      if (success) {
+        showToast(client.is_enabled ? '应用已禁用' : '应用已启用', 'success');
+        hideModal(modal);
+        updateClientRow(client.id);
+      } else {
+        showToast('操作失败', 'error');
+      }
+    });
+  });
 
   document.getElementById('edit-oauth-btn')?.addEventListener('click', () => {
     hideModal(modal);
@@ -590,62 +554,43 @@ async function copySecret(): Promise<void> {
  */
 export function initOAuthPage(): void {
   console.log('[ADMIN][OAUTH] initOAuthPage called');
-  
-  const localOauthSearchBtn = oauthSearchBtn;
-  const localOauthSearch = oauthSearch;
-  const localCreateOAuthBtn = createOAuthBtn;
-  const localOauthModalClose = oauthModalClose;
-  const localOauthModal = oauthModal;
-  const localOauthFormClose = oauthFormClose;
-  const localOauthFormCancel = oauthFormCancel;
-  const localOauthFormModal = oauthFormModal;
-  const localOauthForm = oauthForm;
-  const localOauthFormSubmit = oauthFormSubmit;
-  const localOauthSecretClose = oauthSecretClose;
-  const localOauthSecretOk = oauthSecretOk;
-  const localCopySecretBtn = copySecretBtn;
-  const localOauthSecretModal = oauthSecretModal;
-  
-  if (localOauthSearchBtn && localOauthSearch) {
-    initSearch(localOauthSearch, localOauthSearchBtn, (query) => {
+
+  if (oauthSearchBtn && oauthSearch) {
+    initSearch(oauthSearch, oauthSearchBtn, (query) => {
       currentSearch = query;
       currentPage = 1;
       loadOAuthClients();
     });
   }
 
-  if (localCreateOAuthBtn) {
-    localCreateOAuthBtn.addEventListener('click', showCreateForm);
+  if (createOAuthBtn) {
+    createOAuthBtn.addEventListener('click', showCreateForm);
   }
 
-  if (localOauthModalClose && localOauthModal) {
-    localOauthModalClose.addEventListener('click', () => hideModal(localOauthModal));
-    localOauthModal.addEventListener('click', (e) => {
-      if (e.target === localOauthModal) hideModal(localOauthModal);
-    });
+  initModalCloseEvents(oauthModal, oauthModalClose);
+  initModalCloseEvents(oauthFormModal, null);
+
+  if (oauthFormClose) {
+    oauthFormClose.addEventListener('click', () => hideModal(oauthFormModal));
+  }
+  if (oauthFormCancel) {
+    oauthFormCancel.addEventListener('click', () => hideModal(oauthFormModal));
   }
 
-  if (localOauthFormClose && localOauthFormCancel && localOauthFormModal && localOauthForm && localOauthFormSubmit) {
-    localOauthFormClose.addEventListener('click', () => hideModal(localOauthFormModal));
-    localOauthFormCancel.addEventListener('click', () => hideModal(localOauthFormModal));
-    localOauthFormModal.addEventListener('click', (e) => {
-      if (e.target === localOauthFormModal) hideModal(localOauthFormModal);
-    });
-
-    localOauthForm.addEventListener('submit', (e) => {
+  if (oauthForm && oauthFormSubmit) {
+    oauthForm.addEventListener('submit', (e) => {
       e.preventDefault();
       handleFormSubmit();
     });
-
-    localOauthFormSubmit.addEventListener('click', (e) => {
+    oauthFormSubmit.addEventListener('click', (e) => {
       e.preventDefault();
       handleFormSubmit();
     });
   }
 
-  if (localOauthSecretClose && localOauthSecretOk && localCopySecretBtn && localOauthSecretModal) {
-    localOauthSecretClose.addEventListener('click', () => hideModal(localOauthSecretModal));
-    localOauthSecretOk.addEventListener('click', () => hideModal(localOauthSecretModal));
-    localCopySecretBtn.addEventListener('click', copySecret);
+  if (oauthSecretClose && oauthSecretOk && copySecretBtn && oauthSecretModal) {
+    oauthSecretClose.addEventListener('click', () => hideModal(oauthSecretModal));
+    oauthSecretOk.addEventListener('click', () => hideModal(oauthSecretModal));
+    copySecretBtn.addEventListener('click', copySecret);
   }
 }

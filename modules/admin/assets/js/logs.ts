@@ -15,7 +15,7 @@ import {
   ROLE_NAMES,
   formatDate,
   escapeHtml,
-  renderPagination
+  renderList
 } from './common';
 
 // ==================== 状态 ====================
@@ -81,6 +81,18 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
     return domain || JSON.stringify(details);
   }
 
+  if (action === 'data_export') {
+    const users = details.users_count || details.usersCount || 0;
+    const logs = details.logs_count || details.logsCount || 0;
+    return `用户 ${users} 条, 日志 ${logs} 条`;
+  }
+
+  if (action === 'data_import') {
+    const users = details.users_imported || details.usersImported || 0;
+    const logs = details.logs_imported || details.logsImported || 0;
+    return `用户 ${users} 条, 日志 ${logs} 条`;
+  }
+
   return JSON.stringify(details);
 }
 
@@ -106,48 +118,33 @@ function renderLogRow(log: AdminLog): string {
  */
 export async function loadLogs(): Promise<void> {
   console.log('[ADMIN][LOGS] loadLogs called');
-  
+
   if (!logsTableBody) {
     console.error('[ADMIN][LOGS] logsTableBody element not found');
     return;
   }
 
-  logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">加载中...</td></tr>';
-
   const data = await getLogs(currentPage);
 
   if (data === 'forbidden') {
     logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">无权限查看</td></tr>';
-    if (logsPagination) {
-      logsPagination.innerHTML = '';
+    if (logsPagination) logsPagination.innerHTML = '';
+    return;
+  }
+
+  await renderList({
+    tableBody: logsTableBody,
+    pagination: logsPagination,
+    fetchData: async () => {
+      if (!data) return null;
+      return { items: data.logs, total: data.total, page: data.page, totalPages: data.totalPages };
+    },
+    renderRow: renderLogRow,
+    colspan: 4,
+    emptyMessage: '暂无日志',
+    onPageChange: (page) => {
+      currentPage = page;
+      loadLogs();
     }
-    return;
-  }
-
-  if (!data) {
-    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">加载失败</td></tr>';
-    return;
-  }
-
-  if (data.logs.length === 0) {
-    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">暂无日志</td></tr>';
-    if (logsPagination) {
-      logsPagination.innerHTML = '';
-    }
-    return;
-  }
-
-  logsTableBody.innerHTML = data.logs.map(log => renderLogRow(log)).join('');
-
-  if (logsPagination) {
-    renderPagination({
-      container: logsPagination,
-      current: data.page,
-      total: data.totalPages,
-      onPageChange: (page) => {
-        currentPage = page;
-        loadLogs();
-      }
-    });
-  }
+  });
 }

@@ -165,6 +165,38 @@ func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 	})
 }
 
+// GetEmailWhitelistByID 获取单个邮箱白名单条目
+// GET /admin/api/email-whitelist/:id
+//
+// 权限：仅超级管理员
+func (h *AdminHandler) GetEmailWhitelistByID(c *gin.Context) {
+	if h.emailWhitelistRepo == nil {
+		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		return
+	}
+
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	item, err := h.emailWhitelistRepo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		return
+	}
+
+	utils.RespondSuccessWithData(c, gin.H{"item": item})
+}
+
 // CreateEmailWhitelist 创建邮箱白名单条目
 // POST /admin/api/email-whitelist
 //
