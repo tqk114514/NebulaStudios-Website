@@ -358,7 +358,8 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
 	adminLogRepo := models.NewAdminLogRepository()
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo)
+	exportService := services.NewExportService()
+	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo, exportService, cfg.DataExportSalt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin handler: %w", err)
 	}

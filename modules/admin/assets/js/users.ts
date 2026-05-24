@@ -13,8 +13,6 @@ import {
   fetchApi,
   UserPublic,
   UserListResponse,
-  ROLE_NAMES,
-  ROLE_CLASSES,
   userModal,
   userModalBody,
   userModalFooter,
@@ -31,7 +29,7 @@ import {
   formatDate,
   formatRelativeTime,
   escapeHtml,
-  renderPagination,
+  renderList,
   DataCache,
   updateTableRow,
   removeTableRow,
@@ -182,48 +180,30 @@ function removeUserRow(userUid: string): void {
 
 export async function loadUsers(): Promise<void> {
   console.log('[ADMIN][USERS] loadUsers called');
-  
+
   if (!usersTableBody) {
     console.error('[ADMIN][USERS] usersTableBody element not found');
     return;
   }
-  
-  usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中...</td></tr>';
 
-  const data = await getUsers(currentPage, currentSearch);
-  if (!data) {
-    usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败</td></tr>';
-    return;
-  }
-
-  if (data.users.length === 0) {
-    usersTableBody.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无数据</td></tr>';
-    if (pagination) {
-      pagination.innerHTML = '';
+  await renderList({
+    tableBody: usersTableBody,
+    pagination,
+    fetchData: async () => {
+      const data = await getUsers(currentPage, currentSearch);
+      if (!data) return null;
+      return { items: data.users, total: data.total, page: data.page, totalPages: data.totalPages };
+    },
+    renderRow: renderUserRow,
+    bindEvents: bindUserRowEvents,
+    cache: usersCache,
+    getCacheKey: (user) => user.uid,
+    colspan: 6,
+    onPageChange: (page) => {
+      currentPage = page;
+      loadUsers();
     }
-    return;
-  }
-
-  const now = Date.now();
-  data.users.forEach(user => usersCache.set(user.uid, user));
-
-  usersTableBody.innerHTML = data.users.map(user => renderUserRow(user)).join('');
-
-  usersTableBody.querySelectorAll('tr[data-user-uid]').forEach(row => {
-    bindUserRowEvents(row as HTMLTableRowElement);
   });
-
-  if (pagination) {
-    renderPagination({
-      container: pagination,
-      current: data.page,
-      total: data.totalPages,
-      onPageChange: (page) => {
-        currentPage = page;
-        loadUsers();
-      }
-    });
-  }
 }
 
 // ==================== 用户详情 ====================

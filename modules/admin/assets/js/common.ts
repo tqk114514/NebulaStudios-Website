@@ -246,6 +246,7 @@ export function showConfirm(title: string, message: string, onConfirm: () => voi
   }
 
   const handleConfirm = (): void => {
+    localConfirmOk.removeEventListener('click', handleConfirm);
     if (localConfirmOk.disabled) return;
     localConfirmOk.disabled = true;
     hideModal(localConfirmModal);
@@ -592,5 +593,97 @@ export function showDetailWithCache<T>(config: DetailModalConfig<T>): void {
     modalBody.innerHTML = renderContent(data, Date.now(), false);
     modalFooter.innerHTML = renderFooter(data);
     bindFooterEvents(data, modal);
+  });
+}
+
+// ==================== 通用列表渲染 ====================
+
+export interface RenderListResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+export interface RenderListConfig<T> {
+  tableBody: HTMLTableSectionElement;
+  pagination: HTMLElement | null;
+  fetchData: () => Promise<RenderListResult<T> | null>;
+  renderRow: (item: T) => string;
+  bindEvents?: ((row: HTMLTableRowElement) => void) | null;
+  cache?: DataCache<T> | null;
+  getCacheKey?: ((item: T) => string | number) | null;
+  colspan: number;
+  loadingMessage?: string;
+  errorMessage?: string;
+  emptyMessage?: string;
+  onPageChange: (page: number) => void;
+}
+
+export async function renderList<T>(config: RenderListConfig<T>): Promise<T[] | null> {
+  const {
+    tableBody, pagination, fetchData, renderRow, bindEvents,
+    cache, getCacheKey, colspan,
+    loadingMessage = '加载中...', errorMessage = '加载失败', emptyMessage = '暂无数据',
+    onPageChange
+  } = config;
+
+  tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${loadingMessage}</td></tr>`;
+
+  const data = await fetchData();
+  if (!data) {
+    tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${errorMessage}</td></tr>`;
+    return null;
+  }
+
+  if (data.items.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${emptyMessage}</td></tr>`;
+    if (pagination) pagination.innerHTML = '';
+    return [];
+  }
+
+  if (cache && getCacheKey) {
+    data.items.forEach(item => cache.set(getCacheKey(item), item));
+  }
+
+  tableBody.innerHTML = data.items.map(renderRow).join('');
+
+  if (bindEvents) {
+    tableBody.querySelectorAll('tr').forEach(row => {
+      bindEvents(row as HTMLTableRowElement);
+    });
+  }
+
+  if (pagination) {
+    renderPagination({
+      container: pagination,
+      current: data.page,
+      total: data.totalPages,
+      onPageChange
+    });
+  }
+
+  return data.items;
+}
+
+// ==================== 弹窗关闭事件 ====================
+
+export function initModalCloseEvents(
+  modal: HTMLElement | null,
+  closeBtn: HTMLElement | null,
+  onClose?: (() => void) | null
+): void {
+  if (!modal) return;
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      hideModal(modal);
+      onClose?.();
+    });
+  }
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      hideModal(modal);
+      onClose?.();
+    }
   });
 }

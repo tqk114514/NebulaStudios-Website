@@ -103,6 +103,9 @@ type Config struct {
 
 	// 默认头像
 	DefaultAvatarURL string // 默认头像 URL
+
+	// 数据导出加密
+	DataExportSalt string // HKDF 密钥派生的 Salt1（Base64）
 }
 
 // ====================  全局配置实例 ====================
@@ -224,6 +227,9 @@ func loadConfig() error {
 
 	// 加载默认头像 URL
 	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "https://cdn01.nebulastudios.top/images/default-avatar.svg")
+
+	// 加载数据导出 Salt1
+	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
 
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {

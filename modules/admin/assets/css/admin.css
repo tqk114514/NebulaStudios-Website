@@ -195,7 +195,7 @@
 .stat-icon.users { background: rgba(99, 102, 241, 0.15); color: var(--accent); }
 .stat-icon.new { background: rgba(34, 197, 94, 0.15); color: var(--success); }
 .stat-icon.admin { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
-.stat-icon.microsoft { background: rgba(255, 255, 255, 0.1); }
+.stat-icon.banned { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
 
 .stat-info {
   display: flex;

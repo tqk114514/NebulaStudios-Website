@@ -59,6 +59,11 @@ const (
 	ActionEmailWhitelistUpdate = "email_whitelist_update"
 	// ActionEmailWhitelistDelete 删除邮箱白名单
 	ActionEmailWhitelistDelete = "email_whitelist_delete"
+
+	// ActionDataExport 数据导出
+	ActionDataExport = "data_export"
+	// ActionDataImport 数据导入
+	ActionDataImport = "data_import"
 )
 
 // ====================  数据结构 ====================
@@ -122,6 +127,18 @@ type OAuthClientToggleDetails struct {
 	ClientID   string `json:"client_id"`
 	ClientName string `json:"client_name"`
 	Enabled    bool   `json:"enabled"`
+}
+
+// DataExportDetails 导出数据操作详情
+type DataExportDetails struct {
+	UsersCount int `json:"users_count"`
+	LogsCount  int `json:"logs_count"`
+}
+
+// DataImportDetails 导入数据操作详情
+type DataImportDetails struct {
+	UsersImported int `json:"users_imported"`
+	LogsImported  int `json:"logs_imported"`
 }
 
 // AdminLogRepository 管理员日志仓库
@@ -480,6 +497,48 @@ func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminU
 		Action:    ActionEmailWhitelistDelete,
 		TargetUID: &targetUID,
 		Details:   detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogDataExport 记录数据导出操作
+func (r *AdminLogRepository) LogDataExport(ctx context.Context, adminUID string, usersCount, logsCount int) error {
+	details := DataExportDetails{
+		UsersCount: usersCount,
+		LogsCount:  logsCount,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminUID: adminUID,
+		Action:   ActionDataExport,
+		Details:  detailsJSON,
+	}
+
+	return r.Create(ctx, log)
+}
+
+// LogDataImport 记录数据导入操作
+func (r *AdminLogRepository) LogDataImport(ctx context.Context, adminUID string, usersImported, logsImported int) error {
+	details := DataImportDetails{
+		UsersImported: usersImported,
+		LogsImported:  logsImported,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &AdminLog{
+		AdminUID: adminUID,
+		Action:   ActionDataImport,
+		Details:  detailsJSON,
 	}
 
 	return r.Create(ctx, log)

@@ -48,7 +48,7 @@ func setupHandler(t *testing.T) *AdminHandler {
 	oauthSvc := services.NewOAuthService()
 	emailWhitelistRepo := models.NewEmailWhitelistRepository()
 
-	h, err := NewAdminHandler(userRepo, uc, logRepo, userLogRepo, oauthSvc, emailWhitelistRepo)
+	h, err := NewAdminHandler(userRepo, uc, logRepo, userLogRepo, oauthSvc, emailWhitelistRepo, nil, "")
 	if err != nil {
 		t.Fatalf("failed to create AdminHandler: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestNewAdminHandler_NilUserRepo(t *testing.T) {
 	_ = setupConfig(t)
 	uc, _ := cache.NewUserCache(10, time.Hour)
 	logRepo := models.NewAdminLogRepository()
-	_, err := NewAdminHandler(nil, uc, logRepo, nil, nil, nil)
+	_, err := NewAdminHandler(nil, uc, logRepo, nil, nil, nil, nil, "")
 	if err != ErrAdminNilUserRepo {
 		t.Errorf("expected ErrAdminNilUserRepo, got %v", err)
 	}
@@ -75,7 +75,7 @@ func TestNewAdminHandler_NilUserCache(t *testing.T) {
 	_ = setupConfig(t)
 	userRepo := models.NewUserRepository()
 	logRepo := models.NewAdminLogRepository()
-	_, err := NewAdminHandler(userRepo, nil, logRepo, nil, nil, nil)
+	_, err := NewAdminHandler(userRepo, nil, logRepo, nil, nil, nil, nil, "")
 	if err != ErrAdminNilUserCache {
 		t.Errorf("expected ErrAdminNilUserCache, got %v", err)
 	}
@@ -85,7 +85,7 @@ func TestNewAdminHandler_NilLogRepo(t *testing.T) {
 	_ = setupConfig(t)
 	userRepo := models.NewUserRepository()
 	uc, _ := cache.NewUserCache(10, time.Hour)
-	_, err := NewAdminHandler(userRepo, uc, nil, nil, nil, nil)
+	_, err := NewAdminHandler(userRepo, uc, nil, nil, nil, nil, nil, "")
 	if err != ErrAdminNilLogRepo {
 		t.Errorf("expected ErrAdminNilLogRepo, got %v", err)
 	}
@@ -104,7 +104,7 @@ func TestNewAdminHandler_OptionalFieldsNil(t *testing.T) {
 	uc, _ := cache.NewUserCache(10, time.Hour)
 	logRepo := models.NewAdminLogRepository()
 
-	h, err := NewAdminHandler(userRepo, uc, logRepo, nil, nil, nil)
+	h, err := NewAdminHandler(userRepo, uc, logRepo, nil, nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -293,9 +293,16 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 			superAdminAPI.POST("/oauth/clients/:id/toggle", hdlrs.adminHandler.ToggleOAuthClient)
 
 			superAdminAPI.GET("/email-whitelist", hdlrs.adminHandler.GetEmailWhitelist)
+			superAdminAPI.GET("/email-whitelist/:id", hdlrs.adminHandler.GetEmailWhitelistByID)
 			superAdminAPI.POST("/email-whitelist", hdlrs.adminHandler.CreateEmailWhitelist)
 			superAdminAPI.PUT("/email-whitelist/:id", hdlrs.adminHandler.UpdateEmailWhitelist)
 			superAdminAPI.DELETE("/email-whitelist/:id", hdlrs.adminHandler.DeleteEmailWhitelist)
+
+			superAdminAPI.POST("/data/export/request", hdlrs.adminHandler.RequestExport)
+			superAdminAPI.POST("/data/export/download", hdlrs.adminHandler.DownloadExport)
+			superAdminAPI.POST("/data/import/preview", hdlrs.adminHandler.PreviewImport)
+			superAdminAPI.POST("/data/import/execute", hdlrs.adminHandler.ExecuteImport)
+			superAdminAPI.DELETE("/data/otac", hdlrs.adminHandler.RevokeOTAC)
 		}
 	}
 
