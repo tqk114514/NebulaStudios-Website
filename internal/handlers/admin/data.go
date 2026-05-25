@@ -45,6 +45,7 @@ type importPreviewResponse struct {
 
 type importExecuteRequest struct {
 	FileToken string `json:"fileToken"`
+	Strategy  string `json:"strategy"` // "merge" (default) or "overwrite"
 }
 
 type importExecuteResponse struct {
@@ -218,6 +219,19 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout*3)
 	defer cancel()
+
+	if req.Strategy == "overwrite" {
+		if err := h.deleteAllUserLogs(ctx); err != nil {
+			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to clear user logs for overwrite")
+			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			return
+		}
+		if err := h.deleteAllUsers(ctx); err != nil {
+			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to clear users for overwrite")
+			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			return
+		}
+	}
 
 	usersImported, err := h.importUsers(ctx, payload.Users)
 	if err != nil {
@@ -474,6 +488,26 @@ func (h *AdminHandler) importUserLogs(ctx context.Context, logs []map[string]any
 }
 
 // ====================  类型转换辅助函数 ====================
+
+func (h *AdminHandler) deleteAllUsers(ctx context.Context) error {
+	p := models.GetPool()
+	if p == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	_, err := p.Exec(ctx, `DELETE FROM users`)
+	return err
+}
+
+func (h *AdminHandler) deleteAllUserLogs(ctx context.Context) error {
+	p := models.GetPool()
+	if p == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	_, err := p.Exec(ctx, `DELETE FROM user_logs`)
+	return err
+}
 
 func setNullableString(m map[string]any, key string, v *string) {
 	if v != nil {
