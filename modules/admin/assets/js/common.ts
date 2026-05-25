@@ -659,7 +659,7 @@ export interface RenderListResult<T> {
 export interface RenderListConfig<T> {
   tableBody: HTMLTableSectionElement;
   pagination: HTMLElement | null;
-  fetchData: () => Promise<RenderListResult<T> | null>;
+  fetchData: () => Promise<RenderListResult<T> | null | 'forbidden'>;
   renderRow: (item: T) => string;
   bindEvents?: ((row: HTMLTableRowElement) => void) | null;
   cache?: DataCache<T> | null;
@@ -668,6 +668,7 @@ export interface RenderListConfig<T> {
   loadingMessage?: string;
   errorMessage?: string;
   emptyMessage?: string;
+  forbiddenMessage?: string;
   onPageChange: (page: number) => void;
 }
 
@@ -676,12 +677,19 @@ export async function renderList<T>(config: RenderListConfig<T>): Promise<T[] | 
     tableBody, pagination, fetchData, renderRow, bindEvents,
     cache, getCacheKey, colspan,
     loadingMessage = '加载中...', errorMessage = '加载失败', emptyMessage = '暂无数据',
+    forbiddenMessage = '无权限查看',
     onPageChange
   } = config;
 
   tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${loadingMessage}</td></tr>`;
 
   const data = await fetchData();
+  if (data === 'forbidden') {
+    tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${forbiddenMessage}</td></tr>`;
+    if (pagination) pagination.innerHTML = '';
+    return null;
+  }
+
   if (!data) {
     tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${errorMessage}</td></tr>`;
     return null;
