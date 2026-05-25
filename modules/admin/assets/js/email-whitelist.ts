@@ -21,11 +21,10 @@ import {
   whitelistModalBody,
   whitelistModalFooter,
   whitelistModalClose,
-  showModal,
   hideModal,
   DataCache,
   updateTableRow,
-  removeTableRow,
+  animateTableRow,
   renderStatusBadge,
   showDetailWithCache,
   initModalCloseEvents
@@ -202,8 +201,9 @@ async function updateWhitelistRow(entryId: number): Promise<void> {
 function removeWhitelistRow(entryId: number): void {
   if (!whitelistTableBody) return;
   
-  removeTableRow({
+  animateTableRow({
     tableBody: whitelistTableBody,
+    action: 'remove',
     rowId: entryId,
     rowIdAttr: 'data-id',
     cache: whitelistCache as DataCache<unknown>,
@@ -433,10 +433,22 @@ async function handleSubmit(e: Event): Promise<void> {
       closeFormModal();
       await updateWhitelistRow(entryId);
     } else {
-      await createEntry(domain, signupUrl);
-      showToast('添加成功', 'success');
-      closeFormModal();
-      await loadWhitelist();
+      const newEntry = await createEntry(domain, signupUrl);
+      if (newEntry) {
+        showToast('添加成功', 'success');
+        closeFormModal();
+        animateTableRow({
+          tableBody: whitelistTableBody!,
+          action: 'insert',
+          item: newEntry,
+          renderRow: renderWhitelistRow,
+          bindEvents: bindWhitelistRowEvents,
+          cache: whitelistCache,
+          getCacheKey: (e) => e.id
+        });
+      } else {
+        showToast('创建失败', 'error');
+      }
     }
   } catch {
     showToast('操作失败', 'error');

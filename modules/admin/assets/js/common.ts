@@ -424,40 +424,84 @@ export async function updateTableRow<T>(config: TableRowUpdateConfig<T>): Promis
   bindEvents(newRow);
 }
 
-export interface TableRowRemoveConfig {
+export type TableRowAnimationConfig<T = unknown> = {
   tableBody: HTMLTableSectionElement;
-  rowId: string | number;
-  rowIdAttr: string;
-  cache?: DataCache<unknown>;
-  cacheKey?: string | number;
-  colspan: number;
-  emptyMessage?: string;
-}
+  cache?: DataCache<unknown> | null;
+  getCacheKey?: ((item: T) => string | number) | null;
+} & (
+  | {
+      action: 'remove';
+      rowId: string | number;
+      rowIdAttr: string;
+      cacheKey?: string | number;
+      colspan: number;
+      emptyMessage?: string;
+    }
+  | {
+      action: 'insert';
+      item: T;
+      renderRow: (data: T) => string;
+      bindEvents?: ((row: HTMLTableRowElement) => void) | null;
+    }
+);
 
-export function removeTableRow(config: TableRowRemoveConfig): void {
-  const { tableBody, rowId, rowIdAttr, cache, cacheKey, colspan, emptyMessage = '暂无数据' } = config;
+export function animateTableRow<T = unknown>(config: TableRowAnimationConfig<T>): void {
+  const { tableBody, action, cache, getCacheKey } = config;
 
-  const row = tableBody.querySelector(`tr[${rowIdAttr}="${rowId}"]`) as HTMLTableRowElement;
-  if (!row) return;
+  if (action === 'remove') {
+    if (cache && config.cacheKey !== undefined) {
+      cache.delete(config.cacheKey);
+    }
 
-  if (cache && cacheKey !== undefined) {
-    cache.delete(cacheKey);
-  }
+    const row = tableBody.querySelector(`tr[${config.rowIdAttr}="${config.rowId}"]`) as HTMLTableRowElement;
+    if (!row) return;
 
-  row.classList.add('is-deleting');
-
-  setTimeout(() => {
-    row.style.transition = 'opacity 0.2s, transform 0.2s';
-    row.style.opacity = '0';
-    row.style.transform = 'translateX(-20px)';
+    row.classList.add('is-deleting');
 
     setTimeout(() => {
-      row.remove();
-      if (tableBody.children.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="${colspan}" class="loading-cell">${emptyMessage}</td></tr>`;
-      }
-    }, 200);
-  }, 600);
+      row.style.transition = 'opacity 0.2s, transform 0.2s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(-20px)';
+
+      setTimeout(() => {
+        row.remove();
+        if (tableBody.children.length === 0) {
+          tableBody.innerHTML = `<tr><td colspan="${config.colspan}" class="loading-cell">${config.emptyMessage || '暂无数据'}</td></tr>`;
+        }
+      }, 200);
+    }, 600);
+    return;
+  }
+
+  const { item, renderRow, bindEvents } = config;
+
+  if (cache && getCacheKey) {
+    cache.set(getCacheKey(item), item);
+  }
+
+  const emptyRow = tableBody.querySelector('tr:only-child .loading-cell');
+  if (emptyRow) {
+    tableBody.innerHTML = '';
+  }
+
+  const temp = document.createElement('tbody');
+  temp.innerHTML = renderRow(item);
+  const newRow = temp.firstElementChild as HTMLTableRowElement;
+
+  newRow.style.opacity = '0';
+  newRow.style.transform = 'translateY(-10px)';
+  newRow.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+
+  tableBody.prepend(newRow);
+
+  requestAnimationFrame(() => {
+    newRow.style.opacity = '1';
+    newRow.style.transform = 'translateY(0)';
+  });
+
+  if (bindEvents) {
+    bindEvents(newRow);
+  }
 }
 
 // ==================== 搜索初始化 ====================

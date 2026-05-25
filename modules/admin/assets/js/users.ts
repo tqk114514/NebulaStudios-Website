@@ -32,7 +32,7 @@ import {
   renderList,
   DataCache,
   updateTableRow,
-  removeTableRow,
+  animateTableRow,
   initSearch,
   renderRoleBadge,
   showDetailWithCache
@@ -168,8 +168,9 @@ async function updateUserRow(userUid: string): Promise<void> {
 function removeUserRow(userUid: string): void {
   if (!usersTableBody) return;
   
-  removeTableRow({
+  animateTableRow({
     tableBody: usersTableBody,
+    action: 'remove',
     rowId: userUid,
     rowIdAttr: 'data-user-uid',
     cache: usersCache as DataCache<unknown>,

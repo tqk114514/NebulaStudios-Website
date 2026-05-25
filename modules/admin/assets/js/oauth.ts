@@ -25,6 +25,7 @@ import {
   renderStatusBadge,
   DataCache,
   updateTableRow,
+  animateTableRow,
   showDetailWithCache,
   initModalCloseEvents
 } from './common';
@@ -210,6 +211,19 @@ async function updateClientRow(clientId: number): Promise<void> {
   });
 }
 
+async function removeClientRow(clientId: number): Promise<void> {
+  if (!oauthTableBody) return;
+  animateTableRow({
+    tableBody: oauthTableBody,
+    action: 'remove',
+    rowId: clientId,
+    rowIdAttr: 'data-client-id',
+    cache: clientsCache as DataCache<unknown>,
+    cacheKey: clientId,
+    colspan: 5
+  });
+}
+
 /**
  * 加载客户端列表
  */
@@ -366,7 +380,7 @@ function bindClientDetailEvents(client: OAuthClient, modal: HTMLElement): void {
       if (success) {
         showToast('应用已删除', 'success');
         hideModal(modal);
-        loadOAuthClients();
+        removeClientRow(client.id);
       } else {
         showToast('删除失败', 'error');
       }
@@ -505,7 +519,15 @@ async function handleFormSubmit(): Promise<void> {
       hideModal(oauthFormModal);
       showSecretModal(result.client_secret);
       showToast('应用创建成功', 'success');
-      await loadOAuthClients();
+      animateTableRow({
+        tableBody: oauthTableBody!,
+        action: 'insert',
+        item: result.client,
+        renderRow: renderClientRow,
+        bindEvents: bindClientRowEvents,
+        cache: clientsCache as DataCache<unknown>,
+        getCacheKey: (c) => c.id
+      });
     } else {
       showToast('创建失败', 'error');
     }
