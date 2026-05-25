@@ -521,12 +521,28 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
           </svg>
-          <span>导入将覆盖已有的同名用户数据，请确认后继续</span>
+          <span>请选择导入策略并确认后继续</span>
         </div>
         <div class="form-group">
           <p><strong>用户数：</strong><span id="import-preview-users">-</span></p>
           <p><strong>日志数：</strong><span id="import-preview-logs">-</span></p>
           <p><strong>导出时间：</strong><span id="import-preview-time">-</span></p>
+        </div>
+        <div class="form-group">
+          <label class="radio-group">
+            <input type="radio" name="import-strategy" value="merge" checked>
+            <span>
+              <strong>合并导入</strong>
+              <small>Upsert 用户（已存在则覆盖），跳过重复日志，保留未命中数据</small>
+            </span>
+          </label>
+          <label class="radio-group">
+            <input type="radio" name="import-strategy" value="overwrite">
+            <span>
+              <strong>全量覆盖</strong>
+              <small>先清空所有用户和日志，再用备份数据完全覆盖</small>
+            </span>
+          </label>
         </div>
       </div>
       <div class="modal-footer">

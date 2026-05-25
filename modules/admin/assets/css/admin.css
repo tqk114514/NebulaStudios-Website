@@ -519,3 +519,39 @@
   padding: 4px 8px;
   border-radius: 4px;
 }
+
+/* 导入策略 radio 组 */
+.radio-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.radio-group:hover {
+  border-color: var(--accent);
+}
+.radio-group input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.radio-group span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.radio-group strong {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+.radio-group small {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
