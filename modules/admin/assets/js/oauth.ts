@@ -105,12 +105,15 @@ const oauthSecretClose = document.getElementById('oauth-secret-close') as HTMLBu
 
 // ==================== API ====================
 
-async function getClients(page: number, search: string): Promise<OAuthClientListResponse | null> {
+async function getClients(page: number, search: string): Promise<OAuthClientListResponse | null | 'forbidden'> {
   const params = new URLSearchParams({ page: String(page), pageSize: '20' });
   if (search) params.set('search', search);
-
   const result = await fetchApi<OAuthClientListResponse>(`/admin/api/oauth/clients?${params}`);
-  return result.success ? result.data! : null;
+  if (!result.success) {
+    console.warn('[ADMIN][OAUTH] getClients failed:', result.errorCode);
+    return result.errorCode === 'FORBIDDEN' || result.errorCode === 'ACCESS_DENIED' ? 'forbidden' : null;
+  }
+  return result.data!;
 }
 
 async function getClient(id: number): Promise<OAuthClient | null> {
@@ -241,7 +244,7 @@ export async function loadOAuthClients(): Promise<void> {
     pagination: oauthPagination,
     fetchData: async () => {
       const data = await getClients(currentPage, currentSearch);
-      if (!data) return null;
+      if (!data || data === 'forbidden') return data;
       return { items: data.clients, total: data.total, page: data.page, totalPages: data.totalPages };
     },
     renderRow: renderClientRow,

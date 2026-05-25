@@ -124,19 +124,12 @@ export async function loadLogs(): Promise<void> {
     return;
   }
 
-  const data = await getLogs(currentPage);
-
-  if (data === 'forbidden') {
-    logsTableBody.innerHTML = '<tr><td colspan="4" class="loading-cell">无权限查看</td></tr>';
-    if (logsPagination) logsPagination.innerHTML = '';
-    return;
-  }
-
   await renderList({
     tableBody: logsTableBody,
     pagination: logsPagination,
     fetchData: async () => {
-      if (!data) return null;
+      const data = await getLogs(currentPage);
+      if (!data || data === 'forbidden') return data;
       return { items: data.logs, total: data.total, page: data.page, totalPages: data.totalPages };
     },
     renderRow: renderLogRow,

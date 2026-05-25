@@ -64,10 +64,13 @@ const whitelistPagination = document.getElementById('whitelist-pagination') as H
 
 // ==================== API ====================
 
-async function getWhitelist(page: number): Promise<EmailWhitelistListResponse | null> {
+async function getWhitelist(page: number): Promise<EmailWhitelistListResponse | null | 'forbidden'> {
   const params = new URLSearchParams({ page: String(page), pageSize: '20' });
   const result = await fetchApi<EmailWhitelistListResponse>(`/admin/api/email-whitelist?${params}`);
-  return result.success && result.data ? result.data : null;
+  if (!result.success) {
+    return result.errorCode === 'FORBIDDEN' || result.errorCode === 'ACCESS_DENIED' ? 'forbidden' : null;
+  }
+  return result.data;
 }
 
 async function getEntry(id: number): Promise<EmailWhitelistEntry | null> {
@@ -180,7 +183,7 @@ async function loadWhitelist(): Promise<void> {
     pagination: whitelistPagination,
     fetchData: async () => {
       const data = await getWhitelist(currentPage);
-      if (!data) return null;
+      if (!data || data === 'forbidden') return data;
       return { items: data.whitelist, total: data.total, page: data.page, totalPages: data.totalPages };
     },
     renderRow: renderWhitelistRow,

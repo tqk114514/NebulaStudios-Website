@@ -65,12 +65,15 @@ const pagination = document.getElementById('pagination') as HTMLElement | null;
 
 // ==================== API ====================
 
-async function getUsers(page: number, search: string): Promise<UserListResponse | null> {
+async function getUsers(page: number, search: string): Promise<UserListResponse | null | 'forbidden'> {
   const params = new URLSearchParams({ page: String(page), pageSize: '20' });
   if (search) params.set('search', search);
-  
+
   const result = await fetchApi<UserListResponse>(`/admin/api/users?${params}`);
-  return result.success ? result.data! : null;
+  if (!result.success) {
+    return result.errorCode === 'FORBIDDEN' || result.errorCode === 'ACCESS_DENIED' ? 'forbidden' : null;
+  }
+  return result.data!;
 }
 
 async function getUser(uid: string): Promise<UserPublic | null> {
@@ -192,7 +195,7 @@ export async function loadUsers(): Promise<void> {
     pagination,
     fetchData: async () => {
       const data = await getUsers(currentPage, currentSearch);
-      if (!data) return null;
+      if (!data || data === 'forbidden') return data;
       return { items: data.users, total: data.total, page: data.page, totalPages: data.totalPages };
     },
     renderRow: renderUserRow,
