@@ -43,14 +43,14 @@ type createOAuthClientResponse struct {
 type createOAuthClientRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
 	Description string `json:"description" binding:"max=500"`
-	RedirectURI string `json:"redirect_uri" binding:"required"`
+	RedirectURI string `json:"redirect_uri" binding:"required,url"`
 }
 
 // updateOAuthClientRequest 更新 OAuth 客户端请求
 type updateOAuthClientRequest struct {
 	Name        string  `json:"name" binding:"omitempty,min=1,max=100"`
 	Description *string `json:"description" binding:"max=500"`
-	RedirectURI string  `json:"redirect_uri"`
+	RedirectURI string  `json:"redirect_uri" binding:"required,url"`
 }
 
 // regenerateSecretResponse 重新生成密钥响应

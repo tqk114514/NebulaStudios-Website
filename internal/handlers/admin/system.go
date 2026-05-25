@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -234,6 +235,10 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_SIGNUP_URL", "Signup URL is required")
 		return
 	}
+	if _, err := url.Parse(signupURL); err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL format is invalid")
+		return
+	}
 
 	operatorUID, _ := middleware.GetUID(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
@@ -314,6 +319,10 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	signupURL := existing.SignupURL
 	if req.SignupURL != nil && *req.SignupURL != "" {
 		signupURL = strings.TrimSpace(*req.SignupURL)
+		if _, err := url.Parse(signupURL); err != nil {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL format is invalid")
+			return
+		}
 	}
 
 	isEnabled := existing.IsEnabled
