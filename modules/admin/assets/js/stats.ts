@@ -35,28 +35,17 @@ export async function loadStats(): Promise<void> {
   }
   
   console.log('[ADMIN][STATS] Stats data:', stats);
-  
-  if (statTotalUsers) {
-    statTotalUsers.textContent = String(stats.totalUsers);
-  } else {
-    console.error('[ADMIN][STATS] statTotalUsers element not found');
-  }
-  
-  if (statTodayUsers) {
-    statTodayUsers.textContent = String(stats.todayNewUsers);
-  } else {
-    console.error('[ADMIN][STATS] statTodayUsers element not found');
-  }
-  
-  if (statAdminCount) {
-    statAdminCount.textContent = String(stats.adminCount);
-  } else {
-    console.error('[ADMIN][STATS] statAdminCount element not found');
-  }
-  
-  if (statBannedCount) {
-    statBannedCount.textContent = String(stats.bannedCount);
-  } else {
-    console.error('[ADMIN][STATS] statBannedCount element not found');
+
+  const mappings: [HTMLElement | null, number][] = [
+    [statTotalUsers, stats.totalUsers],
+    [statTodayUsers, stats.todayNewUsers],
+    [statAdminCount, stats.adminCount],
+    [statBannedCount, stats.bannedCount]
+  ];
+
+  for (const [el, value] of mappings) {
+    if (el) {
+      el.textContent = String(value);
+    }
   }
 }

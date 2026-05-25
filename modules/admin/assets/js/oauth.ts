@@ -23,6 +23,7 @@ import {
   initSearch,
   copyToClipboard,
   renderStatusBadge,
+  getToggleProps,
   DataCache,
   updateTableRow,
   animateTableRow,
@@ -329,8 +330,7 @@ function renderClientDetailContent(client: OAuthClient, cachedAt?: number, isRef
 }
 
 function renderClientDetailFooter(client: OAuthClient): string {
-  const toggleClass = client.is_enabled ? 'btn-warning' : 'btn-success';
-  const toggleText = client.is_enabled ? '禁用' : '启用';
+  const { toggleClass, toggleText } = getToggleProps(client.is_enabled);
   return `
     <button class="btn btn-secondary" data-close-modal>关闭</button>
     <button class="btn ${toggleClass}" id="toggle-oauth-btn" data-id="${client.id}">${toggleText}</button>
@@ -358,7 +358,7 @@ function bindClientDetailEvents(client: OAuthClient, modal: HTMLElement): void {
 
   document.getElementById('edit-oauth-btn')?.addEventListener('click', () => {
     hideModal(modal);
-    showEditForm(client);
+    showForm(client);
   });
 
   document.getElementById('regenerate-secret-btn')?.addEventListener('click', () => {
@@ -412,54 +412,27 @@ function showClientDetail(clientId: number): void {
 
 // ==================== 创建/编辑表单 ====================
 
-/**
- * 显示创建表单
- */
-function showCreateForm(): void {
-  console.log('[ADMIN][OAUTH] showCreateForm called');
-  
-  const localOauthFormTitle = oauthFormTitle;
-  const localOauthFormSubmit = oauthFormSubmit;
-  const localOauthForm = oauthForm;
-  const localOauthFormModal = oauthFormModal;
-  
-  if (!localOauthFormTitle || !localOauthFormSubmit || !localOauthForm || !localOauthFormModal) {
-    console.error('[ADMIN][OAUTH] Form elements not found for showCreateForm');
-    return;
-  }
-  
-  editingClientId = null;
-  localOauthFormTitle.textContent = '创建应用';
-  localOauthFormSubmit.textContent = '创建';
-  localOauthForm.reset();
-  showModal(localOauthFormModal);
-}
+function showForm(client?: OAuthClient): void {
+  console.log('[ADMIN][OAUTH] showForm called');
 
-/**
- * 显示编辑表单
- */
-function showEditForm(client: OAuthClient): void {
-  console.log('[ADMIN][OAUTH] showEditForm called');
-  
-  const localOauthFormTitle = oauthFormTitle;
-  const localOauthFormSubmit = oauthFormSubmit;
-  const localOauthNameInput = oauthNameInput;
-  const localOauthDescInput = oauthDescInput;
-  const localOauthRedirectInput = oauthRedirectInput;
-  const localOauthFormModal = oauthFormModal;
-  
-  if (!localOauthFormTitle || !localOauthFormSubmit || !localOauthNameInput || !localOauthDescInput || !localOauthRedirectInput || !localOauthFormModal) {
-    console.error('[ADMIN][OAUTH] Form elements not found for showEditForm');
+  if (!oauthFormTitle || !oauthFormSubmit || !oauthForm || !oauthFormModal) {
+    console.error('[ADMIN][OAUTH] Form elements not found for showForm');
     return;
   }
-  
-  editingClientId = client.id;
-  localOauthFormTitle.textContent = '编辑应用';
-  localOauthFormSubmit.textContent = '保存';
-  localOauthNameInput.value = client.name;
-  localOauthDescInput.value = client.description || '';
-  localOauthRedirectInput.value = client.redirect_uri;
-  showModal(localOauthFormModal);
+
+  editingClientId = client ? client.id : null;
+  oauthFormTitle.textContent = client ? '编辑应用' : '创建应用';
+  oauthFormSubmit.textContent = client ? '保存' : '创建';
+
+  if (client) {
+    oauthNameInput!.value = client.name;
+    oauthDescInput!.value = client.description || '';
+    oauthRedirectInput!.value = client.redirect_uri;
+  } else {
+    oauthForm.reset();
+  }
+
+  showModal(oauthFormModal);
 }
 
 /**
@@ -586,7 +559,7 @@ export function initOAuthPage(): void {
   }
 
   if (createOAuthBtn) {
-    createOAuthBtn.addEventListener('click', showCreateForm);
+    createOAuthBtn.addEventListener('click', () => showForm());
   }
 
   initModalCloseEvents(oauthModal, oauthModalClose);
