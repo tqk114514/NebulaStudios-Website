@@ -289,11 +289,14 @@ function bindImportPreviewEvents(): void {
     if (confirmBtn instanceof HTMLButtonElement) confirmBtn.disabled = true;
 
     try {
+      const strategyRadio = document.querySelector<HTMLInputElement>('input[name="import-strategy"]:checked');
+      const strategy = strategyRadio?.value || 'merge';
+
       const resp = await fetch('/admin/api/data/import/execute', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileToken: importFileToken })
+        body: JSON.stringify({ fileToken: importFileToken, strategy })
       });
 
       const data = await resp.json();
