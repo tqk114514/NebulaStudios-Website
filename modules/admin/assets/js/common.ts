@@ -557,6 +557,13 @@ export function renderRoleBadge(role: number): string {
   return `<span class="role-badge ${ROLE_CLASSES[role]}">${ROLE_NAMES[role]}</span>`;
 }
 
+export function getToggleProps(enabled: boolean): { toggleClass: string; toggleText: string } {
+  return {
+    toggleClass: enabled ? 'btn-warning' : 'btn-success',
+    toggleText: enabled ? '禁用' : '启用'
+  };
+}
+
 // ==================== 详情弹窗缓存渲染 ====================
 
 export interface DetailModalConfig<T> {
