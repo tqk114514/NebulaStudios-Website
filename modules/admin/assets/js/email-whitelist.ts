@@ -25,6 +25,7 @@ import {
   DataCache,
   updateTableRow,
   animateTableRow,
+  getToggleProps,
   renderStatusBadge,
   showDetailWithCache,
   initModalCloseEvents
@@ -64,91 +65,45 @@ const whitelistPagination = document.getElementById('whitelist-pagination') as H
 // ==================== API ====================
 
 async function getWhitelist(page: number): Promise<EmailWhitelistListResponse | null> {
-  try {
-    const params = new URLSearchParams({ page: String(page), pageSize: '20' });
-    const result = await fetchApi<EmailWhitelistListResponse>(`/admin/api/email-whitelist?${params}`);
-    if (result.success && result.data) {
-      return result.data;
-    }
-    return null;
-  } catch (e) {
-    console.error('[WHITELIST] Failed to load whitelist:', e);
-    return null;
-  }
+  const params = new URLSearchParams({ page: String(page), pageSize: '20' });
+  const result = await fetchApi<EmailWhitelistListResponse>(`/admin/api/email-whitelist?${params}`);
+  return result.success && result.data ? result.data : null;
 }
 
 async function getEntry(id: number): Promise<EmailWhitelistEntry | null> {
-  try {
-    const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`);
-    if (result.success && result.data) {
-      return result.data.item || null;
-    }
-    return null;
-  } catch (e) {
-    console.error('[WHITELIST] Failed to get entry:', e);
-    return null;
-  }
+  const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`);
+  return result.success && result.data ? result.data.item || null : null;
 }
 
 async function createEntry(domain: string, signupUrl: string): Promise<EmailWhitelistEntry | null> {
-  try {
-    const result = await fetchApi<{ item: EmailWhitelistEntry }>('/admin/api/email-whitelist', {
-      method: 'POST',
-      body: JSON.stringify({ domain, signup_url: signupUrl }),
-    });
-    if (result.success && result.data) {
-      return result.data.item || null;
-    }
-    return null;
-  } catch (e) {
-    console.error('[WHITELIST] Failed to create entry:', e);
-    throw e;
-  }
+  const result = await fetchApi<{ item: EmailWhitelistEntry }>('/admin/api/email-whitelist', {
+    method: 'POST',
+    body: JSON.stringify({ domain, signup_url: signupUrl }),
+  });
+  return result.success && result.data ? result.data.item || null : null;
 }
 
 async function updateEntry(id: number, domain: string, signupUrl: string, isEnabled: boolean): Promise<EmailWhitelistEntry | null> {
-  try {
-    const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ domain, signup_url: signupUrl, is_enabled: isEnabled }),
-    });
-    if (result.success && result.data) {
-      return result.data.item || null;
-    }
-    return null;
-  } catch (e) {
-    console.error('[WHITELIST] Failed to update entry:', e);
-    throw e;
-  }
+  const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ domain, signup_url: signupUrl, is_enabled: isEnabled }),
+  });
+  return result.success && result.data ? result.data.item || null : null;
 }
 
-async function deleteEntry(id: number): Promise<void> {
-  try {
-    const result = await fetchApi(`/admin/api/email-whitelist/${id}`, {
-      method: 'DELETE',
-    });
-    if (!result.success) {
-      throw new Error('Delete failed');
-    }
-  } catch (e) {
-    console.error('[WHITELIST] Failed to delete entry:', e);
-    throw e;
-  }
+async function deleteEntry(id: number): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/email-whitelist/${id}`, {
+    method: 'DELETE',
+  });
+  return result.success;
 }
 
-async function toggleEntry(id: number, isEnabled: boolean): Promise<void> {
-  try {
-    const result = await fetchApi(`/admin/api/email-whitelist/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_enabled: isEnabled }),
-    });
-    if (!result.success) {
-      throw new Error('Toggle failed');
-    }
-  } catch (e) {
-    console.error('[WHITELIST] Failed to toggle entry:', e);
-    throw e;
-  }
+async function toggleEntry(id: number, isEnabled: boolean): Promise<boolean> {
+  const result = await fetchApi(`/admin/api/email-whitelist/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_enabled: isEnabled }),
+  });
+  return result.success;
 }
 
 // ==================== 渲染 ====================
@@ -300,8 +255,7 @@ function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: num
 }
 
 function renderWhitelistDetailFooter(entry: EmailWhitelistEntry): string {
-  const toggleClass = entry.is_enabled ? 'btn-warning' : 'btn-success';
-  const toggleText = entry.is_enabled ? '禁用' : '启用';
+  const { toggleClass, toggleText } = getToggleProps(entry.is_enabled);
   return `
     <button class="btn btn-secondary" data-close-modal>关闭</button>
     <button class="btn ${toggleClass}" id="toggle-whitelist" data-id="${entry.id}">${toggleText}</button>
@@ -315,12 +269,12 @@ function bindWhitelistDetailEvents(entry: EmailWhitelistEntry, modal: HTMLElemen
 
   document.getElementById('toggle-whitelist')?.addEventListener('click', async () => {
     showConfirm(entry.is_enabled ? '禁用白名单' : '启用白名单', `确定要${entry.is_enabled ? '禁用' : '启用'}域名 "${entry.domain}" 吗？`, async () => {
-      try {
-        await toggleEntry(entry.id, !entry.is_enabled);
+      const success = await toggleEntry(entry.id, !entry.is_enabled);
+      if (success) {
         showToast(entry.is_enabled ? '已禁用' : '已启用', 'success');
         hideModal(modal);
         updateWhitelistRow(entry.id);
-      } catch {
+      } else {
         showToast('操作失败', 'error');
       }
     });
@@ -328,17 +282,17 @@ function bindWhitelistDetailEvents(entry: EmailWhitelistEntry, modal: HTMLElemen
 
   document.getElementById('edit-whitelist')?.addEventListener('click', () => {
     hideModal(modal);
-    openEditModal(entry);
+    openFormModal(entry);
   });
 
   document.getElementById('delete-whitelist')?.addEventListener('click', async () => {
     showConfirm('删除白名单', `确定要删除域名 "${entry.domain}" 吗？`, async () => {
-      try {
-        await deleteEntry(entry.id);
+      const success = await deleteEntry(entry.id);
+      if (success) {
         showToast('删除成功', 'success');
         hideModal(modal);
         removeWhitelistRow(entry.id);
-      } catch {
+      } else {
         showToast('删除失败', 'error');
       }
     });
@@ -364,33 +318,18 @@ function showWhitelistDetail(entryId: number): void {
 
 // ==================== 弹窗操作 ====================
 
-function openCreateModal(): void {
+function openFormModal(entry?: EmailWhitelistEntry): void {
   const formTitle = document.getElementById('whitelist-form-title') as HTMLElement | null;
   const formSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
   const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
   const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
   const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
 
-  editingEntryId = null;
-  if (formTitle) formTitle.textContent = '添加白名单';
-  if (formSubmit) formSubmit.textContent = '添加';
-  if (domainInput) domainInput.value = '';
-  if (urlInput) urlInput.value = '';
-  if (formModal) formModal.classList.remove('is-hidden');
-}
-
-function openEditModal(entry: EmailWhitelistEntry): void {
-  const formTitle = document.getElementById('whitelist-form-title') as HTMLElement | null;
-  const formSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
-  const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
-  const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
-  const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
-
-  editingEntryId = entry.id;
-  if (formTitle) formTitle.textContent = '编辑白名单';
-  if (formSubmit) formSubmit.textContent = '保存';
-  if (domainInput) domainInput.value = entry.domain;
-  if (urlInput) urlInput.value = entry.signup_url;
+  editingEntryId = entry ? entry.id : null;
+  if (formTitle) formTitle.textContent = entry ? '编辑白名单' : '添加白名单';
+  if (formSubmit) formSubmit.textContent = entry ? '保存' : '添加';
+  if (domainInput) domainInput.value = entry ? entry.domain : '';
+  if (urlInput) urlInput.value = entry ? entry.signup_url : '';
   if (formModal) formModal.classList.remove('is-hidden');
 }
 
@@ -470,7 +409,7 @@ export function initWhitelistPage(): void {
   initModalCloseEvents(formModal, null);
 
   if (createBtn) {
-    createBtn.addEventListener('click', openCreateModal);
+    createBtn.addEventListener('click', () => openFormModal());
   }
 
   if (form) {
