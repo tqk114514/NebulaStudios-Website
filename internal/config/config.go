@@ -106,6 +106,9 @@ type Config struct {
 
 	// 数据导出加密
 	DataExportSalt string // HKDF 密钥派生的 Salt1（Base64）
+
+	// 图片处理器 Unix Socket 路径
+	ImageProcessorSocket string // 图片处理器的 Unix Socket 路径
 }
 
 // ====================  全局配置实例 ====================
@@ -230,6 +233,9 @@ func loadConfig() error {
 
 	// 加载数据导出 Salt1
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
+
+	// 加载图片处理器 Socket 路径
+	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "/tmp/img-processor.sock")
 
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {
@@ -361,11 +367,12 @@ func MustGet() *Config {
 // 用于配置加载失败时的降级处理
 func getDefaultConfig() *Config {
 	return &Config{
-		Port:         "3000",
-		DBMaxConns:   10,
-		JWTExpiresIn: 60 * 24 * time.Hour,
-		SMTPHost:     "smtp.163.com",
-		SMTPPort:     465,
+		Port:                 "3000",
+		DBMaxConns:           10,
+		JWTExpiresIn:         60 * 24 * time.Hour,
+		SMTPHost:             "smtp.163.com",
+		SMTPPort:             465,
+		ImageProcessorSocket: "/tmp/img-processor.sock",
 	}
 }
 

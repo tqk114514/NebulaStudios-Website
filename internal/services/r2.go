@@ -63,7 +63,7 @@ func NewR2Service() (*R2Service, error) {
 	client := s3.NewFromConfig(awsCfg)
 
 	// 初始化图片处理器
-	imgProcessor := NewImgProcessor()
+	imgProcessor := NewImgProcessor(cfg.ImageProcessorSocket)
 
 	utils.LogInfo("R2", fmt.Sprintf("R2 service initialized: bucket=%s", cfg.R2Bucket))
 
