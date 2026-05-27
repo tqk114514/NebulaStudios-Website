@@ -628,20 +628,16 @@ func (r *UserRepository) Delete(ctx context.Context, uid string) error {
 // 返回：
 //   - error: 处理后的错误
 func (r *UserRepository) handleWriteError(err error, operation string, identifier any) error {
-	errStr := err.Error()
-
-	// 检查唯一约束冲突
-	if strings.Contains(errStr, "users_email_key") {
+	if IsUniqueViolation(err, "email") {
 		return ErrEmailExists
 	}
-	if strings.Contains(errStr, "users_username_key") {
+	if IsUniqueViolation(err, "username") {
 		return ErrUsernameExists
 	}
-	if strings.Contains(errStr, "users_microsoft_id_key") {
+	if IsUniqueViolation(err, "microsoft_id") {
 		return ErrMicrosoftIDExists
 	}
 
-	// 使用统一的错误日志记录
 	return utils.LogError("USER", operation, err, fmt.Sprintf("identifier=%v", identifier))
 }
 
