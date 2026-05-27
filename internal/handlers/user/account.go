@@ -461,7 +461,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	footer := getDataExportFooter(lang, utcTimeStr)
 	finalData := append(jsonData, []byte(footer)...)
 
-	filename := fmt.Sprintf("nebula_account_data_%s_%s.txt", userUID, time.Now().Format("20060102_150405"))
+	filename := fmt.Sprintf("nebula_account_data_%s_%s.txt", userUID, time.Now().In(utils.ShanghaiLocation()).Format("20060102_150405"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", finalData)
