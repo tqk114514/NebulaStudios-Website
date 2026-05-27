@@ -474,10 +474,7 @@ func (r *OAuthClientRepository) handleQueryError(err error, operation string, id
 // 返回：
 //   - error: 处理后的错误
 func (r *OAuthClientRepository) handleWriteError(err error, operation string, identifier any) error {
-	errStr := err.Error()
-
-	// 检查唯一约束冲突
-	if strings.Contains(errStr, "oauth_clients_client_id_key") {
+	if IsUniqueViolation(err, "client_id") {
 		return ErrOAuthClientIDExists
 	}
 
