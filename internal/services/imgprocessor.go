@@ -24,8 +24,6 @@ import (
 )
 
 const (
-	// SocketPath Unix Socket 路径
-	SocketPath = "/tmp/img-processor.sock"
 	// BinaryPath 二进制文件路径
 	BinaryPath = "/tmp/img-processor"
 	// ConnectTimeout 连接超时
@@ -60,12 +58,14 @@ type ImgProcessor struct {
 	sem        chan struct{} // 并发限制信号量
 	cmd        *exec.Cmd     // 子进程
 	restarting bool          // 是否正在重启
+	socketPath string        // Unix Socket 路径
 }
 
 // NewImgProcessor 创建图片处理服务
-func NewImgProcessor() *ImgProcessor {
+func NewImgProcessor(socketPath string) *ImgProcessor {
 	p := &ImgProcessor{
-		sem: make(chan struct{}, MaxConcurrent),
+		sem:        make(chan struct{}, MaxConcurrent),
+		socketPath: socketPath,
 	}
 	p.startProcessor()
 	return p
@@ -88,7 +88,8 @@ func (p *ImgProcessor) startProcessor() {
 	}
 
 	// 删除旧的 socket
-	os.Remove(SocketPath)
+	os.Remove(p.socketPath)
+	os.Remove(BinaryPath)
 
 	// 启动进程
 	p.cmd = exec.Command(BinaryPath)
@@ -101,7 +102,7 @@ func (p *ImgProcessor) startProcessor() {
 	// 等待 socket 就绪
 	for range 50 { // 最多等 5 秒
 		time.Sleep(100 * time.Millisecond)
-		if _, err := os.Stat(SocketPath); err == nil {
+		if _, err := os.Stat(p.socketPath); err == nil {
 			p.available = true
 			utils.LogInfo("IMG", fmt.Sprintf("Image processor started (PID: %d)", p.cmd.Process.Pid))
 			return
@@ -123,7 +124,7 @@ func (p *ImgProcessor) Shutdown(ctx context.Context) {
 			p.cmd.Wait()
 			utils.LogInfo("IMG", "Image processor stopped")
 		}
-		os.Remove(SocketPath)
+		os.Remove(p.socketPath)
 		os.Remove(BinaryPath)
 		close(done)
 	}()
@@ -180,7 +181,7 @@ func (p *ImgProcessor) checkAndRestart() {
 	}
 
 	// 检查 socket 是否存在
-	if _, err := os.Stat(SocketPath); os.IsNotExist(err) {
+	if _, err := os.Stat(p.socketPath); os.IsNotExist(err) {
 		p.tryRestart()
 		return
 	}
@@ -200,7 +201,7 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	defer func() { <-p.sem }()
 
 	// 连接
-	conn, err := net.DialTimeout("unix", SocketPath, ConnectTimeout)
+	conn, err := net.DialTimeout("unix", p.socketPath, ConnectTimeout)
 	if err != nil {
 		p.available = false
 		p.checkAndRestart() // 连接失败时触发重启检查
