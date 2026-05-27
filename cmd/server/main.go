@@ -46,17 +46,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  初始化 ====================
-
-func init() {
-	loc, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		loc = time.FixedZone("CST", 8*3600)
-	}
-	time.Local = loc
-	utils.LogInfo("SERVER", "Timezone set to UTC+8 (Asia/Shanghai)")
-}
-
 // ====================  常量定义 ====================
 
 const (

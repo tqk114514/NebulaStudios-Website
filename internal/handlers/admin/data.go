@@ -141,7 +141,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("nebula-backup-%s.enc", time.Now().Format("2006-01-02T15-04-05"))
+	filename := fmt.Sprintf("nebula-backup-%s.enc", time.Now().In(utils.ShanghaiLocation()).Format("2006-01-02T15-04-05"))
 
 	if err := h.logRepo.LogDataExport(ctx, operatorUID, len(users), len(logs)); err != nil {
 		utils.LogWarn("DATA-EXPORT", "Failed to log export", err.Error())
