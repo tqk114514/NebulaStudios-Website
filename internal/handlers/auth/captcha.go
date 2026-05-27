@@ -110,8 +110,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	if !middleware.EmailLimiter.Allow(validatedEmail) {
-		waitTime := middleware.EmailLimiter.GetWaitTime(validatedEmail)
+	if !middleware.DefaultLimiterManager.EmailLimiter.Allow(validatedEmail) {
+		waitTime := middleware.DefaultLimiterManager.EmailLimiter.GetWaitTime(validatedEmail)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
 		return
 	}

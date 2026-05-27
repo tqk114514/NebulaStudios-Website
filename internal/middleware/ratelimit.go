@@ -722,30 +722,50 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
 	return int((sdel.interval - elapsed).Seconds())
 }
 
-// ====================  预定义限流器 ====================
+// ====================  限流器管理器 ====================
 
-var (
-	// LoginLimiter 登录限流：5 次/分钟
-	LoginLimiter = NewShardedRateLimiter(rate.Every(defaultLoginRate), defaultLoginBurst)
+// RateLimiterManager 统一管理所有限流器实例
+// 将所有限流器收敛到单一结构体，避免多个包级全局变量
+type RateLimiterManager struct {
+	LoginLimiter          *ShardedRateLimiter
+	RegisterLimiter       *ShardedRateLimiter
+	ResetPasswordLimiter  *ShardedRateLimiter
+	OAuthTokenLimiter     *ShardedRateLimiter
+	InvalidateCodeLimiter *ShardedRateLimiter
+	EmailLimiter          *ShardedEmailRateLimiter
+	DataExportLimiter     *ShardedDataExportLimiter
+}
 
-	// RegisterLimiter 注册限流：3 次/分钟
-	RegisterLimiter = NewShardedRateLimiter(rate.Every(defaultRegisterRate), defaultRegisterBurst)
+// DefaultLimiterManager 包级默认限流器管理器
+var DefaultLimiterManager = NewRateLimiterManager()
 
-	// ResetPasswordLimiter 密码重置限流：3 次/分钟
-	ResetPasswordLimiter = NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst)
+// NewRateLimiterManager 创建并初始化所有限流器
+func NewRateLimiterManager() *RateLimiterManager {
+	return &RateLimiterManager{
+		LoginLimiter:          NewShardedRateLimiter(rate.Every(defaultLoginRate), defaultLoginBurst),
+		RegisterLimiter:       NewShardedRateLimiter(rate.Every(defaultRegisterRate), defaultRegisterBurst),
+		ResetPasswordLimiter:  NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst),
+		OAuthTokenLimiter:     NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst),
+		InvalidateCodeLimiter: NewShardedRateLimiter(rate.Every(defaultInvalidateCodeRate), defaultInvalidateCodeBurst),
+		EmailLimiter:          NewShardedEmailRateLimiter(defaultEmailInterval),
+		DataExportLimiter:     NewShardedDataExportLimiter(24 * time.Hour),
+	}
+}
 
-	// OAuthTokenLimiter OAuth Token 端点限流：10 次/20 秒
-	OAuthTokenLimiter = NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst)
-
-	// InvalidateCodeLimiter 验证码失效限流：2 次/60 秒
-	InvalidateCodeLimiter = NewShardedRateLimiter(rate.Every(defaultInvalidateCodeRate), defaultInvalidateCodeBurst)
-
-	// EmailLimiter 邮件发送限流：60 秒/邮箱
-	EmailLimiter = NewShardedEmailRateLimiter(defaultEmailInterval)
-
-	// DataExportLimiter 数据导出限流：24 小时/用户
-	DataExportLimiter = NewShardedDataExportLimiter(24 * time.Hour)
-)
+// StopAll 停止所有限流器的后台 goroutine
+func (m *RateLimiterManager) StopAll() {
+	if m == nil {
+		return
+	}
+	m.LoginLimiter.Stop()
+	m.RegisterLimiter.Stop()
+	m.ResetPasswordLimiter.Stop()
+	m.OAuthTokenLimiter.Stop()
+	m.InvalidateCodeLimiter.Stop()
+	m.EmailLimiter.Stop()
+	m.DataExportLimiter.Stop()
+	utils.LogInfo("RATELIMIT", "All rate limiters stopped")
+}
 
 // ====================  中间件 ====================
 
@@ -790,46 +810,26 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 }
 
 // LoginRateLimit 登录限流中间件
-// 限制：5 次/分钟
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func LoginRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(LoginLimiter)
+	return RateLimitMiddleware(DefaultLimiterManager.LoginLimiter)
 }
 
 // RegisterRateLimit 注册限流中间件
-// 限制：3 次/分钟
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func RegisterRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(RegisterLimiter)
+	return RateLimitMiddleware(DefaultLimiterManager.RegisterLimiter)
 }
 
 // ResetPasswordRateLimit 密码重置限流中间件
-// 限制：3 次/分钟
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func ResetPasswordRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(ResetPasswordLimiter)
+	return RateLimitMiddleware(DefaultLimiterManager.ResetPasswordLimiter)
 }
 
 // OAuthTokenRateLimit OAuth Token 端点限流中间件
-// 限制：10 次/20 秒
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func OAuthTokenRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(OAuthTokenLimiter)
+	return RateLimitMiddleware(DefaultLimiterManager.OAuthTokenLimiter)
 }
 
 // InvalidateCodeRateLimit 验证码失效限流中间件
-// 限制：2 次/60 秒
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func InvalidateCodeRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(InvalidateCodeLimiter)
+	return RateLimitMiddleware(DefaultLimiterManager.InvalidateCodeLimiter)
 }

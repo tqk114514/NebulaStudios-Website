@@ -415,13 +415,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 
 	userhandler.StopDataExportCleanup()
 
-	middleware.LoginLimiter.Stop()
-	middleware.RegisterLimiter.Stop()
-	middleware.ResetPasswordLimiter.Stop()
-	middleware.OAuthTokenLimiter.Stop()
-	middleware.InvalidateCodeLimiter.Stop()
-	middleware.EmailLimiter.Stop()
-	middleware.DataExportLimiter.Stop()
+	middleware.DefaultLimiterManager.StopAll()
 
 	if svcs.wsService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
