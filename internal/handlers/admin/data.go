@@ -12,7 +12,6 @@
 package admin
 
 import (
-	"auth-system/internal/models"
 	"auth-system/internal/utils"
 	"context"
 	"fmt"
@@ -268,7 +267,7 @@ func (h *AdminHandler) RevokeOTAC(c *gin.Context) {
 
 // queryAllUsers 查询所有用户
 func (h *AdminHandler) queryAllUsers(ctx context.Context) ([]map[string]any, error) {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -336,7 +335,7 @@ func (h *AdminHandler) queryAllUsers(ctx context.Context) ([]map[string]any, err
 
 // queryAllUserLogs 查询所有用户操作日志
 func (h *AdminHandler) queryAllUserLogs(ctx context.Context) ([]map[string]any, error) {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -384,7 +383,7 @@ func (h *AdminHandler) queryAllUserLogs(ctx context.Context) ([]map[string]any, 
 
 // importUsers 批量导入用户
 func (h *AdminHandler) importUsers(ctx context.Context, users []map[string]any) (int, error) {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
@@ -450,7 +449,7 @@ func (h *AdminHandler) importUsers(ctx context.Context, users []map[string]any) 
 
 // importUserLogs 批量导入用户操作日志
 func (h *AdminHandler) importUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
@@ -490,7 +489,7 @@ func (h *AdminHandler) importUserLogs(ctx context.Context, logs []map[string]any
 // ====================  类型转换辅助函数 ====================
 
 func (h *AdminHandler) deleteAllUsers(ctx context.Context) error {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -500,7 +499,7 @@ func (h *AdminHandler) deleteAllUsers(ctx context.Context) error {
 }
 
 func (h *AdminHandler) deleteAllUserLogs(ctx context.Context) error {
-	p := models.GetPool()
+	p := h.pool
 	if p == nil {
 		return fmt.Errorf("database not initialized")
 	}

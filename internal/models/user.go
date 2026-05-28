@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -117,7 +118,9 @@ type UserPublic struct {
 }
 
 // UserRepository 用户仓库
-type UserRepository struct{}
+type UserRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  User 方法 ====================
 
@@ -222,8 +225,8 @@ func (u *User) Validate() error {
 // NewUserRepository 创建用户仓库
 // 返回：
 //   - *UserRepository: 用户仓库实例
-func NewUserRepository() *UserRepository {
-	return &UserRepository{}
+func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
+	return &UserRepository{pool: pool}
 }
 
 // ====================  查询方法 ====================
@@ -241,12 +244,12 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 		return nil, errors.New("invalid user ID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -279,12 +282,12 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 		return nil, errors.New("invalid user UID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -319,12 +322,12 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 		return nil, errors.New("empty identifier")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -358,12 +361,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 		return nil, errors.New("empty email")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -396,12 +399,12 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 		return nil, errors.New("empty username")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -434,12 +437,12 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 		return nil, errors.New("empty microsoft ID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	user := &User{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, uid, username, email, password, avatar_url, role,
 		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -477,7 +480,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		return err
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
@@ -501,7 +504,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 				return utils.LogError("USER", "Create", err, "Failed to generate UID")
 			}
 
-			err = pool.QueryRow(ctx, `
+			err = r.pool.QueryRow(ctx, `
 				INSERT INTO users (uid, username, email, password, avatar_url, microsoft_id, role)
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 				RETURNING id, created_at, updated_at
@@ -526,7 +529,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 	}
 
 	// UID 已指定，直接插入
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO users (uid, username, email, password, avatar_url, microsoft_id, role)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
@@ -564,7 +567,7 @@ func (r *UserRepository) Update(ctx context.Context, uid string, updates map[str
 		return errors.New("too many update fields")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
@@ -575,7 +578,7 @@ func (r *UserRepository) Update(ctx context.Context, uid string, updates map[str
 	}
 
 	// 执行更新
-	result, err := pool.Exec(ctx, query, args...)
+	result, err := r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return r.handleWriteError(err, "Update", uid)
 	}
@@ -600,11 +603,11 @@ func (r *UserRepository) Delete(ctx context.Context, uid string) error {
 		return errors.New("invalid user UID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM users WHERE uid = $1", uid)
+	result, err := r.pool.Exec(ctx, "DELETE FROM users WHERE uid = $1", uid)
 	if err != nil {
 		return utils.LogError("USER", "Delete", err, fmt.Sprintf("uid=%s", uid))
 	}
@@ -704,7 +707,7 @@ type UserStats struct {
 //   - int64: 总数
 //   - error: 错误信息
 func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, 0, errors.New("database not ready")
 	}
 
@@ -717,12 +720,12 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 
 	if search == "" {
 		// 无搜索条件
-		err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total)
+		err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total)
 		if err != nil {
 			return nil, 0, utils.LogError("USER", "CountUsers", err)
 		}
 
-		rows, err = pool.Query(ctx, `
+		rows, err = r.pool.Query(ctx, `
 			SELECT id, uid, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -734,7 +737,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	} else {
 		// 有搜索条件
 		searchPattern := "%" + search + "%"
-		err = pool.QueryRow(ctx, `
+		err = r.pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM users 
 			WHERE username ILIKE $1 OR email ILIKE $1
 		`, searchPattern).Scan(&total)
@@ -742,7 +745,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			return nil, 0, utils.LogError("USER", "CountUsersWithSearch", err)
 		}
 
-		rows, err = pool.Query(ctx, `
+		rows, err = r.pool.Query(ctx, `
 			SELECT id, uid, username, email, password, avatar_url, role,
 			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
 			       is_banned, ban_reason, banned_at, banned_by, unban_at,
@@ -792,20 +795,20 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 //   - *UserStats: 统计数据
 //   - error: 错误信息
 func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	stats := &UserStats{}
 
 	// 总用户数
-	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
 	if err != nil {
 		return nil, utils.LogError("USER", "CountTotalUsers", err)
 	}
 
 	// 今日新增用户
-	err = pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users 
 		WHERE created_at >= CURRENT_DATE
 	`).Scan(&stats.TodayNewUsers)
@@ -814,7 +817,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	}
 
 	// 管理员数量
-	err = pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users WHERE role >= $1
 	`, RoleAdmin).Scan(&stats.AdminCount)
 	if err != nil {
@@ -822,7 +825,7 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	}
 
 	// 封禁用户数
-	err = pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users WHERE is_banned = true AND (unban_at IS NULL OR unban_at > CURRENT_TIMESTAMP)
 	`).Scan(&stats.BannedCount)
 	if err != nil {
@@ -850,12 +853,12 @@ func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reas
 		return errors.New("invalid admin UID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
 	// 执行封禁
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		UPDATE users SET 
 			is_banned = true,
 			ban_reason = $1,
@@ -890,12 +893,12 @@ func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
 		return errors.New("invalid user UID")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
 	// 执行解封
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		UPDATE users SET 
 			is_banned = false,
 			ban_reason = NULL,

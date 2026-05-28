@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -142,15 +144,15 @@ type DataImportDetails struct {
 }
 
 // AdminLogRepository 管理员日志仓库
-type AdminLogRepository struct{}
+type AdminLogRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewAdminLogRepository 创建管理员日志仓库
-// 返回：
-//   - *AdminLogRepository: 日志仓库实例
-func NewAdminLogRepository() *AdminLogRepository {
-	return &AdminLogRepository{}
+func NewAdminLogRepository(pool *pgxpool.Pool) *AdminLogRepository {
+	return &AdminLogRepository{pool: pool}
 }
 
 // ====================  写入方法 ====================
@@ -180,7 +182,7 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 	}
 
 	// 执行插入
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO admin_logs (admin_uid, action, target_uid, details)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
@@ -567,13 +569,13 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 
 	// 查询总数
 	var total int64
-	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM admin_logs").Scan(&total)
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM admin_logs").Scan(&total)
 	if err != nil {
 		return nil, 0, utils.LogError("ADMIN_LOG", "FindAll.Count", err)
 	}
 
 	// 查询日志列表（关联用户表获取管理员用户名）
-	rows, err := pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, `
 		SELECT l.id, l.admin_uid, u.username, l.action, l.target_uid, l.details, l.created_at
 		FROM admin_logs l
 		LEFT JOIN users u ON l.admin_uid = u.uid
@@ -613,7 +615,7 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 
 // checkDB 检查数据库连接是否就绪
 func (r *AdminLogRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("ADMIN_LOG", "checkDB", ErrAdminLogDBNotReady)
 		return ErrAdminLogDBNotReady
 	}

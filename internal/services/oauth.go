@@ -39,6 +39,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -99,13 +101,13 @@ type OAuthTokenResponse struct {
 // ====================  构造函数 ====================
 
 // NewOAuthService 创建 OAuth 服务
-func NewOAuthService() *OAuthService {
+func NewOAuthService(pool *pgxpool.Pool) *OAuthService {
 	return &OAuthService{
-		clientRepo:       models.NewOAuthClientRepository(),
-		authCodeRepo:     models.NewOAuthAuthCodeRepository(),
-		accessTokenRepo:  models.NewOAuthAccessTokenRepository(),
-		refreshTokenRepo: models.NewOAuthRefreshTokenRepository(),
-		grantRepo:        models.NewOAuthGrantRepository(),
+		clientRepo:       models.NewOAuthClientRepository(pool),
+		authCodeRepo:     models.NewOAuthAuthCodeRepository(pool),
+		accessTokenRepo:  models.NewOAuthAccessTokenRepository(pool),
+		refreshTokenRepo: models.NewOAuthRefreshTokenRepository(pool),
+		grantRepo:        models.NewOAuthGrantRepository(pool),
 	}
 }
 

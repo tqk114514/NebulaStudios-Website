@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -89,7 +91,9 @@ type OAuthClientPublic struct {
 }
 
 // OAuthClientRepository OAuth 客户端仓库
-type OAuthClientRepository struct{}
+type OAuthClientRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  OAuthClient 方法 ====================
 
@@ -135,10 +139,8 @@ func (c *OAuthClient) Validate() error {
 // ====================  构造函数 ====================
 
 // NewOAuthClientRepository 创建 OAuth 客户端仓库
-// 返回：
-//   - *OAuthClientRepository: 客户端仓库实例
-func NewOAuthClientRepository() *OAuthClientRepository {
-	return &OAuthClientRepository{}
+func NewOAuthClientRepository(pool *pgxpool.Pool) *OAuthClientRepository {
+	return &OAuthClientRepository{pool: pool}
 }
 
 // ====================  查询方法 ====================
@@ -163,7 +165,7 @@ func (r *OAuthClientRepository) FindByID(ctx context.Context, id int64) (*OAuthC
 	}
 
 	client := &OAuthClient{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, client_id, client_secret_hash, name, description, redirect_uri,
 		       is_enabled, created_at, updated_at
 		FROM oauth_clients WHERE id = $1
@@ -200,7 +202,7 @@ func (r *OAuthClientRepository) FindByClientID(ctx context.Context, clientID str
 	}
 
 	client := &OAuthClient{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, client_id, client_secret_hash, name, description, redirect_uri,
 		       is_enabled, created_at, updated_at
 		FROM oauth_clients WHERE client_id = $1
@@ -243,13 +245,13 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 
 	if search == "" {
 		// 无搜索条件
-		err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM oauth_clients").Scan(&total)
+		err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM oauth_clients").Scan(&total)
 		if err != nil {
 			utils.LogError("OAUTH_CLIENT", "List", err, "Failed to count clients")
 			return nil, 0, fmt.Errorf("count clients failed: %w", err)
 		}
 
-		rows, err = pool.Query(ctx, `
+		rows, err = r.pool.Query(ctx, `
 			SELECT id, client_id, client_secret_hash, name, description, redirect_uri,
 			       is_enabled, created_at, updated_at
 			FROM oauth_clients
@@ -259,7 +261,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 	} else {
 		// 有搜索条件
 		searchPattern := "%" + search + "%"
-		err = pool.QueryRow(ctx, `
+		err = r.pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM oauth_clients 
 			WHERE name ILIKE $1 OR description ILIKE $1 OR client_id ILIKE $1
 		`, searchPattern).Scan(&total)
@@ -268,7 +270,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 			return nil, 0, fmt.Errorf("count clients failed: %w", err)
 		}
 
-		rows, err = pool.Query(ctx, `
+		rows, err = r.pool.Query(ctx, `
 			SELECT id, client_id, client_secret_hash, name, description, redirect_uri,
 			       is_enabled, created_at, updated_at
 			FROM oauth_clients
@@ -334,7 +336,7 @@ func (r *OAuthClientRepository) Create(ctx context.Context, client *OAuthClient)
 	}
 
 	// 执行插入
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO oauth_clients (client_id, client_secret_hash, name, description, redirect_uri, is_enabled)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
@@ -387,7 +389,7 @@ func (r *OAuthClientRepository) Update(ctx context.Context, id int64, updates ma
 	}
 
 	// 执行更新
-	result, err := pool.Exec(ctx, query, args...)
+	result, err := r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return r.handleWriteError(err, "Update", id)
 	}
@@ -418,7 +420,7 @@ func (r *OAuthClientRepository) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_clients WHERE id = $1", id)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_clients WHERE id = $1", id)
 	if err != nil {
 		utils.LogError("OAUTH_CLIENT", "Delete", err, fmt.Sprintf("Failed to delete client: id=%d", id))
 		return fmt.Errorf("delete client failed: %w", err)
@@ -436,7 +438,7 @@ func (r *OAuthClientRepository) Delete(ctx context.Context, id int64) error {
 
 // checkDB 检查数据库连接是否就绪
 func (r *OAuthClientRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("OAUTH_CLIENT", "checkDB", fmt.Errorf("database pool is nil"), "")
 		return ErrOAuthClientRepoDBNotReady
 	}
