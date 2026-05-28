@@ -31,12 +31,6 @@ import (
 // ====================  全局变量 ====================
 
 var (
-	// logger zap 日志实例
-	logger *zap.Logger
-
-	// sugar zap SugaredLogger（更方便的 API）
-	sugar *zap.SugaredLogger
-
 	// loggerOnce 确保只初始化一次
 	loggerOnce sync.Once
 
@@ -58,12 +52,73 @@ var (
 	logTokenRegex = regexp.MustCompile(`(?i)(token|bearer|authorization)[=:\s]+([a-zA-Z0-9_\-\.]{32,})`)
 )
 
+// ====================  Logger 接口实现 ====================
+
+// loggerInstance 当前日志实例（可通过 SetLogger 替换）
+var loggerInstance Logger
+
+// zapLogger 基于 zap 的 Logger 实现
+type zapLogger struct {
+	zap   *zap.Logger
+	sugar *zap.SugaredLogger
+}
+
+func (l *zapLogger) Debug(category, message string) {
+	masked := maskSensitiveData(message)
+	l.sugar.Debugw(masked, "category", category)
+}
+
+func (l *zapLogger) Info(category, message string) {
+	masked := maskSensitiveData(message)
+	l.sugar.Infow(masked, "category", category)
+}
+
+func (l *zapLogger) Warn(category, message string) {
+	masked := maskSensitiveData(message)
+	l.sugar.Warnw(masked, "category", category)
+}
+
+func (l *zapLogger) Error(category, message string) {
+	masked := maskSensitiveData(message)
+	l.sugar.Errorw(masked, "category", category)
+}
+
+func (l *zapLogger) Printf(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	masked := maskSensitiveData(message)
+	l.sugar.Info(masked)
+}
+
+func (l *zapLogger) Fatalf(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	masked := maskSensitiveData(message)
+	l.sugar.Fatal(masked)
+}
+
+func (l *zapLogger) Sync() {
+	_ = l.zap.Sync()
+}
+
+// SetLogger 注入自定义 Logger 实现（用于测试、替换日志库等）
+func SetLogger(l Logger) {
+	if l != nil {
+		loggerInstance = l
+	}
+}
+
+// GetLogger 获取当前 Logger 实例
+func GetLogger() Logger {
+	if loggerInstance == nil {
+		initLogger()
+	}
+	return loggerInstance
+}
+
 // ====================  初始化 ====================
 
 // initLogger 初始化 zap 日志
 func initLogger() {
 	loggerOnce.Do(func() {
-		// 统一配置：控制台格式，Info 级别
 		config := zap.Config{
 			Level:            zap.NewAtomicLevelAt(zapcore.InfoLevel),
 			Development:      false,
@@ -80,83 +135,65 @@ func initLogger() {
 			},
 		}
 
-		var err error
-		logger, err = config.Build(
-			zap.AddCallerSkip(1), // 跳过 LogPrintf 调用层
+		zl, err := config.Build(
+			zap.AddCallerSkip(1),
 		)
 		if err != nil {
-			// 降级到标准输出
 			fmt.Fprintf(os.Stderr, "[LOGGER] Failed to init zap: %v, falling back to basic logger\n", err)
-			logger = zap.NewNop()
+			zl = zap.NewNop()
 		}
 
-		sugar = logger.Sugar()
+		loggerInstance = &zapLogger{
+			zap:   zl,
+			sugar: zl.Sugar(),
+		}
 	})
-}
-
-// getLogger 获取 logger 实例（懒加载）
-func getLogger() *zap.SugaredLogger {
-	if sugar == nil {
-		initLogger()
-	}
-	return sugar
 }
 
 // ====================  公开函数 ====================
 
 // Log 安全日志输出，自动脱敏敏感信息
-// 直接输出已构建好的消息
 func Log(message string) {
 	masked := maskSensitiveData(message)
-	getLogger().Info(masked)
-}
-
-// logDebug 安全日志输出（DEBUG 级别），自动脱敏敏感信息
-func logDebug(message string) {
-	masked := maskSensitiveData(message)
-	getLogger().Debug(masked)
-}
-
-// logInfo 安全日志输出（INFO 级别），自动脱敏敏感信息
-func logInfo(message string) {
-	masked := maskSensitiveData(message)
-	getLogger().Info(masked)
-}
-
-// logWarn 安全日志输出（WARN 级别），自动脱敏敏感信息
-func logWarn(message string) {
-	masked := maskSensitiveData(message)
-	getLogger().Warn(masked)
-}
-
-// logError 安全日志输出（ERROR 级别），自动脱敏敏感信息
-func logError(message string) {
-	masked := maskSensitiveData(message)
-	getLogger().Error(masked)
+	if loggerInstance == nil {
+		initLogger()
+	}
+	if l, ok := loggerInstance.(*zapLogger); ok {
+		l.sugar.Info(masked)
+	}
 }
 
 // LogPrintf 安全日志输出（格式化），自动脱敏敏感信息
-// 替代 log.Printf，使用 zap 异步写入
 func LogPrintf(format string, args ...any) {
-	message := fmt.Sprintf(format, args...)
-	masked := maskSensitiveData(message)
-	getLogger().Info(masked)
+	GetLogger().Printf(format, args...)
 }
 
 // LogFatalf 安全日志输出后退出，自动脱敏敏感信息
-// 替代 log.Fatalf
 func LogFatalf(format string, args ...any) {
-	message := fmt.Sprintf(format, args...)
-	masked := maskSensitiveData(message)
-	getLogger().Fatal(masked)
+	GetLogger().Fatalf(format, args...)
 }
 
 // SyncLogger 同步日志缓冲区（程序退出前调用）
-// 确保所有日志都被写入
 func SyncLogger() {
-	if logger != nil {
-		_ = logger.Sync()
-	}
+	GetLogger().Sync()
+}
+
+// ====================  内部函数（供 errors.go 使用） ====================
+
+func logDebug(message string) {
+	GetLogger().Debug("", message)
+}
+
+func logInfo(message string) {
+	GetLogger().Info("", message)
+}
+
+func logWarn(message string) {
+	GetLogger().Warn("", message)
+}
+
+func logError(message string) {
+	GetLogger().Error("", message)
 }
 
 // ====================  私有函数 ====================

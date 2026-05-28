@@ -724,9 +724,22 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
 
 // ====================  限流器管理器 ====================
 
-// RateLimiterManager 统一管理所有限流器实例
-// 将所有限流器收敛到单一结构体，避免多个包级全局变量
-type RateLimiterManager struct {
+// RateLimiterManager 限流器管理器接口
+type RateLimiterManager interface {
+	LoginRateLimit() gin.HandlerFunc
+	RegisterRateLimit() gin.HandlerFunc
+	ResetPasswordRateLimit() gin.HandlerFunc
+	OAuthTokenRateLimit() gin.HandlerFunc
+	InvalidateCodeRateLimit() gin.HandlerFunc
+	EmailAllow(email string) bool
+	EmailWaitTime(email string) int
+	DataExportAllow(userUID string) bool
+	DataExportWaitTime(userUID string) int
+	StopAll()
+}
+
+// rateLimiterManager 限流器管理器实现
+type rateLimiterManager struct {
 	LoginLimiter          *ShardedRateLimiter
 	RegisterLimiter       *ShardedRateLimiter
 	ResetPasswordLimiter  *ShardedRateLimiter
@@ -736,12 +749,9 @@ type RateLimiterManager struct {
 	DataExportLimiter     *ShardedDataExportLimiter
 }
 
-// DefaultLimiterManager 包级默认限流器管理器
-var DefaultLimiterManager = NewRateLimiterManager()
-
 // NewRateLimiterManager 创建并初始化所有限流器
-func NewRateLimiterManager() *RateLimiterManager {
-	return &RateLimiterManager{
+func NewRateLimiterManager() RateLimiterManager {
+	return &rateLimiterManager{
 		LoginLimiter:          NewShardedRateLimiter(rate.Every(defaultLoginRate), defaultLoginBurst),
 		RegisterLimiter:       NewShardedRateLimiter(rate.Every(defaultRegisterRate), defaultRegisterBurst),
 		ResetPasswordLimiter:  NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst),
@@ -753,7 +763,7 @@ func NewRateLimiterManager() *RateLimiterManager {
 }
 
 // StopAll 停止所有限流器的后台 goroutine
-func (m *RateLimiterManager) StopAll() {
+func (m *rateLimiterManager) StopAll() {
 	if m == nil {
 		return
 	}
@@ -767,14 +777,45 @@ func (m *RateLimiterManager) StopAll() {
 	utils.LogInfo("RATELIMIT", "All rate limiters stopped")
 }
 
+func (m *rateLimiterManager) LoginRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.LoginLimiter)
+}
+
+func (m *rateLimiterManager) RegisterRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.RegisterLimiter)
+}
+
+func (m *rateLimiterManager) ResetPasswordRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.ResetPasswordLimiter)
+}
+
+func (m *rateLimiterManager) OAuthTokenRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.OAuthTokenLimiter)
+}
+
+func (m *rateLimiterManager) InvalidateCodeRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.InvalidateCodeLimiter)
+}
+
+func (m *rateLimiterManager) EmailAllow(email string) bool {
+	return m.EmailLimiter.Allow(email)
+}
+
+func (m *rateLimiterManager) EmailWaitTime(email string) int {
+	return m.EmailLimiter.GetWaitTime(email)
+}
+
+func (m *rateLimiterManager) DataExportAllow(userUID string) bool {
+	return m.DataExportLimiter.Allow(userUID)
+}
+
+func (m *rateLimiterManager) DataExportWaitTime(userUID string) int {
+	return m.DataExportLimiter.GetWaitTime(userUID)
+}
+
 // ====================  中间件 ====================
 
 // RateLimitMiddleware 通用限流中间件
-// 参数：
-//   - limiter: 分片限流器实例
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
 func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 	// 参数验证
 	if limiter == nil {
@@ -807,29 +848,4 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-// LoginRateLimit 登录限流中间件
-func LoginRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(DefaultLimiterManager.LoginLimiter)
-}
-
-// RegisterRateLimit 注册限流中间件
-func RegisterRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(DefaultLimiterManager.RegisterLimiter)
-}
-
-// ResetPasswordRateLimit 密码重置限流中间件
-func ResetPasswordRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(DefaultLimiterManager.ResetPasswordLimiter)
-}
-
-// OAuthTokenRateLimit OAuth Token 端点限流中间件
-func OAuthTokenRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(DefaultLimiterManager.OAuthTokenLimiter)
-}
-
-// InvalidateCodeRateLimit 验证码失效限流中间件
-func InvalidateCodeRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(DefaultLimiterManager.InvalidateCodeLimiter)
 }
