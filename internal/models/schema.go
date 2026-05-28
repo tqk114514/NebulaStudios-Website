@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  Schema 定义 ====================
@@ -231,7 +233,7 @@ func getTableSchemas() []TableSchema {
 
 // CreateTablesFromSchema 从 Schema 创建所有表
 // 使用 CREATE TABLE IF NOT EXISTS，不影响已存在的表
-func CreateTablesFromSchema(ctx context.Context) error {
+func CreateTablesFromSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	if pool == nil {
 		return ErrDBNotInitialized
 	}
@@ -312,7 +314,7 @@ func buildCreateTableSQL(schema TableSchema) string {
 
 // AutoMigrate 执行自动迁移
 // 检查表结构，自动添加缺失的列
-func AutoMigrate(ctx context.Context) error {
+func AutoMigrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if pool == nil {
 		return ErrDBNotInitialized
 	}
@@ -321,7 +323,7 @@ func AutoMigrate(ctx context.Context) error {
 	totalAdded := 0
 
 	for _, schema := range schemas {
-		added, err := migrateTable(ctx, schema)
+		added, err := migrateTable(ctx, pool, schema)
 		if err != nil {
 			utils.LogError("DATABASE", "AutoMigrate", err, fmt.Sprintf("Failed to migrate table: %s", schema.Name))
 			return fmt.Errorf("migrate table %s: %w", schema.Name, err)
@@ -339,9 +341,8 @@ func AutoMigrate(ctx context.Context) error {
 }
 
 // migrateTable 迁移单个表
-func migrateTable(ctx context.Context, schema TableSchema) (int, error) {
-	// 获取现有列
-	existingColumns, err := getExistingColumns(ctx, schema.Name)
+func migrateTable(ctx context.Context, pool *pgxpool.Pool, schema TableSchema) (int, error) {
+	existingColumns, err := getExistingColumns(ctx, pool, schema.Name)
 	if err != nil {
 		return 0, err
 	}
@@ -351,8 +352,7 @@ func migrateTable(ctx context.Context, schema TableSchema) (int, error) {
 	// 检查每个定义的列
 	for _, col := range schema.Columns {
 		if !columnExists(existingColumns, col.Name) {
-			// 列不存在，添加它
-			if err := addColumn(ctx, schema.Name, col); err != nil {
+			if err := addColumn(ctx, pool, schema.Name, col); err != nil {
 				return addedCount, err
 			}
 			addedCount++
@@ -364,7 +364,7 @@ func migrateTable(ctx context.Context, schema TableSchema) (int, error) {
 }
 
 // getExistingColumns 获取表的现有列
-func getExistingColumns(ctx context.Context, tableName string) ([]string, error) {
+func getExistingColumns(ctx context.Context, pool *pgxpool.Pool, tableName string) ([]string, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT column_name 
 		FROM information_schema.columns 
@@ -399,7 +399,7 @@ func columnExists(existingColumns []string, columnName string) bool {
 }
 
 // addColumn 添加列
-func addColumn(ctx context.Context, tableName string, col ColumnDefinition) error {
+func addColumn(ctx context.Context, pool *pgxpool.Pool, tableName string, col ColumnDefinition) error {
 	// 构建 ALTER TABLE 语句
 	sql := fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" %s`, tableName, col.Name, col.Type)
 

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -44,24 +46,26 @@ type EmailWhitelist struct {
 }
 
 // EmailWhitelistRepository 邮箱白名单仓库
-type EmailWhitelistRepository struct{}
+type EmailWhitelistRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewEmailWhitelistRepository 创建邮箱白名单仓库
-func NewEmailWhitelistRepository() *EmailWhitelistRepository {
-	return &EmailWhitelistRepository{}
+func NewEmailWhitelistRepository(pool *pgxpool.Pool) *EmailWhitelistRepository {
+	return &EmailWhitelistRepository{pool: pool}
 }
 
 // ====================  读取方法 ====================
 
 // FindAll 获取所有白名单条目
 func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhitelist, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
-	rows, err := pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, `
 		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		ORDER BY domain ASC
@@ -86,13 +90,13 @@ func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhiteli
 
 // FindAllPaginated 获取分页的白名单条目
 func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page int, pageSize int) ([]*EmailWhitelist, int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, 0, ErrDBNotInitialized
 	}
 
 	offset := (page - 1) * pageSize
 
-	rows, err := pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, `
 		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		ORDER BY domain ASC
@@ -114,7 +118,7 @@ func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page in
 	}
 
 	var total int64
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&total)
+	err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count email whitelist: %w", err)
 	}
@@ -124,14 +128,14 @@ func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page in
 
 // FindByDomain 按域名查找
 func (r *EmailWhitelistRepository) FindByDomain(ctx context.Context, domain string) (*EmailWhitelist, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
 	domain = strings.ToLower(strings.TrimSpace(domain))
 
 	var item EmailWhitelist
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		WHERE domain = $1
@@ -149,12 +153,12 @@ func (r *EmailWhitelistRepository) FindByDomain(ctx context.Context, domain stri
 
 // FindByID 按 ID 查找
 func (r *EmailWhitelistRepository) FindByID(ctx context.Context, id int64) (*EmailWhitelist, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
 	var item EmailWhitelist
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		WHERE id = $1
@@ -172,7 +176,7 @@ func (r *EmailWhitelistRepository) FindByID(ctx context.Context, id int64) (*Ema
 
 // IsDomainAllowed 检查域名是否在白名单中且已启用
 func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain string) (bool, string, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return false, "", ErrDBNotInitialized
 	}
 
@@ -180,7 +184,7 @@ func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain s
 
 	var signupURL string
 	var isEnabled bool
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT signup_url, is_enabled
 		FROM email_whitelist
 		WHERE domain = $1
@@ -200,7 +204,7 @@ func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain s
 
 // Create 创建白名单条目
 func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL string) (*EmailWhitelist, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
@@ -215,7 +219,7 @@ func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL
 	}
 
 	var item EmailWhitelist
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO email_whitelist (domain, signup_url, is_enabled)
 		VALUES ($1, $2, true)
 		RETURNING id, domain, signup_url, is_enabled, created_at, updated_at
@@ -233,7 +237,7 @@ func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL
 
 // Update 更新白名单条目
 func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain, signupURL string, isEnabled bool) (*EmailWhitelist, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
@@ -251,7 +255,7 @@ func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain,
 	}
 
 	var item EmailWhitelist
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		UPDATE email_whitelist
 		SET domain = $1, signup_url = $2, is_enabled = $3, updated_at = NOW()
 		WHERE id = $4
@@ -273,7 +277,7 @@ func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain,
 
 // Delete 删除白名单条目
 func (r *EmailWhitelistRepository) Delete(ctx context.Context, id int64) error {
-	if pool == nil {
+	if r.pool == nil {
 		return ErrDBNotInitialized
 	}
 
@@ -281,7 +285,7 @@ func (r *EmailWhitelistRepository) Delete(ctx context.Context, id int64) error {
 		return errors.New("invalid id")
 	}
 
-	result, err := pool.Exec(ctx, `DELETE FROM email_whitelist WHERE id = $1`, id)
+	result, err := r.pool.Exec(ctx, `DELETE FROM email_whitelist WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete email whitelist: %w", err)
 	}
@@ -295,7 +299,7 @@ func (r *EmailWhitelistRepository) Delete(ctx context.Context, id int64) error {
 
 // SetEnabled 启用/禁用白名单条目
 func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isEnabled bool) error {
-	if pool == nil {
+	if r.pool == nil {
 		return ErrDBNotInitialized
 	}
 
@@ -303,7 +307,7 @@ func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isE
 		return errors.New("invalid id")
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		UPDATE email_whitelist
 		SET is_enabled = $1, updated_at = NOW()
 		WHERE id = $2
@@ -324,13 +328,13 @@ func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isE
 // InitDefaultWhitelist 初始化默认邮箱白名单
 // 如果白名单为空，自动添加 outlook.com 和 gmail.com
 func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context) error {
-	if pool == nil {
+	if r.pool == nil {
 		return ErrDBNotInitialized
 	}
 
 	// 检查白名单是否为空
 	var count int64
-	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&count)
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("failed to count email whitelist: %w", err)
 	}
@@ -352,7 +356,7 @@ func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context) err
 	}
 
 	for _, d := range defaultDomains {
-		_, err := pool.Exec(ctx, `
+		_, err := r.pool.Exec(ctx, `
 			INSERT INTO email_whitelist (domain, signup_url, is_enabled)
 			VALUES ($1, $2, true)
 		`, d.domain, d.signupURL)

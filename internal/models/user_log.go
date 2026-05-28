@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -108,13 +110,15 @@ type OAuthRevokeDetails struct {
 }
 
 // UserLogRepository 用户日志仓库
-type UserLogRepository struct{}
+type UserLogRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewUserLogRepository 创建用户日志仓库
-func NewUserLogRepository() *UserLogRepository {
-	return &UserLogRepository{}
+func NewUserLogRepository(pool *pgxpool.Pool) *UserLogRepository {
+	return &UserLogRepository{pool: pool}
 }
 
 // ====================  写入方法 ====================
@@ -131,11 +135,11 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 		return errors.New("action is required")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO user_logs (user_uid, action, details)
 		VALUES ($1, $2, $3)
 		RETURNING id, created_at
@@ -323,7 +327,7 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userUID string, 
 
 // FindByUserUID 查询用户的操作日志（分页）
 func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, page, pageSize int) ([]*UserLog, int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return nil, 0, errors.New("database not ready")
 	}
 
@@ -331,7 +335,7 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 
 	// 查询总数
 	var total int64
-	err := pool.QueryRow(ctx,
+	err := r.pool.QueryRow(ctx,
 		"SELECT COUNT(*) FROM user_logs WHERE user_uid = $1",
 		userUID,
 	).Scan(&total)
@@ -340,7 +344,7 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 	}
 
 	// 查询日志列表
-	rows, err := pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, `
 		SELECT id, user_uid, action, details, created_at
 		FROM user_logs
 		WHERE user_uid = $1
@@ -369,11 +373,11 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 // DeleteByUserUID 删除用户的所有日志（账户删除时调用）
 // 注意：根据隐私政策，用户日志保留6个月，此方法仅供特殊情况使用
 func (r *UserLogRepository) DeleteByUserUID(ctx context.Context, userUID string) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM user_logs WHERE user_uid = $1", userUID)
+	_, err := r.pool.Exec(ctx, "DELETE FROM user_logs WHERE user_uid = $1", userUID)
 	if err != nil {
 		return utils.LogError("USER_LOG", "DeleteByUserUID", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
@@ -385,12 +389,12 @@ func (r *UserLogRepository) DeleteByUserUID(ctx context.Context, userUID string)
 // DeleteExpiredLogs 删除超过6个月的过期日志
 // 应通过定时任务定期调用（如每天一次）
 func (r *UserLogRepository) DeleteExpiredLogs(ctx context.Context) (int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return 0, errors.New("database not ready")
 	}
 
 	// 删除6个月前的日志
-	result, err := pool.Exec(ctx,
+	result, err := r.pool.Exec(ctx,
 		"DELETE FROM user_logs WHERE created_at < NOW() - INTERVAL '6 months'")
 	if err != nil {
 		return 0, utils.LogError("USER_LOG", "DeleteExpiredLogs", err)

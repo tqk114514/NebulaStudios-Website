@@ -24,13 +24,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
-
 	"strings"
+	"sync"
 	"time"
 
 	"auth-system/internal/models"
 	"auth-system/internal/utils"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -92,6 +93,7 @@ type CodeResult struct {
 type TokenService struct {
 	tokenRepo *models.TokenRepository
 	codeRepo  *models.CodeRepository
+	pool      *pgxpool.Pool
 }
 
 // ====================  构造函数 ====================
@@ -99,11 +101,12 @@ type TokenService struct {
 // NewTokenService 创建 Token 服务
 // 返回：
 //   - *TokenService: Token 服务实例
-func NewTokenService() *TokenService {
+func NewTokenService(pool *pgxpool.Pool) *TokenService {
 	utils.LogInfo("TOKEN", "Token service initialized")
 	return &TokenService{
-		tokenRepo: models.NewTokenRepository(),
-		codeRepo:  models.NewCodeRepository(),
+		tokenRepo: models.NewTokenRepository(pool),
+		codeRepo:  models.NewCodeRepository(pool),
+		pool:      pool,
 	}
 }
 
@@ -523,7 +526,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthAuthCodeRepository()
+		repo := models.NewOAuthAuthCodeRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth auth codes", err)
 		} else if count > 0 {
@@ -539,7 +542,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthAccessTokenRepository()
+		repo := models.NewOAuthAccessTokenRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth access tokens", err)
 		} else if count > 0 {
@@ -555,7 +558,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthRefreshTokenRepository()
+		repo := models.NewOAuthRefreshTokenRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", err)
 		} else if count > 0 {

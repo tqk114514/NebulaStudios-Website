@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -88,21 +90,25 @@ type Code struct {
 // ====================  Repository 结构 ====================
 
 // TokenRepository Token 仓库
-type TokenRepository struct{}
+type TokenRepository struct {
+	pool *pgxpool.Pool
+}
 
 // CodeRepository 验证码仓库
-type CodeRepository struct{}
+type CodeRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewTokenRepository 创建 Token 仓库
-func NewTokenRepository() *TokenRepository {
-	return &TokenRepository{}
+func NewTokenRepository(pool *pgxpool.Pool) *TokenRepository {
+	return &TokenRepository{pool: pool}
 }
 
 // NewCodeRepository 创建验证码仓库
-func NewCodeRepository() *CodeRepository {
-	return &CodeRepository{}
+func NewCodeRepository(pool *pgxpool.Pool) *CodeRepository {
+	return &CodeRepository{pool: pool}
 }
 
 // ====================  Token 方法 ====================
@@ -149,11 +155,11 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 		return errors.New("token is empty")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO tokens (token, email, type, created_at, expire_time, used)
 		VALUES ($1, $2, $3, $4, $5, 0)
 	`, token.Token, token.Email, token.Type, token.CreatedAt, token.ExpireTime)
@@ -180,12 +186,12 @@ func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*To
 		return nil, ErrInvalidToken
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	token := &Token{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT email, type, code, expire_time, used FROM tokens WHERE token = $1
 	`, strings.TrimSpace(tokenStr)).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime, &token.Used)
 
@@ -206,11 +212,11 @@ func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*To
 // 返回：
 //   - error: 错误信息
 func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token = $2", code, tokenStr)
+	_, err := r.pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token = $2", code, tokenStr)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to update token code", err)
 	}
@@ -225,11 +231,11 @@ func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string)
 // 返回：
 //   - error: 错误信息
 func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token = $1", tokenStr)
+	_, err := r.pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token = $1", tokenStr)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to mark token as used", err)
 	}
@@ -245,11 +251,11 @@ func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
 //   - int64: 删除的数量
 //   - error: 错误信息
 func (r *TokenRepository) DeleteExpired(ctx context.Context, now int64) (int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return 0, errors.New("database not ready")
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
+	result, err := r.pool.Exec(ctx, "DELETE FROM tokens WHERE expire_time < $1", now)
 	if err != nil {
 		return 0, utils.LogError("TOKEN", "DeleteExpired", err)
 	}
@@ -265,11 +271,11 @@ func (r *TokenRepository) DeleteExpired(ctx context.Context, now int64) (int64, 
 // 返回：
 //   - error: 错误信息
 func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenStr string) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM tokens WHERE token = $1", tokenStr)
+	_, err := r.pool.Exec(ctx, "DELETE FROM tokens WHERE token = $1", tokenStr)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to delete token", err)
 	}
@@ -296,11 +302,11 @@ func (r *CodeRepository) Create(ctx context.Context, code *Code) error {
 		return errors.New("code is empty")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO codes (code, email, type, created_at, expire_time, attempts, verified)
 		VALUES ($1, $2, $3, $4, $5, 0, 0)
 	`, code.Code, code.Email, code.Type, code.CreatedAt, code.ExpireTime)
@@ -324,12 +330,12 @@ func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code,
 		return nil, ErrInvalidCode
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	code := &Code{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT email, type, expire_time, attempts, verified FROM codes WHERE code = $1
 	`, strings.TrimSpace(codeStr)).Scan(&code.Email, &code.Type, &code.ExpireTime, &code.Attempts, &code.Verified)
 
@@ -351,11 +357,11 @@ func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code,
 // 返回：
 //   - error: 错误信息
 func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string, attempts int, verifiedAt int64) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		UPDATE codes SET attempts = $1, verified = 1, verified_at = $2 WHERE code = $3
 	`, attempts, verifiedAt, codeStr)
 
@@ -373,11 +379,11 @@ func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string,
 // 返回：
 //   - error: 错误信息
 func (r *CodeRepository) DeleteByCode(ctx context.Context, codeStr string) error {
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", codeStr)
+	_, err := r.pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", codeStr)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to delete code", err)
 	}
@@ -397,15 +403,15 @@ func (r *CodeRepository) DeleteByEmail(ctx context.Context, email string, tokenT
 		return nil
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
 	var err error
 	if tokenType != nil && *tokenType != "" {
-		_, err = pool.Exec(ctx, "DELETE FROM codes WHERE email = $1 AND type = $2", email, *tokenType)
+		_, err = r.pool.Exec(ctx, "DELETE FROM codes WHERE email = $1 AND type = $2", email, *tokenType)
 	} else {
-		_, err = pool.Exec(ctx, "DELETE FROM codes WHERE email = $1", email)
+		_, err = r.pool.Exec(ctx, "DELETE FROM codes WHERE email = $1", email)
 	}
 
 	if err != nil {
@@ -430,12 +436,12 @@ func (r *CodeRepository) GetLatestExpiryByEmail(ctx context.Context, email strin
 		return 0, errors.New("email is empty")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return 0, errors.New("database not ready")
 	}
 
 	var expireTime int64
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT expire_time FROM codes 
 		WHERE email = $1 AND expire_time > $2 
 		ORDER BY expire_time DESC LIMIT 1
@@ -458,11 +464,11 @@ func (r *CodeRepository) GetLatestExpiryByEmail(ctx context.Context, email strin
 //   - int64: 删除的数量
 //   - error: 错误信息
 func (r *CodeRepository) DeleteExpired(ctx context.Context, now int64) (int64, error) {
-	if pool == nil {
+	if r.pool == nil {
 		return 0, errors.New("database not ready")
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
+	result, err := r.pool.Exec(ctx, "DELETE FROM codes WHERE expire_time < $1", now)
 	if err != nil {
 		return 0, utils.LogError("TOKEN", "DeleteExpired", err)
 	}

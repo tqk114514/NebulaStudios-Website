@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  错误定义 ====================
@@ -103,37 +105,45 @@ type OAuthGrantWithClient struct {
 // ====================  Repository 结构 ====================
 
 // OAuthAuthCodeRepository 授权码仓库
-type OAuthAuthCodeRepository struct{}
+type OAuthAuthCodeRepository struct {
+	pool *pgxpool.Pool
+}
 
 // OAuthAccessTokenRepository Access Token 仓库
-type OAuthAccessTokenRepository struct{}
+type OAuthAccessTokenRepository struct {
+	pool *pgxpool.Pool
+}
 
 // OAuthRefreshTokenRepository Refresh Token 仓库
-type OAuthRefreshTokenRepository struct{}
+type OAuthRefreshTokenRepository struct {
+	pool *pgxpool.Pool
+}
 
 // OAuthGrantRepository 授权记录仓库
-type OAuthGrantRepository struct{}
+type OAuthGrantRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewOAuthAuthCodeRepository 创建授权码仓库
-func NewOAuthAuthCodeRepository() *OAuthAuthCodeRepository {
-	return &OAuthAuthCodeRepository{}
+func NewOAuthAuthCodeRepository(pool *pgxpool.Pool) *OAuthAuthCodeRepository {
+	return &OAuthAuthCodeRepository{pool: pool}
 }
 
 // NewOAuthAccessTokenRepository 创建 Access Token 仓库
-func NewOAuthAccessTokenRepository() *OAuthAccessTokenRepository {
-	return &OAuthAccessTokenRepository{}
+func NewOAuthAccessTokenRepository(pool *pgxpool.Pool) *OAuthAccessTokenRepository {
+	return &OAuthAccessTokenRepository{pool: pool}
 }
 
 // NewOAuthRefreshTokenRepository 创建 Refresh Token 仓库
-func NewOAuthRefreshTokenRepository() *OAuthRefreshTokenRepository {
-	return &OAuthRefreshTokenRepository{}
+func NewOAuthRefreshTokenRepository(pool *pgxpool.Pool) *OAuthRefreshTokenRepository {
+	return &OAuthRefreshTokenRepository{pool: pool}
 }
 
 // NewOAuthGrantRepository 创建授权记录仓库
-func NewOAuthGrantRepository() *OAuthGrantRepository {
-	return &OAuthGrantRepository{}
+func NewOAuthGrantRepository(pool *pgxpool.Pool) *OAuthGrantRepository {
+	return &OAuthGrantRepository{pool: pool}
 }
 
 // ====================  OAuthAuthCode 方法 ====================
@@ -180,7 +190,7 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 		return err
 	}
 
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO oauth_auth_codes (code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
@@ -214,7 +224,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 	}
 
 	authCode := &OAuthAuthCode{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used, created_at
 		FROM oauth_auth_codes WHERE code = $1
 	`, code).Scan(
@@ -245,7 +255,7 @@ func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error 
 		return err
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		UPDATE oauth_auth_codes SET used = true WHERE id = $1 AND used = false
 	`, id)
 
@@ -273,7 +283,7 @@ func (r *OAuthAuthCodeRepository) DeleteExpired(ctx context.Context) (int64, err
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		DELETE FROM oauth_auth_codes WHERE expires_at < NOW() OR used = true
 	`)
 
@@ -289,7 +299,7 @@ func (r *OAuthAuthCodeRepository) DeleteExpired(ctx context.Context) (int64, err
 }
 
 func (r *OAuthAuthCodeRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("OAUTH_CODE", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
@@ -314,7 +324,7 @@ func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAcc
 		return err
 	}
 
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO oauth_access_tokens (token_hash, client_id, user_uid, scope, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at
@@ -348,7 +358,7 @@ func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 	}
 
 	token := &OAuthAccessToken{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, token_hash, client_id, user_uid, scope, expires_at, created_at
 		FROM oauth_access_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(
@@ -378,7 +388,7 @@ func (r *OAuthAccessTokenRepository) Delete(ctx context.Context, id int64) error
 		return err
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE id = $1", id)
+	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE id = $1", id)
 	if err != nil {
 		return utils.LogError("OAUTH_ACCESS_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
 	}
@@ -399,7 +409,7 @@ func (r *OAuthAccessTokenRepository) DeleteByTokenHash(ctx context.Context, toke
 		return err
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE token_hash = $1", tokenHash)
+	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
 		return utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByTokenHash", err)
 	}
@@ -421,7 +431,7 @@ func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, 
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		DELETE FROM oauth_access_tokens WHERE user_uid = $1 AND client_id = $2
 	`, userUID, clientID)
 
@@ -447,7 +457,7 @@ func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userUID s
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_uid = $1", userUID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
@@ -469,7 +479,7 @@ func (r *OAuthAccessTokenRepository) DeleteExpired(ctx context.Context) (int64, 
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE expires_at < NOW()")
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE expires_at < NOW()")
 	if err != nil {
 		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteExpired", err)
 	}
@@ -494,7 +504,7 @@ func (r *OAuthAccessTokenRepository) DeleteByClient(ctx context.Context, clientI
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE client_id = $1", clientID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE client_id = $1", clientID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
@@ -505,7 +515,7 @@ func (r *OAuthAccessTokenRepository) DeleteByClient(ctx context.Context, clientI
 }
 
 func (r *OAuthAccessTokenRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("OAUTH_ACCESS_TOKEN", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
@@ -535,7 +545,7 @@ func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRe
 		accessTokenID = token.AccessTokenID
 	}
 
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_uid, scope, expires_at, access_token_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at
@@ -570,7 +580,7 @@ func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, token
 
 	token := &OAuthRefreshToken{}
 	var accessTokenID sql.NullInt64
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, token_hash, client_id, user_uid, scope, expires_at, access_token_id, created_at
 		FROM oauth_refresh_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(
@@ -604,7 +614,7 @@ func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) erro
 		return err
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE id = $1", id)
+	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE id = $1", id)
 	if err != nil {
 		return utils.LogError("OAUTH_REFRESH_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
 	}
@@ -625,7 +635,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tok
 		return err
 	}
 
-	_, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE token_hash = $1", tokenHash)
+	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
 		return utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByTokenHash", err)
 	}
@@ -647,7 +657,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context,
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		DELETE FROM oauth_refresh_tokens WHERE user_uid = $1 AND client_id = $2
 	`, userUID, clientID)
 
@@ -673,7 +683,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userUID 
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_uid = $1", userUID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
@@ -695,7 +705,7 @@ func (r *OAuthRefreshTokenRepository) DeleteExpired(ctx context.Context) (int64,
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()")
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()")
 	if err != nil {
 		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteExpired", err)
 	}
@@ -720,7 +730,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByClient(ctx context.Context, client
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE client_id = $1", clientID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE client_id = $1", clientID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
@@ -731,7 +741,7 @@ func (r *OAuthRefreshTokenRepository) DeleteByClient(ctx context.Context, client
 }
 
 func (r *OAuthRefreshTokenRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("OAUTH_REFRESH_TOKEN", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
@@ -757,7 +767,7 @@ func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthG
 	}
 
 	// 使用 UPSERT（INSERT ... ON CONFLICT）
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO oauth_grants (user_uid, client_id, scope)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (user_uid, client_id) DO UPDATE SET
@@ -789,7 +799,7 @@ func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string
 		return nil, err
 	}
 
-	rows, err := pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, `
 		SELECT g.id, g.user_uid, g.client_id, g.scope, g.created_at, g.updated_at,
 		       c.name, COALESCE(c.description, '')
 		FROM oauth_grants g
@@ -836,7 +846,7 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID 
 	}
 
 	grant := &OAuthGrant{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT id, user_uid, client_id, scope, created_at, updated_at
 		FROM oauth_grants WHERE user_uid = $1 AND client_id = $2
 	`, userUID, clientID).Scan(
@@ -867,7 +877,7 @@ func (r *OAuthGrantRepository) Delete(ctx context.Context, userUID string, clien
 		return err
 	}
 
-	result, err := pool.Exec(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		DELETE FROM oauth_grants WHERE user_uid = $1 AND client_id = $2
 	`, userUID, clientID)
 
@@ -896,7 +906,7 @@ func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userUID string)
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_uid = $1", userUID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_uid = $1", userUID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
 	}
@@ -919,7 +929,7 @@ func (r *OAuthGrantRepository) DeleteByClient(ctx context.Context, clientID stri
 		return 0, err
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM oauth_grants WHERE client_id = $1", clientID)
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_grants WHERE client_id = $1", clientID)
 	if err != nil {
 		return 0, utils.LogError("OAUTH_GRANT", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
 	}
@@ -930,7 +940,7 @@ func (r *OAuthGrantRepository) DeleteByClient(ctx context.Context, clientID stri
 }
 
 func (r *OAuthGrantRepository) checkDB() error {
-	if pool == nil {
+	if r.pool == nil {
 		utils.LogError("OAUTH_GRANT", "checkDB", ErrOAuthTokenRepoDBNotReady)
 		return ErrOAuthTokenRepoDBNotReady
 	}
