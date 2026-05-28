@@ -93,32 +93,8 @@ type SessionService struct {
 
 // ====================  构造函数 ====================
 
-// NewSessionService 创建 Session 服务
-// 使用带验证的构造函数，确保配置有效
-//
-// 参数：
-//   - cfg: 应用配置
-//
-// 返回：
-//   - *SessionService: Session 服务实例
-func NewSessionService(cfg *config.Config) *SessionService {
-	svc, err := NewSessionServiceWithValidation(cfg)
-	if err != nil {
-		utils.LogError("SESSION", "NewSessionService", err, "FATAL: Invalid JWT configuration - "+err.Error())
-		utils.LogError("SESSION", "NewSessionService", nil, "Please configure a secure JWT_SECRET in your environment")
-		panic("session service initialization failed: " + err.Error())
-	}
-	return svc
-}
-
-// NewSessionServiceWithValidation 创建 Session 服务（带验证）
-// 参数：
-//   - cfg: 应用配置
-//
-// 返回：
-//   - *SessionService: Session 服务实例
-//   - error: 配置无效时返回错误
-func NewSessionServiceWithValidation(cfg *config.Config) (*SessionService, error) {
+// NewSessionService 创建 Session 服务（带配置验证）
+func NewSessionService(cfg *config.Config) (*SessionService, error) {
 	// 参数验证
 	if cfg == nil {
 		return nil, ErrSessionNilConfig
