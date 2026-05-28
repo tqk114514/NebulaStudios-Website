@@ -6,7 +6,6 @@
  * - 从环境变量加载所有配置
  * - 提供默认值和类型转换
  * - 配置验证（必需项检查）
- * - 安全的配置访问（防止 nil panic）
  *
  * 依赖：
  * - github.com/joho/godotenv (.env 文件加载)
@@ -21,7 +20,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -30,17 +28,11 @@ import (
 // ====================  错误定义 ====================
 
 var (
-	// ErrConfigNotLoaded 配置未加载
-	ErrConfigNotLoaded = errors.New("CONFIG_NOT_LOADED")
-
 	// ErrMissingRequired 缺少必需的配置项
 	ErrMissingRequired = errors.New("MISSING_REQUIRED_CONFIG")
 
 	// ErrInvalidValue 配置值无效
 	ErrInvalidValue = errors.New("INVALID_CONFIG_VALUE")
-
-	// ErrEnvFileNotFound .env 文件未找到（仅警告，不阻止启动）
-	ErrEnvFileNotFound = errors.New("ENV_FILE_NOT_FOUND")
 )
 
 // ====================  配置结构 ====================
@@ -113,13 +105,7 @@ type Config struct {
 
 // ====================  全局配置实例 ====================
 
-var (
-	cfg       *Config        // 全局配置实例
-	cfgLoaded bool           // 配置是否已加载
-	cfgMu     sync.RWMutex   // 保护 cfg 读写
-	loadMu    sync.Mutex     // 保证 loadConfig 只被一个 goroutine 执行
-	reloadMu  sync.Mutex     // 防止并发 Reload
-)
+var cfg *Config // 全局配置实例
 
 // ====================  配置加载 ====================
 
@@ -129,42 +115,10 @@ var (
 //   - *Config: 配置实例
 //   - error: 加载错误
 func Load() (*Config, error) {
-	cfgMu.RLock()
-	if cfgLoaded {
-		defer cfgMu.RUnlock()
+	if cfg != nil {
 		return cfg, nil
 	}
-	cfgMu.RUnlock()
 
-	return doLoad()
-}
-
-// doLoad 执行实际加载，由 loadMu 保证单次执行
-func doLoad() (*Config, error) {
-	loadMu.Lock()
-	defer loadMu.Unlock()
-
-	// 双重检查：可能在等待 loadMu 期间已被其他 goroutine 加载
-	cfgMu.RLock()
-	if cfgLoaded {
-		cfgMu.RUnlock()
-		return cfg, nil
-	}
-	cfgMu.RUnlock()
-
-	if err := loadConfig(); err != nil {
-		return nil, err
-	}
-
-	cfgMu.Lock()
-	cfgLoaded = true
-	cfgMu.Unlock()
-
-	return cfg, nil
-}
-
-// loadConfig 内部配置加载函数
-func loadConfig() error {
 	// 加载 .env 文件（优先从 /var/www/.env 加载，其次当前目录）
 	envPaths := []string{"/var/www/.env", ".env"}
 	envLoaded := false
@@ -251,20 +205,33 @@ func loadConfig() error {
 
 	// 验证配置
 	if err := validateConfig(newCfg); err != nil {
-		return err
+		return nil, err
 	}
 
 	// 保存配置
-	cfgMu.Lock()
 	cfg = newCfg
-	cfgMu.Unlock()
 
 	// 记录配置加载成功（不记录敏感信息）
 	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s, db_max_conns=%d",
 		newCfg.Port, newCfg.DBMaxConns))
 
-	return nil
+	return cfg, nil
 }
+
+// ====================  配置访问 ====================
+
+// Get 获取全局配置实例
+//
+// 返回：
+//   - *Config: 配置实例（永不为 nil）
+func Get() *Config {
+	if cfg == nil {
+		panic("config not loaded")
+	}
+	return cfg
+}
+
+// ====================  配置验证 ====================
 
 // validateConfig 验证配置
 // 检查必需的配置项是否存在
@@ -317,75 +284,6 @@ func validateConfig(c *Config) error {
 	}
 
 	return nil
-}
-
-// ====================  配置访问 ====================
-
-// Get 获取全局配置实例
-// 如果配置未加载，会自动加载
-//
-// 返回：
-//   - *Config: 配置实例（永不为 nil）
-//
-// 注意：
-//   - 此方法会在配置未加载时自动调用 Load()
-//   - 如果加载失败，会返回一个带有默认值的配置
-func Get() *Config {
-	cfgMu.RLock()
-	if cfg != nil {
-		defer cfgMu.RUnlock()
-		return cfg
-	}
-	cfgMu.RUnlock()
-
-	// 配置未加载，尝试加载
-	loadedCfg, err := Load()
-	if err != nil {
-		utils.LogError("CONFIG", "Get", err, "Failed to load config, using defaults")
-		// 返回默认配置，避免 nil panic
-		return getDefaultConfig()
-	}
-
-	return loadedCfg
-}
-
-// MustGet 获取全局配置实例（必须成功）
-// 如果配置未加载或加载失败，会 panic
-//
-// 返回：
-//   - *Config: 配置实例
-//
-// 注意：
-//   - 仅在程序启动时使用，确保配置正确加载
-//   - 运行时应使用 Get() 方法
-func MustGet() *Config {
-	cfgMu.RLock()
-	if cfg != nil {
-		defer cfgMu.RUnlock()
-		return cfg
-	}
-	cfgMu.RUnlock()
-
-	loadedCfg, err := Load()
-	if err != nil {
-		utils.LogError("CONFIG", "init", err, "Failed to load config")
-		utils.LogFatalf("Config initialization failed")
-	}
-
-	return loadedCfg
-}
-
-// getDefaultConfig 获取默认配置
-// 用于配置加载失败时的降级处理
-func getDefaultConfig() *Config {
-	return &Config{
-		Port:                 "3000",
-		DBMaxConns:           10,
-		JWTExpiresIn:         60 * 24 * time.Hour,
-		SMTPHost:             "smtp.163.com",
-		SMTPPort:             465,
-		ImageProcessorSocket: "/tmp/img-processor.sock",
-	}
 }
 
 // ====================  配置检查方法 ====================
@@ -518,29 +416,4 @@ func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
 		return value
 	}
 	return defaultValue
-}
-
-// ====================  重新加载配置 ====================
-
-// Reload 重新加载配置
-//
-// 返回：
-//   - error: 加载错误
-func Reload() error {
-	reloadMu.Lock()
-	defer reloadMu.Unlock()
-
-	utils.LogInfo("CONFIG", "Reloading configuration...")
-
-	cfgMu.Lock()
-	cfgLoaded = false
-	cfgMu.Unlock()
-
-	_, err := doLoad()
-	if err != nil {
-		return utils.LogError("CONFIG", "Reload", err)
-	}
-
-	utils.LogInfo("CONFIG", "Configuration reloaded successfully")
-	return nil
 }
