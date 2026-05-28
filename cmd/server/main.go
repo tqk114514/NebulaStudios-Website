@@ -19,7 +19,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -143,6 +142,18 @@ func initDatabase(cfg *config.Config) error {
 	return nil
 }
 
+// ====================  初始化辅助 ====================
+
+// initOne 调用无错误返回值的构造函数，检查 nil 并统一日志
+func initOne[T any](dest **T, create func() *T, name string) error {
+	*dest = create()
+	if *dest == nil {
+		return fmt.Errorf("failed to create %s", name)
+	}
+	utils.LogInfo("SERVICES", name+" initialized")
+	return nil
+}
+
 // ====================  服务容器 ====================
 
 // Services 服务容器，持有所有服务实例
@@ -167,89 +178,66 @@ func initServices(cfg *config.Config) (*Services, error) {
 	utils.LogInfo("SERVICES", "Initializing services...")
 
 	svcs := &Services{}
-
-	svcs.userRepo = models.NewUserRepository()
-	if svcs.userRepo == nil {
-		return nil, errors.New("failed to create user repository")
-	}
-	utils.LogInfo("SERVICES", "UserRepository initialized")
-
-	svcs.userLogRepo = models.NewUserLogRepository()
-	if svcs.userLogRepo == nil {
-		return nil, errors.New("failed to create user log repository")
-	}
-	utils.LogInfo("SERVICES", "UserLogRepository initialized")
-
-	svcs.qrLoginRepo = models.NewQRLoginRepository()
-	if svcs.qrLoginRepo == nil {
-		return nil, errors.New("failed to create qr login repository")
-	}
-	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
-
-	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository()
-	if svcs.emailWhitelistRepo == nil {
-		return nil, errors.New("failed to create email whitelist repository")
-	}
-	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
-
-	svcs.tokenService = services.NewTokenService()
-	if svcs.tokenService == nil {
-		return nil, errors.New("failed to create token service")
-	}
-	utils.LogInfo("SERVICES", "TokenService initialized")
-
-	svcs.sessionService = services.NewSessionService(cfg)
-	if svcs.sessionService == nil {
-		return nil, errors.New("failed to create session service")
-	}
-	utils.LogInfo("SERVICES", "SessionService initialized")
-
-	svcs.captchaService = services.NewCaptchaService(cfg)
-	if svcs.captchaService == nil {
-		return nil, errors.New("failed to create captcha service")
-	}
-	utils.LogInfo("SERVICES", "CaptchaService initialized")
-
-	svcs.wsService = services.NewWebSocketService()
-	if svcs.wsService == nil {
-		return nil, errors.New("failed to create websocket service")
-	}
-	utils.LogInfo("SERVICES", "WebSocketService initialized")
-
 	var err error
+
+	// Repositories
+	if err = initOne(&svcs.userRepo, models.NewUserRepository, "UserRepository"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.userLogRepo, models.NewUserLogRepository, "UserLogRepository"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.qrLoginRepo, models.NewQRLoginRepository, "QRLoginRepository"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.emailWhitelistRepo, models.NewEmailWhitelistRepository, "EmailWhitelistRepository"); err != nil {
+		return nil, err
+	}
+
+	// Core services
+	if err = initOne(&svcs.tokenService, services.NewTokenService, "TokenService"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.sessionService, func() *services.SessionService { return services.NewSessionService(cfg) }, "SessionService"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.captchaService, func() *services.CaptchaService { return services.NewCaptchaService(cfg) }, "CaptchaService"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.wsService, services.NewWebSocketService, "WebSocketService"); err != nil {
+		return nil, err
+	}
+	if err = initOne(&svcs.oauthService, services.NewOAuthService, "OAuthService"); err != nil {
+		return nil, err
+	}
+
+	// Cache
 	svcs.userCache, err = cache.NewUserCache(userCacheMaxSize, userCacheTTL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user cache: %w", err)
+		return nil, fmt.Errorf("failed to create UserCache: %w", err)
 	}
 	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
 
+	// Optional: Email service (non-fatal if unavailable)
 	svcs.emailService, err = services.NewEmailService(cfg)
 	if err != nil {
-		utils.LogWarn("SERVICES", fmt.Sprintf("Email service initialization failed: %v", err))
-		utils.LogWarn("SERVICES", "Email functionality will be unavailable")
+		utils.LogWarn("SERVICES", fmt.Sprintf("Email service unavailable: %v", err))
 	} else {
 		if err := svcs.emailService.VerifyConnection(); err != nil {
-			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP connection verification failed: %v", err))
-			utils.LogWarn("SERVICES", "Email delivery may fail, but server will continue")
+			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP verification failed: %v", err))
 		} else {
 			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
 		}
 	}
 
+	// Optional: R2 service (non-fatal if unavailable)
 	svcs.r2Service, err = services.NewR2Service()
 	if err != nil {
-		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service initialization failed: %v", err))
-		utils.LogWarn("SERVICES", "Avatar upload to R2 will be unavailable")
+		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service unavailable: %v", err))
 	} else if svcs.r2Service != nil {
 		utils.LogInfo("SERVICES", "R2Service initialized")
 		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
 	}
-
-	svcs.oauthService = services.NewOAuthService()
-	if svcs.oauthService == nil {
-		return nil, errors.New("failed to create oauth service")
-	}
-	utils.LogInfo("SERVICES", "OAuthService initialized")
 
 	utils.LogInfo("SERVICES", "All services initialized successfully")
 	return svcs, nil
@@ -276,81 +264,64 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	var err error
 
 	hdlrs.authHandler, err = auth.NewAuthHandler(
-		svcs.userRepo,
-		svcs.userLogRepo,
-		svcs.tokenService,
-		svcs.sessionService,
-		svcs.emailService,
-		svcs.captchaService,
-		svcs.userCache,
-		svcs.emailWhitelistRepo,
+		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
+		svcs.sessionService, svcs.emailService, svcs.captchaService,
+		svcs.userCache, svcs.emailWhitelistRepo,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create auth handler: %w", err)
+		return nil, fmt.Errorf("AuthHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "AuthHandler initialized")
 
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
-		svcs.userRepo,
-		svcs.userLogRepo,
-		svcs.tokenService,
-		svcs.emailService,
-		svcs.captchaService,
-		svcs.userCache,
-		svcs.r2Service,
-		svcs.oauthService,
-		cfg.BaseURL,
+		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
+		svcs.emailService, svcs.captchaService, svcs.userCache,
+		svcs.r2Service, svcs.oauthService, cfg.BaseURL,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user handler: %w", err)
+		return nil, fmt.Errorf("UserHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "UserHandler initialized")
 
 	hdlrs.microsoftHandler, err = msauth.NewMicrosoftHandler(
-		svcs.userRepo,
-		svcs.userLogRepo,
-		svcs.sessionService,
-		svcs.userCache,
-		svcs.r2Service,
+		svcs.userRepo, svcs.userLogRepo, svcs.sessionService,
+		svcs.userCache, svcs.r2Service,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create microsoft oauth handler: %w", err)
+		return nil, fmt.Errorf("MicrosoftHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "MicrosoftHandler initialized")
 
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
-		svcs.oauthService,
-		svcs.userRepo,
-		svcs.userLogRepo,
-		svcs.userCache,
-		svcs.sessionService,
-		cfg.BaseURL,
+		svcs.oauthService, svcs.userRepo, svcs.userLogRepo,
+		svcs.userCache, svcs.sessionService, cfg.BaseURL,
 	)
 	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 
 	hdlrs.qrLoginHandler, err = qrlogin.NewQRLoginHandler(
-		svcs.sessionService,
-		svcs.wsService,
-		svcs.qrLoginRepo,
-		cfg.QREncryptionKey,
-		cfg.QRKeyDerivationSalt,
+		svcs.sessionService, svcs.wsService, svcs.qrLoginRepo,
+		cfg.QREncryptionKey, cfg.QRKeyDerivationSalt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create qr login handler: %w", err)
+		return nil, fmt.Errorf("QRLoginHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "QRLoginHandler initialized")
 
-	hdlrs.staticHandler, err = handlers.NewStaticHandler(cfg, svcs.userCache, svcs.wsService, svcs.captchaService)
+	hdlrs.staticHandler, err = handlers.NewStaticHandler(
+		cfg, svcs.userCache, svcs.wsService, svcs.captchaService,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create static handler: %w", err)
+		return nil, fmt.Errorf("StaticHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
-	adminLogRepo := models.NewAdminLogRepository()
-	exportService := services.NewExportService()
-	hdlrs.adminHandler, err = admin.NewAdminHandler(svcs.userRepo, svcs.userCache, adminLogRepo, svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo, exportService, cfg.DataExportSalt)
+	hdlrs.adminHandler, err = admin.NewAdminHandler(
+		svcs.userRepo, svcs.userCache, models.NewAdminLogRepository(),
+		svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo,
+		services.NewExportService(), cfg.DataExportSalt,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create admin handler: %w", err)
+		return nil, fmt.Errorf("AdminHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "AdminHandler initialized")
 
