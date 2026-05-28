@@ -118,6 +118,9 @@ type EmailService struct {
 	clientMu   sync.Mutex
 	lastUsed   time.Time
 	stopKeeper chan struct{}
+
+	// 异步发送追踪
+	wg sync.WaitGroup
 }
 
 // ====================  构造函数 ====================
@@ -207,7 +210,15 @@ func (s *EmailService) VerifyConnection() error {
 //   - verifyURL: 验证链接
 //   - logContext: 日志上下文（用于错误日志，如 "AUTH"）
 func (s *EmailService) SendVerificationEmailAsync(to, emailType, language, verifyURL, logContext string) {
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogError(logContext, "SendVerificationEmailAsync",
+					fmt.Errorf("panic: %v", r), fmt.Sprintf("to=%s, type=%s", to, emailType))
+			}
+		}()
 		if err := s.SendVerificationEmail(to, emailType, language, verifyURL); err != nil {
 			utils.LogError(logContext, "SendVerificationEmailAsync", err, fmt.Sprintf("to=%s, type=%s", to, emailType))
 		}
@@ -571,6 +582,19 @@ func (s *EmailService) connectionKeeper() {
 func (s *EmailService) Close() {
 	if s.stopKeeper != nil {
 		close(s.stopKeeper)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		utils.LogInfo("EMAIL", "All inflight email sends completed")
+	case <-time.After(30 * time.Second):
+		utils.LogWarn("EMAIL", "Timed out waiting for inflight email sends")
 	}
 }
 
