@@ -144,33 +144,25 @@ func initDatabase(cfg *config.Config) error {
 
 // ====================  初始化辅助 ====================
 
-// initOne 调用无错误返回值的构造函数，检查 nil 并统一日志
-func initOne[T any](dest **T, create func() *T, name string) error {
-	*dest = create()
-	if *dest == nil {
-		return fmt.Errorf("failed to create %s", name)
-	}
-	utils.LogInfo("SERVICES", name+" initialized")
-	return nil
-}
-
 // ====================  服务容器 ====================
 
 // Services 服务容器，持有所有服务实例
 type Services struct {
-	userRepo           *models.UserRepository
-	userLogRepo        *models.UserLogRepository
-	qrLoginRepo        *models.QRLoginRepository
-	tokenService       *services.TokenService
-	sessionService     *services.SessionService
-	captchaService     *services.CaptchaService
-	wsService          *services.WebSocketService
-	emailService       *services.EmailService
-	userCache          *cache.UserCache
-	r2Service          *services.R2Service
-	imgProcessor       *services.ImgProcessor
-	oauthService       *services.OAuthService
-	emailWhitelistRepo *models.EmailWhitelistRepository
+	userRepo           models.UserStore
+	userLogRepo        models.UserLogStore
+	qrLoginRepo        models.QRLoginStore
+	adminLogRepo       models.AdminLogStore
+	tokenService       services.TokenManager
+	sessionService     services.SessionManager
+	captchaService     services.CaptchaVerifier
+	wsService          services.WebSocketManager
+	emailService       services.EmailSender
+	userCache          services.UserCacheStore
+	r2Service          services.StorageService
+	imgProcessor       services.ImageProcessor
+	oauthService       services.OAuthClientManager
+	exportService      services.ExportManager
+	emailWhitelistRepo models.EmailWhitelistStore
 }
 
 // initServices 初始化所有服务
@@ -180,49 +172,82 @@ func initServices(cfg *config.Config) (*Services, error) {
 	svcs := &Services{}
 	var err error
 
-	// Repositories
-	if err = initOne(&svcs.userRepo, models.NewUserRepository, "UserRepository"); err != nil {
-		return nil, err
+	svcs.userRepo = models.NewUserRepository()
+	if svcs.userRepo == nil {
+		return nil, fmt.Errorf("failed to create UserRepository")
 	}
-	if err = initOne(&svcs.userLogRepo, models.NewUserLogRepository, "UserLogRepository"); err != nil {
-		return nil, err
-	}
-	if err = initOne(&svcs.qrLoginRepo, models.NewQRLoginRepository, "QRLoginRepository"); err != nil {
-		return nil, err
-	}
-	if err = initOne(&svcs.emailWhitelistRepo, models.NewEmailWhitelistRepository, "EmailWhitelistRepository"); err != nil {
-		return nil, err
-	}
+	utils.LogInfo("SERVICES", "UserRepository initialized")
 
-	// Core services
-	if err = initOne(&svcs.tokenService, services.NewTokenService, "TokenService"); err != nil {
-		return nil, err
+	svcs.userLogRepo = models.NewUserLogRepository()
+	if svcs.userLogRepo == nil {
+		return nil, fmt.Errorf("failed to create UserLogRepository")
 	}
-	if err = initOne(&svcs.sessionService, func() *services.SessionService { return services.NewSessionService(cfg) }, "SessionService"); err != nil {
-		return nil, err
-	}
-	if err = initOne(&svcs.captchaService, func() *services.CaptchaService { return services.NewCaptchaService(cfg) }, "CaptchaService"); err != nil {
-		return nil, err
-	}
-	if err = initOne(&svcs.wsService, services.NewWebSocketService, "WebSocketService"); err != nil {
-		return nil, err
-	}
-	if err = initOne(&svcs.oauthService, services.NewOAuthService, "OAuthService"); err != nil {
-		return nil, err
-	}
+	utils.LogInfo("SERVICES", "UserLogRepository initialized")
 
-	// Cache
+	svcs.qrLoginRepo = models.NewQRLoginRepository()
+	if svcs.qrLoginRepo == nil {
+		return nil, fmt.Errorf("failed to create QRLoginRepository")
+	}
+	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
+
+	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository()
+	if svcs.emailWhitelistRepo == nil {
+		return nil, fmt.Errorf("failed to create EmailWhitelistRepository")
+	}
+	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
+
+	svcs.adminLogRepo = models.NewAdminLogRepository()
+	if svcs.adminLogRepo == nil {
+		return nil, fmt.Errorf("failed to create AdminLogRepository")
+	}
+	utils.LogInfo("SERVICES", "AdminLogRepository initialized")
+
+	svcs.tokenService = services.NewTokenService()
+	if svcs.tokenService == nil {
+		return nil, fmt.Errorf("failed to create TokenService")
+	}
+	utils.LogInfo("SERVICES", "TokenService initialized")
+
+	svcs.sessionService = services.NewSessionService(cfg)
+	if svcs.sessionService == nil {
+		return nil, fmt.Errorf("failed to create SessionService")
+	}
+	utils.LogInfo("SERVICES", "SessionService initialized")
+
+	svcs.captchaService = services.NewCaptchaService(cfg)
+	if svcs.captchaService == nil {
+		return nil, fmt.Errorf("failed to create CaptchaService")
+	}
+	utils.LogInfo("SERVICES", "CaptchaService initialized")
+
+	svcs.wsService = services.NewWebSocketService()
+	if svcs.wsService == nil {
+		return nil, fmt.Errorf("failed to create WebSocketService")
+	}
+	utils.LogInfo("SERVICES", "WebSocketService initialized")
+
+	svcs.oauthService = services.NewOAuthService()
+	if svcs.oauthService == nil {
+		return nil, fmt.Errorf("failed to create OAuthService")
+	}
+	utils.LogInfo("SERVICES", "OAuthService initialized")
+
+	svcs.exportService = services.NewExportService()
+	if svcs.exportService == nil {
+		return nil, fmt.Errorf("failed to create ExportService")
+	}
+	utils.LogInfo("SERVICES", "ExportService initialized")
+
 	svcs.userCache, err = cache.NewUserCache(userCacheMaxSize, userCacheTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UserCache: %w", err)
 	}
 	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
 
-	// Optional: Email service (non-fatal if unavailable)
 	svcs.emailService, err = services.NewEmailService(cfg)
 	if err != nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("Email service unavailable: %v", err))
-	} else {
+	} else if svcs.emailService != nil {
 		if err := svcs.emailService.VerifyConnection(); err != nil {
 			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP verification failed: %v", err))
 		} else {
@@ -230,7 +255,6 @@ func initServices(cfg *config.Config) (*Services, error) {
 		}
 	}
 
-	// Optional: R2 service (non-fatal if unavailable)
 	svcs.r2Service, err = services.NewR2Service()
 	if err != nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service unavailable: %v", err))
@@ -316,9 +340,9 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
 	hdlrs.adminHandler, err = admin.NewAdminHandler(
-		svcs.userRepo, svcs.userCache, models.NewAdminLogRepository(),
+		svcs.userRepo, svcs.userCache, svcs.adminLogRepo,
 		svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo,
-		services.NewExportService(), cfg.DataExportSalt,
+		svcs.exportService, cfg.DataExportSalt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AdminHandler: %w", err)

@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/config"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -67,15 +66,15 @@ const (
 // AuthHandler 认证 Handler
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo           *models.UserRepository           // 用户数据仓库
-	userLogRepo        *models.UserLogRepository        // 用户日志仓库
-	tokenService       *services.TokenService           // Token 服务
-	sessionService     *services.SessionService         // Session 服务
-	emailService       *services.EmailService           // 邮件服务
-	captchaService     *services.CaptchaService         // 验证码服务
-	userCache          *cache.UserCache                 // 用户缓存
-	emailWhitelistRepo *models.EmailWhitelistRepository // 邮箱白名单仓库
-	baseURL            string                           // 基础 URL
+	userRepo           models.UserStore           // 用户数据仓库
+	userLogRepo        models.UserLogStore        // 用户日志仓库
+	tokenService       services.TokenManager      // Token 服务
+	sessionService     services.SessionManager    // Session 服务
+	emailService       services.EmailSender       // 邮件服务
+	captchaService     services.CaptchaVerifier   // 验证码服务
+	userCache          services.UserCacheStore    // 用户缓存
+	emailWhitelistRepo models.EmailWhitelistStore // 邮箱白名单仓库
+	baseURL            string                     // 基础 URL
 }
 
 // ====================  构造函数 ====================
@@ -96,14 +95,14 @@ type AuthHandler struct {
 //   - *AuthHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewAuthHandler(
-	userRepo *models.UserRepository,
-	userLogRepo *models.UserLogRepository,
-	tokenService *services.TokenService,
-	sessionService *services.SessionService,
-	emailService *services.EmailService,
-	captchaService *services.CaptchaService,
-	userCache *cache.UserCache,
-	emailWhitelistRepo *models.EmailWhitelistRepository,
+	userRepo models.UserStore,
+	userLogRepo models.UserLogStore,
+	tokenService services.TokenManager,
+	sessionService services.SessionManager,
+	emailService services.EmailSender,
+	captchaService services.CaptchaVerifier,
+	userCache services.UserCacheStore,
+	emailWhitelistRepo models.EmailWhitelistStore,
 ) (*AuthHandler, error) {
 	if userRepo == nil {
 		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userRepo is required"))

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -55,13 +54,13 @@ const (
 
 // AdminHandler 管理后台 Handler
 type AdminHandler struct {
-	userRepo           *models.UserRepository
-	userCache          *cache.UserCache
-	logRepo            *models.AdminLogRepository
-	userLogRepo        *models.UserLogRepository
-	oauthService       *services.OAuthService
-	emailWhitelistRepo *models.EmailWhitelistRepository
-	exportService      *services.ExportService
+	userRepo           models.UserStore
+	userCache          services.UserCacheStore
+	logRepo            models.AdminLogStore
+	userLogRepo        models.UserLogStore
+	oauthService       services.OAuthClientManager
+	emailWhitelistRepo models.EmailWhitelistStore
+	exportService      services.ExportManager
 	dataExportSalt     string
 }
 
@@ -79,7 +78,7 @@ type AdminHandler struct {
 // 返回：
 //   - *AdminHandler: Handler 实例
 //   - error: 错误信息
-func NewAdminHandler(userRepo *models.UserRepository, userCache *cache.UserCache, logRepo *models.AdminLogRepository, userLogRepo *models.UserLogRepository, oauthService *services.OAuthService, emailWhitelistRepo *models.EmailWhitelistRepository, exportService *services.ExportService, dataExportSalt string) (*AdminHandler, error) {
+func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthClientManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}

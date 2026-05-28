@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -53,14 +52,14 @@ var (
 
 // UserHandler 用户管理 Handler
 type UserHandler struct {
-	userRepo       *models.UserRepository
-	userLogRepo    *models.UserLogRepository
-	tokenService   *services.TokenService
-	emailService   *services.EmailService
-	captchaService *services.CaptchaService
-	userCache      *cache.UserCache
-	r2Service      *services.R2Service
-	oauthService   *services.OAuthService
+	userRepo       models.UserStore
+	userLogRepo    models.UserLogStore
+	tokenService   services.TokenManager
+	emailService   services.EmailSender
+	captchaService services.CaptchaVerifier
+	userCache      services.UserCacheStore
+	r2Service      services.StorageService
+	oauthService   services.OAuthClientManager
 	baseURL        string
 }
 
@@ -108,14 +107,14 @@ const (
 //   - *UserHandler: Handler 实例
 //   - error: 错误信息
 func NewUserHandler(
-	userRepo *models.UserRepository,
-	userLogRepo *models.UserLogRepository,
-	tokenService *services.TokenService,
-	emailService *services.EmailService,
-	captchaService *services.CaptchaService,
-	userCache *cache.UserCache,
-	r2Service *services.R2Service,
-	oauthService *services.OAuthService,
+	userRepo models.UserStore,
+	userLogRepo models.UserLogStore,
+	tokenService services.TokenManager,
+	emailService services.EmailSender,
+	captchaService services.CaptchaVerifier,
+	userCache services.UserCacheStore,
+	r2Service services.StorageService,
+	oauthService services.OAuthClientManager,
 	baseURL string,
 ) (*UserHandler, error) {
 	if userRepo == nil {

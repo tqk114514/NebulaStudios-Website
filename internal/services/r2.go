@@ -151,7 +151,7 @@ func (s *R2Service) IsConfigured() bool {
 }
 
 // GetImgProcessor 获取图片处理器实例（用于优雅关闭）
-func (s *R2Service) GetImgProcessor() *ImgProcessor {
+func (s *R2Service) GetImgProcessor() ImageProcessor {
 	if s == nil {
 		return nil
 	}

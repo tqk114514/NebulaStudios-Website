@@ -114,39 +114,51 @@ type Config struct {
 // ====================  全局配置实例 ====================
 
 var (
-	cfg      *Config      // 全局配置实例
-	cfgOnce  sync.Once    // 确保只加载一次
-	cfgMu    sync.RWMutex // 配置读写锁
-	reloadMu sync.Mutex   // Reload 互斥锁，防止并发重置 cfgOnce 导致竞态
+	cfg       *Config        // 全局配置实例
+	cfgLoaded bool           // 配置是否已加载
+	cfgMu     sync.RWMutex   // 保护 cfg 读写
+	loadMu    sync.Mutex     // 保证 loadConfig 只被一个 goroutine 执行
+	reloadMu  sync.Mutex     // 防止并发 Reload
 )
 
 // ====================  配置加载 ====================
 
 // Load 加载配置
-// 从环境变量加载所有配置项，支持 .env 文件
 //
 // 返回：
 //   - *Config: 配置实例
-//   - error: 错误信息
-//   - ErrMissingRequired: 缺少必需的配置项（仅生产环境）
-//   - ErrInvalidValue: 配置值无效
-//
-// 注意：
-//   - .env 文件不存在时会记录警告但不会返回错误
-//   - 开发环境下缺少配置只会警告，生产环境会返回错误
+//   - error: 加载错误
 func Load() (*Config, error) {
-	var loadErr error
+	cfgMu.RLock()
+	if cfgLoaded {
+		defer cfgMu.RUnlock()
+		return cfg, nil
+	}
+	cfgMu.RUnlock()
 
-	cfgOnce.Do(func() {
-		loadErr = loadConfig()
-	})
+	return doLoad()
+}
 
-	if loadErr != nil {
-		return nil, loadErr
+// doLoad 执行实际加载，由 loadMu 保证单次执行
+func doLoad() (*Config, error) {
+	loadMu.Lock()
+	defer loadMu.Unlock()
+
+	// 双重检查：可能在等待 loadMu 期间已被其他 goroutine 加载
+	cfgMu.RLock()
+	if cfgLoaded {
+		cfgMu.RUnlock()
+		return cfg, nil
+	}
+	cfgMu.RUnlock()
+
+	if err := loadConfig(); err != nil {
+		return nil, err
 	}
 
-	cfgMu.RLock()
-	defer cfgMu.RUnlock()
+	cfgMu.Lock()
+	cfgLoaded = true
+	cfgMu.Unlock()
 
 	return cfg, nil
 }
@@ -511,23 +523,20 @@ func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
 // ====================  重新加载配置 ====================
 
 // Reload 重新加载配置
-// 用于运行时更新配置（如热重载）
 //
 // 返回：
 //   - error: 加载错误
-//
-// 注意：
-//   - 此方法会重置 sync.Once，允许重新加载
-//   - 生产环境慎用，可能导致配置不一致
 func Reload() error {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
 
 	utils.LogInfo("CONFIG", "Reloading configuration...")
 
-	cfgOnce = sync.Once{}
+	cfgMu.Lock()
+	cfgLoaded = false
+	cfgMu.Unlock()
 
-	_, err := Load()
+	_, err := doLoad()
 	if err != nil {
 		return utils.LogError("CONFIG", "Reload", err)
 	}
