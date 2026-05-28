@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"auth-system/internal/middleware"
 	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -110,8 +109,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	if !middleware.DefaultLimiterManager.EmailLimiter.Allow(validatedEmail) {
-		waitTime := middleware.DefaultLimiterManager.EmailLimiter.GetWaitTime(validatedEmail)
+	if !h.limiterMgr.EmailAllow(validatedEmail) {
+		waitTime := h.limiterMgr.EmailWaitTime(validatedEmail)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
 		return
 	}

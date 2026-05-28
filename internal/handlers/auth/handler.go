@@ -66,15 +66,16 @@ const (
 // AuthHandler 认证 Handler
 // 处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo           models.UserStore           // 用户数据仓库
-	userLogRepo        models.UserLogStore        // 用户日志仓库
-	tokenService       services.TokenManager      // Token 服务
-	sessionService     services.SessionManager    // Session 服务
-	emailService       services.EmailSender       // 邮件服务
-	captchaService     services.CaptchaVerifier   // 验证码服务
-	userCache          services.UserCacheStore    // 用户缓存
-	emailWhitelistRepo models.EmailWhitelistStore // 邮箱白名单仓库
-	baseURL            string                     // 基础 URL
+	userRepo           models.UserStore
+	userLogRepo        models.UserLogStore
+	tokenService       services.TokenManager
+	sessionService     services.SessionManager
+	emailService       services.EmailSender
+	captchaService     services.CaptchaVerifier
+	userCache          services.UserCacheStore
+	emailWhitelistRepo models.EmailWhitelistStore
+	limiterMgr         middleware.RateLimiterManager
+	baseURL            string
 }
 
 // ====================  构造函数 ====================
@@ -103,6 +104,7 @@ func NewAuthHandler(
 	captchaService services.CaptchaVerifier,
 	userCache services.UserCacheStore,
 	emailWhitelistRepo models.EmailWhitelistStore,
+	limiterMgr middleware.RateLimiterManager,
 ) (*AuthHandler, error) {
 	if userRepo == nil {
 		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userRepo is required"))
@@ -136,6 +138,7 @@ func NewAuthHandler(
 		captchaService:     captchaService,
 		userCache:          userCache,
 		emailWhitelistRepo: emailWhitelistRepo,
+		limiterMgr:         limiterMgr,
 		baseURL:            baseURL,
 	}, nil
 }
