@@ -89,7 +89,6 @@ func (p *ImgProcessor) startProcessor() {
 
 	// 删除旧的 socket
 	os.Remove(p.socketPath)
-	os.Remove(BinaryPath)
 
 	// 启动进程
 	p.cmd = exec.Command(BinaryPath)
