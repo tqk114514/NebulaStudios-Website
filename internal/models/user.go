@@ -117,6 +117,12 @@ type UserPublic struct {
 	CreatedAt          time.Time  `json:"created_at"`
 }
 
+// userColumns 用户表全列 SELECT 字符串，所有查询方法统一引用
+const userColumns = `id, uid, username, email, password, avatar_url, role,
+       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+       is_banned, ban_reason, banned_at, banned_by, unban_at,
+       created_at, updated_at`
+
 // UserRepository 用户仓库
 type UserRepository struct {
 	pool *pgxpool.Pool
@@ -250,12 +256,8 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
-		FROM users WHERE id = $1
-	`, id).Scan(
+		SELECT `+userColumns+`
+		FROM users WHERE id = $1`, id).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
@@ -288,12 +290,8 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
-		FROM users WHERE uid = $1
-	`, uid).Scan(
+		SELECT `+userColumns+`
+		FROM users WHERE uid = $1`, uid).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
@@ -328,10 +326,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
+		SELECT `+userColumns+`
 		FROM users WHERE email = $1 OR LOWER(username) = LOWER($1)
 		LIMIT 1
 	`, identifier).Scan(
@@ -367,12 +362,8 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
-		FROM users WHERE email = $1
-	`, email).Scan(
+		SELECT `+userColumns+`
+		FROM users WHERE email = $1`, email).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
@@ -405,12 +396,8 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
-		FROM users WHERE LOWER(username) = LOWER($1)
-	`, username).Scan(
+		SELECT `+userColumns+`
+		FROM users WHERE LOWER(username) = LOWER($1)`, username).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
@@ -443,12 +430,8 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 
 	user := &User{}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, uid, username, email, password, avatar_url, role,
-		       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-		       is_banned, ban_reason, banned_at, banned_by, unban_at,
-		       created_at, updated_at
-		FROM users WHERE microsoft_id = $1
-	`, msID).Scan(
+		SELECT `+userColumns+`
+		FROM users WHERE microsoft_id = $1`, msID).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
@@ -726,10 +709,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = r.pool.Query(ctx, `
-			SELECT id, uid, username, email, password, avatar_url, role,
-			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-			       is_banned, ban_reason, banned_at, banned_by, unban_at,
-			       created_at, updated_at
+			SELECT `+userColumns+`
 			FROM users
 			ORDER BY id DESC
 			LIMIT $1 OFFSET $2
@@ -746,10 +726,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = r.pool.Query(ctx, `
-			SELECT id, uid, username, email, password, avatar_url, role,
-			       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-			       is_banned, ban_reason, banned_at, banned_by, unban_at,
-			       created_at, updated_at
+			SELECT `+userColumns+`
 			FROM users
 			WHERE username ILIKE $1 OR email ILIKE $1
 			ORDER BY id DESC
