@@ -19,12 +19,8 @@
 package user
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -49,47 +45,20 @@ var (
 	ErrUserHandlerEmptyBaseURL = errors.New("base URL is empty")
 )
 
-// ====================  数据结构 ====================
-
 // UserHandler 用户管理 Handler
 type UserHandler struct {
-	userRepo       models.UserStore
-	userLogRepo    models.UserLogStore
-	tokenService   services.TokenManager
-	emailService   services.EmailSender
-	captchaService services.CaptchaVerifier
-	userCache      services.UserCacheStore
-	r2Service      services.StorageService
-	oauthService   services.OAuthClientManager
-	limiterMgr     middleware.RateLimiterManager
-	baseURL        string
+	userRepo           models.UserStore
+	userLogRepo        models.UserLogStore
+	tokenService       services.TokenManager
+	emailService       services.EmailSender
+	captchaService     services.CaptchaVerifier
+	userCache          services.UserCacheStore
+	r2Service          services.StorageService
+	oauthService       services.OAuthClientManager
+	limiterMgr         middleware.RateLimiterManager
+	exportTokenService services.ExportTokenManager
+	baseURL            string
 }
-
-// dataExportToken 数据导出 Token（内存存储，一次性使用）
-type dataExportToken struct {
-	UserUID   string
-	ExpiresAt time.Time
-}
-
-// dataExportTokens 数据导出 Token 存储（内存）
-// 带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
-// FIFO 使用自增计数器实现
-var (
-	dataExportTokens       = make(map[string]*dataExportToken)
-	dataExportTokensMu     sync.RWMutex
-	dataExportCleanupOnce  sync.Once
-	dataExportTokenIndex   = make(map[string]int64)
-	dataExportTokenCounter int64
-	dataExportStopChan     chan struct{}
-)
-
-const (
-	// DataExportCleanupInterval 数据导出 Token 清理任务间隔
-	DataExportCleanupInterval = 5 * time.Minute
-
-	// maxDataExportTokensCapacity dataExportTokens 最大容量
-	maxDataExportTokensCapacity = 1000
-)
 
 // ====================  构造函数 ====================
 
@@ -118,6 +87,7 @@ func NewUserHandler(
 	r2Service services.StorageService,
 	oauthService services.OAuthClientManager,
 	limiterMgr middleware.RateLimiterManager,
+	exportTokenService services.ExportTokenManager,
 	baseURL string,
 ) (*UserHandler, error) {
 	if userRepo == nil {
@@ -141,19 +111,18 @@ func NewUserHandler(
 
 	utils.LogInfo("USER", "Handler initialized successfully")
 
-	StartDataExportCleanup()
-
 	return &UserHandler{
-		userRepo:       userRepo,
-		userLogRepo:    userLogRepo,
-		tokenService:   tokenService,
-		emailService:   emailService,
-		captchaService: captchaService,
-		userCache:      userCache,
-		r2Service:      r2Service,
-		oauthService:   oauthService,
-		limiterMgr:     limiterMgr,
-		baseURL:        baseURL,
+		userRepo:           userRepo,
+		userLogRepo:        userLogRepo,
+		tokenService:       tokenService,
+		emailService:       emailService,
+		captchaService:     captchaService,
+		userCache:          userCache,
+		r2Service:          r2Service,
+		oauthService:       oauthService,
+		limiterMgr:         limiterMgr,
+		exportTokenService: exportTokenService,
+		baseURL:            baseURL,
 	}, nil
 }
 
@@ -181,129 +150,5 @@ func (h *UserHandler) invalidateUserCache(userUID string) {
 	if h.userCache != nil {
 		h.userCache.Invalidate(userUID)
 		utils.LogInfo("USER", fmt.Sprintf("Cache invalidated: userUID=%s", userUID))
-	}
-}
-
-// ====================  数据导出 Token 管理 ====================
-
-// generateExportToken 生成数据导出 Token
-func generateExportToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
-}
-
-// StartDataExportCleanup 启动数据导出 Token 清理任务
-// 定期清理过期的导出 Token，可通过 StopDataExportCleanup 优雅停止
-func StartDataExportCleanup() {
-	dataExportCleanupOnce.Do(func() {
-		dataExportStopChan = make(chan struct{})
-		go func() {
-			ticker := time.NewTicker(DataExportCleanupInterval)
-			defer ticker.Stop()
-
-			utils.LogInfo("USER", "Data export cleanup task started")
-
-			for {
-				select {
-				case <-ticker.C:
-					CleanupExpiredExportTokens()
-				case <-dataExportStopChan:
-					utils.LogInfo("USER", "Data export cleanup task stopped")
-					return
-				}
-			}
-		}()
-	})
-}
-
-// StopDataExportCleanup 停止数据导出 Token 清理任务
-func StopDataExportCleanup() {
-	if dataExportStopChan != nil {
-		select {
-		case <-dataExportStopChan:
-		default:
-			close(dataExportStopChan)
-		}
-	}
-}
-
-// CleanupExpiredExportTokens 清理过期的导出 Token（应定期调用）
-func CleanupExpiredExportTokens() {
-	dataExportTokensMu.Lock()
-	defer dataExportTokensMu.Unlock()
-
-	now := time.Now()
-	count := 0
-	for t, data := range dataExportTokens {
-		if now.After(data.ExpiresAt) {
-			delete(dataExportTokens, t)
-			delete(dataExportTokenIndex, t)
-			count++
-		}
-	}
-
-	if count > 0 {
-		utils.LogInfo("USER", fmt.Sprintf("Cleanup completed: expired export tokens=%d", count))
-	}
-}
-
-// findOldestExportTokens 找出序号最小的 N 个 token
-func findOldestExportTokens(count int) []string {
-	if len(dataExportTokenIndex) <= count {
-		keys := make([]string, 0, len(dataExportTokenIndex))
-		for k := range dataExportTokenIndex {
-			keys = append(keys, k)
-		}
-		return keys
-	}
-
-	heap := make([]exportFifoKv, 0, count)
-
-	for k, v := range dataExportTokenIndex {
-		if len(heap) < count {
-			heap = append(heap, exportFifoKv{k, v})
-			if len(heap) == count {
-				buildExportFifoMinHeap(heap)
-			}
-		} else if v < heap[0].value {
-			heap[0] = exportFifoKv{k, v}
-			exportFifoHeapify(heap, 0)
-		}
-	}
-
-	result := make([]string, count)
-	for i := range heap {
-		result[i] = heap[i].key
-	}
-	return result
-}
-
-type exportFifoKv struct {
-	key   string
-	value int64
-}
-
-func buildExportFifoMinHeap(h []exportFifoKv) {
-	for i := len(h)/2 - 1; i >= 0; i-- {
-		exportFifoHeapify(h, i)
-	}
-}
-
-func exportFifoHeapify(h []exportFifoKv, i int) {
-	min := i
-	left := 2*i + 1
-	right := 2*i + 2
-	if left < len(h) && h[left].value < h[min].value {
-		min = left
-	}
-	if right < len(h) && h[right].value < h[min].value {
-		min = right
-	}
-	if min != i {
-		h[i], h[min] = h[min], h[i]
-		exportFifoHeapify(h, min)
 	}
 }
