@@ -191,15 +191,15 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		authAPI.POST("/verify-token", hdlrs.authHandler.VerifyToken)
 		authAPI.POST("/check-code-expiry", hdlrs.authHandler.CheckCodeExpiry)
 		authAPI.POST("/verify-code", hdlrs.authHandler.VerifyCode)
-		authAPI.POST("/invalidate-code", middleware.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
+		authAPI.POST("/invalidate-code", svcs.limiterMgr.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
 
-		authAPI.POST("/register", middleware.RegisterRateLimit(), hdlrs.authHandler.Register)
-		authAPI.POST("/login", middleware.LoginRateLimit(), hdlrs.authHandler.Login)
+		authAPI.POST("/register", svcs.limiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
+		authAPI.POST("/login", svcs.limiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
 		authAPI.POST("/verify-session", hdlrs.authHandler.VerifySession)
 		authAPI.POST("/logout", hdlrs.authHandler.Logout)
 		authAPI.GET("/me", middleware.AuthMiddleware(svcs.sessionService), hdlrs.authHandler.GetMe)
 
-		authAPI.POST("/send-reset-code", middleware.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)
+		authAPI.POST("/send-reset-code", svcs.limiterMgr.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)
 		authAPI.POST("/reset-password", hdlrs.authHandler.ResetPassword)
 		authAPI.POST("/change-password",
 			middleware.AuthMiddleware(svcs.sessionService),
@@ -330,7 +330,7 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 			hdlrs.oauthProviderHandler.AuthorizeInfo)
 
 		oauthGroup.POST("/token",
-			middleware.OAuthTokenRateLimit(),
+			svcs.limiterMgr.OAuthTokenRateLimit(),
 			hdlrs.oauthProviderHandler.Token)
 
 		oauthGroup.GET("/userinfo", hdlrs.oauthProviderHandler.UserInfo)

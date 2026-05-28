@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -60,6 +61,7 @@ type UserHandler struct {
 	userCache      services.UserCacheStore
 	r2Service      services.StorageService
 	oauthService   services.OAuthClientManager
+	limiterMgr     middleware.RateLimiterManager
 	baseURL        string
 }
 
@@ -115,6 +117,7 @@ func NewUserHandler(
 	userCache services.UserCacheStore,
 	r2Service services.StorageService,
 	oauthService services.OAuthClientManager,
+	limiterMgr middleware.RateLimiterManager,
 	baseURL string,
 ) (*UserHandler, error) {
 	if userRepo == nil {
@@ -149,6 +152,7 @@ func NewUserHandler(
 		userCache:      userCache,
 		r2Service:      r2Service,
 		oauthService:   oauthService,
+		limiterMgr:     limiterMgr,
 		baseURL:        baseURL,
 	}, nil
 }

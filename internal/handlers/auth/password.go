@@ -83,8 +83,8 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	if !middleware.DefaultLimiterManager.EmailLimiter.Allow(normalizedEmail) {
-		waitTime := middleware.DefaultLimiterManager.EmailLimiter.GetWaitTime(normalizedEmail)
+	if !h.limiterMgr.EmailAllow(normalizedEmail) {
+		waitTime := h.limiterMgr.EmailWaitTime(normalizedEmail)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded for reset: email=%s, wait=%ds", normalizedEmail, waitTime))
 		return
 	}

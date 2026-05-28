@@ -163,6 +163,8 @@ type Services struct {
 	oauthService       services.OAuthClientManager
 	exportService      services.ExportManager
 	emailWhitelistRepo models.EmailWhitelistStore
+	limiterMgr         middleware.RateLimiterManager
+	cfg                *config.Config
 }
 
 // initServices 初始化所有服务
@@ -263,6 +265,9 @@ func initServices(cfg *config.Config) (*Services, error) {
 		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
 	}
 
+	svcs.limiterMgr = middleware.NewRateLimiterManager()
+	utils.LogInfo("SERVICES", "RateLimiterManager initialized")
+
 	utils.LogInfo("SERVICES", "All services initialized successfully")
 	return svcs, nil
 }
@@ -290,7 +295,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	hdlrs.authHandler, err = auth.NewAuthHandler(
 		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
 		svcs.sessionService, svcs.emailService, svcs.captchaService,
-		svcs.userCache, svcs.emailWhitelistRepo,
+		svcs.userCache, svcs.emailWhitelistRepo, svcs.limiterMgr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AuthHandler: %w", err)
@@ -300,7 +305,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
 		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
 		svcs.emailService, svcs.captchaService, svcs.userCache,
-		svcs.r2Service, svcs.oauthService, cfg.BaseURL,
+		svcs.r2Service, svcs.oauthService, svcs.limiterMgr, cfg.BaseURL,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("UserHandler: %w", err)
@@ -399,7 +404,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 
 	userhandler.StopDataExportCleanup()
 
-	middleware.DefaultLimiterManager.StopAll()
+	svcs.limiterMgr.StopAll()
 
 	if svcs.wsService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
