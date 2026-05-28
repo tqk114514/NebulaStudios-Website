@@ -724,20 +724,6 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
 
 // ====================  限流器管理器 ====================
 
-// RateLimiterManager 限流器管理器接口
-type RateLimiterManager interface {
-	LoginRateLimit() gin.HandlerFunc
-	RegisterRateLimit() gin.HandlerFunc
-	ResetPasswordRateLimit() gin.HandlerFunc
-	OAuthTokenRateLimit() gin.HandlerFunc
-	InvalidateCodeRateLimit() gin.HandlerFunc
-	EmailAllow(email string) bool
-	EmailWaitTime(email string) int
-	DataExportAllow(userUID string) bool
-	DataExportWaitTime(userUID string) int
-	StopAll()
-}
-
 // rateLimiterManager 限流器管理器实现
 type rateLimiterManager struct {
 	LoginLimiter          *ShardedRateLimiter
