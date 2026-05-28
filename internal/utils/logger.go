@@ -65,22 +65,38 @@ type zapLogger struct {
 
 func (l *zapLogger) Debug(category, message string) {
 	masked := maskSensitiveData(message)
-	l.sugar.Debugw(masked, "category", category)
+	if category == "" {
+		l.sugar.Debug(masked)
+	} else {
+		l.sugar.Debugw(masked, "category", category)
+	}
 }
 
 func (l *zapLogger) Info(category, message string) {
 	masked := maskSensitiveData(message)
-	l.sugar.Infow(masked, "category", category)
+	if category == "" {
+		l.sugar.Info(masked)
+	} else {
+		l.sugar.Infow(masked, "category", category)
+	}
 }
 
 func (l *zapLogger) Warn(category, message string) {
 	masked := maskSensitiveData(message)
-	l.sugar.Warnw(masked, "category", category)
+	if category == "" {
+		l.sugar.Warn(masked)
+	} else {
+		l.sugar.Warnw(masked, "category", category)
+	}
 }
 
 func (l *zapLogger) Error(category, message string) {
 	masked := maskSensitiveData(message)
-	l.sugar.Errorw(masked, "category", category)
+	if category == "" {
+		l.sugar.Error(masked)
+	} else {
+		l.sugar.Errorw(masked, "category", category)
+	}
 }
 
 func (l *zapLogger) Printf(format string, args ...any) {
