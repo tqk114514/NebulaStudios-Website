@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/models"
 	"auth-system/internal/paths"
 	"auth-system/internal/services"
@@ -68,7 +67,7 @@ const (
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
+func AuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
 		utils.LogError("AUTH-MW", "AuthMiddleware", fmt.Errorf("SessionService is nil"), "Returning error middleware")
@@ -124,7 +123,7 @@ func AuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func OptionalAuthMiddleware(sessionService *services.SessionService) gin.HandlerFunc {
+func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for optional auth, skipping auth", "")
@@ -288,7 +287,7 @@ const guestOnlyCheckTimeout = 3 * time.Second
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func GuestOnlyMiddleware(sessionService *services.SessionService, userCache *cache.UserCache, userRepo *models.UserRepository) gin.HandlerFunc {
+func GuestOnlyMiddleware(sessionService services.SessionManager, userCache services.UserCacheStore, userRepo models.UserStore) gin.HandlerFunc {
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check", "")
 		return func(c *gin.Context) {
@@ -344,7 +343,7 @@ func GuestOnlyMiddleware(sessionService *services.SessionService, userCache *cac
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func guestOnlyTokenCheck(sessionService *services.SessionService) gin.HandlerFunc {
+func guestOnlyTokenCheck(sessionService services.SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := ExtractToken(c)
 		if token == "" {

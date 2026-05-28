@@ -32,7 +32,6 @@ import (
 	"net/url"
 	"strings"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/paths"
@@ -84,11 +83,11 @@ func authorizeErrorStatus(errorCode string) int {
 
 // OAuthProviderHandler OAuth Provider Handler
 type OAuthProviderHandler struct {
-	oauthService   *services.OAuthService
-	userRepo       *models.UserRepository
-	userLogRepo    *models.UserLogRepository
-	userCache      *cache.UserCache
-	sessionService *services.SessionService
+	oauthService   services.OAuthClientManager
+	userRepo       models.UserStore
+	userLogRepo    models.UserLogStore
+	userCache      services.UserCacheStore
+	sessionService services.SessionManager
 	baseURL        string
 }
 
@@ -96,11 +95,11 @@ type OAuthProviderHandler struct {
 
 // NewOAuthProviderHandler 创建 OAuth Provider Handler
 func NewOAuthProviderHandler(
-	oauthService *services.OAuthService,
-	userRepo *models.UserRepository,
-	userLogRepo *models.UserLogRepository,
-	userCache *cache.UserCache,
-	sessionService *services.SessionService,
+	oauthService services.OAuthClientManager,
+	userRepo models.UserStore,
+	userLogRepo models.UserLogStore,
+	userCache services.UserCacheStore,
+	sessionService services.SessionManager,
 	baseURL string,
 ) *OAuthProviderHandler {
 	return &OAuthProviderHandler{

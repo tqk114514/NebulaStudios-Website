@@ -54,7 +54,7 @@ const (
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
+func AdminMiddleware(userRepo models.UserStore) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil {
 		utils.LogError("ADMIN-MW", "AdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
@@ -122,7 +122,7 @@ func AdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func SuperAdminMiddleware(userRepo *models.UserRepository) gin.HandlerFunc {
+func SuperAdminMiddleware(userRepo models.UserStore) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil {
 		utils.LogError("ADMIN-MW", "SuperAdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
@@ -247,7 +247,7 @@ func respondForbidden(c *gin.Context, errorCode string) {
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func AdminPageMiddleware(userRepo *models.UserRepository, sessionService *services.SessionService) gin.HandlerFunc {
+func AdminPageMiddleware(userRepo models.UserStore, sessionService services.SessionManager) gin.HandlerFunc {
 	// 参数验证
 	if userRepo == nil || sessionService == nil {
 		utils.LogError("ADMIN-MW", "AdminPageMiddleware", fmt.Errorf("UserRepository or SessionService is nil"), "")

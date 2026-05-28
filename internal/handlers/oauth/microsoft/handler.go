@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/config"
 	"auth-system/internal/handlers/oauth"
 	"auth-system/internal/middleware"
@@ -49,15 +48,15 @@ const (
 // MicrosoftHandler Microsoft OAuth Handler
 // 处理 Microsoft OAuth 相关的 HTTP 请求
 type MicrosoftHandler struct {
-	userRepo       *models.UserRepository    // 用户数据仓库
-	userLogRepo    *models.UserLogRepository // 用户日志仓库
-	sessionService *services.SessionService  // Session 服务
-	userCache      *cache.UserCache          // 用户缓存
-	r2Service      *services.R2Service       // R2 存储服务
-	clientID       string                    // Microsoft 应用 ID
-	clientSecret   string                    // Microsoft 应用密钥
-	redirectURI    string                    // OAuth 回调地址
-	baseURL        string                    // 基础 URL
+	userRepo       models.UserStore        // 用户数据仓库
+	userLogRepo    models.UserLogStore     // 用户日志仓库
+	sessionService services.SessionManager // Session 服务
+	userCache      services.UserCacheStore // 用户缓存
+	r2Service      services.StorageService // R2 存储服务
+	clientID       string                  // Microsoft 应用 ID
+	clientSecret   string                  // Microsoft 应用密钥
+	redirectURI    string                  // OAuth 回调地址
+	baseURL        string                  // 基础 URL
 }
 
 // ====================  构造函数 ====================
@@ -75,11 +74,11 @@ type MicrosoftHandler struct {
 //   - *MicrosoftHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewMicrosoftHandler(
-	userRepo *models.UserRepository,
-	userLogRepo *models.UserLogRepository,
-	sessionService *services.SessionService,
-	userCache *cache.UserCache,
-	r2Service *services.R2Service,
+	userRepo models.UserStore,
+	userLogRepo models.UserLogStore,
+	sessionService services.SessionManager,
+	userCache services.UserCacheStore,
+	r2Service services.StorageService,
 ) (*MicrosoftHandler, error) {
 	if userRepo == nil {
 		return nil, fmt.Errorf("userRepo is required")
