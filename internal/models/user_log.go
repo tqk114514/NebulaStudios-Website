@@ -117,7 +117,6 @@ func NewUserLogRepository() *UserLogRepository {
 	return &UserLogRepository{}
 }
 
-
 // ====================  写入方法 ====================
 
 // Create 创建日志记录
@@ -154,7 +153,7 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 func (r *UserLogRepository) LogChangePassword(ctx context.Context, userUID string) error {
 	log := &UserLog{
 		UserUID: userUID,
-		Action: UserActionChangePassword,
+		Action:  UserActionChangePassword,
 	}
 	return r.Create(ctx, log)
 }
@@ -163,7 +162,7 @@ func (r *UserLogRepository) LogChangePassword(ctx context.Context, userUID strin
 func (r *UserLogRepository) LogRegister(ctx context.Context, userUID string) error {
 	log := &UserLog{
 		UserUID: userUID,
-		Action: UserActionRegister,
+		Action:  UserActionRegister,
 	}
 	return r.Create(ctx, log)
 }
@@ -248,7 +247,7 @@ func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userUID stri
 func (r *UserLogRepository) LogDeleteAccount(ctx context.Context, userUID string) error {
 	log := &UserLog{
 		UserUID: userUID,
-		Action: UserActionDeleteAccount,
+		Action:  UserActionDeleteAccount,
 	}
 	return r.Create(ctx, log)
 }
@@ -276,7 +275,7 @@ func (r *UserLogRepository) LogBanned(ctx context.Context, userUID string, reaso
 func (r *UserLogRepository) LogUnbanned(ctx context.Context, userUID string) error {
 	log := &UserLog{
 		UserUID: userUID,
-		Action: UserActionUnbanned,
+		Action:  UserActionUnbanned,
 	}
 	return r.Create(ctx, log)
 }
@@ -319,7 +318,6 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userUID string, 
 	}
 	return r.Create(ctx, log)
 }
-
 
 // ====================  查询方法 ====================
 

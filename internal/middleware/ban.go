@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"time"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -50,7 +49,7 @@ const (
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func BanCheckMiddleware(userCache *cache.UserCache, userRepo *models.UserRepository, sessionService *services.SessionService) gin.HandlerFunc {
+func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserStore, sessionService services.SessionManager) gin.HandlerFunc {
 	if userCache == nil || userRepo == nil {
 		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"), "")
 		return func(c *gin.Context) {

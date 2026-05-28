@@ -30,7 +30,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"auth-system/internal/cache"
 	"auth-system/internal/config"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -84,10 +83,10 @@ const (
 // StaticHandler 静态文件 Handler
 // 处理静态文件服务和配置 API
 type StaticHandler struct {
-	cfg            *config.Config             // 应用配置
-	userCache      *cache.UserCache           // 用户缓存
-	wsService      *services.WebSocketService // WebSocket 服务
-	captchaService *services.CaptchaService   // 验证码服务
+	cfg            *config.Config              // 应用配置
+	userCache      services.UserCacheStore     // 用户缓存
+	wsService      services.WebSocketManager   // WebSocket 服务
+	captchaService services.CaptchaVerifier    // 验证码服务
 }
 
 // ====================  构造函数 ====================
@@ -103,7 +102,7 @@ type StaticHandler struct {
 // 返回：
 //   - *StaticHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
-func NewStaticHandler(cfg *config.Config, userCache *cache.UserCache, wsService *services.WebSocketService, captchaService *services.CaptchaService) (*StaticHandler, error) {
+func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsService services.WebSocketManager, captchaService services.CaptchaVerifier) (*StaticHandler, error) {
 	// 参数验证
 	if cfg == nil {
 		return nil, errors.New("cfg is required")

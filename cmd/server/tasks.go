@@ -48,7 +48,7 @@ func startBackgroundTasks(_ *Handlers, svcs *Services) {
 }
 
 // runTokenCleanup 运行 Token 清理定时任务
-func runTokenCleanup(tokenService *services.TokenService) {
+func runTokenCleanup(tokenService services.TokenManager) {
 	if tokenService == nil {
 		utils.LogWarn("TASKS", "Token service is nil, cleanup task disabled")
 		return
@@ -74,7 +74,7 @@ func runTokenCleanup(tokenService *services.TokenService) {
 }
 
 // runUserLogCleanup 运行用户日志清理定时任务
-func runUserLogCleanup(userLogRepo *models.UserLogRepository) {
+func runUserLogCleanup(userLogRepo models.UserLogStore) {
 	if userLogRepo == nil {
 		utils.LogWarn("TASKS", "User log repository is nil, cleanup task disabled")
 		return

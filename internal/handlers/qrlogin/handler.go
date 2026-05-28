@@ -96,11 +96,11 @@ const (
 // QRLoginHandler 扫码登录 Handler
 // 处理所有扫码登录相关的 HTTP 请求
 type QRLoginHandler struct {
-	sessionService *services.SessionService   // Session 服务
-	wsService      *services.WebSocketService // WebSocket 服务
-	qrLoginRepo    *models.QRLoginRepository  // 扫码登录仓库
-	encryptKey     []byte                     // AES-256-GCM 加密密钥
-	isConfigured   bool                       // 是否已配置（加密密钥有效）
+	sessionService services.SessionManager   // Session 服务
+	wsService      services.WebSocketManager // WebSocket 服务
+	qrLoginRepo    models.QRLoginStore       // 扫码登录仓库
+	encryptKey     []byte                    // AES-256-GCM 加密密钥
+	isConfigured   bool                      // 是否已配置（加密密钥有效）
 }
 
 // ====================  构造函数 ====================
@@ -118,9 +118,9 @@ type QRLoginHandler struct {
 //   - *QRLoginHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewQRLoginHandler(
-	sessionService *services.SessionService,
-	wsService *services.WebSocketService,
-	qrLoginRepo *models.QRLoginRepository,
+	sessionService services.SessionManager,
+	wsService services.WebSocketManager,
+	qrLoginRepo models.QRLoginStore,
 	encryptKey string,
 	derivationSalt string,
 ) (*QRLoginHandler, error) {
