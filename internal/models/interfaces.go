@@ -15,6 +15,7 @@ type UserStore interface {
 	FindByMicrosoftID(ctx context.Context, msID string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, uid string, updates map[string]any) error
+	UpdatePassword(ctx context.Context, uid, plainPassword string) error
 	Delete(ctx context.Context, uid string) error
 	FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error)
 	GetStats(ctx context.Context) (*UserStats, error)

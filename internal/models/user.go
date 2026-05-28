@@ -66,7 +66,6 @@ const (
 var allowedUpdateFields = map[string]bool{
 	"username":              true,
 	"email":                 true,
-	"password":              true,
 	"avatar_url":            true,
 	"microsoft_id":          true,
 	"microsoft_name":        true,
@@ -571,6 +570,43 @@ func (r *UserRepository) Update(ctx context.Context, uid string, updates map[str
 	}
 
 	utils.LogInfo("USER", fmt.Sprintf("User updated: uid=%s, fields=%d", uid, len(updates)))
+	return nil
+}
+
+// UpdatePassword 更新用户密码（内部强制哈希，不接受明文）
+func (r *UserRepository) UpdatePassword(ctx context.Context, uid, plainPassword string) error {
+	if uid == "" {
+		return errors.New("invalid user UID")
+	}
+	if plainPassword == "" {
+		return errors.New("password is empty")
+	}
+	if len(plainPassword) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	if r.pool == nil {
+		return errors.New("database not ready")
+	}
+
+	hashedPassword, err := utils.HashPassword(plainPassword)
+	if err != nil {
+		return utils.LogError("USER", "UpdatePassword", err, fmt.Sprintf("uid=%s", uid))
+	}
+
+	result, err := r.pool.Exec(ctx,
+		"UPDATE users SET password = $1, updated_at = NOW() WHERE uid = $2",
+		hashedPassword, uid,
+	)
+	if err != nil {
+		return r.handleWriteError(err, "UpdatePassword", uid)
+	}
+
+	if result.RowsAffected() == 0 {
+		return utils.HandleDatabaseError("USER", "UpdatePassword", errors.New("no rows affected"), uid)
+	}
+
+	utils.LogInfo("USER", fmt.Sprintf("Password updated: uid=%s", uid))
 	return nil
 }
 
