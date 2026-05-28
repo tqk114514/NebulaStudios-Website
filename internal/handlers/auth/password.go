@@ -178,13 +178,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := utils.HashPassword(password)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", "Password hashing failed in ResetPassword")
-		return
-	}
-
-	if err := h.userRepo.Update(ctx, user.UID, map[string]any{"password": hashedPassword}); err != nil {
+	if err := h.userRepo.UpdatePassword(ctx, user.UID, password); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userUID=%s", user.UID))
 		return
 	}
@@ -299,13 +293,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := utils.HashPassword(newPassword)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", "Password hashing failed in ChangePassword")
-		return
-	}
-
-	if err := h.userRepo.Update(ctx, userUID, map[string]any{"password": hashedPassword}); err != nil {
+	if err := h.userRepo.UpdatePassword(ctx, userUID, newPassword); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Password update failed in ChangePassword: userUID=%s", userUID))
 		return
 	}
