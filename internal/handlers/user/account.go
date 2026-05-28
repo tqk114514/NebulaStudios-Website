@@ -346,29 +346,12 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 		return
 	}
 
-	token, err := generateExportToken()
+	token, err := h.exportTokenService.Generate(userUID)
 	if err != nil {
 		utils.LogError("USER", "RequestDataExport", err, fmt.Sprintf("Failed to generate export token: userUID=%s", userUID))
 		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATE_FAILED")
 		return
 	}
-
-	dataExportTokensMu.Lock()
-	if len(dataExportTokens) >= maxDataExportTokensCapacity {
-		evictCount := maxDataExportTokensCapacity / 10
-		toEvict := findOldestExportTokens(evictCount)
-		for _, t := range toEvict {
-			delete(dataExportTokens, t)
-			delete(dataExportTokenIndex, t)
-		}
-	}
-	dataExportTokenCounter++
-	dataExportTokens[token] = &dataExportToken{
-		UserUID:   userUID,
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-	}
-	dataExportTokenIndex[token] = dataExportTokenCounter
-	dataExportTokensMu.Unlock()
 
 	utils.LogInfo("USER", fmt.Sprintf("Data export token generated: userUID=%s", userUID))
 	c.JSON(http.StatusOK, gin.H{
@@ -386,27 +369,14 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 		return
 	}
 
-	dataExportTokensMu.Lock()
-	tokenData, exists := dataExportTokens[token]
-	if exists {
-		delete(dataExportTokens, token)
-		delete(dataExportTokenIndex, token)
-	}
-	dataExportTokensMu.Unlock()
+	userUID, valid := h.exportTokenService.ValidateAndConsume(token)
 
-	if !exists {
+	if !valid || userUID == "" {
 		utils.LogWarn("USER", "Invalid export token", "")
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
-	if time.Now().After(tokenData.ExpiresAt) {
-		utils.LogWarn("USER", "Export token expired", fmt.Sprintf("userUID=%s", tokenData.UserUID))
-		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
-		return
-	}
-
-	userUID := tokenData.UserUID
 	ctx := c.Request.Context()
 
 	user, err := h.userRepo.FindByUID(ctx, userUID)

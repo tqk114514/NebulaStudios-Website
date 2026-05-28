@@ -117,6 +117,13 @@ type ExportManager interface {
 	RetrieveFile(token string) ([]byte, string, error)
 }
 
+// ExportTokenManager 数据导出 Token 管理接口
+type ExportTokenManager interface {
+	Generate(userUID string) (string, error)
+	ValidateAndConsume(token string) (string, bool)
+	Stop()
+}
+
 // ====================  Cache ====================
 
 // UserCacheStore 用户缓存接口

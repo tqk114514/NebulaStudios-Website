@@ -160,6 +160,7 @@ type Services struct {
 	imgProcessor       services.ImageProcessor
 	oauthService       services.OAuthClientManager
 	exportService      services.ExportManager
+	exportTokenService services.ExportTokenManager
 	emailWhitelistRepo models.EmailWhitelistStore
 	limiterMgr         middleware.RateLimiterManager
 	cfg                *config.Config
@@ -238,6 +239,12 @@ func initServices(cfg *config.Config) (*Services, error) {
 	}
 	utils.LogInfo("SERVICES", "ExportService initialized")
 
+	svcs.exportTokenService, err = services.NewExportTokenService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ExportTokenService: %w", err)
+	}
+	utils.LogInfo("SERVICES", "ExportTokenService initialized")
+
 	svcs.userCache, err = cache.NewUserCache(userCacheMaxSize, userCacheTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UserCache: %w", err)
@@ -303,7 +310,8 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
 		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
 		svcs.emailService, svcs.captchaService, svcs.userCache,
-		svcs.r2Service, svcs.oauthService, svcs.limiterMgr, cfg.BaseURL,
+		svcs.r2Service, svcs.oauthService, svcs.limiterMgr,
+		svcs.exportTokenService, cfg.BaseURL,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("UserHandler: %w", err)
@@ -400,7 +408,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	sig := <-quit
 	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
-	userhandler.StopDataExportCleanup()
+	svcs.exportTokenService.Stop()
 
 	svcs.limiterMgr.StopAll()
 
