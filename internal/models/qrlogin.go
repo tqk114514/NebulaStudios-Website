@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  常量定义 ====================
@@ -55,15 +56,15 @@ type QRLoginToken struct {
 }
 
 // QRLoginRepository 扫码登录仓库
-type QRLoginRepository struct{}
+type QRLoginRepository struct {
+	pool *pgxpool.Pool
+}
 
 // ====================  构造函数 ====================
 
 // NewQRLoginRepository 创建扫码登录仓库
-// 返回：
-//   - *QRLoginRepository: 仓库实例
-func NewQRLoginRepository() *QRLoginRepository {
-	return &QRLoginRepository{}
+func NewQRLoginRepository(pool *pgxpool.Pool) *QRLoginRepository {
+	return &QRLoginRepository{pool: pool}
 }
 
 // ====================  查询方法 ====================
@@ -81,12 +82,12 @@ func (r *QRLoginRepository) FindByToken(ctx context.Context, token string) (*QRL
 		return nil, errors.New("empty token")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return nil, errors.New("database not ready")
 	}
 
 	qrToken := &QRLoginToken{}
-	err := pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		SELECT token, status, user_uid, pc_ip, pc_user_agent, pc_session_token,
 		       created_at, scanned_at, confirmed_at, expire_time
 		FROM qr_login_tokens WHERE token = $1
@@ -119,11 +120,11 @@ func (r *QRLoginRepository) Create(ctx context.Context, qrToken *QRLoginToken) e
 		return errors.New("empty token")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO qr_login_tokens (token, status, pc_ip, pc_user_agent, created_at, expire_time)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, qrToken.Token, qrToken.Status, qrToken.PcIP, qrToken.PcUserAgent, qrToken.CreatedAt, qrToken.ExpireTime)
@@ -150,19 +151,19 @@ func (r *QRLoginRepository) UpdateStatus(ctx context.Context, token, status stri
 		return errors.New("empty token or status")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
 	var err error
 	if scannedAt != nil {
-		_, err = pool.Exec(ctx, `
+		_, err = r.pool.Exec(ctx, `
 			UPDATE qr_login_tokens 
 			SET status = $1, scanned_at = $2 
 			WHERE token = $3
 		`, status, *scannedAt, token)
 	} else {
-		_, err = pool.Exec(ctx, `
+		_, err = r.pool.Exec(ctx, `
 			UPDATE qr_login_tokens 
 			SET status = $1 
 			WHERE token = $2
@@ -193,7 +194,7 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 		return false, errors.New("invalid parameters")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return false, errors.New("database not ready")
 	}
 
@@ -201,13 +202,13 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 	var err error
 
 	if scannedAt != nil {
-		commandTag, err = pool.Exec(ctx, `
+		commandTag, err = r.pool.Exec(ctx, `
 			UPDATE qr_login_tokens 
 			SET status = $1, scanned_at = $2 
 			WHERE token = $3 AND status = $4
 		`, toStatus, *scannedAt, token, fromStatus)
 	} else {
-		commandTag, err = pool.Exec(ctx, `
+		commandTag, err = r.pool.Exec(ctx, `
 			UPDATE qr_login_tokens 
 			SET status = $1 
 			WHERE token = $2 AND status = $3
@@ -242,11 +243,11 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, user
 		return errors.New("invalid parameters")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		UPDATE qr_login_tokens 
 		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
 		WHERE token = $5
@@ -275,11 +276,11 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 		return false, errors.New("invalid parameters")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return false, errors.New("database not ready")
 	}
 
-	commandTag, err := pool.Exec(ctx, `
+	commandTag, err := r.pool.Exec(ctx, `
 		UPDATE qr_login_tokens 
 		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
 		WHERE token = $5 AND status = $6
@@ -311,11 +312,11 @@ func (r *QRLoginRepository) Delete(ctx context.Context, token string) error {
 		return errors.New("empty token")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	result, err := pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
+	result, err := r.pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token = $1", token)
 	if err != nil {
 		return utils.LogError("QRLOGIN", "Delete", err, fmt.Sprintf("token=%s", token[:8]+"..."))
 	}
@@ -344,11 +345,11 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcS
 		return "", errors.New("invalid parameters")
 	}
 
-	if pool == nil {
+	if r.pool == nil {
 		return "", errors.New("database not ready")
 	}
 
-	tx, err := pool.Begin(ctx)
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return "", utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to begin transaction")
 	}

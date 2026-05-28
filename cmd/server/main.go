@@ -43,6 +43,7 @@ import (
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ====================  常量定义 ====================
@@ -84,11 +85,12 @@ func run() error {
 
 	gin.SetMode(gin.ReleaseMode)
 
-	if err := initDatabase(cfg); err != nil {
+	pool, err := initDatabase(cfg)
+	if err != nil {
 		return fmt.Errorf("database init failed: %w", err)
 	}
 
-	svcs, err := initServices(cfg)
+	svcs, err := initServices(cfg, pool)
 	if err != nil {
 		return fmt.Errorf("services init failed: %w", err)
 	}
@@ -131,21 +133,23 @@ func loadConfig() (*config.Config, error) {
 }
 
 // initDatabase 初始化数据库连接
-func initDatabase(cfg *config.Config) error {
+func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	utils.LogInfo("DATABASE", "Initializing database connection...")
 
-	if err := models.InitDB(cfg); err != nil {
-		return utils.LogError("DATABASE", "initDatabase", err)
+	pool, err := models.InitDB(cfg)
+	if err != nil {
+		return nil, utils.LogError("DATABASE", "initDatabase", err)
 	}
 
 	utils.LogInfo("DATABASE", "Database connection established")
-	return nil
+	return pool, nil
 }
 
 // ====================  服务容器 ====================
 
 // Services 服务容器，持有所有服务实例
 type Services struct {
+	pool               *pgxpool.Pool
 	userRepo           models.UserStore
 	userLogRepo        models.UserLogStore
 	qrLoginRepo        models.QRLoginStore
@@ -167,43 +171,43 @@ type Services struct {
 }
 
 // initServices 初始化所有服务
-func initServices(cfg *config.Config) (*Services, error) {
+func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	utils.LogInfo("SERVICES", "Initializing services...")
 
-	svcs := &Services{}
+	svcs := &Services{pool: pool}
 	var err error
 
-	svcs.userRepo = models.NewUserRepository()
+	svcs.userRepo = models.NewUserRepository(pool)
 	if svcs.userRepo == nil {
 		return nil, fmt.Errorf("failed to create UserRepository")
 	}
 	utils.LogInfo("SERVICES", "UserRepository initialized")
 
-	svcs.userLogRepo = models.NewUserLogRepository()
+	svcs.userLogRepo = models.NewUserLogRepository(pool)
 	if svcs.userLogRepo == nil {
 		return nil, fmt.Errorf("failed to create UserLogRepository")
 	}
 	utils.LogInfo("SERVICES", "UserLogRepository initialized")
 
-	svcs.qrLoginRepo = models.NewQRLoginRepository()
+	svcs.qrLoginRepo = models.NewQRLoginRepository(pool)
 	if svcs.qrLoginRepo == nil {
 		return nil, fmt.Errorf("failed to create QRLoginRepository")
 	}
 	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
 
-	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository()
+	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
 	if svcs.emailWhitelistRepo == nil {
 		return nil, fmt.Errorf("failed to create EmailWhitelistRepository")
 	}
 	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
 
-	svcs.adminLogRepo = models.NewAdminLogRepository()
+	svcs.adminLogRepo = models.NewAdminLogRepository(pool)
 	if svcs.adminLogRepo == nil {
 		return nil, fmt.Errorf("failed to create AdminLogRepository")
 	}
 	utils.LogInfo("SERVICES", "AdminLogRepository initialized")
 
-	svcs.tokenService = services.NewTokenService()
+	svcs.tokenService = services.NewTokenService(pool)
 	if svcs.tokenService == nil {
 		return nil, fmt.Errorf("failed to create TokenService")
 	}
@@ -227,7 +231,7 @@ func initServices(cfg *config.Config) (*Services, error) {
 	}
 	utils.LogInfo("SERVICES", "WebSocketService initialized")
 
-	svcs.oauthService = services.NewOAuthService()
+	svcs.oauthService = services.NewOAuthService(pool)
 	if svcs.oauthService == nil {
 		return nil, fmt.Errorf("failed to create OAuthService")
 	}
@@ -344,6 +348,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 
 	hdlrs.staticHandler, err = handlers.NewStaticHandler(
 		cfg, svcs.userCache, svcs.wsService, svcs.captchaService,
+		svcs.pool,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("StaticHandler: %w", err)
@@ -353,7 +358,7 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	hdlrs.adminHandler, err = admin.NewAdminHandler(
 		svcs.userRepo, svcs.userCache, svcs.adminLogRepo,
 		svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo,
-		svcs.exportService, cfg.DataExportSalt,
+		svcs.exportService, cfg.DataExportSalt, svcs.pool,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AdminHandler: %w", err)
@@ -443,7 +448,7 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 	}
 
 	utils.LogInfo("SERVER", "Closing database connections...")
-	models.CloseDB()
+	models.CloseDB(svcs.pool)
 	utils.LogInfo("SERVER", "Database connections closed")
 
 	utils.SyncLogger()
