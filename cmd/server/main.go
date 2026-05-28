@@ -142,8 +142,6 @@ func initDatabase(cfg *config.Config) error {
 	return nil
 }
 
-// ====================  初始化辅助 ====================
-
 // ====================  服务容器 ====================
 
 // Services 服务容器，持有所有服务实例
@@ -210,9 +208,9 @@ func initServices(cfg *config.Config) (*Services, error) {
 	}
 	utils.LogInfo("SERVICES", "TokenService initialized")
 
-	svcs.sessionService = services.NewSessionService(cfg)
-	if svcs.sessionService == nil {
-		return nil, fmt.Errorf("failed to create SessionService")
+	svcs.sessionService, err = services.NewSessionService(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SessionService: %w", err)
 	}
 	utils.LogInfo("SERVICES", "SessionService initialized")
 
