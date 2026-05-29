@@ -296,30 +296,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	existingByEmail, err := h.userRepo.FindByEmail(ctx, emailResult.Value)
-	if err != nil {
-		if !utils.IsDatabaseNotFound(err) {
-			utils.HTTPDatabaseError(c, "AUTH", err)
-			return
-		}
-	}
-	if existingByEmail != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
-		return
-	}
-
-	existingByUsername, err := h.userRepo.FindByUsername(ctx, usernameResult.Value)
-	if err != nil {
-		if !utils.IsDatabaseNotFound(err) {
-			utils.HTTPDatabaseError(c, "AUTH", err)
-			return
-		}
-	}
-	if existingByUsername != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
-		return
-	}
-
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", "Password hashing failed")
@@ -333,6 +309,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.userRepo.Create(ctx, user); err != nil {
+		if errors.Is(err, models.ErrEmailExists) {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
+			return
+		}
+		if errors.Is(err, models.ErrUsernameExists) {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
+			return
+		}
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", fmt.Sprintf("User creation failed: username=%s, email=%s", usernameResult.Value, emailResult.Value))
 		return
 	}
