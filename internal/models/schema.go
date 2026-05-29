@@ -1,27 +1,29 @@
 /**
  * internal/models/schema.go
- * 数据库 Schema 定义和自动迁移
+ * 数据库 Schema 定义和迁移
  *
  * 功能：
  * - 定义所有表的完整 Schema（包括约束）
- * - 自动创建表（使用 CREATE TABLE IF NOT EXISTS）
- * - 自动检查表结构差异
- * - 自动添加缺失的列
- * - 安全的数据库迁移（无破坏性操作）
+ * - 使用 golang-migrate 进行版本化数据库迁移
  *
  * 依赖：
- * - PostgreSQL 数据库连接池
+ * - github.com/golang-migrate/migrate/v4: 迁移引擎
+ * - github.com/jackc/pgx/v5: PostgreSQL 驱动
  */
 
 package models
 
 import (
 	"auth-system/internal/utils"
-	"context"
 	"fmt"
 	"strings"
+	"testing/fstest"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // ====================  Schema 定义 ====================
@@ -229,32 +231,41 @@ func getTableSchemas() []TableSchema {
 	}
 }
 
-// ====================  表创建函数 ====================
-
-// CreateTablesFromSchema 从 Schema 创建所有表
-// 使用 CREATE TABLE IF NOT EXISTS，不影响已存在的表
-func CreateTablesFromSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	if pool == nil {
-		return ErrDBNotInitialized
+// getIndexDefinitions 获取所有索引定义
+func getIndexDefinitions() []struct {
+	Name string
+	SQL  string
+} {
+	return []struct {
+		Name string
+		SQL  string
+	}{
+		{"idx_users_email", "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"},
+		{"idx_users_username", "CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))"},
+		{"idx_users_microsoft_id", "CREATE INDEX IF NOT EXISTS idx_users_microsoft_id ON users(microsoft_id)"},
+		{"idx_tokens_email_type", "CREATE INDEX IF NOT EXISTS idx_tokens_email_type ON tokens(email, type)"},
+		{"idx_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_tokens_expire ON tokens(expire_time)"},
+		{"idx_codes_email_type", "CREATE INDEX IF NOT EXISTS idx_codes_email_type ON codes(email, type)"},
+		{"idx_codes_expire", "CREATE INDEX IF NOT EXISTS idx_codes_expire ON codes(expire_time)"},
+		{"idx_qr_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_qr_tokens_expire ON qr_login_tokens(expire_time)"},
+		{"idx_admin_logs_admin_uid", "CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_uid ON admin_logs(admin_uid)"},
+		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
+		{"idx_user_logs_user_uid", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_uid ON user_logs(user_uid)"},
+		{"idx_user_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at DESC)"},
+		{"idx_oauth_clients_client_id", "CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id ON oauth_clients(client_id)"},
+		{"idx_oauth_auth_codes_code", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_code ON oauth_auth_codes(code)"},
+		{"idx_oauth_auth_codes_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_expires ON oauth_auth_codes(expires_at)"},
+		{"idx_oauth_access_tokens_hash", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_hash ON oauth_access_tokens(token_hash)"},
+		{"idx_oauth_access_tokens_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_user_uid ON oauth_access_tokens(user_uid)"},
+		{"idx_oauth_access_tokens_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_expires ON oauth_access_tokens(expires_at)"},
+		{"idx_oauth_refresh_tokens_hash", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_hash ON oauth_refresh_tokens(token_hash)"},
+		{"idx_oauth_refresh_tokens_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_uid ON oauth_refresh_tokens(user_uid)"},
+		{"idx_oauth_refresh_tokens_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at)"},
+		{"idx_oauth_grants_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_grants_user_uid ON oauth_grants(user_uid)"},
 	}
-
-	schemas := getTableSchemas()
-	createdCount := 0
-
-	for _, schema := range schemas {
-		sql := buildCreateTableSQL(schema)
-		_, err := pool.Exec(ctx, sql)
-		if err != nil {
-			utils.LogError("DATABASE", "CreateTablesFromSchema", err, fmt.Sprintf("Failed to create table: %s", schema.Name))
-			return fmt.Errorf("create table %s: %w", schema.Name, err)
-		}
-		createdCount++
-		utils.LogInfo("DATABASE", fmt.Sprintf("Table ready: %s", schema.Name))
-	}
-
-	utils.LogInfo("DATABASE", fmt.Sprintf("All tables created/verified: %d", createdCount))
-	return nil
 }
+
+// ====================  SQL 构建 ====================
 
 // buildCreateTableSQL 构建 CREATE TABLE 语句
 func buildCreateTableSQL(schema TableSchema) string {
@@ -310,109 +321,67 @@ func buildCreateTableSQL(schema TableSchema) string {
 	return strings.Join(lines, "\n")
 }
 
-// ====================  自动迁移函数 ====================
+// buildFullMigrationSQL 构建完整的迁移 SQL（表 + 索引）
+func buildFullMigrationSQL() string {
+	var sb strings.Builder
 
-// AutoMigrate 执行自动迁移
-// 检查表结构，自动添加缺失的列
-func AutoMigrate(ctx context.Context, pool *pgxpool.Pool) error {
+	sb.WriteString("-- Initialize database schema\n")
+	sb.WriteString("-- Version 1: Create all tables and indexes\n\n")
+
+	// 创建所有表
+	for _, schema := range getTableSchemas() {
+		sb.WriteString(buildCreateTableSQL(schema))
+		sb.WriteString(";\n\n")
+	}
+
+	// 创建所有索引
+	for _, idx := range getIndexDefinitions() {
+		sb.WriteString(idx.SQL)
+		sb.WriteString(";\n")
+	}
+
+	return sb.String()
+}
+
+// RunMigrations 使用 golang-migrate 执行数据库迁移
+func RunMigrations(pool *pgxpool.Pool) error {
 	if pool == nil {
 		return ErrDBNotInitialized
 	}
 
-	schemas := getTableSchemas()
-	totalAdded := 0
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer sqlDB.Close()
 
-	for _, schema := range schemas {
-		added, err := migrateTable(ctx, pool, schema)
-		if err != nil {
-			utils.LogError("DATABASE", "AutoMigrate", err, fmt.Sprintf("Failed to migrate table: %s", schema.Name))
-			return fmt.Errorf("migrate table %s: %w", schema.Name, err)
-		}
-		totalAdded += added
+	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
+	if err != nil {
+		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create postgres driver")
+		return fmt.Errorf("create postgres driver: %w", err)
 	}
 
-	if totalAdded > 0 {
-		utils.LogInfo("DATABASE", fmt.Sprintf("Auto-migration completed: %d columns added", totalAdded))
-	} else {
-		utils.LogInfo("DATABASE", "Auto-migration completed: no changes needed")
+	migrationSQL := buildFullMigrationSQL()
+	mapFS := fstest.MapFS{
+		"1_initial_schema.up.sql": {
+			Data: []byte(migrationSQL),
+		},
+	}
+	source, err := iofs.New(mapFS, ".")
+	if err != nil {
+		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create migration source")
+		return fmt.Errorf("create migration source: %w", err)
 	}
 
+	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
+	if err != nil {
+		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create migrator")
+		return fmt.Errorf("create migrator: %w", err)
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		utils.LogError("DATABASE", "RunMigrations", err, "Migration failed")
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	utils.LogInfo("DATABASE", "Migrations completed successfully")
 	return nil
-}
-
-// migrateTable 迁移单个表
-func migrateTable(ctx context.Context, pool *pgxpool.Pool, schema TableSchema) (int, error) {
-	existingColumns, err := getExistingColumns(ctx, pool, schema.Name)
-	if err != nil {
-		return 0, err
-	}
-
-	addedCount := 0
-
-	// 检查每个定义的列
-	for _, col := range schema.Columns {
-		if !columnExists(existingColumns, col.Name) {
-			if err := addColumn(ctx, pool, schema.Name, col); err != nil {
-				return addedCount, err
-			}
-			addedCount++
-			utils.LogInfo("DATABASE", fmt.Sprintf("Added column: %s.%s", schema.Name, col.Name))
-		}
-	}
-
-	return addedCount, nil
-}
-
-// getExistingColumns 获取表的现有列
-func getExistingColumns(ctx context.Context, pool *pgxpool.Pool, tableName string) ([]string, error) {
-	rows, err := pool.Query(ctx, `
-		SELECT column_name 
-		FROM information_schema.columns 
-		WHERE table_name = $1
-		ORDER BY ordinal_position
-	`, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var columns []string
-	for rows.Next() {
-		var colName string
-		if err := rows.Scan(&colName); err != nil {
-			return nil, err
-		}
-		columns = append(columns, colName)
-	}
-
-	return columns, nil
-}
-
-// columnExists 检查列是否存在
-func columnExists(existingColumns []string, columnName string) bool {
-	for _, col := range existingColumns {
-		if strings.EqualFold(col, columnName) {
-			return true
-		}
-	}
-	return false
-}
-
-// addColumn 添加列
-func addColumn(ctx context.Context, pool *pgxpool.Pool, tableName string, col ColumnDefinition) error {
-	// 构建 ALTER TABLE 语句
-	sql := fmt.Sprintf(`ALTER TABLE "%s" ADD COLUMN "%s" %s`, tableName, col.Name, col.Type)
-
-	// 添加 NULL 约束
-	if !col.Nullable {
-		sql += " NOT NULL"
-	}
-
-	// 添加默认值
-	if col.Default != "" {
-		sql += fmt.Sprintf(" DEFAULT %s", col.Default)
-	}
-
-	_, err := pool.Exec(ctx, sql)
-	return err
 }
