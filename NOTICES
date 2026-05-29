@@ -8,43 +8,43 @@ Their respective licenses are listed below.
 License: Apache-2.0
 ------------------------------------------------------------
   github.com/aws/aws-sdk-go-v2
-    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.7/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.8/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream
     https://github.com/aws/aws-sdk-go-v2/blob/aws/protocol/eventstream/v1.7.10/aws/protocol/eventstream/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/config
-    https://github.com/aws/aws-sdk-go-v2/blob/config/v1.32.17/config/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/config/v1.32.19/config/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/credentials
-    https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.16/credentials/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.18/credentials/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/feature/ec2/imds
-    https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.18.23/feature/ec2/imds/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.18.24/feature/ec2/imds/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/configsources
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.4.23/internal/configsources/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.4.24/internal/configsources/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.7.23/internal/endpoints/v2/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.7.24/internal/endpoints/v2/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/ini
     https://github.com/aws/aws-sdk-go-v2/blob/internal/ini/v1.8.6/internal/ini/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/v4a
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.4.24/internal/v4a/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.4.25/internal/v4a/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
     https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.9/service/internal/accept-encoding/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/checksum
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.15/service/internal/checksum/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.17/service/internal/checksum/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.13.23/service/internal/presigned-url/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.13.24/service/internal/presigned-url/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/s3shared
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/s3shared/v1.19.23/service/internal/s3shared/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/s3shared/v1.19.24/service/internal/s3shared/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/s3
-    https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.101.0/service/s3/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.102.1/service/s3/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/signin
-    https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.0.11/service/signin/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.1.0/service/signin/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/sso
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.30.17/service/sso/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.30.18/service/sso/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/ssooidc
-    https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.35.21/service/ssooidc/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.36.1/service/ssooidc/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/sts
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.42.1/service/sts/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.42.2/service/sts/LICENSE.txt
   github.com/aws/smithy-go
-    https://github.com/aws/smithy-go/blob/v1.25.1/LICENSE
+    https://github.com/aws/smithy-go/blob/v1.26.0/LICENSE
   go.mongodb.org/mongo-driver/v2
     https://github.com/mongodb/mongo-go-driver/blob/v2.6.0/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
@@ -72,17 +72,17 @@ License: BSD-2-Clause
 License: BSD-3-Clause
 ------------------------------------------------------------
   github.com/aws/aws-sdk-go-v2/internal/sync/singleflight
-    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.4/internal\sync\singleflight\LICENSE
+    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.4/internal/sync/singleflight/LICENSE
   github.com/aws/smithy-go/internal/sync/singleflight
-    https://github.com/aws/smithy-go/blob/v1.24.2/internal\sync\singleflight\LICENSE
+    https://github.com/aws/smithy-go/blob/v1.24.2/internal/sync/singleflight/LICENSE
   github.com/hashicorp/golang-lru/v2/simplelru
-    https://github.com/hashicorp/golang-lru/blob/v2.0.7/simplelru\LICENSE_list
+    https://github.com/hashicorp/golang-lru/blob/v2.0.7/simplelru/LICENSE_list
   github.com/wneessen/go-mail/smtp
-    https://github.com/wneessen/go-mail/blob/v0.7.2/smtp\LICENSE
+    https://github.com/wneessen/go-mail/blob/v0.7.3/smtp/LICENSE
   golang.org/x/crypto
     https://cs.opensource.google/go/x/crypto/+/v0.50.0:LICENSE
   golang.org/x/net
-    https://cs.opensource.google/go/x/net/+/v0.53.0:LICENSE
+    https://cs.opensource.google/go/x/net/+/v0.55.0:LICENSE
   golang.org/x/sync
     https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
   golang.org/x/sys
@@ -106,7 +106,7 @@ License: MIT
   github.com/evanw/esbuild
     https://github.com/evanw/esbuild/blob/v0.28.0/LICENSE.md
   github.com/evanw/esbuild/internal/xxhash
-    https://github.com/evanw/esbuild/blob/v0.27.4/internal\xxhash\LICENSE.txt
+    https://github.com/evanw/esbuild/blob/v0.27.4/internal/xxhash/LICENSE.txt
   github.com/gabriel-vasile/mimetype
     https://github.com/gabriel-vasile/mimetype/blob/v1.4.13/LICENSE
   github.com/gin-contrib/sse
@@ -142,7 +142,7 @@ License: MIT
   github.com/quic-go/qpack
     https://github.com/quic-go/qpack/blob/v0.6.0/LICENSE.md
   github.com/quic-go/quic-go
-    https://github.com/quic-go/quic-go/blob/v0.59.0/LICENSE
+    https://github.com/quic-go/quic-go/blob/v0.59.1/LICENSE
   github.com/ugorji/go/codec
     https://github.com/ugorji/go/blob/codec/v1.3.1/codec/LICENSE
   github.com/wneessen/go-mail
@@ -166,7 +166,7 @@ License: MIT
   github.com/golang-migrate/migrate/v4
    https://github.com/golang-migrate/migrate/blob/v4.19.1/LICENSE
   github.com/lib/pq
-   https://github.com/lib/pq/blob/v1.10.9/LICENSE.md
+   https://github.com/lib/pq/blob/v1.12.3/LICENSE
 
 ------------------------------------------------------------
 License: MPL-2.0
