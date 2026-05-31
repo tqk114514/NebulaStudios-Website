@@ -162,7 +162,7 @@ License: MIT
   github.com/klauspost/cpuid/v2
     https://github.com/klauspost/cpuid/blob/v2.3.0/LICENSE
   github.com/paulmillr/qr(MIT OR Apache-2.0)
-    https://github.com/paulmillr/qr/blob/0.5.5/LICENSE-MIT
+    https://github.com/paulmillr/qr/blob/0.6.0/LICENSE-MIT
   github.com/golang-migrate/migrate/v4
    https://github.com/golang-migrate/migrate/blob/v4.19.1/LICENSE
   github.com/lib/pq
