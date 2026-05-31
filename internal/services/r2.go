@@ -33,8 +33,7 @@ type R2Service struct {
 }
 
 // NewR2Service 创建 R2 服务实例
-func NewR2Service() (*R2Service, error) {
-	cfg := config.Get()
+func NewR2Service(cfg *config.Config) (*R2Service, error) {
 
 	if cfg.R2Endpoint == "" || cfg.R2AccessKey == "" || cfg.R2SecretKey == "" || cfg.R2Bucket == "" {
 		utils.LogWarn("R2", "R2 not configured, avatar upload will be disabled", "")

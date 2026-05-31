@@ -48,15 +48,16 @@ const (
 // MicrosoftHandler Microsoft OAuth Handler
 // 处理 Microsoft OAuth 相关的 HTTP 请求
 type MicrosoftHandler struct {
-	userRepo       models.UserStore        // 用户数据仓库
-	userLogRepo    models.UserLogStore     // 用户日志仓库
-	sessionService services.SessionManager // Session 服务
-	userCache      services.UserCacheStore // 用户缓存
-	r2Service      services.StorageService // R2 存储服务
-	clientID       string                  // Microsoft 应用 ID
-	clientSecret   string                  // Microsoft 应用密钥
-	redirectURI    string                  // OAuth 回调地址
-	baseURL        string                  // 基础 URL
+	userRepo         models.UserStore
+	userLogRepo      models.UserLogStore
+	sessionService   services.SessionManager
+	userCache        services.UserCacheStore
+	r2Service        services.StorageService
+	clientID         string
+	clientSecret     string
+	redirectURI      string
+	baseURL          string
+	defaultAvatarURL string
 }
 
 // ====================  构造函数 ====================
@@ -74,6 +75,7 @@ type MicrosoftHandler struct {
 //   - *MicrosoftHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewMicrosoftHandler(
+	cfg *config.Config,
 	userRepo models.UserStore,
 	userLogRepo models.UserLogStore,
 	sessionService services.SessionManager,
@@ -90,7 +92,6 @@ func NewMicrosoftHandler(
 		return nil, fmt.Errorf("userCache is required")
 	}
 
-	cfg := config.Get()
 	baseURL := cfg.BaseURL
 	clientID := cfg.MicrosoftClientID
 	clientSecret := cfg.MicrosoftClientSecret
@@ -105,15 +106,16 @@ func NewMicrosoftHandler(
 		baseURL, clientID != "" && clientSecret != ""))
 
 	return &MicrosoftHandler{
-		userRepo:       userRepo,
-		userLogRepo:    userLogRepo,
-		sessionService: sessionService,
-		userCache:      userCache,
-		r2Service:      r2Service,
-		clientID:       clientID,
-		clientSecret:   clientSecret,
-		redirectURI:    redirectURI,
-		baseURL:        baseURL,
+		userRepo:         userRepo,
+		userLogRepo:      userLogRepo,
+		sessionService:   sessionService,
+		userCache:        userCache,
+		r2Service:        r2Service,
+		clientID:         clientID,
+		clientSecret:     clientSecret,
+		redirectURI:      redirectURI,
+		baseURL:          baseURL,
+		defaultAvatarURL: cfg.DefaultAvatarURL,
 	}, nil
 }
 
@@ -421,7 +423,7 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	}
 
 	if user.AvatarURL == "microsoft" {
-		updateFields["avatar_url"] = config.Get().DefaultAvatarURL
+		updateFields["avatar_url"] = h.defaultAvatarURL
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("User was using Microsoft avatar, resetting to default: userUID=%s", userUID))
 	}
 

@@ -103,10 +103,6 @@ type Config struct {
 	ImageProcessorSocket string // 图片处理器的 Unix Socket 路径
 }
 
-// ====================  全局配置实例 ====================
-
-var cfg *Config // 全局配置实例
-
 // ====================  配置加载 ====================
 
 // Load 加载配置
@@ -115,10 +111,6 @@ var cfg *Config // 全局配置实例
 //   - *Config: 配置实例
 //   - error: 加载错误
 func Load() (*Config, error) {
-	if cfg != nil {
-		return cfg, nil
-	}
-
 	// 加载 .env 文件（优先从 /var/www/.env 加载，其次当前目录）
 	envPaths := []string{"/var/www/.env", ".env"}
 	envLoaded := false
@@ -208,27 +200,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	// 保存配置
-	cfg = newCfg
-
 	// 记录配置加载成功（不记录敏感信息）
 	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s, db_max_conns=%d",
 		newCfg.Port, newCfg.DBMaxConns))
 
-	return cfg, nil
-}
-
-// ====================  配置访问 ====================
-
-// Get 获取全局配置实例
-//
-// 返回：
-//   - *Config: 配置实例（永不为 nil）
-func Get() *Config {
-	if cfg == nil {
-		panic("config not loaded")
-	}
-	return cfg
+	return newCfg, nil
 }
 
 // ====================  配置验证 ====================

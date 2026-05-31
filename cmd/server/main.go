@@ -90,7 +90,7 @@ func run() error {
 		return fmt.Errorf("database init failed: %w", err)
 	}
 
-	repos := initRepos(pool)
+	repos := initRepos(cfg, pool)
 
 	svcs, err := initServices(cfg, pool)
 	if err != nil {
@@ -176,10 +176,10 @@ type Services struct {
 }
 
 // initRepos 初始化数据访问层
-func initRepos(pool *pgxpool.Pool) *Repos {
+func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	repos := &Repos{Pool: pool}
 
-	repos.UserRepo = models.NewUserRepository(pool)
+	repos.UserRepo = models.NewUserRepository(pool, cfg.DefaultAvatarURL)
 	repos.UserLogRepo = models.NewUserLogRepository(pool)
 	repos.QRLoginRepo = models.NewQRLoginRepository(pool)
 	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
@@ -198,7 +198,7 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 
 	svcs.TokenService = services.NewTokenService(pool)
 	svcs.CaptchaService = services.NewCaptchaService(cfg)
-	svcs.WSService = services.NewWebSocketService()
+	svcs.WSService = services.NewWebSocketService(cfg)
 	svcs.OAuthService = services.NewOAuthService(pool)
 	svcs.ExportService = services.NewExportService()
 	svcs.LimiterMgr = middleware.NewRateLimiterManager()
@@ -230,7 +230,7 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 		}
 	}
 
-	svcs.R2Service, err = services.NewR2Service()
+	svcs.R2Service, err = services.NewR2Service(cfg)
 	if err != nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service unavailable: %v", err))
 	} else if svcs.R2Service != nil {
@@ -263,7 +263,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	var err error
 
 	hdlrs.authHandler, err = auth.NewAuthHandler(
-		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
+		cfg, repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
 		svcs.SessionService, svcs.EmailService, svcs.CaptchaService,
 		svcs.UserCache, repos.EmailWhitelistRepo, svcs.LimiterMgr,
 	)
@@ -284,7 +284,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	utils.LogInfo("HANDLERS", "UserHandler initialized")
 
 	hdlrs.microsoftHandler, err = msauth.NewMicrosoftHandler(
-		repos.UserRepo, repos.UserLogRepo, svcs.SessionService,
+		cfg, repos.UserRepo, repos.UserLogRepo, svcs.SessionService,
 		svcs.UserCache, svcs.R2Service,
 	)
 	if err != nil {

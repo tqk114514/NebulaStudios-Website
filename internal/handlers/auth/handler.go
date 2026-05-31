@@ -96,6 +96,7 @@ type AuthHandler struct {
 //   - *AuthHandler: Handler 实例
 //   - error: 错误信息（参数为 nil 时返回错误）
 func NewAuthHandler(
+	cfg *config.Config,
 	userRepo models.UserStore,
 	userLogRepo models.UserLogStore,
 	tokenService services.TokenManager,
@@ -125,7 +126,7 @@ func NewAuthHandler(
 		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userCache is required"))
 	}
 
-	baseURL := config.Get().BaseURL
+	baseURL := cfg.BaseURL
 
 	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s, whitelistEnabled=%v", baseURL, emailWhitelistRepo != nil))
 
