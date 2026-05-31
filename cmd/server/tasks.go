@@ -32,16 +32,16 @@ import (
 // ====================  后台任务 ====================
 
 // startBackgroundTasks 启动后台任务
-func startBackgroundTasks(_ *Handlers, svcs *Services) {
+func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	utils.LogInfo("TASKS", "Starting background tasks...")
 
 	oauth.StartCleanup()
 	utils.LogInfo("TASKS", "OAuth cleanup task started")
 
-	go runTokenCleanup(svcs.tokenService)
+	go runTokenCleanup(svcs.TokenService)
 	utils.LogInfo("TASKS", fmt.Sprintf("Token cleanup task started: interval=%v", tokenCleanupInterval))
 
-	go runUserLogCleanup(svcs.userLogRepo)
+	go runUserLogCleanup(repos.UserLogRepo)
 	utils.LogInfo("TASKS", "User log cleanup task started: interval=24h, retention=6 months")
 
 	utils.LogInfo("TASKS", "All background tasks started")
