@@ -57,14 +57,14 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 // ====================  中间件配置 ====================
 
 // setupMiddleware 配置中间件
-func setupMiddleware(r *gin.Engine, _ *config.Config) {
+func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 	r.Use(gin.Recovery())
 
 	r.Use(middleware.BodySizeLimit(defaultMaxBodySize))
 
 	r.Use(loggerMiddleware())
 
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg))
 
 	r.Use(middleware.SecurityHeaders())
 

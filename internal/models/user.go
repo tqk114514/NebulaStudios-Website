@@ -15,7 +15,6 @@
 package models
 
 import (
-	"auth-system/internal/config"
 	"auth-system/internal/utils"
 	"context"
 	"database/sql"
@@ -124,7 +123,8 @@ const userColumns = `id, uid, username, email, password, avatar_url, role,
 
 // UserRepository 用户仓库
 type UserRepository struct {
-	pool *pgxpool.Pool
+	pool             *pgxpool.Pool
+	defaultAvatarURL string
 }
 
 // ====================  User 方法 ====================
@@ -230,8 +230,8 @@ func (u *User) Validate() error {
 // NewUserRepository 创建用户仓库
 // 返回：
 //   - *UserRepository: 用户仓库实例
-func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
-	return &UserRepository{pool: pool}
+func NewUserRepository(pool *pgxpool.Pool, defaultAvatarURL string) *UserRepository {
+	return &UserRepository{pool: pool, defaultAvatarURL: defaultAvatarURL}
 }
 
 // ====================  查询方法 ====================
@@ -468,7 +468,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 
 	// 设置默认头像
 	if user.AvatarURL == "" {
-		user.AvatarURL = config.Get().DefaultAvatarURL
+		user.AvatarURL = r.defaultAvatarURL
 	}
 
 	// 设置默认角色（普通用户）
