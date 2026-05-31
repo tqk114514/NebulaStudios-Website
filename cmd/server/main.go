@@ -90,24 +90,26 @@ func run() error {
 		return fmt.Errorf("database init failed: %w", err)
 	}
 
+	repos := initRepos(pool)
+
 	svcs, err := initServices(cfg, pool)
 	if err != nil {
 		return fmt.Errorf("services init failed: %w", err)
 	}
 
-	hdlrs, err := initHandlers(cfg, svcs)
+	hdlrs, err := initHandlers(cfg, repos, svcs)
 	if err != nil {
 		return fmt.Errorf("handlers init failed: %w", err)
 	}
 
-	startBackgroundTasks(hdlrs, svcs)
+	startBackgroundTasks(hdlrs, repos, svcs)
 
-	router := setupRouter(cfg, hdlrs, svcs)
+	router := setupRouter(cfg, hdlrs, repos, svcs)
 
 	srv := createServer(cfg.Port, router)
 	startServer(srv)
 
-	gracefulShutdown(srv, svcs)
+	gracefulShutdown(srv, repos, svcs)
 
 	return nil
 }
@@ -145,139 +147,98 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// ====================  服务容器 ====================
+// ====================  依赖容器 ====================
 
-// Services 服务容器，持有所有服务实例
-type Services struct {
-	pool               *pgxpool.Pool
-	userRepo           models.UserStore
-	userLogRepo        models.UserLogStore
-	qrLoginRepo        models.QRLoginStore
-	adminLogRepo       models.AdminLogStore
-	tokenService       services.TokenManager
-	sessionService     services.SessionManager
-	captchaService     services.CaptchaVerifier
-	wsService          services.WebSocketManager
-	emailService       services.EmailSender
-	userCache          services.UserCacheStore
-	r2Service          services.StorageService
-	imgProcessor       services.ImageProcessor
-	oauthService       services.OAuthClientManager
-	exportService      services.ExportManager
-	exportTokenService services.ExportTokenManager
-	emailWhitelistRepo models.EmailWhitelistStore
-	limiterMgr         middleware.RateLimiterManager
-	cfg                *config.Config
+// Repos 数据访问层容器
+type Repos struct {
+	Pool               *pgxpool.Pool
+	UserRepo           models.UserStore
+	UserLogRepo        models.UserLogStore
+	QRLoginRepo        models.QRLoginStore
+	AdminLogRepo       models.AdminLogStore
+	EmailWhitelistRepo models.EmailWhitelistStore
 }
 
-// initServices 初始化所有服务
+// Services 业务服务层容器
+type Services struct {
+	TokenService       services.TokenManager
+	SessionService     services.SessionManager
+	CaptchaService     services.CaptchaVerifier
+	WSService          services.WebSocketManager
+	EmailService       services.EmailSender
+	UserCache          services.UserCacheStore
+	R2Service          services.StorageService
+	ImgProcessor       services.ImageProcessor
+	OAuthService       services.OAuthClientManager
+	ExportService      services.ExportManager
+	ExportTokenService services.ExportTokenManager
+	LimiterMgr         middleware.RateLimiterManager
+}
+
+// initRepos 初始化数据访问层
+func initRepos(pool *pgxpool.Pool) *Repos {
+	repos := &Repos{Pool: pool}
+
+	repos.UserRepo = models.NewUserRepository(pool)
+	repos.UserLogRepo = models.NewUserLogRepository(pool)
+	repos.QRLoginRepo = models.NewQRLoginRepository(pool)
+	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
+	repos.AdminLogRepo = models.NewAdminLogRepository(pool)
+
+	utils.LogInfo("REPOS", "All repositories initialized")
+	return repos
+}
+
+// initServices 初始化业务服务层
 func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	utils.LogInfo("SERVICES", "Initializing services...")
 
-	svcs := &Services{pool: pool}
+	svcs := &Services{}
 	var err error
 
-	svcs.userRepo = models.NewUserRepository(pool)
-	if svcs.userRepo == nil {
-		return nil, fmt.Errorf("failed to create UserRepository")
-	}
-	utils.LogInfo("SERVICES", "UserRepository initialized")
+	svcs.TokenService = services.NewTokenService(pool)
+	svcs.CaptchaService = services.NewCaptchaService(cfg)
+	svcs.WSService = services.NewWebSocketService()
+	svcs.OAuthService = services.NewOAuthService(pool)
+	svcs.ExportService = services.NewExportService()
+	svcs.LimiterMgr = middleware.NewRateLimiterManager()
 
-	svcs.userLogRepo = models.NewUserLogRepository(pool)
-	if svcs.userLogRepo == nil {
-		return nil, fmt.Errorf("failed to create UserLogRepository")
-	}
-	utils.LogInfo("SERVICES", "UserLogRepository initialized")
-
-	svcs.qrLoginRepo = models.NewQRLoginRepository(pool)
-	if svcs.qrLoginRepo == nil {
-		return nil, fmt.Errorf("failed to create QRLoginRepository")
-	}
-	utils.LogInfo("SERVICES", "QRLoginRepository initialized")
-
-	svcs.emailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
-	if svcs.emailWhitelistRepo == nil {
-		return nil, fmt.Errorf("failed to create EmailWhitelistRepository")
-	}
-	utils.LogInfo("SERVICES", "EmailWhitelistRepository initialized")
-
-	svcs.adminLogRepo = models.NewAdminLogRepository(pool)
-	if svcs.adminLogRepo == nil {
-		return nil, fmt.Errorf("failed to create AdminLogRepository")
-	}
-	utils.LogInfo("SERVICES", "AdminLogRepository initialized")
-
-	svcs.tokenService = services.NewTokenService(pool)
-	if svcs.tokenService == nil {
-		return nil, fmt.Errorf("failed to create TokenService")
-	}
-	utils.LogInfo("SERVICES", "TokenService initialized")
-
-	svcs.sessionService, err = services.NewSessionService(cfg)
+	svcs.SessionService, err = services.NewSessionService(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SessionService: %w", err)
 	}
-	utils.LogInfo("SERVICES", "SessionService initialized")
 
-	svcs.captchaService = services.NewCaptchaService(cfg)
-	if svcs.captchaService == nil {
-		return nil, fmt.Errorf("failed to create CaptchaService")
-	}
-	utils.LogInfo("SERVICES", "CaptchaService initialized")
-
-	svcs.wsService = services.NewWebSocketService()
-	if svcs.wsService == nil {
-		return nil, fmt.Errorf("failed to create WebSocketService")
-	}
-	utils.LogInfo("SERVICES", "WebSocketService initialized")
-
-	svcs.oauthService = services.NewOAuthService(pool)
-	if svcs.oauthService == nil {
-		return nil, fmt.Errorf("failed to create OAuthService")
-	}
-	utils.LogInfo("SERVICES", "OAuthService initialized")
-
-	svcs.exportService = services.NewExportService()
-	if svcs.exportService == nil {
-		return nil, fmt.Errorf("failed to create ExportService")
-	}
-	utils.LogInfo("SERVICES", "ExportService initialized")
-
-	svcs.exportTokenService, err = services.NewExportTokenService()
+	svcs.ExportTokenService, err = services.NewExportTokenService()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ExportTokenService: %w", err)
 	}
-	utils.LogInfo("SERVICES", "ExportTokenService initialized")
 
-	svcs.userCache, err = cache.NewUserCache(userCacheMaxSize, userCacheTTL)
+	svcs.UserCache, err = cache.NewUserCache(userCacheMaxSize, userCacheTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UserCache: %w", err)
 	}
 	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
 
-	svcs.emailService, err = services.NewEmailService(cfg)
+	svcs.EmailService, err = services.NewEmailService(cfg)
 	if err != nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("Email service unavailable: %v", err))
-	} else if svcs.emailService != nil {
-		if err := svcs.emailService.VerifyConnection(); err != nil {
+	} else if svcs.EmailService != nil {
+		if err := svcs.EmailService.VerifyConnection(); err != nil {
 			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP verification failed: %v", err))
 		} else {
 			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
 		}
 	}
 
-	svcs.r2Service, err = services.NewR2Service()
+	svcs.R2Service, err = services.NewR2Service()
 	if err != nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service unavailable: %v", err))
-	} else if svcs.r2Service != nil {
+	} else if svcs.R2Service != nil {
+		svcs.ImgProcessor = svcs.R2Service.GetImgProcessor()
 		utils.LogInfo("SERVICES", "R2Service initialized")
-		svcs.imgProcessor = svcs.r2Service.GetImgProcessor()
 	}
 
-	svcs.limiterMgr = middleware.NewRateLimiterManager()
-	utils.LogInfo("SERVICES", "RateLimiterManager initialized")
-
-	utils.LogInfo("SERVICES", "All services initialized successfully")
+	utils.LogInfo("SERVICES", "All services initialized")
 	return svcs, nil
 }
 
@@ -295,16 +256,16 @@ type Handlers struct {
 }
 
 // initHandlers 初始化所有 Handlers
-func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
+func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "Initializing handlers...")
 
 	hdlrs := &Handlers{}
 	var err error
 
 	hdlrs.authHandler, err = auth.NewAuthHandler(
-		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
-		svcs.sessionService, svcs.emailService, svcs.captchaService,
-		svcs.userCache, svcs.emailWhitelistRepo, svcs.limiterMgr,
+		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
+		svcs.SessionService, svcs.EmailService, svcs.CaptchaService,
+		svcs.UserCache, repos.EmailWhitelistRepo, svcs.LimiterMgr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AuthHandler: %w", err)
@@ -312,10 +273,10 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "AuthHandler initialized")
 
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
-		svcs.userRepo, svcs.userLogRepo, svcs.tokenService,
-		svcs.emailService, svcs.captchaService, svcs.userCache,
-		svcs.r2Service, svcs.oauthService, svcs.limiterMgr,
-		svcs.exportTokenService, cfg.BaseURL,
+		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
+		svcs.EmailService, svcs.CaptchaService, svcs.UserCache,
+		svcs.R2Service, svcs.OAuthService, svcs.LimiterMgr,
+		svcs.ExportTokenService, cfg.BaseURL,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("UserHandler: %w", err)
@@ -323,8 +284,8 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "UserHandler initialized")
 
 	hdlrs.microsoftHandler, err = msauth.NewMicrosoftHandler(
-		svcs.userRepo, svcs.userLogRepo, svcs.sessionService,
-		svcs.userCache, svcs.r2Service,
+		repos.UserRepo, repos.UserLogRepo, svcs.SessionService,
+		svcs.UserCache, svcs.R2Service,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("MicrosoftHandler: %w", err)
@@ -332,13 +293,13 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "MicrosoftHandler initialized")
 
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
-		svcs.oauthService, svcs.userRepo, svcs.userLogRepo,
-		svcs.userCache, svcs.sessionService, cfg.BaseURL,
+		svcs.OAuthService, repos.UserRepo, repos.UserLogRepo,
+		svcs.UserCache, svcs.SessionService, cfg.BaseURL,
 	)
 	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 
 	hdlrs.qrLoginHandler, err = qrlogin.NewQRLoginHandler(
-		svcs.sessionService, svcs.wsService, svcs.qrLoginRepo,
+		svcs.SessionService, svcs.WSService, repos.QRLoginRepo,
 		cfg.QREncryptionKey, cfg.QRKeyDerivationSalt,
 	)
 	if err != nil {
@@ -347,8 +308,8 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "QRLoginHandler initialized")
 
 	hdlrs.staticHandler, err = handlers.NewStaticHandler(
-		cfg, svcs.userCache, svcs.wsService, svcs.captchaService,
-		svcs.pool,
+		cfg, svcs.UserCache, svcs.WSService, svcs.CaptchaService,
+		repos.Pool,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("StaticHandler: %w", err)
@@ -356,9 +317,9 @@ func initHandlers(cfg *config.Config, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
 	hdlrs.adminHandler, err = admin.NewAdminHandler(
-		svcs.userRepo, svcs.userCache, svcs.adminLogRepo,
-		svcs.userLogRepo, svcs.oauthService, svcs.emailWhitelistRepo,
-		svcs.exportService, cfg.DataExportSalt, svcs.pool,
+		repos.UserRepo, svcs.UserCache, repos.AdminLogRepo,
+		repos.UserLogRepo, svcs.OAuthService, repos.EmailWhitelistRepo,
+		svcs.ExportService, cfg.DataExportSalt, repos.Pool,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AdminHandler: %w", err)
@@ -406,22 +367,22 @@ func startServer(srv *http.Server) {
 // ====================  优雅关闭 ====================
 
 // gracefulShutdown 优雅关闭服务器
-func gracefulShutdown(srv *http.Server, svcs *Services) {
+func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-quit
 	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
 
-	svcs.exportTokenService.Stop()
+	svcs.ExportTokenService.Stop()
 
-	svcs.limiterMgr.StopAll()
+	svcs.LimiterMgr.StopAll()
 
-	if svcs.wsService != nil {
+	if svcs.WSService != nil {
 		utils.LogInfo("SERVER", "Closing WebSocket connections...")
 		wsCtx, wsCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer wsCancel()
-		svcs.wsService.Shutdown(wsCtx)
+		svcs.WSService.Shutdown(wsCtx)
 		utils.LogInfo("SERVER", "WebSocket connections closed")
 	}
 
@@ -434,21 +395,21 @@ func gracefulShutdown(srv *http.Server, svcs *Services) {
 		utils.LogInfo("SERVER", "HTTP server stopped")
 	}
 
-	if svcs.imgProcessor != nil {
+	if svcs.ImgProcessor != nil {
 		utils.LogInfo("SERVER", "Shutting down image processor...")
 		imgCtx, imgCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer imgCancel()
-		svcs.imgProcessor.Shutdown(imgCtx)
+		svcs.ImgProcessor.Shutdown(imgCtx)
 	}
 
-	if svcs.emailService != nil {
+	if svcs.EmailService != nil {
 		utils.LogInfo("SERVER", "Closing email service...")
-		svcs.emailService.Close()
+		svcs.EmailService.Close()
 		utils.LogInfo("SERVER", "Email service closed")
 	}
 
 	utils.LogInfo("SERVER", "Closing database connections...")
-	models.CloseDB(svcs.pool)
+	models.CloseDB(repos.Pool)
 	utils.LogInfo("SERVER", "Database connections closed")
 
 	utils.SyncLogger()

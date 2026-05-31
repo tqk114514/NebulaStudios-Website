@@ -33,7 +33,7 @@ import (
 // ====================  路由器配置 ====================
 
 // setupRouter 创建并配置路由
-func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engine {
+func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Services) *gin.Engine {
 	utils.LogInfo("ROUTER", "Setting up routes...")
 
 	r := gin.New()
@@ -42,9 +42,9 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, svcs *Services) *gin.Engin
 
 	setupStaticFiles(r, cfg)
 
-	setupPageRoutes(r, svcs)
+	setupPageRoutes(r, repos, svcs)
 
-	setupAPIRoutes(r, hdlrs, svcs)
+	setupAPIRoutes(r, hdlrs, repos, svcs)
 
 	setupWebSocketRoutes(r, svcs)
 
@@ -86,7 +86,7 @@ func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 // ====================  页面路由 ====================
 
 // setupPageRoutes 配置页面路由
-func setupPageRoutes(r *gin.Engine, svcs *Services) {
+func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	r.GET("/", handlers.ServeHomePage)
 
 	accountPages := r.Group("/account")
@@ -94,8 +94,8 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 		accountPages.GET("", func(c *gin.Context) {
 			c.Redirect(http.StatusFound, paths.PathAccountLogin)
 		})
-		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.sessionService, svcs.userCache, svcs.userRepo), handlers.ServeLoginPage)
-		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.sessionService, svcs.userCache, svcs.userRepo), handlers.ServeRegisterPage)
+		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeLoginPage)
+		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeRegisterPage)
 		accountPages.GET("/verify", handlers.ServeVerifyPage)
 		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
 		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
@@ -106,7 +106,7 @@ func setupPageRoutes(r *gin.Engine, svcs *Services) {
 	r.GET("/policy", handlers.ServePolicyPage)
 
 	adminPage := r.Group("/admin")
-	adminPage.Use(adminmw.AdminPageMiddleware(svcs.userRepo, svcs.sessionService))
+	adminPage.Use(adminmw.AdminPageMiddleware(repos.UserRepo, svcs.SessionService))
 	{
 		adminPage.GET("", handlers.ServeAdminPage)
 	}
@@ -146,7 +146,7 @@ func setupLegacyRedirects(r *gin.Engine) {
 // ====================  API 路由 ====================
 
 // setupAPIRoutes 配置 API 路由
-func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	r.GET("/health", hdlrs.staticHandler.GetHealth)
 	r.GET("/api/version", hdlrs.staticHandler.GetVersion)
 
@@ -155,15 +155,15 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 
 	setupConfigAPI(apiGroup, hdlrs)
 
-	setupAuthAPI(apiGroup, hdlrs, svcs)
+	setupAuthAPI(apiGroup, hdlrs, repos, svcs)
 
-	setupUserAPI(apiGroup, hdlrs, svcs)
+	setupUserAPI(apiGroup, hdlrs, repos, svcs)
 
-	setupQRLoginAPI(apiGroup, hdlrs, svcs)
+	setupQRLoginAPI(apiGroup, hdlrs, repos, svcs)
 
-	setupAdminAPI(apiGroup, hdlrs, svcs)
+	setupAdminAPI(apiGroup, hdlrs, repos, svcs)
 
-	setupOAuthProviderAPI(r, hdlrs, svcs)
+	setupOAuthProviderAPI(r, hdlrs, repos, svcs)
 
 	utils.LogInfo("ROUTER", "API routes configured")
 }
@@ -182,7 +182,7 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 }
 
 // setupAuthAPI 配置认证 API
-func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
+func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	r.GET("/api/email-whitelist", hdlrs.authHandler.GetEmailWhitelist)
 
 	authAPI := r.Group("/api/auth")
@@ -191,35 +191,35 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		authAPI.POST("/verify-token", hdlrs.authHandler.VerifyToken)
 		authAPI.POST("/check-code-expiry", hdlrs.authHandler.CheckCodeExpiry)
 		authAPI.POST("/verify-code", hdlrs.authHandler.VerifyCode)
-		authAPI.POST("/invalidate-code", svcs.limiterMgr.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
+		authAPI.POST("/invalidate-code", svcs.LimiterMgr.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
 
-		authAPI.POST("/register", svcs.limiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
-		authAPI.POST("/login", svcs.limiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
+		authAPI.POST("/register", svcs.LimiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
+		authAPI.POST("/login", svcs.LimiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
 		authAPI.POST("/verify-session", hdlrs.authHandler.VerifySession)
 		authAPI.POST("/logout", hdlrs.authHandler.Logout)
-		authAPI.GET("/me", middleware.AuthMiddleware(svcs.sessionService), hdlrs.authHandler.GetMe)
+		authAPI.GET("/me", middleware.AuthMiddleware(svcs.SessionService), hdlrs.authHandler.GetMe)
 
-		authAPI.POST("/send-reset-code", svcs.limiterMgr.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)
+		authAPI.POST("/send-reset-code", svcs.LimiterMgr.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)
 		authAPI.POST("/reset-password", hdlrs.authHandler.ResetPassword)
 		authAPI.POST("/change-password",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.authHandler.ChangePassword)
 
 		authAPI.POST("/send-delete-code",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.userHandler.SendDeleteCode)
 		authAPI.POST("/delete-account",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.userHandler.DeleteAccount)
 
 		authAPI.GET("/microsoft", hdlrs.microsoftHandler.Auth)
 		authAPI.GET("/microsoft/callback", hdlrs.microsoftHandler.Callback)
 		authAPI.POST("/microsoft/unlink",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
 		authAPI.POST("/microsoft/confirm-link", hdlrs.microsoftHandler.ConfirmLink)
@@ -227,10 +227,10 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupUserAPI 配置用户 API
-func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
+func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	userAPI := r.Group("/api/user")
-	userAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
-	userAPI.Use(middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService))
+	userAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
+	userAPI.Use(middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService))
 	{
 		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
@@ -245,15 +245,15 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupQRLoginAPI 配置扫码登录 API
-func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
+func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	qrAPI := r.Group("/api/qr-login")
 	{
 		qrAPI.POST("/generate", hdlrs.qrLoginHandler.Generate)
 		qrAPI.POST("/cancel", hdlrs.qrLoginHandler.Cancel)
 		qrAPI.POST("/scan", hdlrs.qrLoginHandler.Scan)
 		qrAPI.POST("/mobile-confirm",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.qrLoginHandler.MobileConfirm)
 		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
 		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
@@ -261,12 +261,12 @@ func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupAdminAPI 配置管理后台 API
-func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
+func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	adminAPI := r.Group("/admin/api")
 
-	adminAPI.Use(middleware.AuthMiddleware(svcs.sessionService))
+	adminAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
 
-	adminAPI.Use(adminmw.AdminMiddleware(svcs.userRepo))
+	adminAPI.Use(adminmw.AdminMiddleware(repos.UserRepo))
 
 	{
 		adminAPI.GET("/stats", hdlrs.adminHandler.GetStats)
@@ -278,7 +278,7 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 		adminAPI.POST("/users/:uid/unban", hdlrs.adminHandler.UnbanUser)
 
 		superAdminAPI := adminAPI.Group("")
-		superAdminAPI.Use(adminmw.SuperAdminMiddleware(svcs.userRepo))
+		superAdminAPI.Use(adminmw.SuperAdminMiddleware(repos.UserRepo))
 		{
 			superAdminAPI.PUT("/users/:uid/role", hdlrs.adminHandler.SetUserRole)
 			superAdminAPI.DELETE("/users/:uid", hdlrs.adminHandler.DeleteUser)
@@ -310,27 +310,27 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 }
 
 // setupOAuthProviderAPI 配置 OAuth Provider API
-func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
+func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	oauthGroup := r.Group("/oauth")
 	oauthGroup.Use(middleware.APIBodySizeLimit())
 	{
 		oauthGroup.GET("/authorize",
-			middleware.OptionalAuthMiddleware(svcs.sessionService),
+			middleware.OptionalAuthMiddleware(svcs.SessionService),
 			middleware.CSRFTokenMiddleware(),
 			hdlrs.oauthProviderHandler.Authorize)
 		oauthGroup.POST("/authorize",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			middleware.CSRFTokenMiddleware(),
 			hdlrs.oauthProviderHandler.AuthorizePost)
 
 		oauthGroup.GET("/authorize/info",
-			middleware.AuthMiddleware(svcs.sessionService),
-			middleware.BanCheckMiddleware(svcs.userCache, svcs.userRepo, svcs.sessionService),
+			middleware.AuthMiddleware(svcs.SessionService),
+			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.oauthProviderHandler.AuthorizeInfo)
 
 		oauthGroup.POST("/token",
-			svcs.limiterMgr.OAuthTokenRateLimit(),
+			svcs.LimiterMgr.OAuthTokenRateLimit(),
 			hdlrs.oauthProviderHandler.Token)
 
 		oauthGroup.GET("/userinfo", hdlrs.oauthProviderHandler.UserInfo)
@@ -345,6 +345,6 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, svcs *Services) {
 
 // setupWebSocketRoutes 配置 WebSocket 路由
 func setupWebSocketRoutes(r *gin.Engine, svcs *Services) {
-	r.GET("/ws/qr-login", svcs.wsService.HandleQRLogin)
+	r.GET("/ws/qr-login", svcs.WSService.HandleQRLogin)
 	utils.LogInfo("ROUTER", "WebSocket routes configured")
 }
