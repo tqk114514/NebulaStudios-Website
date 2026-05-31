@@ -52,10 +52,10 @@ type Config struct {
 	DBMaxConns  int    // 最大连接数，默认 10
 
 	// JWT 配置
-	JWTSecret    string        // JWT 签名密钥（必需）
-	JWTExpiresIn time.Duration // JWT 过期时间，默认 60 天
-	JWTIssuer    string        // JWT 签发者（iss）
-	JWTAudience  string        // JWT 受众（aud）
+	JWTPrivateKey string        // ECDSA P-256 私钥（PEM 格式，必需）
+	JWTExpiresIn  time.Duration // JWT 过期时间，默认 60 天
+	JWTIssuer     string        // JWT 签发者（iss）
+	JWTAudience   string        // JWT 受众（aud）
 
 	// SMTP 配置
 	SMTPHost     string // SMTP 服务器地址
@@ -150,7 +150,7 @@ func Load() (*Config, error) {
 	newCfg.DBMaxConns = dbMaxConns
 
 	// 加载 JWT 配置
-	newCfg.JWTSecret = getEnv("JWT_SECRET", "")
+	newCfg.JWTPrivateKey = getEnv("JWT_PRIVATE_KEY", "")
 	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "auth-system")
 	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "auth-system-users")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
@@ -250,8 +250,8 @@ func validateConfig(c *Config) error {
 		missingKeys = append(missingKeys, "DATABASE_URL")
 	}
 
-	if c.JWTSecret == "" {
-		missingKeys = append(missingKeys, "JWT_SECRET")
+	if c.JWTPrivateKey == "" {
+		missingKeys = append(missingKeys, "JWT_PRIVATE_KEY")
 	}
 
 	if c.QRKeyDerivationSalt == "" {
