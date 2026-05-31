@@ -91,38 +91,6 @@ const (
 	writeBufferSize = 1024
 )
 
-// upgrader WebSocket 升级器
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  readBufferSize,
-	WriteBufferSize: writeBufferSize,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true
-		}
-
-		cfg := config.Get()
-		if cfg.CORSAllowOrigins == "" {
-			utils.LogError("WS", "CheckOrigin", nil, "WebSocket origin check failed - CORS_ALLOW_ORIGINS is not configured, rejecting all origins")
-			return false
-		}
-
-		allowedOrigins := strings.SplitSeq(cfg.CORSAllowOrigins, ",")
-		for allowed := range allowedOrigins {
-			allowed = strings.TrimSpace(allowed)
-			if allowed == origin {
-				return true
-			}
-		}
-
-		utils.LogWarn("WS", "WebSocket origin rejected", fmt.Sprintf("origin=%s", origin))
-		return false
-	},
-	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
-		utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
-	},
-}
-
 // ====================  数据结构 ====================
 
 // WSClient WebSocket 客户端
@@ -149,6 +117,7 @@ type WebSocketService struct {
 	wg         sync.WaitGroup
 	isShutdown bool
 	mu         sync.RWMutex
+	upgrader   websocket.Upgrader
 }
 
 // WSMessage WebSocket 消息
@@ -161,11 +130,38 @@ type WSMessage struct {
 // ====================  构造函数 ====================
 
 // NewWebSocketService 创建 WebSocket 服务
-// 返回：
-//   - *WebSocketService: WebSocket 服务实例
-func NewWebSocketService() *WebSocketService {
+func NewWebSocketService(cfg *config.Config) *WebSocketService {
 	ws := &WebSocketService{
 		shutdown: make(chan struct{}),
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  readBufferSize,
+			WriteBufferSize: writeBufferSize,
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+
+				if cfg.CORSAllowOrigins == "" {
+					utils.LogError("WS", "CheckOrigin", nil, "WebSocket origin check failed - CORS_ALLOW_ORIGINS is not configured, rejecting all origins")
+					return false
+				}
+
+				allowedOrigins := strings.SplitSeq(cfg.CORSAllowOrigins, ",")
+				for allowed := range allowedOrigins {
+					allowed = strings.TrimSpace(allowed)
+					if allowed == origin {
+						return true
+					}
+				}
+
+				utils.LogWarn("WS", "WebSocket origin rejected", fmt.Sprintf("origin=%s", origin))
+				return false
+			},
+			Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+				utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
+			},
+		},
 	}
 
 	// 初始化所有分片
@@ -213,7 +209,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	}
 
 	// 升级到 WebSocket
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := ws.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		utils.LogError("WS", "HandleConnection", err, "WebSocket upgrade failed")
 		return

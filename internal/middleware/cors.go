@@ -67,8 +67,7 @@ type CORSConfig struct {
 //
 // 返回：
 //   - gin.HandlerFunc: Gin 中间件函数
-func CORS() gin.HandlerFunc {
-	cfg := config.Get()
+func CORS(cfg *config.Config) gin.HandlerFunc {
 	allowOrigins := parseAllowOrigins(cfg.CORSAllowOrigins)
 
 	corsConfig := CORSConfig{
