@@ -10,7 +10,7 @@
  * 设计原则：
  * - JWT 只存储 userId，其他数据从数据库实时获取
  * - 保证用户数据的实时性和一致性
- * - 使用 HS256 签名算法
+ * - 使用 ES256 签名算法（ECDSA P-256，私钥签发，公钥验证）
  *
  * 依赖：
  * - github.com/golang-jwt/jwt/v5: JWT 库
@@ -21,10 +21,12 @@ package services
 
 import (
 	"auth-system/internal/utils"
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"slices"
-
 	"time"
 
 	"auth-system/internal/config"
@@ -37,10 +39,10 @@ import (
 var (
 	// ErrSessionNilConfig 配置为空
 	ErrSessionNilConfig = errors.New("session config is nil")
-	// ErrSessionEmptySecret JWT 密钥为空
-	ErrSessionEmptySecret = errors.New("JWT secret is empty")
-	// ErrSessionInvalidSecret JWT 密钥不符合要求
-	ErrSessionInvalidSecret = errors.New("JWT secret is invalid")
+	// ErrSessionEmptyPrivateKey ECDSA 私钥为空
+	ErrSessionEmptyPrivateKey = errors.New("ECDSA private key is empty")
+	// ErrSessionInvalidPrivateKey ECDSA 私钥无效
+	ErrSessionInvalidPrivateKey = errors.New("ECDSA private key is invalid")
 	// ErrSessionInvalidExpiry 无效的过期时间
 	ErrSessionInvalidExpiry = errors.New("invalid JWT expiry duration")
 	// ErrNoToken Token 为空
@@ -70,9 +72,6 @@ const (
 
 	// maxJWTExpiry 最大 JWT 过期时间
 	maxJWTExpiry = 30 * 24 * time.Hour // 30 天
-
-	// minSecretLength 最小密钥长度
-	minSecretLength = 32
 )
 
 // ====================  数据结构 ====================
@@ -85,7 +84,7 @@ type Claims struct {
 
 // SessionService Session 服务
 type SessionService struct {
-	jwtSecret    []byte
+	privateKey   *ecdsa.PrivateKey
 	jwtExpiresIn time.Duration
 	jwtIssuer    string
 	jwtAudience  string
@@ -100,19 +99,20 @@ func NewSessionService(cfg *config.Config) (*SessionService, error) {
 		return nil, ErrSessionNilConfig
 	}
 
-	// 验证 JWT 密钥
-	if cfg.JWTSecret == "" {
-		return nil, ErrSessionEmptySecret
+	// 验证 ECDSA 私钥
+	if cfg.JWTPrivateKey == "" {
+		return nil, ErrSessionEmptyPrivateKey
+	}
+
+	// 解析 PEM 格式的 ECDSA 私钥
+	privateKey, err := parseECDSAPrivateKey(cfg.JWTPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrSessionInvalidPrivateKey, err)
 	}
 
 	// 验证过期时间
 	if cfg.JWTExpiresIn <= 0 {
 		return nil, ErrSessionInvalidExpiry
-	}
-
-	// 验证密钥长度
-	if len(cfg.JWTSecret) < minSecretLength {
-		return nil, fmt.Errorf("%w: JWT secret length is %d, minimum is %d", ErrSessionInvalidSecret, len(cfg.JWTSecret), minSecretLength)
 	}
 
 	// 读取 iss/aud（允许空，使用默认值）
@@ -136,10 +136,10 @@ func NewSessionService(cfg *config.Config) (*SessionService, error) {
 		utils.LogWarn("SESSION", "JWT expiry adjusted to maximum", fmt.Sprintf("newExpiry=%v", expiry))
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v, issuer=%s, audience=%s", expiry, issuer, audience))
+	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: expiry=%v, issuer=%s, audience=%s, alg=ES256", expiry, issuer, audience))
 
 	return &SessionService{
-		jwtSecret:    []byte(cfg.JWTSecret),
+		privateKey:   privateKey,
 		jwtExpiresIn: expiry,
 		jwtIssuer:    issuer,
 		jwtAudience:  audience,
@@ -148,7 +148,7 @@ func NewSessionService(cfg *config.Config) (*SessionService, error) {
 
 // ====================  公开方法 ====================
 
-// GenerateToken 生成 JWT Token
+// GenerateToken 生成 JWT Token（ES256 签名）
 // 参数：
 //   - uid: 用户 UID
 //
@@ -168,8 +168,8 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 		return "", ErrTokenGenerationFailed
 	}
 
-	if len(s.jwtSecret) == 0 {
-		utils.LogError("SESSION", "GenerateToken", fmt.Errorf("JWT secret is empty"), "")
+	if s.privateKey == nil {
+		utils.LogError("SESSION", "GenerateToken", fmt.Errorf("ECDSA private key is nil"), "")
 		return "", ErrTokenGenerationFailed
 	}
 
@@ -187,10 +187,10 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 	}
 
 	// 创建 Token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 
 	// 签名 Token
-	tokenString, err := token.SignedString(s.jwtSecret)
+	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
 		utils.LogError("SESSION", "GenerateToken", err, fmt.Sprintf("Failed to sign token: uid=%s", uid))
 		return "", fmt.Errorf("%w: %v", ErrTokenGenerationFailed, err)
@@ -200,7 +200,7 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 	return tokenString, nil
 }
 
-// VerifyToken 验证 JWT Token
+// VerifyToken 验证 JWT Token（ES256 公钥验证）
 // 参数：
 //   - tokenString: JWT Token 字符串
 //
@@ -219,19 +219,19 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 		return nil, ErrTokenError
 	}
 
-	if len(s.jwtSecret) == 0 {
-		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("JWT secret is empty"), "")
+	if s.privateKey == nil {
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("ECDSA private key is nil"), "")
 		return nil, ErrTokenError
 	}
 
 	// 解析 Token
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		// 验证签名方法
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			utils.LogWarn("SESSION", "Unexpected signing method", fmt.Sprintf("alg=%v", token.Header["alg"]))
 			return nil, ErrInvalidSigningMethod
 		}
-		return s.jwtSecret, nil
+		return &s.privateKey.PublicKey, nil
 	})
 
 	// 处理解析错误
@@ -280,10 +280,37 @@ func (s *SessionService) GetExpiry() time.Duration {
 // 返回：
 //   - bool: 是否已配置
 func (s *SessionService) IsConfigured() bool {
-	return s != nil && len(s.jwtSecret) > 0 && s.jwtExpiresIn > 0
+	return s != nil && s.privateKey != nil && s.jwtExpiresIn > 0
 }
 
 // ====================  私有方法 ====================
+
+// parseECDSAPrivateKey 解析 PEM 格式的 ECDSA 私钥
+func parseECDSAPrivateKey(pemData string) (*ecdsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+
+	// 尝试解析 EC PRIVATE KEY
+	key, err := x509.ParseECPrivateKey(block.Bytes)
+	if err == nil {
+		return key, nil
+	}
+
+	// 尝试解析 PKCS#8 PRIVATE KEY
+	pkcs8Key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ECDSA private key: %w", err)
+	}
+
+	ecKey, ok := pkcs8Key.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("key is not an ECDSA private key")
+	}
+
+	return ecKey, nil
+}
 
 // handleParseError 处理 Token 解析错误
 // 参数：
