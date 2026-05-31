@@ -20,7 +20,7 @@ import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModal
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
 import { isMobileDevice } from './lib/utils/device.ts';
-import { QRCanvas, QRCamera, frameLoop } from './lib/paulmillr-qr@5.5.0/src/dom.ts';
+import { QRCanvas, QRCamera, frameLoop } from './lib/paulmillr-qr@0.6.0/src/dom.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
