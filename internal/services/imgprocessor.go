@@ -9,7 +9,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/binary"
 	"errors"
@@ -80,9 +82,27 @@ func (p *ImgProcessor) startProcessor() {
 		return
 	}
 
+	// 计算嵌入二进制的 SHA-256
+	expectedHash := sha256.Sum256(imgProcessorBin)
+
 	// 释放二进制文件
 	if err := os.WriteFile(BinaryPath, imgProcessorBin, 0755); err != nil {
 		utils.LogError("IMG", "start", err, "Failed to write binary")
+		p.available = false
+		return
+	}
+
+	// 验证写入文件的完整性
+	writtenData, err := os.ReadFile(BinaryPath)
+	if err != nil {
+		utils.LogError("IMG", "start", err, "Failed to verify binary integrity")
+		p.available = false
+		return
+	}
+	actualHash := sha256.Sum256(writtenData)
+	if !bytes.Equal(expectedHash[:], actualHash[:]) {
+		utils.LogError("IMG", "start", nil, "Binary integrity check failed: hash mismatch")
+		os.Remove(BinaryPath)
 		p.available = false
 		return
 	}
