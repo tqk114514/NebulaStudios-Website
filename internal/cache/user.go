@@ -1,19 +1,4 @@
-/**
- * internal/cache/user.go
- * 用户数据 LRU 缓存（带 singleflight 防缓存击穿）
- *
- * 功能：
- * - LRU 缓存策略（自动淘汰最少使用的条目）
- * - TTL 过期支持（可配置过期时间）
- * - 命中率统计（实时监控缓存效率）
- * - 线程安全（读写锁保护）
- * - Singleflight 防缓存击穿（多个并发请求合并为一次查询）
- *
- * 依赖：
- * - github.com/hashicorp/golang-lru/v2 (LRU 缓存实现)
- * - golang.org/x/sync/singleflight (防缓存击穿)
- */
-
+// Package cache 提供用户数据 LRU 缓存，支持 TTL 过期和 singleflight 防缓存击穿。
 package cache
 
 import (
@@ -32,66 +17,41 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrInvalidUserID 用户 ID 无效
-	ErrInvalidUserID = errors.New("INVALID_USER_ID")
-
-	// ErrNilUser 用户对象为空
-	ErrNilUser = errors.New("NIL_USER")
-
-	// ErrLoaderFailed 加载器执行失败
-	ErrLoaderFailed = errors.New("LOADER_FAILED")
-
-	// ErrCacheInitFailed 缓存初始化失败
+	ErrInvalidUserID   = errors.New("INVALID_USER_ID")
+	ErrNilUser         = errors.New("NIL_USER")
+	ErrLoaderFailed    = errors.New("LOADER_FAILED")
 	ErrCacheInitFailed = errors.New("CACHE_INIT_FAILED")
 )
 
-// ====================  数据结构 ====================
-
-// CachedUser 缓存的用户数据
-// 包含用户对象和缓存时间，用于 TTL 检查
+// CachedUser 缓存的用户数据，包含用户对象和缓存时间用于 TTL 检查
 type CachedUser struct {
-	User     *models.User // 用户对象
-	CachedAt time.Time    // 缓存时间
+	User     *models.User
+	CachedAt time.Time
 }
 
-// CacheStats 缓存统计信息
-// 用于监控缓存性能和效率
+// CacheStats 缓存统计信息，用于监控缓存命中率和容量
 type CacheStats struct {
-	Size     int     `json:"size"`     // 当前缓存条目数
-	MaxSize  int     `json:"maxSize"`  // 最大缓存容量
-	Hits     uint64  `json:"hits"`     // 缓存命中次数
-	Misses   uint64  `json:"misses"`   // 缓存未命中次数
-	HitRatio float64 `json:"hitRatio"` // 缓存命中率（0-1）
+	Size     int     `json:"size"`
+	MaxSize  int     `json:"maxSize"`
+	Hits     uint64  `json:"hits"`
+	Misses   uint64  `json:"misses"`
+	HitRatio float64 `json:"hitRatio"`
 }
 
-// UserCache 用户缓存
-// 线程安全的 LRU 缓存，支持 TTL 和 singleflight
+// UserCache 线程安全的 LRU 用户缓存，支持 TTL 过期和 singleflight 防缓存击穿
 type UserCache struct {
-	cache   *lru.Cache[string, *CachedUser] // LRU 缓存实例
-	ttl     time.Duration                   // 缓存过期时间
-	maxSize int                             // 最大缓存容量
-	hits    uint64                          // 命中计数器（原子操作）
-	misses  uint64                          // 未命中计数器（原子操作）
-	mu      sync.RWMutex                    // 读写锁
-	sf      singleflight.Group              // 防缓存击穿
+	cache   *lru.Cache[string, *CachedUser]
+	ttl     time.Duration
+	maxSize int
+	hits    uint64
+	misses  uint64
+	mu      sync.RWMutex
+	sf      singleflight.Group
 }
 
-// ====================  构造函数 ====================
-
-// NewUserCache 创建用户缓存实例
-//
-// 参数：
-//   - maxSize: 最大缓存容量，必须大于 0
-//   - ttl: 缓存过期时间，必须大于 0
-//
-// 返回：
-//   - *UserCache: 缓存实例
-//   - error: 错误信息
+// NewUserCache 创建用户缓存实例，maxSize 和 ttl 必须大于 0
 func NewUserCache(maxSize int, ttl time.Duration) (*UserCache, error) {
-	// 参数验证
 	if maxSize <= 0 {
 		return nil, utils.LogError("CACHE", "NewUserCache", ErrCacheInitFailed, fmt.Sprintf("maxSize must be positive, got %d", maxSize))
 	}
@@ -100,7 +60,6 @@ func NewUserCache(maxSize int, ttl time.Duration) (*UserCache, error) {
 		return nil, utils.LogError("CACHE", "NewUserCache", ErrCacheInitFailed, fmt.Sprintf("ttl must be positive, got %v", ttl))
 	}
 
-	// 创建 LRU 缓存
 	cache, err := lru.New[string, *CachedUser](maxSize)
 	if err != nil {
 		return nil, utils.LogError("CACHE", "NewUserCache", err, "Failed to create LRU cache")
@@ -115,37 +74,23 @@ func NewUserCache(maxSize int, ttl time.Duration) (*UserCache, error) {
 	}, nil
 }
 
-// ====================  缓存操作 ====================
-
-// Get 获取缓存的用户数据
-// 如果缓存不存在或已过期，返回 nil 和 false
-//
-// 参数：
-//   - uid: 用户 UID
-//
-// 返回：
-//   - *models.User: 用户对象（缓存未命中或过期时为 nil）
-//   - bool: 是否命中缓存
+// Get 获取缓存的用户数据，缓存不存在或已过期时返回 nil 和 false
 func (c *UserCache) Get(uid string) (*models.User, bool) {
-	// 参数验证
 	if uid == "" {
 		utils.LogWarn("CACHE", fmt.Sprintf("Invalid uid for Get: %s", uid))
 		atomic.AddUint64(&c.misses, 1)
 		return nil, false
 	}
 
-	// 读取缓存（使用读锁）
 	c.mu.RLock()
 	entry, ok := c.cache.Get(uid)
 	c.mu.RUnlock()
 
-	// 缓存未命中
 	if !ok {
 		atomic.AddUint64(&c.misses, 1)
 		return nil, false
 	}
 
-	// 安全检查：防止 nil entry
 	if entry == nil {
 		utils.LogWarn("CACHE", fmt.Sprintf("Nil entry found for uid: %s", uid))
 		c.mu.Lock()
@@ -155,8 +100,8 @@ func (c *UserCache) Get(uid string) (*models.User, bool) {
 		return nil, false
 	}
 
-	// 检查 TTL 是否过期
 	if time.Since(entry.CachedAt) > c.ttl {
+		// TTL 过期时二次检查，防止并发场景下刚被其他 goroutine 刷新
 		c.mu.Lock()
 		if current, ok := c.cache.Get(uid); ok && current != nil && time.Since(current.CachedAt) <= c.ttl {
 			c.mu.Unlock()
@@ -169,7 +114,6 @@ func (c *UserCache) Get(uid string) (*models.User, bool) {
 		return nil, false
 	}
 
-	// 安全检查：防止 nil user
 	if entry.User == nil {
 		utils.LogWarn("CACHE", fmt.Sprintf("Nil user found in entry for uid: %s", uid))
 		c.mu.Lock()
@@ -179,28 +123,13 @@ func (c *UserCache) Get(uid string) (*models.User, bool) {
 		return nil, false
 	}
 
-	// 缓存命中
 	atomic.AddUint64(&c.hits, 1)
 	return entry.User, true
 }
 
-// GetOrLoad 获取缓存或加载（带 singleflight 防缓存击穿）
-// 如果缓存未命中，使用 loader 函数加载数据并写入缓存
-// 多个并发请求同一个 uid 时，只有一个会执行 loader
-//
-// 参数：
-//   - ctx: 上下文，用于超时控制和取消
-//   - uid: 用户 UID
-//   - loader: 数据加载函数，用于从数据库查询用户
-//
-// 返回：
-//   - *models.User: 用户对象
-//   - error: 错误信息
-//   - ErrInvalidUserID: uid 无效
-//   - ErrLoaderFailed: loader 执行失败
-//   - ErrNilUser: loader 返回 nil 用户
+// GetOrLoad 获取缓存或通过 loader 加载，使用 singleflight 合并同一 uid 的并发请求
+// 防止缓存击穿：多个并发请求同一个 uid 时，只有第一个执行 loader，其余共享结果
 func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(context.Context, string) (*models.User, error)) (*models.User, error) {
-	// 参数验证
 	if uid == "" {
 		return nil, utils.LogError("CACHE", "GetOrLoad", ErrInvalidUserID, fmt.Sprintf("uid=%s", uid))
 	}
@@ -209,21 +138,16 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 		return nil, utils.LogError("CACHE", "GetOrLoad", ErrLoaderFailed, "loader is nil")
 	}
 
-	// 先尝试从缓存获取
 	if user, ok := c.Get(uid); ok {
 		return user, nil
 	}
 
-	// 使用 singleflight 防止缓存击穿
-	// 多个并发请求同一个 uid 时，只有一个会执行 loader
 	key := uid
 	result, err, shared := c.sf.Do(key, func() (any, error) {
-		// 再次检查缓存（可能在等待期间已被其他请求加载）
 		if user, ok := c.Get(uid); ok {
 			return user, nil
 		}
 
-		// 检查 context 是否已取消
 		select {
 		case <-ctx.Done():
 			utils.LogWarn("CACHE", fmt.Sprintf("Context cancelled for uid: %s", uid))
@@ -231,18 +155,15 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 		default:
 		}
 
-		// 从数据库加载
 		user, err := loader(ctx, uid)
 		if err != nil {
 			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", err, fmt.Sprintf("uid=%s", uid))
 		}
 
-		// 验证返回的用户对象
 		if user == nil {
 			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", ErrNilUser, fmt.Sprintf("uid=%s", uid))
 		}
 
-		// 写入缓存
 		c.Set(uid, user)
 
 		return user, nil
@@ -252,12 +173,10 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 		return nil, err
 	}
 
-	// 记录是否使用了共享结果（singleflight 合并了请求）
 	if shared {
 		utils.LogDebug("CACHE", fmt.Sprintf("Singleflight shared result for uid: %s", uid))
 	}
 
-	// 类型断言
 	user, ok := result.(*models.User)
 	if !ok {
 		return nil, utils.LogError("CACHE", "GetOrLoad.TypeAssertion", ErrLoaderFailed, fmt.Sprintf("uid=%s", uid))
@@ -266,16 +185,8 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 	return user, nil
 }
 
-// Set 设置缓存
-// 将用户数据写入缓存，如果缓存已满会自动淘汰最少使用的条目
-//
-// 参数：
-//   - uid: 用户 UID
-//   - user: 用户对象，不能为 nil
-//
-// 注意：如果参数无效，会记录警告日志但不会返回错误（避免影响主流程）
+// Set 将用户数据写入缓存，缓存满时自动淘汰最少使用的条目
 func (c *UserCache) Set(uid string, user *models.User) {
-	// 参数验证
 	if uid == "" {
 		utils.LogWarn("CACHE", fmt.Sprintf("Invalid uid for Set: %s", uid))
 		return
@@ -286,32 +197,22 @@ func (c *UserCache) Set(uid string, user *models.User) {
 		return
 	}
 
-	// 创建缓存条目
 	entry := &CachedUser{
 		User:     user,
 		CachedAt: time.Now(),
 	}
 
-	// 写入缓存（使用写锁）
 	c.mu.Lock()
 	evicted := c.cache.Add(uid, entry)
 	c.mu.Unlock()
 
-	// 记录淘汰信息（仅在调试时）
 	if evicted {
 		utils.LogDebug("CACHE", fmt.Sprintf("Entry evicted when caching uid: %s", uid))
 	}
 }
 
 // Invalidate 使指定用户的缓存失效
-// 从缓存中删除指定用户的数据
-//
-// 参数：
-//   - uid: 用户 UID
-//
-// 注意：如果 uid 无效，会记录警告日志但不会返回错误
 func (c *UserCache) Invalidate(uid string) {
-	// 参数验证
 	if uid == "" {
 		utils.LogWarn("CACHE", fmt.Sprintf("Invalid uid for Invalidate: %s", uid))
 		return
@@ -326,42 +227,29 @@ func (c *UserCache) Invalidate(uid string) {
 	}
 }
 
-// InvalidateAll 清空所有缓存
-// 删除缓存中的所有条目，通常用于系统维护或重置
-//
-// 注意：此操作会重置命中率统计
+// InvalidateAll 清空所有缓存并重置命中率统计
 func (c *UserCache) InvalidateAll() {
 	c.mu.Lock()
 	c.cache.Purge()
 	c.mu.Unlock()
 
-	// 重置统计计数器
 	atomic.StoreUint64(&c.hits, 0)
 	atomic.StoreUint64(&c.misses, 0)
 
 	utils.LogInfo("CACHE", "All cache entries invalidated")
 }
 
-// ====================  统计信息 ====================
-
-// Stats 获取缓存统计信息
-// 返回当前缓存的性能指标，用于监控和调优
-//
-// 返回：
-//   - CacheStats: 缓存统计信息，包含大小、命中率等
+// Stats 获取缓存统计信息，用于监控缓存性能和命中率
 func (c *UserCache) Stats() CacheStats {
-	// 原子读取计数器（避免加锁）
 	hits := atomic.LoadUint64(&c.hits)
 	misses := atomic.LoadUint64(&c.misses)
 	total := hits + misses
 
-	// 计算命中率
 	var hitRatio float64
 	if total > 0 {
 		hitRatio = float64(hits) / float64(total)
 	}
 
-	// 获取当前缓存大小（需要读锁）
 	c.mu.RLock()
 	size := c.cache.Len()
 	c.mu.RUnlock()
@@ -376,20 +264,13 @@ func (c *UserCache) Stats() CacheStats {
 }
 
 // Len 获取当前缓存条目数
-// 返回缓存中当前存储的用户数量
-//
-// 返回：
-//   - int: 缓存条目数
 func (c *UserCache) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cache.Len()
 }
 
-// ====================  辅助方法 ====================
-
-// ResetStats 重置统计计数器
-// 将命中和未命中计数器归零，用于重新开始统计
+// ResetStats 重置命中和未命中计数器
 func (c *UserCache) ResetStats() {
 	atomic.StoreUint64(&c.hits, 0)
 	atomic.StoreUint64(&c.misses, 0)
@@ -397,30 +278,18 @@ func (c *UserCache) ResetStats() {
 }
 
 // IsFull 检查缓存是否已满
-// 返回缓存是否达到最大容量
-//
-// 返回：
-//   - bool: true 表示缓存已满
 func (c *UserCache) IsFull() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.cache.Len() >= c.maxSize
 }
 
-// GetTTL 获取缓存 TTL 配置
-// 返回缓存的过期时间设置
-//
-// 返回：
-//   - time.Duration: TTL 时长
+// GetTTL 获取缓存过期时间
 func (c *UserCache) GetTTL() time.Duration {
 	return c.ttl
 }
 
 // GetMaxSize 获取最大缓存容量
-// 返回缓存的最大条目数限制
-//
-// 返回：
-//   - int: 最大容量
 func (c *UserCache) GetMaxSize() int {
 	return c.maxSize
 }
