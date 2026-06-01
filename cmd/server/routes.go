@@ -1,20 +1,3 @@
-/**
- * cmd/server/routes.go
- * 路由配置模块
- *
- * 功能：
- * - 路由器创建和配置
- * - 中间件配置
- * - 静态文件服务
- * - 页面路由配置
- * - API 路由配置
- * - WebSocket 路由配置
- *
- * 依赖：
- * - Gin Web 框架
- * - 内部 Handler 和 Middleware 模块
- */
-
 package main
 
 import (
@@ -30,9 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  路由器配置 ====================
-
-// setupRouter 创建并配置路由
 func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Services) *gin.Engine {
 	utils.LogInfo("ROUTER", "Setting up routes...")
 
@@ -54,9 +34,6 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 	return r
 }
 
-// ====================  中间件配置 ====================
-
-// setupMiddleware 配置中间件
 func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 	r.Use(gin.Recovery())
 
@@ -71,9 +48,6 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 	utils.LogInfo("MIDDLEWARE", "Base middleware configured")
 }
 
-// ====================  静态文件 ====================
-
-// setupStaticFiles 配置静态文件服务
 func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
@@ -83,9 +57,6 @@ func setupStaticFiles(r *gin.Engine, _ *config.Config) {
 	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
 }
 
-// ====================  页面路由 ====================
-
-// setupPageRoutes 配置页面路由
 func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	r.GET("/", handlers.ServeHomePage)
 
@@ -116,7 +87,6 @@ func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	utils.LogInfo("ROUTER", "Page routes configured")
 }
 
-// setupLegacyRedirects 配置旧路由重定向
 func setupLegacyRedirects(r *gin.Engine) {
 	for oldPath, newPath := range paths.LegacyRedirects {
 		r.GET(oldPath, func(c *gin.Context) {
@@ -143,9 +113,6 @@ func setupLegacyRedirects(r *gin.Engine) {
 	})
 }
 
-// ====================  API 路由 ====================
-
-// setupAPIRoutes 配置 API 路由
 func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	r.GET("/health", hdlrs.staticHandler.GetHealth)
 	r.GET("/api/version", hdlrs.staticHandler.GetVersion)
@@ -168,7 +135,6 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services
 	utils.LogInfo("ROUTER", "API routes configured")
 }
 
-// setupConfigAPI 配置 Config API
 func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	configAPI := r.Group("/api/config")
 	{
@@ -181,7 +147,6 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	}
 }
 
-// setupAuthAPI 配置认证 API
 func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	r.GET("/api/email-whitelist", hdlrs.authHandler.GetEmailWhitelist)
 
@@ -226,7 +191,6 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 	}
 }
 
-// setupUserAPI 配置用户 API
 func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	userAPI := r.Group("/api/user")
 	userAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
@@ -244,7 +208,6 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 	r.GET("/api/user/export/download", hdlrs.userHandler.DownloadUserData)
 }
 
-// setupQRLoginAPI 配置扫码登录 API
 func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	qrAPI := r.Group("/api/qr-login")
 	{
@@ -260,7 +223,6 @@ func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Service
 	}
 }
 
-// setupAdminAPI 配置管理后台 API
 func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	adminAPI := r.Group("/admin/api")
 
@@ -309,7 +271,6 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services)
 	utils.LogInfo("ROUTER", "Admin API routes configured")
 }
 
-// setupOAuthProviderAPI 配置 OAuth Provider API
 func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	oauthGroup := r.Group("/oauth")
 	oauthGroup.Use(middleware.APIBodySizeLimit())
@@ -341,9 +302,6 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *S
 	utils.LogInfo("ROUTER", "OAuth Provider API routes configured")
 }
 
-// ====================  WebSocket 路由 ====================
-
-// setupWebSocketRoutes 配置 WebSocket 路由
 func setupWebSocketRoutes(r *gin.Engine, svcs *Services) {
 	r.GET("/ws/qr-login", svcs.WSService.HandleQRLogin)
 	utils.LogInfo("ROUTER", "WebSocket routes configured")

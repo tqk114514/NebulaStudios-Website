@@ -1,24 +1,5 @@
-/**
- * cmd/build/main.go
- * 前端资源构建工具 - 入口文件
- *
- * 功能：
- * - JS 压缩优化（使用 esbuild）
- * - CSS 压缩
- * - HTML 压缩（去空白、注释）
- * - i18n 合并（所有语言打包到 translations.js）
- * - Brotli 预压缩
- * - 输出到 dist/ 目录
- *
- * 用法：
- *   go run ./cmd/build        # 生产构建（压缩 + Brotli）
- *   go run ./cmd/build -dev   # 开发模式（不压缩，保留 sourcemap）
- *
- * 依赖：
- * - github.com/evanw/esbuild/pkg/api
- * - github.com/andybalholm/brotli
- */
-
+// 前端资源构建工具，支持 JS/CSS/HTML 压缩、i18n 合并、Brotli 预压缩。
+// 用法：go run ./cmd/build （生产）或 go run ./cmd/build -dev（开发模式）。
 package main
 
 import (
@@ -29,32 +10,23 @@ import (
 	"time"
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// 目录路径
 	distDir    = "dist"
 	sharedDir  = "shared"
 	modulesDir = "modules"
 	dataDir    = "data"
 
-	// 文件权限
 	dirPerm  = 0755
 	filePerm = 0644
 )
 
-// ====================  配置 ====================
-
 var (
-	// 命令行参数
 	isDev = flag.Bool("dev", false, "Development mode (no minification, with sourcemap)")
 
-	// Home 模块页面入口文件
 	homePageEntries = []string{
 		"modules/home/assets/js/home.ts",
 	}
 
-	// Account 模块页面入口文件
 	accountPageEntries = []string{
 		"modules/account/assets/js/login.ts",
 		"modules/account/assets/js/register.ts",
@@ -66,25 +38,19 @@ var (
 		"modules/account/assets/js/404.ts",
 	}
 
-	// Policy 模块页面入口文件
 	policyPageEntries = []string{
 		"modules/policy/assets/js/policy.ts",
 	}
 
-	// Admin 模块页面入口文件（完全独立，不依赖 shared）
 	adminPageEntries = []string{
 		"modules/admin/assets/js/admin.ts",
 	}
 
-	// 支持的语言列表
 	supportedLanguages = []string{
 		"zh-CN", "zh-TW", "en", "ja", "ko",
 	}
 )
 
-// ====================  构建统计 ====================
-
-// BuildStats 构建统计信息
 type BuildStats struct {
 	FilesProcessed int64
 	BytesRead      int64
@@ -93,8 +59,6 @@ type BuildStats struct {
 }
 
 var stats BuildStats
-
-// ====================  主函数 ====================
 
 func main() {
 	flag.Parse()
@@ -107,7 +71,6 @@ func main() {
 
 	log.Printf("[BUILD] Starting build in %s mode...", mode)
 
-	// 运行构建
 	if err := run(); err != nil {
 		log.Fatalf("[BUILD] FATAL: Build failed: %v", err)
 	}
@@ -120,54 +83,44 @@ func main() {
 		formatBytes(stats.BytesWritten))
 }
 
-// run 执行构建流程
 func run() error {
-	// 1. 清理并创建 dist 目录
 	if err := setupDistDir(); err != nil {
 		return fmt.Errorf("setup dist dir failed: %w", err)
 	}
 
-	// 2. 构建后端数据文件
 	if err := buildBackendData(); err != nil {
 		return fmt.Errorf("backend data build failed: %w", err)
 	}
 
-	// 3. 合并 i18n 并构建 translations.js
 	if err := buildTranslations(); err != nil {
 		return fmt.Errorf("translations build failed: %w", err)
 	}
 
-	// 4. 构建 cookie-consent.js
 	if err := buildCookieConsent(); err != nil {
 		return fmt.Errorf("cookie-consent build failed: %w", err)
 	}
 
-	// 5. 构建 JavaScript
 	if err := buildJS(); err != nil {
 		return fmt.Errorf("JS build failed: %w", err)
 	}
 
-	// 6. 构建 CSS
 	if err := buildCSS(); err != nil {
 		return fmt.Errorf("CSS build failed: %w", err)
 	}
 
-	// 7. 构建 HTML
 	if err := buildHTML(); err != nil {
 		return fmt.Errorf("HTML build failed: %w", err)
 	}
 
-	// 8. 复制 Policy Markdown 文件
 	if err := buildPolicyMarkdown(); err != nil {
 		return fmt.Errorf("policy markdown build failed: %w", err)
 	}
 
-	// 9. 保存资源清单
 	if err := saveAssetManifest(); err != nil {
 		log.Printf("[BUILD] WARN: Failed to save asset manifest: %v", err)
 	}
 
-	// 10. 生产模式下生成 Brotli 预压缩文件
+	// 生产模式下为所有静态文件生成 Brotli 预压缩版本，服务端可零运行时开销直接发送 .br 文件
 	if !*isDev {
 		if err := brotliCompressDir(distDir); err != nil {
 			log.Printf("[BUILD] WARN: Brotli compression had errors: %v", err)
@@ -177,18 +130,13 @@ func run() error {
 	return nil
 }
 
-// ====================  目录设置 ====================
-
-// setupDistDir 清理并创建 dist 目录结构
 func setupDistDir() error {
 	log.Println("[BUILD] Setting up dist directory...")
 
-	// 清理旧的 dist 目录
 	if err := os.RemoveAll(distDir); err != nil {
 		log.Printf("[BUILD] WARN: Failed to remove old dist dir: %v", err)
 	}
 
-	// 创建目录结构
 	dirs := []string{
 		"dist/shared/js",
 		"dist/shared/css",

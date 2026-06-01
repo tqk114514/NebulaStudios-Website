@@ -1,12 +1,3 @@
-/**
- * cmd/build/css.go
- * CSS 构建模块
- *
- * 功能：
- * - 使用 esbuild 压缩 CSS
- * - 支持多模块构建
- */
-
 package main
 
 import (
@@ -20,33 +11,25 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// ====================  CSS 构建 ====================
-
-// buildCSS 构建 CSS 文件
 func buildCSS() error {
 	log.Println("[BUILD] Building CSS...")
 
-	// 构建共享 CSS
 	if err := buildCSSModule(filepath.Join(sharedDir, "css/*.css"), "dist/shared/css", "shared"); err != nil {
 		return err
 	}
 
-	// 构建 Home 模块 CSS
 	if err := buildCSSModule("modules/home/assets/css/*.css", "dist/home/assets/css", "home"); err != nil {
 		return err
 	}
 
-	// 构建 Account 模块 CSS
 	if err := buildCSSModule("modules/account/assets/css/*.css", "dist/account/assets/css", "account"); err != nil {
 		return err
 	}
 
-	// 构建 Policy 模块 CSS
 	if err := buildCSSModule("modules/policy/assets/css/*.css", "dist/policy/assets/css", "policy"); err != nil {
 		return err
 	}
 
-	// 构建 Admin 模块 CSS（合并为单个文件）
 	if err := buildAdminCSS(); err != nil {
 		return err
 	}
@@ -55,15 +38,12 @@ func buildCSS() error {
 	return nil
 }
 
-// buildAdminCSS 构建 Admin 模块 CSS（合并多个文件为一个）
 func buildAdminCSS() error {
-	// Admin CSS 按顺序合并：common.css -> admin.css
 	cssFiles := []string{
 		"modules/admin/assets/css/common.css",
 		"modules/admin/assets/css/admin.css",
 	}
 
-	// 读取并合并所有 CSS 文件
 	var combined []byte
 	for _, file := range cssFiles {
 		data, err := os.ReadFile(file)
@@ -74,7 +54,6 @@ func buildAdminCSS() error {
 		combined = append(combined, '\n')
 	}
 
-	// 使用 esbuild 压缩合并后的 CSS
 	opts := api.TransformOptions{
 		Loader: api.LoaderCSS,
 	}
@@ -94,13 +73,11 @@ func buildAdminCSS() error {
 		return fmt.Errorf("admin CSS build failed")
 	}
 
-	// 写入输出文件
 	outFile := "dist/admin/assets/css/admin.css"
 	if err := os.WriteFile(outFile, result.Code, filePerm); err != nil {
 		return fmt.Errorf("failed to write %s: %w", outFile, err)
 	}
 
-	// 哈希化 admin CSS
 	_, _ = addToManifest(outFile)
 
 	atomic.AddInt64(&stats.FilesProcessed, int64(len(cssFiles)))
@@ -109,7 +86,6 @@ func buildAdminCSS() error {
 	return nil
 }
 
-// buildCSSModule 构建单个 CSS 模块
 func buildCSSModule(pattern, outdir, moduleName string) error {
 	entries, err := filepath.Glob(pattern)
 	if err != nil {
@@ -143,7 +119,6 @@ func buildCSSModule(pattern, outdir, moduleName string) error {
 		return fmt.Errorf("%s CSS build failed", moduleName)
 	}
 
-	// 哈希化所有输出的 CSS 文件
 	files, err := os.ReadDir(outdir)
 	if err != nil {
 		return fmt.Errorf("failed to read output dir: %w", err)

@@ -1,12 +1,3 @@
-/**
- * cmd/build/utils.go
- * 辅助函数模块
- *
- * 功能：
- * - 文件复制
- * - 字节格式化
- */
-
 package main
 
 import (
@@ -21,18 +12,13 @@ import (
 	"sync/atomic"
 )
 
-// ====================  辅助函数 ====================
-
-// copyFile 复制文件
 func copyFile(src, dst string) error {
-	// 打开源文件
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source: %w", err)
 	}
 	defer func() { _ = srcFile.Close() }()
 
-	// 获取源文件信息
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
 		return fmt.Errorf("failed to stat source: %w", err)
@@ -40,19 +26,16 @@ func copyFile(src, dst string) error {
 
 	atomic.AddInt64(&stats.BytesRead, srcInfo.Size())
 
-	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(dst), dirPerm); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// 创建目标文件
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
 	defer func() { _ = dstFile.Close() }()
 
-	// 复制内容
 	written, err := io.Copy(dstFile, srcFile)
 	if err != nil {
 		return fmt.Errorf("failed to copy: %w", err)
@@ -62,7 +45,6 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-// formatBytes 格式化字节数为人类可读格式
 func formatBytes(bytes int64) string {
 	const (
 		KB = 1024
@@ -84,7 +66,6 @@ type AssetManifest map[string]string
 
 var assetManifest AssetManifest = make(AssetManifest)
 
-// hashFile 计算文件的 SHA256 哈希前8位
 func hashFile(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -94,7 +75,6 @@ func hashFile(filePath string) (string, error) {
 	return fmt.Sprintf("%x", hash)[:8], nil
 }
 
-// addToManifest 将文件添加到清单并返回哈希化后的路径
 func addToManifest(originalPath string) (string, error) {
 	hash, err := hashFile(originalPath)
 	if err != nil {
@@ -112,17 +92,14 @@ func addToManifest(originalPath string) (string, error) {
 		return "", err
 	}
 
-	// 存储完整路径映射
 	assetManifest[originalPath] = hashedName
 
-	// 同时存储相对路径映射（去掉 dist/ 前缀）
 	relPath := strings.TrimPrefix(originalPath, "dist/")
 	assetManifest[relPath] = hashedName
 
 	return hashedName, nil
 }
 
-// saveAssetManifest 保存资源清单到 JSON 文件
 func saveAssetManifest() error {
 	if len(assetManifest) == 0 {
 		log.Println("[BUILD] No assets to manifest")

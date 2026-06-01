@@ -1,13 +1,3 @@
-/**
- * cmd/build/html.go
- * HTML 构建模块
- *
- * 功能：
- * - HTML 压缩（去空白、注释）
- * - 支持 header 组件替换
- * - 支持多模块构建
- */
-
 package main
 
 import (
@@ -20,7 +10,6 @@ import (
 	"sync/atomic"
 )
 
-// HTML 压缩用正则（预编译，提高性能）
 var (
 	htmlCommentRe    = regexp.MustCompile(`<!--[\s\S]*?-->`)
 	htmlWhitespaceRe = regexp.MustCompile(`\s+`)
@@ -29,9 +18,6 @@ var (
 	styleBlockRe     = regexp.MustCompile(`(?i)<style\b[^>]*>[\s\S]*?</style>`)
 )
 
-// ====================  HTML 构建 ====================
-
-// loadInitLangScript 加载内联语言初始化脚本
 func loadInitLangScript() (string, error) {
 	scriptPath := filepath.Join(sharedDir, "js", "init-lang-inline.js")
 	data, err := os.ReadFile(scriptPath)
@@ -41,38 +27,31 @@ func loadInitLangScript() (string, error) {
 	return fmt.Sprintf("<script nonce=\"{{CSP_NONCE}}\">%s</script>", string(data)), nil
 }
 
-// buildHTML 构建 HTML 文件
 func buildHTML() error {
 	log.Println("[BUILD] Building HTML...")
 
-	// 加载内联语言初始化脚本
 	initLangScript, err := loadInitLangScript()
 	if err != nil {
 		log.Printf("[BUILD] WARN: Failed to load init-lang script: %v", err)
-		initLangScript = "" // 继续构建，但不注入脚本
+		initLangScript = ""
 	}
 
-	// 构建 Home 页面
 	if err := buildHTMLModule("modules/home/pages/*.html", "dist/home/pages", "home", initLangScript); err != nil {
 		return err
 	}
 
-	// 构建 Account 页面
 	if err := buildHTMLModule("modules/account/pages/*.html", "dist/account/pages", "account", initLangScript); err != nil {
 		return err
 	}
 
-	// 构建 Policy 页面
 	if err := buildHTMLModule("modules/policy/pages/*.html", "dist/policy/pages", "policy", initLangScript); err != nil {
 		return err
 	}
 
-	// 构建 Admin 页面（独立，不使用 header 组件）
 	if err := buildHTMLModuleSimple("modules/admin/pages/*.html", "dist/admin/pages", "admin"); err != nil {
 		return err
 	}
 
-	// 构建 shared/components
 	if err := buildHTMLModule("shared/components/*.html", "dist/shared/components", "components", initLangScript); err != nil {
 		return err
 	}
@@ -81,7 +60,6 @@ func buildHTML() error {
 	return nil
 }
 
-// loadHeaderComponent 加载 header.html 组件内容
 func loadHeaderComponent() (string, error) {
 	headerPath := filepath.Join(sharedDir, "components", "header.html")
 	data, err := os.ReadFile(headerPath)
@@ -91,7 +69,6 @@ func loadHeaderComponent() (string, error) {
 	return string(data), nil
 }
 
-// buildHTMLModule 构建单个 HTML 模块（支持 header 组件替换）
 func buildHTMLModule(pattern, outdir, moduleName, initLangScript string) error {
 	files, err := filepath.Glob(pattern)
 	if err != nil {
@@ -103,15 +80,13 @@ func buildHTMLModule(pattern, outdir, moduleName, initLangScript string) error {
 		return nil
 	}
 
-	// 加载 header 组件（用于替换 {{HEADER}}）
 	headerContent, err := loadHeaderComponent()
 	if err != nil {
 		log.Printf("[BUILD] WARN: Failed to load header component: %v", err)
-		headerContent = "" // 继续构建，但不替换
+		headerContent = ""
 	}
 
 	for _, src := range files {
-		// 跳过 header.html 本身（不需要替换）
 		if filepath.Base(src) == "header.html" {
 			if err := minifyHTMLFile(src, outdir); err != nil {
 				return fmt.Errorf("failed to minify %s: %w", src, err)
@@ -129,8 +104,7 @@ func buildHTMLModule(pattern, outdir, moduleName, initLangScript string) error {
 	return nil
 }
 
-// buildHTMLModuleSimple 构建简单 HTML 模块（不替换 header 组件）
-// 用于 Admin 等独立模块
+// buildHTMLModuleSimple 构建简单 HTML 模块，不替换 header 组件（用于 Admin 等独立模块）
 func buildHTMLModuleSimple(pattern, outdir, moduleName string) error {
 	files, err := filepath.Glob(pattern)
 	if err != nil {
@@ -153,7 +127,6 @@ func buildHTMLModuleSimple(pattern, outdir, moduleName string) error {
 	return nil
 }
 
-// minifyHTMLFile 压缩单个 HTML 文件到指定目录
 func minifyHTMLFile(src, outDir string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -168,7 +141,6 @@ func minifyHTMLFile(src, outDir string) error {
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
 
-	// 确保目标目录存在
 	if err := os.MkdirAll(outDir, dirPerm); err != nil {
 		return fmt.Errorf("failed to create output dir: %w", err)
 	}
@@ -181,7 +153,6 @@ func minifyHTMLFile(src, outDir string) error {
 	return nil
 }
 
-// minifyHTMLFileWithHeader 压缩 HTML 文件并替换 {{HEADER}} 占位符
 func minifyHTMLFileWithHeader(src, outDir, headerContent, initLangScript string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -190,26 +161,21 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent, initLangScript string)
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
-	// 替换 {{HEADER}} 占位符
 	content := string(data)
 	if headerContent != "" {
 		content = strings.ReplaceAll(content, "{{HEADER}}", headerContent)
 	}
 
-	// 注入内联语言初始化脚本到 <head> 中
 	if initLangScript != "" {
-		// 在 </head> 标签之前注入脚本
 		content = strings.ReplaceAll(content, "</head>", initLangScript+"</head>")
 	}
 
-	// 替换资源引用为哈希化版本
 	content = replaceAssetRefs(content)
 
 	minified := minifyHTML(content)
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
 
-	// 确保目标目录存在
 	if err := os.MkdirAll(outDir, dirPerm); err != nil {
 		return fmt.Errorf("failed to create output dir: %w", err)
 	}
@@ -222,7 +188,6 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent, initLangScript string)
 	return nil
 }
 
-// minifyHTMLFileTo 压缩单个 HTML 文件到指定路径
 func minifyHTMLFileTo(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -243,18 +208,12 @@ func minifyHTMLFileTo(src, dst string) error {
 	return nil
 }
 
-// minifyHTML 压缩 HTML（去空白、注释）
 func minifyHTML(html string) string {
 	if html == "" {
 		return ""
 	}
 
-	// 提取 <script> 和 <style> 块，用占位符替换以保护其内容不被压缩
 	var preservedBlocks []string
-	saveBlock := func(re *regexp.Regexp) *regexp.Regexp {
-		return re
-	}
-	_ = saveBlock
 
 	placeholder := func(block string) string {
 		idx := len(preservedBlocks)
@@ -269,19 +228,11 @@ func minifyHTML(html string) string {
 		return placeholder(match)
 	})
 
-	// 移除 HTML 注释
 	html = htmlCommentRe.ReplaceAllString(html, "")
-
-	// 移除多余空白（保留单个空格）
 	html = htmlWhitespaceRe.ReplaceAllString(html, " ")
-
-	// 移除标签间的空白
 	html = htmlTagSpaceRe.ReplaceAllString(html, "><")
-
-	// 移除首尾空白
 	html = strings.TrimSpace(html)
 
-	// 还原 <script> 和 <style> 块
 	for i, block := range preservedBlocks {
 		html = strings.Replace(html, fmt.Sprintf("\x00PRESERVE%d\x00", i), block, 1)
 	}
@@ -289,10 +240,7 @@ func minifyHTML(html string) string {
 	return html
 }
 
-// replaceAssetRefs 替换 HTML 中的资源引用为哈希化版本
 func replaceAssetRefs(html string) string {
-	// 匹配 <link href="..."> 和 <script src="...">
-	// 支持 .css 和 .js 文件
 	re := regexp.MustCompile(`(href|src)=["']([^"']+\.(css|js))["']`)
 
 	return re.ReplaceAllStringFunc(html, func(match string) string {
@@ -301,16 +249,13 @@ func replaceAssetRefs(html string) string {
 			return match
 		}
 
-		attr := parts[1]     // href 或 src
-		original := parts[2] // 完整路径如 /shared/css/general.css
-		_ = parts[3]         // css 或 js (忽略)
+		attr := parts[1]
+		original := parts[2]
+		_ = parts[3] // css 或 js
 
-		// 查找映射
 		for originalPath, hashedName := range assetManifest {
-			// 提取文件名进行比较
 			originalBase := filepath.Base(originalPath)
 			if strings.HasSuffix(original, originalBase) {
-				// 替换为哈希化后的文件名
 				newPath := strings.Replace(original, filepath.Base(originalPath), hashedName, 1)
 				return fmt.Sprintf(`%s="%s"`, attr, newPath)
 			}

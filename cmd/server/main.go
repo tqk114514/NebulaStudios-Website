@@ -1,20 +1,3 @@
-/**
- * cmd/server/main.go
- * 服务器入口文件
- *
- * 功能：
- * - Gin 服务器初始化和配置
- * - 服务容器初始化
- * - Handler 容器初始化
- * - HTTP 服务器管理
- * - 优雅关闭
- *
- * 依赖：
- * - Gin Web 框架
- * - PostgreSQL 数据库
- * - 内部服务模块
- */
-
 package main
 
 import (
@@ -46,8 +29,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  常量定义 ====================
-
 const (
 	serverReadTimeout  = 15 * time.Second
 	serverWriteTimeout = 30 * time.Second
@@ -63,8 +44,6 @@ const (
 	defaultMaxBodySize = 1 << 20
 )
 
-// ====================  主函数 ====================
-
 func main() {
 	utils.LogInfo("SERVER", "Starting authentication server...")
 
@@ -74,7 +53,6 @@ func main() {
 	}
 }
 
-// run 运行服务器的主逻辑
 func run() error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -114,9 +92,6 @@ func run() error {
 	return nil
 }
 
-// ====================  初始化函数 ====================
-
-// loadConfig 加载配置
 func loadConfig() (*config.Config, error) {
 	utils.LogInfo("CONFIG", "Loading configuration...")
 
@@ -134,7 +109,6 @@ func loadConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// initDatabase 初始化数据库连接
 func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	utils.LogInfo("DATABASE", "Initializing database connection...")
 
@@ -146,8 +120,6 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	utils.LogInfo("DATABASE", "Database connection established")
 	return pool, nil
 }
-
-// ====================  依赖容器 ====================
 
 // Repos 数据访问层容器
 type Repos struct {
@@ -175,7 +147,6 @@ type Services struct {
 	LimiterMgr         middleware.RateLimiterManager
 }
 
-// initRepos 初始化数据访问层
 func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	repos := &Repos{Pool: pool}
 
@@ -189,7 +160,6 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	return repos
 }
 
-// initServices 初始化业务服务层
 func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	utils.LogInfo("SERVICES", "Initializing services...")
 
@@ -242,8 +212,6 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	return svcs, nil
 }
 
-// ====================  Handler 容器 ====================
-
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
 	authHandler          *auth.AuthHandler
@@ -255,7 +223,6 @@ type Handlers struct {
 	adminHandler         *admin.AdminHandler
 }
 
-// initHandlers 初始化所有 Handlers
 func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, error) {
 	utils.LogInfo("HANDLERS", "Initializing handlers...")
 
@@ -330,9 +297,6 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	return hdlrs, nil
 }
 
-// ====================  服务器管理 ====================
-
-// createServer 创建 HTTP 服务器
 func createServer(port string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:         ":" + port,
@@ -343,7 +307,6 @@ func createServer(port string, handler http.Handler) *http.Server {
 	}
 }
 
-// startServer 启动服务器（非阻塞）
 func startServer(srv *http.Server) {
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
@@ -364,9 +327,6 @@ func startServer(srv *http.Server) {
 	utils.LogInfo("SERVER", fmt.Sprintf("Server is running on http://localhost%s", srv.Addr))
 }
 
-// ====================  优雅关闭 ====================
-
-// gracefulShutdown 优雅关闭服务器
 func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
