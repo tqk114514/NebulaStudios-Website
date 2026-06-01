@@ -162,41 +162,35 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 }
 
 // ValidateAndUseToken 验证并使用 Token
-// 参数：
-//   - ctx: 上下文
-//   - token: Token 字符串
-//
-// 返回：
-//   - *TokenResult: 验证结果
-//   - error: 错误信息
+// 使用原子 UPDATE ... RETURNING 消除 SELECT → 检查 → UPDATE 之间的竞态条件
 func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string) (*TokenResult, error) {
-	// 参数验证
 	if tokenStr == "" {
 		return nil, models.ErrInvalidToken
 	}
 
-	// 查询 Token
-	token, err := s.tokenRepo.FindByToken(ctx, tokenStr)
+	now := time.Now().UnixMilli()
+
+	// 原子性地标记 Token 为已使用，消除竞态条件
+	token, err := s.tokenRepo.MarkUsedAndGet(ctx, tokenStr, now)
 	if err != nil {
-		if utils.IsDatabaseNotFound(err) {
-			utils.LogDebug("TOKEN", "Token not found", tokenStr)
-			return nil, models.ErrInvalidToken
-		}
 		return nil, err
 	}
-
-	// 检查过期
-	if token.IsExpired() {
-		s.tokenRepo.DeleteByToken(ctx, tokenStr)
-		return nil, models.ErrTokenExpired
-	}
-
-	// 检查是否已使用
-	if token.IsUsed() {
+	if token == nil {
+		// Token 未被获取（已被使用 / 已过期 / 不存在），回退查询确定具体原因
+		existingToken, findErr := s.tokenRepo.FindByToken(ctx, tokenStr)
+		if findErr != nil {
+			if utils.IsDatabaseNotFound(findErr) {
+				utils.LogDebug("TOKEN", "Token not found", tokenStr)
+				return nil, models.ErrInvalidToken
+			}
+			return nil, findErr
+		}
+		if existingToken.IsExpired() {
+			s.tokenRepo.DeleteByToken(ctx, tokenStr)
+			return nil, models.ErrTokenExpired
+		}
 		return nil, models.ErrTokenUsed
 	}
-
-	now := time.Now().UnixMilli()
 
 	// 生成验证码（如果没有）
 	var codeStr string
@@ -206,10 +200,8 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 			return nil, utils.LogError("TOKEN", "GenerateCode", err)
 		}
 
-		// 更新 Token 的验证码
 		s.tokenRepo.UpdateCode(ctx, tokenStr, codeStr)
 
-		// 创建验证码记录
 		code := &models.Code{
 			Code:       codeStr,
 			Email:      token.Email,
@@ -221,9 +213,6 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 	} else {
 		codeStr = *token.Code
 	}
-
-	// 标记 Token 已使用
-	s.tokenRepo.MarkUsed(ctx, tokenStr)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Token validated: email=%s, type=%s", token.Email, token.Type))
 
