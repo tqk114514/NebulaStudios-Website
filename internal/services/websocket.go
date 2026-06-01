@@ -28,7 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
+	"hash/maphash"
 	"net/http"
 	"strings"
 	"sync"
@@ -366,20 +366,18 @@ func (ws *WebSocketService) GetStats() map[string]any {
 
 // ====================  私有方法 ====================
 
+// wsHashSeed maphash 种子（进程级别唯一）
+var wsHashSeed = maphash.MakeSeed()
+
 // getShard 获取 token 对应的分片
-// 参数：
-//   - token: 客户端 Token
-//
-// 返回：
-//   - *wsClientShard: 对应的分片
+// 使用 maphash 哈希算法分配分片，与限流器保持一致
 func (ws *WebSocketService) getShard(token string) *wsClientShard {
 	if token == "" {
 		return ws.shards[0]
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(token))
-	return ws.shards[h.Sum32()%wsShardCount]
+	h := maphash.String(wsHashSeed, token)
+	return ws.shards[h%wsShardCount]
 }
 
 // register 注册客户端
