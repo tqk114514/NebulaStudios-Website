@@ -1,13 +1,3 @@
-/**
- * cmd/build/data.go
- * 数据文件构建模块
- *
- * 功能：
- * - 构建后端数据文件（JSON、HTML 等）
- * - JSON 压缩
- * - 文件复制
- */
-
 package main
 
 import (
@@ -20,9 +10,6 @@ import (
 	"sync/atomic"
 )
 
-// ====================  数据文件构建 ====================
-
-// buildBackendData 构建后端数据文件（压缩但不生成 br）
 func buildBackendData() error {
 	log.Println("[BUILD] Building backend data...")
 
@@ -63,7 +50,6 @@ func buildBackendData() error {
 	return nil
 }
 
-// minifyJSONFile 压缩 JSON 文件
 func minifyJSONFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -72,13 +58,11 @@ func minifyJSONFile(src, dst string) error {
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
-	// 验证 JSON 格式
 	var jsonData any
 	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
 	}
 
-	// 压缩输出（无缩进）
 	minified, err := json.Marshal(jsonData)
 	if err != nil {
 		return fmt.Errorf("failed to marshal: %w", err)
@@ -92,7 +76,6 @@ func minifyJSONFile(src, dst string) error {
 	return nil
 }
 
-// buildPolicyMarkdown 复制 Policy Markdown 文件到 dist 目录
 func buildPolicyMarkdown() error {
 	log.Println("[BUILD] Building policy markdown files...")
 
@@ -114,7 +97,6 @@ func buildPolicyMarkdown() error {
 				if !os.IsNotExist(err) {
 					return fmt.Errorf("failed to read directory %s: %w", srcDir, err)
 				}
-				// 目录不存在，跳过该语言
 				continue
 			}
 

@@ -1,14 +1,3 @@
-/**
- * cmd/build/brotli.go
- * Brotli 压缩模块
- *
- * 功能：
- * - 使用 Brotli 预压缩静态文件
- * - 并行压缩提高效率
- * - 保留原文件，同时输出 .br 压缩版本
- *   运行时根据浏览器支持选择发送原文件或压缩文件，无需实时解压
- */
-
 package main
 
 import (
@@ -22,12 +11,9 @@ import (
 	"github.com/andybalholm/brotli"
 )
 
-// Brotli 压缩级别
 const brotliLevel = brotli.BestCompression
 
-// ====================  Brotli 压缩 ====================
-
-// brotliCompressDir 使用 Brotli 预压缩目录中的文件
+// brotliCompressDir 使用 Brotli 预压缩 dist 目录中的静态文件，运行时根据浏览器支持选择发送原文件或 .br 压缩版本
 func brotliCompressDir(dir string) error {
 	log.Println("[BUILD] Compressing with Brotli...")
 
@@ -40,29 +26,27 @@ func brotliCompressDir(dir string) error {
 		errChan         = make(chan error, 100)
 	)
 
-	// 收集需要压缩的文件
 	var filesToCompress []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf("[BUILD] WARN: Walk error for %s: %v", path, err)
-			return nil // 继续处理其他文件
+			return nil
 		}
 
 		if info.IsDir() {
 			return nil
 		}
 
-		// 跳过已压缩的文件
 		if strings.HasSuffix(path, ".br") {
 			return nil
 		}
 
-		// 跳过 dist/data 目录（后端数据不压缩）
+		// dist/data 是后端数据，运行时可能被读取，不预压缩
 		if strings.HasPrefix(filepath.ToSlash(path), "dist/data/") {
 			return nil
 		}
 
-		// 只压缩 js, css, json, md 文件（HTML 需要运行时替换 CSP nonce，不预压缩）
+		// HTML 需要运行时替换 CSP nonce，不预压缩
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext == ".js" || ext == ".css" || ext == ".json" || ext == ".md" {
 			filesToCompress = append(filesToCompress, path)
@@ -80,16 +64,15 @@ func brotliCompressDir(dir string) error {
 		return nil
 	}
 
-	// 并行压缩（限制并发数）
-	semaphore := make(chan struct{}, 4) // 最多 4 个并发
+	semaphore := make(chan struct{}, 4)
 
 	for _, path := range filesToCompress {
 		wg.Add(1)
 		go func(filePath string) {
 			defer wg.Done()
 
-			semaphore <- struct{}{}        // 获取信号量
-			defer func() { <-semaphore }() // 释放信号量
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
 			original, compressed, err := brotliFile(filePath)
 			if err != nil {
@@ -108,14 +91,12 @@ func brotliCompressDir(dir string) error {
 	wg.Wait()
 	close(errChan)
 
-	// 收集错误
 	var errs []error
 	for err := range errChan {
 		errs = append(errs, err)
 		log.Printf("[BUILD] WARN: Brotli compression failed: %v", err)
 	}
 
-	// 计算压缩率
 	var ratio float64
 	if totalOriginal > 0 {
 		ratio = float64(totalCompressed) / float64(totalOriginal) * 100
@@ -134,10 +115,7 @@ func brotliCompressDir(dir string) error {
 	return nil
 }
 
-// brotliFile 使用 Brotli 压缩单个文件，保留原文件
-// 返回原始大小和压缩后大小
 func brotliFile(src string) (int64, int64, error) {
-	// 读取原文件
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to read: %w", err)
@@ -145,20 +123,17 @@ func brotliFile(src string) (int64, int64, error) {
 
 	originalSize := int64(len(data))
 
-	// 跳过空文件
 	if originalSize == 0 {
 		log.Printf("[BUILD] WARN: Skipping empty file: %s", src)
 		return 0, 0, nil
 	}
 
-	// 创建 .br 文件
 	brPath := src + ".br"
 	brFile, err := os.Create(brPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to create .br file: %w", err)
 	}
 
-	// 使用 Brotli 压缩
 	brWriter := brotli.NewWriterLevel(brFile, brotliLevel)
 	_, err = brWriter.Write(data)
 	if err != nil {
@@ -178,7 +153,6 @@ func brotliFile(src string) (int64, int64, error) {
 		return 0, 0, fmt.Errorf("failed to close file: %w", err)
 	}
 
-	// 获取压缩后大小
 	brInfo, err := os.Stat(brPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to stat .br file: %w", err)

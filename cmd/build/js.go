@@ -1,13 +1,3 @@
-/**
- * cmd/build/js.go
- * JavaScript 构建模块
- *
- * 功能：
- * - 使用 esbuild 构建 TypeScript/JavaScript
- * - 支持数据注入（Policy 数据内嵌）
- * - 构建 i18n 翻译文件
- */
-
 package main
 
 import (
@@ -23,13 +13,9 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// ====================  JavaScript 构建 ====================
-
-// buildJS 构建 JavaScript 文件
 func buildJS() error {
 	log.Println("[BUILD] Building JavaScript...")
 
-	// 验证入口文件存在
 	if err := validateEntryPoints(homePageEntries); err != nil {
 		return fmt.Errorf("home entries validation failed: %w", err)
 	}
@@ -46,22 +32,18 @@ func buildJS() error {
 		return fmt.Errorf("admin entries validation failed: %w", err)
 	}
 
-	// 构建 Home 模块
 	if err := buildJSModule(homePageEntries, "dist/home/assets/js", "home", ""); err != nil {
 		return err
 	}
 
-	// 构建 Account 模块
 	if err := buildJSModule(accountPageEntries, "dist/account/assets/js", "account", ""); err != nil {
 		return err
 	}
 
-	// 构建 Policy 模块（无数据注入）
 	if err := buildJSModule(policyPageEntries, "dist/policy/assets/js", "policy", ""); err != nil {
 		return err
 	}
 
-	// 构建 Admin 模块（独立，无数据注入）
 	if err := buildJSModule(adminPageEntries, "dist/admin/assets/js", "admin", ""); err != nil {
 		return err
 	}
@@ -70,7 +52,6 @@ func buildJS() error {
 	return nil
 }
 
-// validateEntryPoints 验证入口文件是否存在
 func validateEntryPoints(entries []string) error {
 	for _, entry := range entries {
 		if _, err := os.Stat(entry); os.IsNotExist(err) {
@@ -80,8 +61,7 @@ func validateEntryPoints(entries []string) error {
 	return nil
 }
 
-// buildJSModule 构建单个 JS 模块
-// injectData 为空时不注入数据，非空时作为 __POLICY_DATA__ 注入
+// buildJSModule 构建单个 JS 模块，injectData 为空时不注入，非空时作为 __POLICY_DATA__ 注入
 func buildJSModule(entries []string, outdir, moduleName, injectData string) error {
 	if len(entries) == 0 {
 		log.Printf("[BUILD] WARN: No JS entries for %s module", moduleName)
@@ -93,22 +73,18 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		sourcemap = api.SourceMapLinked
 	}
 
-	// 如果需要注入数据，创建临时文件（保持在原目录，以便 import 能正确解析）
 	actualEntries := entries
 	var tmpFiles []string
 	if injectData != "" {
 		for _, entry := range entries {
-			// 读取原文件
 			data, err := os.ReadFile(entry)
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", entry, err)
 			}
 
-			// 在文件开头注入数据
 			injectedCode := fmt.Sprintf("const __POLICY_DATA__ = %s;\n\n", injectData)
 			output := injectedCode + string(data)
 
-			// 写入临时文件到原目录（保持相对 import 路径可用）
 			tmpFile := strings.TrimSuffix(entry, ".ts") + ".tmp.ts"
 			if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
 				return fmt.Errorf("failed to write temp file: %w", err)
@@ -144,7 +120,6 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 
 	result := api.Build(opts)
 
-	// 处理错误
 	if len(result.Errors) > 0 {
 		for _, err := range result.Errors {
 			log.Printf("[BUILD] ERROR: %s: %s", moduleName, err.Text)
@@ -156,7 +131,6 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		return fmt.Errorf("%s JS build failed with %d errors", moduleName, len(result.Errors))
 	}
 
-	// 如果使用了临时文件，需要重命名输出文件
 	if injectData != "" {
 		for _, entry := range entries {
 			baseName := strings.TrimSuffix(filepath.Base(entry), ".ts")
@@ -168,7 +142,6 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		}
 	}
 
-	// 哈希化所有输出的 JS 文件
 	files, err := os.ReadDir(outdir)
 	if err != nil {
 		return fmt.Errorf("failed to read output dir: %w", err)
@@ -187,7 +160,6 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		}
 	}
 
-	// 处理警告
 	for _, warn := range result.Warnings {
 		log.Printf("[BUILD] WARN: %s: %s", moduleName, warn.Text)
 	}
@@ -197,23 +169,17 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 	return nil
 }
 
-// ====================  翻译文件构建 ====================
-
-// buildTranslations 合并所有 i18n 文件并生成 translations.js
 func buildTranslations() error {
 	log.Println("[BUILD] Building translations...")
 
-	// i18n 子目录列表
 	i18nModules := []string{"general", "account", "policy", "home"}
 
-	// 读取所有语言文件
 	allTranslations := make(map[string]map[string]string)
 	var totalBytes int64
 
 	for _, lang := range supportedLanguages {
 		langData := make(map[string]string)
 
-		// 从每个子目录读取并合并
 		for _, module := range i18nModules {
 			filePath := filepath.Join(sharedDir, "i18n", module, lang+".json")
 
@@ -233,14 +199,12 @@ func buildTranslations() error {
 				return fmt.Errorf("failed to parse %s: %w", filePath, err)
 			}
 
-			// 合并到语言数据，并检查冲突
 			for key, newValue := range moduleData {
 				if existingValue, exists := langData[key]; exists {
 					if existingValue != newValue {
 						return fmt.Errorf("translation conflict: key '%s' in language '%s' has conflicting values (module '%s' has '%s', previous value was '%s')",
 							key, lang, module, newValue, existingValue)
 					}
-					// 值相同，直接覆盖（无所谓）
 				}
 				langData[key] = newValue
 			}
@@ -260,13 +224,11 @@ func buildTranslations() error {
 		return errors.New("no translation files found")
 	}
 
-	// 序列化为 JSON
 	translationsJSON, err := json.Marshal(allTranslations)
 	if err != nil {
 		return fmt.Errorf("failed to marshal translations: %w", err)
 	}
 
-	// 读取 translations.ts 模板
 	templatePath := filepath.Join(sharedDir, "js", "translations.ts")
 	templateData, err := os.ReadFile(templatePath)
 	if err != nil {
@@ -275,11 +237,9 @@ func buildTranslations() error {
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(templateData)))
 
-	// 在文件开头注入所有翻译数据
 	injectedCode := fmt.Sprintf("const __ALL_TRANSLATIONS__ = %s;\n\n", string(translationsJSON))
 	output := injectedCode + string(templateData)
 
-	// 写入临时文件
 	tmpFile := filepath.Join(distDir, "shared/js/translations.tmp.ts")
 	if err := os.WriteFile(tmpFile, []byte(output), filePerm); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
@@ -290,7 +250,6 @@ func buildTranslations() error {
 		}
 	}()
 
-	// 使用 esbuild 压缩到临时文件
 	sourcemap := api.SourceMapNone
 	if *isDev {
 		sourcemap = api.SourceMapLinked
@@ -321,7 +280,6 @@ func buildTranslations() error {
 		return errors.New("translations.js build failed")
 	}
 
-	// 重命名为正式文件名
 	finalPath := filepath.Join(distDir, "shared/js/translations.js")
 	if err := os.Rename(tmpOutFile, finalPath); err != nil {
 		return fmt.Errorf("failed to rename translations.js: %w", err)
@@ -332,7 +290,6 @@ func buildTranslations() error {
 		return fmt.Errorf("failed to hash translations.js: %w", err)
 	}
 
-	// 同时存储不带 .tmp 的映射
 	assetManifest[finalPath] = hashedName
 	assetManifest["shared/js/translations.js"] = hashedName
 
@@ -341,7 +298,6 @@ func buildTranslations() error {
 	return nil
 }
 
-// buildCookieConsent 构建 cookie-consent.js
 func buildCookieConsent() error {
 	log.Println("[BUILD] Building cookie-consent.js...")
 
@@ -392,7 +348,6 @@ func buildCookieConsent() error {
 		return errors.New("cookie-consent.js build failed")
 	}
 
-	// 重命名为正式文件名
 	finalPath := filepath.Join(distDir, "shared/js/cookie-consent.js")
 	if err := os.Rename(tmpOutFile, finalPath); err != nil {
 		return fmt.Errorf("failed to rename cookie-consent.js: %w", err)
@@ -403,7 +358,6 @@ func buildCookieConsent() error {
 		return fmt.Errorf("failed to hash cookie-consent.js: %w", err)
 	}
 
-	// 同时存储不带 .tmp 的映射
 	assetManifest[finalPath] = hashedName
 	assetManifest["shared/js/cookie-consent.js"] = hashedName
 
