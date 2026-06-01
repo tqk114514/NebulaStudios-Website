@@ -224,12 +224,6 @@ func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string)
 }
 
 // MarkUsed 标记 Token 为已使用
-// 参数：
-//   - ctx: 上下文
-//   - tokenStr: Token 字符串
-//
-// 返回：
-//   - error: 错误信息
 func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
@@ -240,6 +234,35 @@ func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
 		utils.LogWarn("TOKEN", "Failed to mark token as used", err)
 	}
 	return err
+}
+
+// MarkUsedAndGet 原子性地标记 Token 为已使用并返回 Token 数据
+// 使用单条 UPDATE ... RETURNING 消除 SELECT → 检查 → UPDATE 之间的竞态条件
+// 仅在 used=0 且未过期时成功，失败返回 nil 表示 Token 已被使用或已过期
+func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenStr string, now int64) (*Token, error) {
+	if tokenStr == "" {
+		return nil, ErrInvalidToken
+	}
+
+	if r.pool == nil {
+		return nil, errors.New("database not ready")
+	}
+
+	token := &Token{Token: tokenStr}
+	err := r.pool.QueryRow(ctx, `
+		UPDATE tokens SET used = 1
+		WHERE token = $1 AND used = 0 AND expire_time > $2
+		RETURNING email, type, code, expire_time
+	`, tokenStr, now).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime)
+
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil
+		}
+		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, tokenStr)
+	}
+
+	return token, nil
 }
 
 // DeleteExpired 删除过期的 Token
