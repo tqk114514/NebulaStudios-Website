@@ -1,18 +1,3 @@
-/**
- * cmd/server/tasks.go
- * 后台任务和中间件模块
- *
- * 功能：
- * - Token 清理定时任务
- * - 用户日志清理定时任务
- * - HTTP 请求日志中间件
- *
- * 依赖：
- * - internal/services (TokenService)
- * - internal/models (UserLogRepository)
- * - internal/utils (日志工具)
- */
-
 package main
 
 import (
@@ -29,9 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  后台任务 ====================
-
-// startBackgroundTasks 启动后台任务
 func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	utils.LogInfo("TASKS", "Starting background tasks...")
 
@@ -47,7 +29,6 @@ func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	utils.LogInfo("TASKS", "All background tasks started")
 }
 
-// runTokenCleanup 运行 Token 清理定时任务
 func runTokenCleanup(tokenService services.TokenManager) {
 	if tokenService == nil {
 		utils.LogWarn("TASKS", "Token service is nil, cleanup task disabled")
@@ -73,7 +54,6 @@ func runTokenCleanup(tokenService services.TokenManager) {
 	}
 }
 
-// runUserLogCleanup 运行用户日志清理定时任务
 func runUserLogCleanup(userLogRepo models.UserLogStore) {
 	if userLogRepo == nil {
 		utils.LogWarn("TASKS", "User log repository is nil, cleanup task disabled")
@@ -122,9 +102,6 @@ func runUserLogCleanup(userLogRepo models.UserLogStore) {
 	}
 }
 
-// ====================  日志中间件 ====================
-
-// loggerMiddleware 日志中间件
 func loggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -149,7 +126,6 @@ func loggerMiddleware() gin.HandlerFunc {
 	}
 }
 
-// shouldSkipLog 判断是否跳过日志记录
 func shouldSkipLog(path string) bool {
 	skipPrefixes := []string{
 		"/assets",
