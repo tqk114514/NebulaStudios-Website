@@ -1,15 +1,3 @@
-/**
- * internal/handlers/qrlogin/pc.go
- * 扫码登录 API Handler - PC 端路由
- *
- * 功能：
- * - 生成 Token、取消登录、设置会话
- *
- * 依赖：
- * - internal/services (Session、WebSocket 服务)
- * - internal/utils (加密工具)
- */
-
 package qrlogin
 
 import (
@@ -26,19 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  PC 端路由 ====================
-
-// Generate 生成扫码登录 Token
+// Generate 生成扫码登录 Token，加密后返回给 PC 端用于生成二维码
 // POST /api/qr-login/generate
-//
-// 响应：
-//   - success: 是否成功
-//   - token: 加密的 Token（用于生成二维码）
-//   - expireTime: 过期时间戳（毫秒）
-//
-// 错误码：
-//   - QR_NOT_CONFIGURED: 扫码登录未配置
-//   - QR_TOKEN_GENERATE_FAILED: Token 生成失败
 func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if !h.isConfigured {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusServiceUnavailable, "QR_NOT_CONFIGURED", "QR login not configured")
@@ -102,16 +79,8 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	})
 }
 
-// Cancel PC 端取消扫码登录
+// Cancel PC 端取消扫码登录，总是返回成功以避免信息泄露
 // POST /api/qr-login/cancel
-//
-// 请求体：
-//   - token: 加密的 Token
-//
-// 响应：
-//   - success: 是否成功（总是返回 true，避免信息泄露）
-//
-// 注意：此接口总是返回成功，避免泄露 Token 是否存在
 func (h *QRLoginHandler) Cancel(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
@@ -150,23 +119,8 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// SetSession PC 端设置会话 Cookie
+// SetSession PC 端设置会话 Cookie，验证 QR Token 和会话 Token 后设置认证 Cookie
 // POST /api/qr-login/set-session
-//
-// 请求体：
-//   - sessionToken: 会话 Token
-//   - token: 加密的 QR Token
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_TOKEN: 缺少 Token
-//   - INVALID_TOKEN: Token 无效
-//   - TOKEN_NOT_FOUND: Token 不存在
-//   - TOKEN_EXPIRED: Token 已过期
-//   - TOKEN_ALREADY_USED: Token 已被使用
-//   - INVALID_SESSION: 会话无效
 func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	var req struct {
 		SessionToken string `json:"sessionToken"`

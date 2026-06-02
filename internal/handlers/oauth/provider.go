@@ -1,29 +1,3 @@
-/**
- * internal/handlers/oauth/provider.go
- * OAuth Provider API Handler
- *
- * 功能：
- * - 授权端点 (GET/POST /oauth/authorize)
- * - Token 端点 (POST /oauth/token)
- * - 用户信息端点 (GET /oauth/userinfo)
- * - Token 撤销端点 (POST /oauth/revoke)
- *
- * 支持的授权类型：
- * - Authorization Code (response_type=code)
- * - Refresh Token (grant_type=refresh_token)
- *
- * 支持的 Scope：
- * - openid: 用户标识 (sub)
- * - profile: 用户名和头像
- * - email: 邮箱地址
- *
- * 依赖：
- * - internal/services (OAuth 服务)
- * - internal/models (用户模型)
- * - internal/cache (用户缓存)
- * - internal/middleware (认证中间件)
- */
-
 package oauth
 
 import (
@@ -41,10 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// 支持的 scope
 	ScopeOpenID  = "openid"
 	ScopeProfile = "profile"
 	ScopeEmail   = "email"
@@ -79,8 +50,6 @@ func authorizeErrorStatus(errorCode string) int {
 	}
 }
 
-// ====================  Handler 结构 ====================
-
 // OAuthProviderHandler OAuth Provider Handler
 type OAuthProviderHandler struct {
 	oauthService   services.OAuthClientManager
@@ -90,8 +59,6 @@ type OAuthProviderHandler struct {
 	sessionService services.SessionManager
 	baseURL        string
 }
-
-// ====================  构造函数 ====================
 
 // NewOAuthProviderHandler 创建 OAuth Provider Handler
 func NewOAuthProviderHandler(
@@ -112,26 +79,9 @@ func NewOAuthProviderHandler(
 	}
 }
 
-// ====================  授权端点 ====================
-
-// Authorize 授权端点 - 重定向到授权页面
+// Authorize 授权端点（GET），验证参数和登录状态后重定向到授权页面
 // GET /oauth/authorize
-//
-// 查询参数：
-//   - client_id: 客户端 ID（必需）
-//   - redirect_uri: 回调地址（必需）
-//   - response_type: 响应类型，必须为 "code"（必需）
-//   - scope: 请求的权限范围（必需）
-//   - state: 状态参数（推荐）
-//   - code_challenge: PKCE code_challenge（必需）
-//   - code_challenge_method: code_challenge 方法，支持 plain 和 S256（必需）
-//
-// 响应：
-//   - 重定向到授权页面（用户已登录）
-//   - 重定向到登录页面（用户未登录）
-//   - 重定向到错误页面（参数无效）
 func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
-	// 获取请求参数
 	clientID := c.Query("client_id")
 	redirectURI := c.Query("redirect_uri")
 	responseType := c.Query("response_type")
@@ -140,7 +90,6 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	codeChallenge := c.Query("code_challenge")
 	codeChallengeMethod := c.Query("code_challenge_method")
 
-	// 强制要求 PKCE 参数
 	if codeChallenge == "" {
 		h.redirectToErrorPage(c, "invalid_request", "Missing code_challenge parameter")
 		return
@@ -150,13 +99,11 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 验证必需参数
 	if clientID == "" {
 		h.redirectToErrorPage(c, "invalid_request", "Missing client_id parameter")
 		return
 	}
 
-	// 验证 client_id
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id", fmt.Sprintf("clientID=%s", clientID))
@@ -164,7 +111,6 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 验证 redirect_uri
 	if redirectURI == "" {
 		h.redirectToErrorPage(c, "invalid_request", "Missing redirect_uri parameter")
 		return
@@ -176,13 +122,11 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 验证 response_type
 	if responseType != "code" {
 		h.redirectWithError(c, redirectURI, state, "unsupported_response_type", "Only 'code' response type is supported")
 		return
 	}
 
-	// 验证 scope
 	if scope == "" {
 		h.redirectWithError(c, redirectURI, state, "invalid_scope", "Missing scope parameter")
 		return
@@ -194,7 +138,6 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 检查用户登录状态
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
 		// 未登录，重定向到登录页面，登录后返回
@@ -204,7 +147,6 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 获取用户信息
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
 		utils.LogError("OAUTH-PROVIDER", "Authorize", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
@@ -212,35 +154,23 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	// 检查用户是否被封禁
 	if user.CheckBanned() {
 		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize", fmt.Sprintf("userUID=%s", userUID))
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
 
-	// 重定向到授权页面（带参数）
 	authPageURL := h.buildAuthPageURL(clientID, redirectURI, normalizedScope, state, codeChallenge, codeChallengeMethod)
 	c.Redirect(http.StatusFound, authPageURL)
 }
 
-// AuthorizeInfo 获取授权信息 API
+// AuthorizeInfo 获取授权信息（客户端名称、描述、scope 列表、用户信息）
 // GET /oauth/authorize/info
-//
-// 查询参数：
-//   - client_id: 客户端 ID（必需）
-//   - redirect_uri: 回调地址（必需）
-//   - scope: 请求的权限范围（必需）
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 授权信息（clientName, clientDescription, scopes, username, userAvatar）
 func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 	clientID := c.Query("client_id")
 	redirectURI := c.Query("redirect_uri")
 	scope := c.Query("scope")
 
-	// 验证参数
 	if clientID == "" || redirectURI == "" || scope == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success":   false,
@@ -249,7 +179,6 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 		return
 	}
 
-	// 验证 client_id
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -259,7 +188,6 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 		return
 	}
 
-	// 验证 redirect_uri
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success":   false,
@@ -268,7 +196,6 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 		return
 	}
 
-	// 获取用户信息
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -287,10 +214,8 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 		return
 	}
 
-	// 规范化 scope
 	normalizedScope := h.normalizeScope(scope)
 
-	// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
 	avatarURL := user.AvatarURL
 	if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
 		avatarURL = user.MicrosoftAvatarURL.String
@@ -308,21 +233,8 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 	})
 }
 
-// AuthorizePost 授权端点 - 处理授权决定
+// AuthorizePost 处理授权决定（approve/deny），JSON 模式返回 redirect_url，否则 302 重定向
 // POST /oauth/authorize
-//
-// 表单参数：
-//   - client_id: 客户端 ID（必需）
-//   - redirect_uri: 回调地址（必需）
-//   - scope: 请求的权限范围（必需）
-//   - state: 状态参数（可选）
-//   - code_challenge: PKCE code_challenge
-//   - code_challenge_method: PKCE code_challenge_method
-//   - decision: 用户决定，"approve" 或 "deny"（必需）
-//
-// 响应：
-//   - Accept: application/json → JSON（含 redirect_url，由前端 fetch 调用）
-//   - 否则 → 302 重定向到 redirect_uri（带 code 或 error）
 func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	isJSON := acceptsJSON(c)
 
@@ -401,35 +313,13 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 	h.respondAuthorizeSuccess(c, isJSON, redirectURL)
 }
 
-// ====================  Token 端点 ====================
-
-// Token 端点
+// Token 端点，支持 authorization_code 和 refresh_token 两种 grant_type
 // POST /oauth/token
-//
-// 支持的 grant_type：
-//   - authorization_code: 用授权码换取 Token
-//   - refresh_token: 刷新 Access Token
-//
-// 请求参数（application/x-www-form-urlencoded）：
-//   - grant_type: 授权类型（必需）
-//   - client_id: 客户端 ID（必需）
-//   - client_secret: 客户端密钥（必需）
-//   - code: 授权码（grant_type=authorization_code 时必需）
-//   - redirect_uri: 回调地址（grant_type=authorization_code 时必需）
-//   - refresh_token: 刷新令牌（grant_type=refresh_token 时必需）
-//
-// 响应：
-//   - access_token: 访问令牌
-//   - token_type: "Bearer"
-//   - expires_in: 过期时间（秒）
-//   - refresh_token: 刷新令牌
-//   - scope: 授权范围
 func (h *OAuthProviderHandler) Token(c *gin.Context) {
 	grantType := c.PostForm("grant_type")
 	clientID := c.PostForm("client_id")
 	clientSecret := c.PostForm("client_secret")
 
-	// 验证客户端凭证
 	if clientID == "" || clientSecret == "" {
 		h.respondTokenError(c, http.StatusUnauthorized, "invalid_client", "Missing client credentials")
 		return
@@ -442,7 +332,6 @@ func (h *OAuthProviderHandler) Token(c *gin.Context) {
 		return
 	}
 
-	// 根据 grant_type 处理
 	switch grantType {
 	case "authorization_code":
 		h.handleAuthorizationCodeGrant(c, clientID)
@@ -469,7 +358,6 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 		return
 	}
 
-	// 换取 Token
 	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI, codeVerifier)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s", clientID))
@@ -477,7 +365,6 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 		return
 	}
 
-	// 检查用户是否被封禁
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
 		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token exchange", fmt.Sprintf("userUID=%s", userUID))
@@ -498,7 +385,6 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 		return
 	}
 
-	// 刷新 Token
 	tokenResp, userUID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s", clientID))
@@ -506,7 +392,6 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 		return
 	}
 
-	// 检查用户是否被封禁
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
 		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token refresh", fmt.Sprintf("userUID=%s", userUID))
@@ -518,21 +403,9 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 	c.JSON(http.StatusOK, tokenResp)
 }
 
-// ====================  UserInfo 端点 ====================
-
-// UserInfo 用户信息端点
+// UserInfo 用户信息端点，根据 scope（openid/profile/email）返回对应的用户信息
 // GET /oauth/userinfo
-//
-// 请求头：
-//   - Authorization: Bearer <access_token>
-//
-// 响应（根据 scope）：
-//   - sub: 用户 ID（openid）
-//   - username: 用户名（profile）
-//   - avatar_url: 头像 URL（profile）
-//   - email: 邮箱（email）
 func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
-	// 获取 Bearer Token
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 		h.respondUserInfoError(c, http.StatusUnauthorized, "invalid_token", "Missing or invalid Authorization header")
@@ -545,7 +418,6 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 		return
 	}
 
-	// 验证 Token
 	tokenInfo, err := h.oauthService.ValidateAccessToken(c.Request.Context(), accessToken)
 	if err != nil {
 		utils.LogWarn("OAUTH-PROVIDER", "Access token validation failed", "")
@@ -553,7 +425,6 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 		return
 	}
 
-	// 获取用户信息
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), tokenInfo.UserUID, h.userRepo.FindByUID)
 	if err != nil {
 		utils.LogError("OAUTH-PROVIDER", "UserInfo", err, fmt.Sprintf("Failed to get user for userinfo: userUID=%s", tokenInfo.UserUID))
@@ -561,14 +432,12 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 		return
 	}
 
-	// 检查用户是否被封禁
 	if user.CheckBanned() {
 		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to access userinfo", fmt.Sprintf("userUID=%s", tokenInfo.UserUID))
 		h.respondUserInfoError(c, http.StatusForbidden, "access_denied", "User is banned")
 		return
 	}
 
-	// 根据 scope 构建响应
 	response := h.buildUserInfoResponse(user, tokenInfo.Scope)
 	c.JSON(http.StatusOK, response)
 }
@@ -584,7 +453,6 @@ func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope st
 			response["sub"] = user.UID
 		case ScopeProfile:
 			response["username"] = user.Username
-			// 处理头像 URL：如果是 "microsoft" 标记，使用微软头像
 			avatarURL := user.AvatarURL
 			if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
 				avatarURL = user.MicrosoftAvatarURL.String
@@ -598,37 +466,23 @@ func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope st
 	return response
 }
 
-// ====================  Revoke 端点 ====================
-
-// Revoke Token 撤销端点
+// Revoke Token 撤销端点，始终返回 200 OK（RFC 7009）
 // POST /oauth/revoke
-//
-// 请求参数（application/x-www-form-urlencoded）：
-//   - token: 要撤销的 Token（必需）
-//   - token_type_hint: Token 类型提示（可选，access_token 或 refresh_token）
-//
-// 响应：
-//   - 始终返回 200 OK（RFC 7009）
 func (h *OAuthProviderHandler) Revoke(c *gin.Context) {
 	token := c.PostForm("token")
 
 	if token == "" {
-		// RFC 7009: 即使 token 为空也返回成功
 		c.Status(http.StatusOK)
 		return
 	}
 
-	// 撤销 Token（始终返回成功）
 	_ = h.oauthService.RevokeToken(c.Request.Context(), token)
 
 	utils.LogInfo("OAUTH-PROVIDER", "Token revoked")
 	c.Status(http.StatusOK)
 }
 
-// ====================  辅助方法 ====================
-
-// normalizeScope 规范化 scope
-// 返回空字符串表示无效 scope
+// normalizeScope 规范化 scope 字符串，过滤无效 scope，返回空字符串表示全部无效
 func (h *OAuthProviderHandler) normalizeScope(scope string) string {
 	parts := strings.Fields(scope)
 	validParts := make([]string, 0, len(parts))

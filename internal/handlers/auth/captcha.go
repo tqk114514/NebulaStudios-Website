@@ -1,18 +1,3 @@
-/**
- * internal/handlers/auth/captcha.go
- * 认证 API Handler - 验证码路由
- *
- * 功能：
- * - 验证码：发送、验证、过期检查、失效处理
- *
- * 依赖：
- * - internal/cache (用户缓存)
- * - internal/middleware (认证中间件、限流器)
- * - internal/models (用户模型)
- * - internal/services (Token、Email、Turnstile 服务)
- * - internal/utils (验证器)
- */
-
 package auth
 
 import (
@@ -29,30 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ==================== 验证码相关 Handler ====================
-
-// SendCode 发送注册验证码
+// SendCode 发送注册验证码到邮箱
 // POST /api/auth/send-code
-//
-// 请求体：
-//   - email: 邮箱地址（必需）
-//   - captchaToken: 验证码 Token（必需）
-//   - captchaType: 验证码类型（必需）
-//   - language: 语言代码（可选，默认 zh-CN）
-//
-// 响应：
-//   - success: 是否成功
-//   - expireTime: 验证码过期时间戳（毫秒）
-//   - email: 验证后的邮箱地址
-//
-// 错误码：
-//   - INVALID_REQUEST: 请求格式无效
-//   - INVALID_EMAIL / EMAIL_DOMAIN_NOT_ALLOWED: 邮箱验证失败
-//   - CAPTCHA_FAILED: 验证码验证失败
-//   - EMAIL_ALREADY_REGISTERED: 邮箱已注册
-//   - RATE_LIMIT: 发送频率超限
-//   - TOKEN_CREATE_FAILED: Token 创建失败
-//   - SEND_FAILED: 邮件发送失败
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req struct {
 		Email        string `json:"email"`
@@ -136,20 +99,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	})
 }
 
-// VerifyToken 验证邮件链接中的 Token
+// VerifyToken 验证邮件链接中的 Token，返回验证码和邮箱
 // POST /api/auth/verify-token
-//
-// 请求体：
-//   - token: 邮件中的验证 Token（必需）
-//
-// 响应：
-//   - success: 是否成功
-//   - code: 验证码
-//   - email: 邮箱地址
-//
-// 错误码：
-//   - NO_TOKEN: 缺少 Token
-//   - TOKEN_EXPIRED / TOKEN_INVALID / TOKEN_USED: Token 验证失败
 func (h *AuthHandler) VerifyToken(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
@@ -187,18 +138,8 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 	})
 }
 
-// CheckCodeExpiry 检查验证码是否过期
+// CheckCodeExpiry 检查验证码是否已过期
 // POST /api/auth/check-code-expiry
-//
-// 请求体：
-//   - email: 邮箱地址（必需）
-//
-// 响应：
-//   - success: 是否成功
-//   - expired: 是否已过期
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少邮箱参数
 func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 	var req struct {
 		Email string `json:"email"`
@@ -235,18 +176,6 @@ func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
 
 // VerifyCode 验证用户输入的验证码
 // POST /api/auth/verify-code
-//
-// 请求体：
-//   - code: 验证码（必需）
-//   - email: 邮箱地址（必需）
-//   - tokenType: 验证码类型（必需，如 register, reset_password, change_password, delete_account）
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少参数
-//   - CODE_INVALID / CODE_EXPIRED / TYPE_MISMATCH: 验证码验证失败
 func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	var req struct {
 		Code      string `json:"code"`
@@ -282,17 +211,8 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// InvalidateCode 使验证码失效
+// InvalidateCode 使指定邮箱的验证码失效
 // POST /api/auth/invalidate-code
-//
-// 请求体：
-//   - email: 邮箱地址（必需）
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少邮箱参数
 func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 	var req struct {
 		Email string `json:"email"`

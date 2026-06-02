@@ -1,14 +1,3 @@
-/**
- * internal/handlers/admin/data.go
- * 管理后台 API Handler - 数据导入导出
- *
- * 功能：
- * - 导出数据加密下载（OTAC 授权）
- * - 导入数据解密写入
- *
- * 权限：仅限超级管理员（SuperAdminMiddleware）
- */
-
 package admin
 
 import (
@@ -21,8 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// ====================  请求/响应结构 ====================
 
 type exportRequestResponse struct {
 	RequestID string `json:"requestId"`
@@ -51,8 +38,6 @@ type importExecuteResponse struct {
 	UsersImported int `json:"usersImported"`
 	LogsImported  int `json:"logsImported"`
 }
-
-// ====================  Handler 方法 ====================
 
 // RequestExport 生成 OTAC（一次性授权码）
 // POST /admin/api/data/export/request
@@ -263,9 +248,6 @@ func (h *AdminHandler) RevokeOTAC(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{"message": "OTAC revoked"})
 }
 
-// ====================  私有辅助方法 ====================
-
-// queryAllUsers 查询所有用户
 func (h *AdminHandler) queryAllUsers(ctx context.Context) ([]map[string]any, error) {
 	p := h.pool
 	if p == nil {
@@ -333,7 +315,6 @@ func (h *AdminHandler) queryAllUsers(ctx context.Context) ([]map[string]any, err
 	return users, rows.Err()
 }
 
-// queryAllUserLogs 查询所有用户操作日志
 func (h *AdminHandler) queryAllUserLogs(ctx context.Context) ([]map[string]any, error) {
 	p := h.pool
 	if p == nil {
@@ -381,7 +362,6 @@ func (h *AdminHandler) queryAllUserLogs(ctx context.Context) ([]map[string]any, 
 	return logs, rows.Err()
 }
 
-// importUsers 批量导入用户
 func (h *AdminHandler) importUsers(ctx context.Context, users []map[string]any) (int, error) {
 	p := h.pool
 	if p == nil {
@@ -447,7 +427,6 @@ func (h *AdminHandler) importUsers(ctx context.Context, users []map[string]any) 
 	return imported, nil
 }
 
-// importUserLogs 批量导入用户操作日志
 func (h *AdminHandler) importUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
 	p := h.pool
 	if p == nil {
@@ -485,8 +464,6 @@ func (h *AdminHandler) importUserLogs(ctx context.Context, logs []map[string]any
 
 	return imported, nil
 }
-
-// ====================  类型转换辅助函数 ====================
 
 func (h *AdminHandler) deleteAllUsers(ctx context.Context) error {
 	p := h.pool

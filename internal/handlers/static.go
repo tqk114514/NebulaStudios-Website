@@ -1,25 +1,4 @@
-/**
- * internal/handlers/static.go
- * 静态文件和配置 API Handler
- *
- * 功能：
- * - 静态文件服务（HTML 页面，Brotli 压缩）
- * - 页面路由（Account、Policy 模块）
- * - 配置 API（验证码站点密钥）
- * - 健康检查 API（数据库、缓存、WebSocket 状态）
- * - 404 页面处理
- *
- * 依赖：
- * - internal/cache (用户缓存统计)
- * - internal/config (应用配置)
- * - internal/models (数据库连接池)
- * - internal/services (WebSocket 服务、验证码服务)
- *
- * 页面模块：
- * - Account 模块：登录、注册、验证、忘记密码、仪表盘、链接确认
- * - Policy 模块：隐私政策、服务条款、Cookie 政策
- */
-
+// Package handlers 提供静态文件服务、页面路由、配置 API 和健康检查。
 package handlers
 
 import (
@@ -40,48 +19,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrStaticFileNotFound 静态文件不存在
-	ErrStaticFileNotFound = errors.New("STATIC_FILE_NOT_FOUND")
-
-	// ErrStaticHandlerNotInitialized Handler 未初始化
+	ErrStaticFileNotFound          = errors.New("STATIC_FILE_NOT_FOUND")
 	ErrStaticHandlerNotInitialized = errors.New("STATIC_HANDLER_NOT_INITIALIZED")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// DistHomePages Home 模块页面路径
-	DistHomePages = "dist/home/pages"
-
-	// DistAccountPages Account 模块页面路径
-	DistAccountPages = "dist/account/pages"
-
-	// DistPolicyPages Policy 模块页面路径
-	DistPolicyPages = "dist/policy/pages"
-
-	// DistAdminPages Admin 模块页面路径
-	DistAdminPages = "dist/admin/pages"
-
-	// ContentTypeHTML HTML 内容类型
-	ContentTypeHTML = "text/html; charset=utf-8"
-
-	// ContentEncodingBrotli Brotli 编码
+	DistHomePages         = "dist/home/pages"
+	DistAccountPages      = "dist/account/pages"
+	DistPolicyPages       = "dist/policy/pages"
+	DistAdminPages        = "dist/admin/pages"
+	ContentTypeHTML       = "text/html; charset=utf-8"
 	ContentEncodingBrotli = "br"
-
-	// CacheControlNoCache 不缓存（每次验证）
-	CacheControlNoCache = "no-cache"
-
-	// CacheControlNoStore 完全不缓存（敏感页面用）
-	CacheControlNoStore = "no-store, no-cache, must-revalidate, max-age=0"
+	CacheControlNoCache   = "no-cache"
+	CacheControlNoStore   = "no-store, no-cache, must-revalidate, max-age=0"
 )
 
-// ====================  Handler 结构 ====================
-
-// StaticHandler 静态文件 Handler
-// 处理静态文件服务和配置 API
+// StaticHandler 静态文件 Handler，处理静态文件服务和配置 API
 type StaticHandler struct {
 	cfg            *config.Config
 	userCache      services.UserCacheStore
@@ -90,19 +44,7 @@ type StaticHandler struct {
 	pool           *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
-// NewStaticHandler 创建静态文件 Handler
-//
-// 参数：
-//   - cfg: 应用配置（必需）
-//   - userCache: 用户缓存（必需，用于健康检查）
-//   - wsService: WebSocket 服务（必需，用于健康检查）
-//   - captchaService: 验证码服务（必需，用于配置 API）
-//
-// 返回：
-//   - *StaticHandler: Handler 实例
-//   - error: 错误信息（参数为 nil 时返回错误）
+// NewStaticHandler 创建静态文件 Handler，验证所有必需依赖后初始化
 func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsService services.WebSocketManager, captchaService services.CaptchaVerifier, pool *pgxpool.Pool) (*StaticHandler, error) {
 	if cfg == nil {
 		return nil, errors.New("cfg is required")
@@ -128,15 +70,8 @@ func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsS
 	}, nil
 }
 
-// ====================  配置 API ====================
-
-// GetCaptchaConfig 获取验证码配置
+// GetCaptchaConfig 获取验证码配置，返回可用验证器列表
 // GET /api/config/captcha
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 包含 providers 字段
-//   - data.providers: 可用验证器列表 [{type, siteKey}, ...]
 func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	if h.captchaService == nil {
 		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "CONFIG_NOT_LOADED", "CaptchaService is nil in GetCaptchaConfig")
@@ -153,13 +88,8 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
-// GetPolicyVersions 获取政策版本列表
+// GetPolicyVersions 获取政策版本列表，按政策类型和语言分组
 // GET /api/policy/versions
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 包含各政策类型的版本列表（按语言分组）
-//   - data.{policyType}.{lang}: 该政策类型对应语言的版本数组（按日期降序）
 func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	policyBasePath := "dist/shared/i18n/policy"
 
@@ -215,13 +145,8 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	utils.RespondSuccessWithData(c, result)
 }
 
-// GetVersion 获取服务端版本与代码库版本
+// GetVersion 获取服务端与代码库版本（repo commit 缓存 10 分钟）
 // GET /api/version
-//
-// 响应：
-//   - success: 是否成功
-//   - data.serverCommit: 当前运行的服务端 Git commit（编译时注入）
-//   - data.repoCommit: GitHub 仓库最新 commit（缓存 10 分钟）
 func (h *StaticHandler) GetVersion(c *gin.Context) {
 	utils.RespondSuccessWithData(c, gin.H{
 		"serverCommit": version.ServerCommit,
@@ -229,14 +154,8 @@ func (h *StaticHandler) GetVersion(c *gin.Context) {
 	})
 }
 
-// GetHealth 健康检查（增强版）
+// GetHealth 健康检查，返回数据库、缓存和 WebSocket 状态，status 为 ok 或 degraded
 // GET /api/health
-//
-// 响应：
-//   - status: 服务状态（ok/degraded）
-//   - database: 数据库连接池统计
-//   - cache: 缓存统计
-//   - websocket: WebSocket 连接统计
 func (h *StaticHandler) GetHealth(c *gin.Context) {
 	status := "ok"
 	var dbStats gin.H
@@ -300,10 +219,7 @@ func (h *StaticHandler) GetHealth(c *gin.Context) {
 	})
 }
 
-// ====================  页面服务辅助函数 ====================
-
 // serveBrotliOrDecompressed 根据浏览器支持发送 .br 压缩文件或原文件
-// 构建时同时输出原文件和 .br 文件，运行时无需解压
 func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl string) {
 	if middleware.AcceptsBrotli(c) {
 		if _, err := os.Stat(brPath); err == nil {
@@ -332,13 +248,7 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 	serve404Fallback(c)
 }
 
-// serveHTML 服务 HTML 页面
-// 优先读取原文件（用于 CSP nonce 替换），支持 Brotli 时发送 .br 版本
-//
-// 参数：
-//   - c: Gin 上下文
-//   - basePath: 页面目录
-//   - pageName: 页面文件名（如 login.html）
+// serveHTML 服务 HTML 页面，优先读取原文件用于 CSP nonce 替换
 func serveHTML(c *gin.Context, basePath, pageName string) {
 	origPath := filepath.Join(basePath, pageName)
 
@@ -367,10 +277,6 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 	c.Data(200, ContentTypeHTML, []byte(html))
 }
 
-// serve404Fallback 服务 404 页面（回退方案）
-//
-// 参数：
-//   - c: Gin 上下文
 func serve404Fallback(c *gin.Context) {
 	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
 	c.Status(http.StatusNotFound)
@@ -392,15 +298,11 @@ func serve404Fallback(c *gin.Context) {
 	c.String(http.StatusNotFound, "404 Not Found")
 }
 
-// ====================  Home 模块页面路由 ====================
-
 // ServeHomePage 服务首页
 // GET /
 func ServeHomePage(c *gin.Context) {
 	serveHTML(c, DistHomePages, "index.html")
 }
-
-// ====================  Account 模块页面路由 ====================
 
 // ServeLoginPage 服务登录页面
 // GET /account/login
@@ -444,8 +346,6 @@ func ServeOAuthPage(c *gin.Context) {
 	serveHTML(c, DistAccountPages, "oauth.html")
 }
 
-// ====================  Policy 模块页面路由 ====================
-
 // ServePolicyPage 服务政策中心 SPA 页面
 // GET /policy
 // 支持 hash 路由：/policy#privacy, /policy#terms, /policy#cookies
@@ -453,26 +353,14 @@ func ServePolicyPage(c *gin.Context) {
 	serveHTML(c, DistPolicyPages, "policy.html")
 }
 
-// ====================  Admin 模块页面路由 ====================
-
-// ServeAdminPage 服务管理后台 SPA 页面
-// GET /admin
-// 注意：此函数需要配合 AdminPageMiddleware 使用
-// 缓存策略：完全禁止缓存，确保权限变更后立即生效
+// ServeAdminPage 服务管理后台 SPA 页面，完全禁止缓存
 func ServeAdminPage(c *gin.Context) {
 	c.Header("Cache-Control", CacheControlNoStore)
 	c.Header("Pragma", "no-cache")
 	serveHTML(c, DistAdminPages, "index.html")
 }
 
-// ====================  404 处理 ====================
-
-// NotFoundHandler 404 处理
-// 处理所有未匹配的路由
-//
-// 响应：
-//   - 404 状态码
-//   - 404.html 页面
+// NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面
 func NotFoundHandler(c *gin.Context) {
 	// 记录 404 请求（仅记录非静态资源请求）
 	path := c.Request.URL.Path
@@ -490,14 +378,7 @@ func NotFoundHandler(c *gin.Context) {
 	serveHTML(c, DistAccountPages, "404.html")
 }
 
-// isStaticAsset 检查路径是否为静态资源
-// 用于过滤 404 日志，避免记录过多静态资源请求
-//
-// 参数：
-//   - path: 请求路径
-//
-// 返回：
-//   - bool: 是否为静态资源
+// isStaticAsset 检查路径是否为静态资源，用于过滤 404 日志
 func isStaticAsset(path string) bool {
 	staticExtensions := []string{
 		".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",

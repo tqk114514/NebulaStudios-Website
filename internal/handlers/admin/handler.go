@@ -1,22 +1,5 @@
-/**
- * internal/handlers/admin/handler.go
- * 管理后台 API Handler - 核心定义
- *
- * 功能：
- * - Handler 结构定义
- * - 构造函数
- * - 错误和常量定义
- *
- * 安全说明：
- * - 所有接口需要管理员权限
- * - 敏感操作需要超级管理员权限
- * - 操作记录审计日志
- *
- * 依赖：
- * - UserRepository: 用户数据访问
- * - UserCache: 用户缓存（用于失效）
- */
-
+// Package admin 提供管理后台 API Handler，包括用户管理、数据导入导出、OAuth 配置和系统操作。
+// 所有接口需要管理员权限，敏感操作需要超级管理员权限（SuperAdminMiddleware）。
 package admin
 
 import (
@@ -30,29 +13,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrAdminNilUserRepo 用户仓库为空
-	ErrAdminNilUserRepo = errors.New("user repository is nil")
-	// ErrAdminNilUserCache 用户缓存为空
+	ErrAdminNilUserRepo  = errors.New("user repository is nil")
 	ErrAdminNilUserCache = errors.New("user cache is nil")
-	// ErrAdminNilLogRepo 日志仓库为空
-	ErrAdminNilLogRepo = errors.New("admin log repository is nil")
+	ErrAdminNilLogRepo   = errors.New("admin log repository is nil")
 )
-
-// ====================  常量定义 ====================
 
 const (
-	// defaultPageSize 默认分页大小
 	defaultPageSize = 20
-	// maxPageSize 最大分页大小
-	maxPageSize = 100
-	// adminTimeout 管理操作超时时间
-	adminTimeout = 10 * time.Second
+	maxPageSize     = 100
+	adminTimeout    = 10 * time.Second
 )
-
-// ====================  数据结构 ====================
 
 // AdminHandler 管理后台 Handler
 type AdminHandler struct {
@@ -67,20 +38,8 @@ type AdminHandler struct {
 	pool               *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
-// NewAdminHandler 创建管理后台 Handler
-// 参数：
-//   - userRepo: 用户数据仓库
-//   - userCache: 用户缓存
-//   - logRepo: 管理员日志仓库
-//   - userLogRepo: 用户日志仓库
-//   - oauthService: OAuth 服务（可选）
-//   - emailWhitelistRepo: 邮箱白名单仓库（可选）
-//
-// 返回：
-//   - *AdminHandler: Handler 实例
-//   - error: 错误信息
+// NewAdminHandler 创建管理后台 Handler，验证必需依赖（userRepo、userCache、logRepo）后初始化。
+// oauthService 和 emailWhitelistRepo 为可选参数。
 func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthClientManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, pool *pgxpool.Pool) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo

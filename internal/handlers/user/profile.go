@@ -1,15 +1,3 @@
-/**
- * internal/handlers/user/profile.go
- * 用户个人资料 API Handler
- *
- * 功能：
- * - 更新用户名
- * - 更新头像
- *
- * 依赖：
- * - UserHandler 核心结构
- */
-
 package user
 
 import (
@@ -23,9 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  请求结构 ====================
-
-// updateUsernameRequest 更新用户名请求
 type updateUsernameRequest struct {
 	Username     string `json:"username"`
 	CaptchaToken string `json:"captchaToken"`
@@ -36,8 +21,6 @@ type updateUsernameRequest struct {
 type updateAvatarRequest struct {
 	AvatarURL string `json:"avatar_url"`
 }
-
-// ====================  公开方法 ====================
 
 // UpdateUsername 更新用户名
 // POST /api/user/username

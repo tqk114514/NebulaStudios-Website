@@ -1,15 +1,3 @@
-/**
- * internal/handlers/qrlogin/mobile.go
- * 扫码登录 API Handler - 移动端路由
- *
- * 功能：
- * - 扫描二维码、确认登录、取消登录
- *
- * 依赖：
- * - internal/services (Session、WebSocket 服务)
- * - internal/utils (加密工具)
- */
-
 package qrlogin
 
 import (
@@ -24,25 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  移动端路由 ====================
-
-// Scan 移动端扫描二维码
+// Scan 移动端扫描二维码，返回 PC 端信息（ip/browser/os）
 // POST /api/qr-login/scan
-//
-// 请求体：
-//   - token: 加密的 Token（从二维码获取）
-//
-// 响应：
-//   - success: 是否成功
-//   - pcInfo: PC 端信息（ip, browser, os）
-//
-// 错误码：
-//   - MISSING_TOKEN: 缺少 Token
-//   - INVALID_TOKEN_FORMAT: Token 格式无效
-//   - INVALID_TOKEN: Token 无效
-//   - TOKEN_NOT_FOUND: Token 不存在
-//   - TOKEN_EXPIRED: Token 已过期
-//   - TOKEN_ALREADY_USED: Token 已被使用
 func (h *QRLoginHandler) Scan(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
@@ -116,26 +87,8 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	})
 }
 
-// MobileConfirm 移动端确认登录
+// MobileConfirm 移动端确认登录，需要登录，生成 PC 端会话 Token 并通过 WebSocket 推送
 // POST /api/qr-login/mobile-confirm
-//
-// 认证：需要登录（Cookie）
-//
-// 请求体：
-//   - token: 加密的 Token
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_TOKEN: 缺少 Token
-//   - NOT_LOGGED_IN: 未登录
-//   - INVALID_SESSION: 会话无效
-//   - INVALID_TOKEN: Token 无效
-//   - TOKEN_NOT_FOUND: Token 不存在
-//   - TOKEN_EXPIRED: Token 已过期
-//   - TOKEN_ALREADY_USED: Token 已被使用（状态不是 scanned）
-//   - SESSION_CREATE_FAILED: 会话创建失败
 func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
@@ -222,18 +175,8 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// MobileCancel 移动端取消登录
+// MobileCancel 移动端取消登录，删除 Token 并通知 PC 端
 // POST /api/qr-login/mobile-cancel
-//
-// 请求体：
-//   - token: 加密的 Token
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_TOKEN: 缺少 Token
-//   - INVALID_TOKEN: Token 无效
 func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
