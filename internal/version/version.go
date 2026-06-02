@@ -1,17 +1,7 @@
-/**
- * internal/version/version.go
- * 版本信息包
- *
- * 功能：
- * - ServerCommit：编译时通过 ldflags 注入的 Git commit hash
- * - 版本信息 API 数据结构
- *
- * 编译时注入方式：
- *   go build -ldflags "-X auth-system/internal/version.ServerCommit=$(git rev-parse --short HEAD)"
- */
-
+// Package version 提供编译时注入的版本信息和 GitHub 最新 commit 缓存
 package version
 
+// ServerCommit 编译时通过 ldflags 注入的 Git commit hash，未注入时默认 "unknown"
 var ServerCommit = "unknown"
 
 const (
