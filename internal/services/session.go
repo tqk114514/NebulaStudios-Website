@@ -1,22 +1,3 @@
-/**
- * internal/services/session.go
- * JWT 会话管理服务
- *
- * 功能：
- * - JWT Token 生成
- * - JWT Token 验证
- * - 会话有效期管理
- *
- * 设计原则：
- * - JWT 只存储 userId，其他数据从数据库实时获取
- * - 保证用户数据的实时性和一致性
- * - 使用 ES256 签名算法（ECDSA P-256，私钥签发，公钥验证）
- *
- * 依赖：
- * - github.com/golang-jwt/jwt/v5: JWT 库
- * - Config: JWT 配置
- */
-
 package services
 
 import (
@@ -34,47 +15,25 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrSessionNilConfig 配置为空
-	ErrSessionNilConfig = errors.New("session config is nil")
-	// ErrSessionEmptyPrivateKey ECDSA 私钥为空
-	ErrSessionEmptyPrivateKey = errors.New("ECDSA private key is empty")
-	// ErrSessionInvalidPrivateKey ECDSA 私钥无效
+	ErrSessionNilConfig         = errors.New("session config is nil")
+	ErrSessionEmptyPrivateKey   = errors.New("ECDSA private key is empty")
 	ErrSessionInvalidPrivateKey = errors.New("ECDSA private key is invalid")
-	// ErrSessionInvalidExpiry 无效的过期时间
-	ErrSessionInvalidExpiry = errors.New("invalid JWT expiry duration")
-	// ErrNoToken Token 为空
-	ErrNoToken = errors.New("NO_TOKEN")
-	// ErrTokenExpiredSession Token 已过期
-	ErrTokenExpiredSession = errors.New("TOKEN_EXPIRED")
-	// ErrInvalidTokenSession Token 无效
-	ErrInvalidTokenSession = errors.New("INVALID_TOKEN")
-	// ErrTokenError Token 错误
-	ErrTokenError = errors.New("TOKEN_ERROR")
-	// ErrInvalidUser 无效的用户
-	ErrInvalidUser = errors.New("INVALID_USER")
-	// ErrTokenGenerationFailed Token 生成失败
-	ErrTokenGenerationFailed = errors.New("TOKEN_GENERATION_FAILED")
-	// ErrInvalidSigningMethod 无效的签名方法
-	ErrInvalidSigningMethod = errors.New("invalid signing method")
+	ErrSessionInvalidExpiry     = errors.New("invalid JWT expiry duration")
+	ErrNoToken                  = errors.New("NO_TOKEN")
+	ErrTokenExpiredSession      = errors.New("TOKEN_EXPIRED")
+	ErrInvalidTokenSession      = errors.New("INVALID_TOKEN")
+	ErrTokenError               = errors.New("TOKEN_ERROR")
+	ErrInvalidUser              = errors.New("INVALID_USER")
+	ErrTokenGenerationFailed    = errors.New("TOKEN_GENERATION_FAILED")
+	ErrInvalidSigningMethod     = errors.New("invalid signing method")
 )
-
-// ====================  常量定义 ====================
 
 const (
-	// defaultJWTExpiry 默认 JWT 过期时间
 	defaultJWTExpiry = 24 * time.Hour
-
-	// minJWTExpiry 最小 JWT 过期时间
-	minJWTExpiry = 1 * time.Minute
-
-	// maxJWTExpiry 最大 JWT 过期时间
-	maxJWTExpiry = 30 * 24 * time.Hour // 30 天
+	minJWTExpiry     = 1 * time.Minute
+	maxJWTExpiry     = 30 * 24 * time.Hour
 )
-
-// ====================  数据结构 ====================
 
 // Claims JWT 声明
 type Claims struct {
@@ -90,32 +49,25 @@ type SessionService struct {
 	jwtAudience  string
 }
 
-// ====================  构造函数 ====================
-
 // NewSessionService 创建 Session 服务（带配置验证）
 func NewSessionService(cfg *config.Config) (*SessionService, error) {
-	// 参数验证
 	if cfg == nil {
 		return nil, ErrSessionNilConfig
 	}
 
-	// 验证 ECDSA 私钥
 	if cfg.JWTPrivateKey == "" {
 		return nil, ErrSessionEmptyPrivateKey
 	}
 
-	// 解析 PEM 格式的 ECDSA 私钥
 	privateKey, err := parseECDSAPrivateKey(cfg.JWTPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSessionInvalidPrivateKey, err)
 	}
 
-	// 验证过期时间
 	if cfg.JWTExpiresIn <= 0 {
 		return nil, ErrSessionInvalidExpiry
 	}
 
-	// 读取 iss/aud（允许空，使用默认值）
 	issuer := cfg.JWTIssuer
 	if issuer == "" {
 		issuer = "auth-system"
@@ -125,7 +77,6 @@ func NewSessionService(cfg *config.Config) (*SessionService, error) {
 		audience = "auth-system-users"
 	}
 
-	// 限制过期时间范围
 	expiry := cfg.JWTExpiresIn
 	if expiry < minJWTExpiry {
 		expiry = minJWTExpiry
@@ -146,23 +97,13 @@ func NewSessionService(cfg *config.Config) (*SessionService, error) {
 	}, nil
 }
 
-// ====================  公开方法 ====================
-
 // GenerateToken 生成 JWT Token（ES256 签名）
-// 参数：
-//   - uid: 用户 UID
-//
-// 返回：
-//   - string: JWT Token
-//   - error: 生成失败时返回错误
 func (s *SessionService) GenerateToken(uid string) (string, error) {
-	// 参数验证
 	if uid == "" {
 		utils.LogWarn("SESSION", "Invalid user UID for token generation", fmt.Sprintf("uid=%s", uid))
 		return "", ErrInvalidUser
 	}
 
-	// 检查服务是否已初始化
 	if s == nil {
 		utils.LogError("SESSION", "GenerateToken", fmt.Errorf("session service is nil"), "")
 		return "", ErrTokenGenerationFailed
@@ -173,7 +114,6 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 		return "", ErrTokenGenerationFailed
 	}
 
-	// 创建 Claims
 	now := time.Now()
 	claims := &Claims{
 		UID: uid,
@@ -186,10 +126,8 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 		},
 	}
 
-	// 创建 Token
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 
-	// 签名 Token
 	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
 		utils.LogError("SESSION", "GenerateToken", err, fmt.Sprintf("Failed to sign token: uid=%s", uid))
@@ -201,19 +139,11 @@ func (s *SessionService) GenerateToken(uid string) (string, error) {
 }
 
 // VerifyToken 验证 JWT Token（ES256 公钥验证）
-// 参数：
-//   - tokenString: JWT Token 字符串
-//
-// 返回：
-//   - *Claims: Token 声明
-//   - error: 验证失败时返回错误
 func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
-	// 参数验证
 	if tokenString == "" {
 		return nil, ErrNoToken
 	}
 
-	// 检查服务是否已初始化
 	if s == nil {
 		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("session service is nil"), "")
 		return nil, ErrTokenError
@@ -224,9 +154,7 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 		return nil, ErrTokenError
 	}
 
-	// 解析 Token
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		// 验证签名方法
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			utils.LogWarn("SESSION", "Unexpected signing method", fmt.Sprintf("alg=%v", token.Header["alg"]))
 			return nil, ErrInvalidSigningMethod
@@ -234,31 +162,26 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 		return &s.privateKey.PublicKey, nil
 	})
 
-	// 处理解析错误
 	if err != nil {
 		return nil, s.handleParseError(err)
 	}
 
-	// 验证 Token 有效性
 	if token == nil {
 		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("parsed token is nil"), "")
 		return nil, ErrInvalidTokenSession
 	}
 
-	// 提取 Claims
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
 		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("failed to extract claims"), "")
 		return nil, ErrInvalidTokenSession
 	}
 
-	// 验证 Token 是否有效
 	if !token.Valid {
 		utils.LogWarn("SESSION", "Token is not valid", "")
 		return nil, ErrInvalidTokenSession
 	}
 
-	// 验证 Claims 内容
 	if err := s.validateClaims(claims); err != nil {
 		return nil, err
 	}
@@ -267,8 +190,6 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 }
 
 // GetExpiry 获取 Token 过期时间
-// 返回：
-//   - time.Duration: 过期时间
 func (s *SessionService) GetExpiry() time.Duration {
 	if s == nil {
 		return defaultJWTExpiry
@@ -277,13 +198,9 @@ func (s *SessionService) GetExpiry() time.Duration {
 }
 
 // IsConfigured 检查服务是否已配置
-// 返回：
-//   - bool: 是否已配置
 func (s *SessionService) IsConfigured() bool {
 	return s != nil && s.privateKey != nil && s.jwtExpiresIn > 0
 }
-
-// ====================  私有方法 ====================
 
 // parseECDSAPrivateKey 解析 PEM 格式的 ECDSA 私钥
 func parseECDSAPrivateKey(pemData string) (*ecdsa.PrivateKey, error) {
@@ -292,13 +209,11 @@ func parseECDSAPrivateKey(pemData string) (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	// 尝试解析 EC PRIVATE KEY
 	key, err := x509.ParseECPrivateKey(block.Bytes)
 	if err == nil {
 		return key, nil
 	}
 
-	// 尝试解析 PKCS#8 PRIVATE KEY
 	pkcs8Key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ECDSA private key: %w", err)
@@ -313,78 +228,58 @@ func parseECDSAPrivateKey(pemData string) (*ecdsa.PrivateKey, error) {
 }
 
 // handleParseError 处理 Token 解析错误
-// 参数：
-//   - err: 原始错误
-//
-// 返回：
-//   - error: 处理后的错误
 func (s *SessionService) handleParseError(err error) error {
-	// 检查是否是过期错误
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		utils.LogDebug("SESSION", "Token expired")
 		return ErrTokenExpiredSession
 	}
 
-	// 检查是否是签名无效
 	if errors.Is(err, jwt.ErrSignatureInvalid) {
 		utils.LogWarn("SESSION", "Invalid token signature", "")
 		return ErrInvalidTokenSession
 	}
 
-	// 检查是否是格式错误
 	if errors.Is(err, jwt.ErrTokenMalformed) {
 		utils.LogWarn("SESSION", "Malformed token", "")
 		return ErrInvalidTokenSession
 	}
 
-	// 检查是否是未激活
 	if errors.Is(err, jwt.ErrTokenNotValidYet) {
 		utils.LogWarn("SESSION", "Token not valid yet", "")
 		return ErrInvalidTokenSession
 	}
 
-	// 其他错误
 	utils.LogWarn("SESSION", "Token parse error", fmt.Sprintf("error=%v", err))
 	return ErrInvalidTokenSession
 }
 
 // validateClaims 验证 Claims 内容
-// 参数：
-//   - claims: Token 声明
-//
-// 返回：
-//   - error: 验证失败时返回错误
 func (s *SessionService) validateClaims(claims *Claims) error {
 	if claims == nil {
 		return ErrInvalidTokenSession
 	}
 
-	// 验证用户 UID
 	if claims.UID == "" {
 		utils.LogWarn("SESSION", "Invalid user UID in claims", fmt.Sprintf("uid=%s", claims.UID))
 		return ErrInvalidUser
 	}
 
-	// 验证过期时间
 	if claims.ExpiresAt == nil {
 		utils.LogWarn("SESSION", "Token has no expiry time", "")
 		return ErrInvalidTokenSession
 	}
 
-	// 验证签发者（iss）
 	if claims.Issuer != s.jwtIssuer {
 		utils.LogWarn("SESSION", "Invalid token issuer", fmt.Sprintf("expected=%s, got=%s", s.jwtIssuer, claims.Issuer))
 		return ErrInvalidTokenSession
 	}
 
-	// 验证受众（aud）
 	audienceValid := slices.Contains(claims.Audience, s.jwtAudience)
 	if !audienceValid {
 		utils.LogWarn("SESSION", "Invalid token audience", fmt.Sprintf("expected=%s, got=%v", s.jwtAudience, claims.Audience))
 		return ErrInvalidTokenSession
 	}
 
-	// 验证签发时间
 	if claims.IssuedAt == nil {
 		utils.LogDebug("SESSION", "Token has no issued time")
 		// 不返回错误，只记录日志

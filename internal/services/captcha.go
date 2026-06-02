@@ -1,21 +1,3 @@
-/**
- * internal/services/captcha.go
- * 通用人机验证服务
- *
- * 功能：
- * - 支持多种验证器（Turnstile、hCaptcha、reCAPTCHA 等）
- * - 统一验证接口
- * - 根据前端指定类型验证
- * - 支持前端随机选择验证器
- *
- * 当前支持：
- * - Turnstile (Cloudflare)
- * - hCaptcha
- *
- * 依赖：
- * - Config: 验证器配置
- */
-
 package services
 
 import (
@@ -34,50 +16,30 @@ import (
 	"auth-system/internal/config"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrCaptchaNilConfig 配置为空
-	ErrCaptchaNilConfig = errors.New("captcha config is nil")
-	// ErrCaptchaEmptySecret 密钥为空
-	ErrCaptchaEmptySecret = errors.New("captcha secret key is empty")
-	// ErrCaptchaEmptyToken Token 为空
-	ErrCaptchaEmptyToken = errors.New("captcha token is empty")
-	// ErrCaptchaFailed 验证失败
-	ErrCaptchaFailed = errors.New("CAPTCHA_FAILED")
-	// ErrCaptchaNetworkErr 网络错误
-	ErrCaptchaNetworkErr = errors.New("CAPTCHA_NETWORK_ERROR")
-	// ErrCaptchaTimeout 请求超时
-	ErrCaptchaTimeout = errors.New("CAPTCHA_TIMEOUT")
-	// ErrCaptchaInvalidResponse 无效的响应
+	ErrCaptchaNilConfig       = errors.New("captcha config is nil")
+	ErrCaptchaEmptySecret     = errors.New("captcha secret key is empty")
+	ErrCaptchaEmptyToken      = errors.New("captcha token is empty")
+	ErrCaptchaFailed          = errors.New("CAPTCHA_FAILED")
+	ErrCaptchaNetworkErr      = errors.New("CAPTCHA_NETWORK_ERROR")
+	ErrCaptchaTimeout         = errors.New("CAPTCHA_TIMEOUT")
 	ErrCaptchaInvalidResponse = errors.New("CAPTCHA_INVALID_RESPONSE")
-	// ErrCaptchaUnsupportedType 不支持的验证器类型
 	ErrCaptchaUnsupportedType = errors.New("CAPTCHA_UNSUPPORTED_TYPE")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// 验证器类型
 	CaptchaTypeTurnstile = "turnstile"
 	CaptchaTypeHCaptcha  = "hcaptcha"
 	CaptchaTypeRecaptcha = "recaptcha"
 
-	// 验证 API 地址
 	turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 	hcaptchaVerifyURL  = "https://api.hcaptcha.com/siteverify"
 
-	// 默认请求超时时间
-	captchaDefaultTimeout = 10 * time.Second
-
-	// 最大响应大小
-	captchaMaxResponseSize = 1024 * 1024 // 1MB
-
-	// JSON Content-Type
+	captchaDefaultTimeout  = 10 * time.Second
+	captchaMaxResponseSize = 1024 * 1024
 	captchaContentTypeJSON = "application/json"
 )
 
-// 错误码映射（Turnstile）
 var turnstileErrorMessages = map[string]string{
 	"missing-input-secret":   "Secret key is missing",
 	"invalid-input-secret":   "Secret key is invalid",
@@ -90,17 +52,15 @@ var turnstileErrorMessages = map[string]string{
 
 // 错误码映射（hCaptcha）
 var hcaptchaErrorMessages = map[string]string{
-	"missing-input-secret":   "Secret key is missing",
-	"invalid-input-secret":   "Secret key is invalid",
-	"missing-input-response": "Token is missing",
-	"invalid-input-response": "Token is invalid or malformed",
-	"bad-request":            "Request was malformed",
+	"missing-input-secret":             "Secret key is missing",
+	"invalid-input-secret":             "Secret key is invalid",
+	"missing-input-response":           "Token is missing",
+	"invalid-input-response":           "Token is invalid or malformed",
+	"bad-request":                      "Request was malformed",
 	"invalid-or-already-seen-response": "Token has expired or already been used",
 	"not-using-dummy-passcode":         "Not using test passcode",
 	"sitekey-secret-mismatch":          "Site key and secret key mismatch",
 }
-
-// ====================  数据结构 ====================
 
 // CaptchaResponse 验证 API 响应（通用格式）
 type CaptchaResponse struct {
@@ -130,16 +90,8 @@ type CaptchaService struct {
 	enabled   bool
 }
 
-// ====================  构造函数 ====================
-
 // NewCaptchaService 创建验证服务
-// 参数：
-//   - cfg: 应用配置
-//
-// 返回：
-//   - *CaptchaService: 验证服务实例
 func NewCaptchaService(cfg *config.Config) *CaptchaService {
-	// 参数验证
 	if cfg == nil {
 		utils.LogWarn("CAPTCHA", "Config is nil, service will be disabled", "")
 		return &CaptchaService{
@@ -153,7 +105,6 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 
 	providers := make(map[string]*CaptchaProviderConfig)
 
-	// 加载 Turnstile 配置
 	if cfg.TurnstileSecretKey != "" && cfg.TurnstileSiteKey != "" {
 		providers[CaptchaTypeTurnstile] = &CaptchaProviderConfig{
 			Type:      CaptchaTypeTurnstile,
@@ -163,7 +114,6 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		utils.LogInfo("CAPTCHA", fmt.Sprintf("Turnstile configured: siteKey=%s...", truncateCaptchaKey(cfg.TurnstileSiteKey, 8)))
 	}
 
-	// 加载 hCaptcha 配置
 	if cfg.HCaptchaSecretKey != "" && cfg.HCaptchaSiteKey != "" {
 		providers[CaptchaTypeHCaptcha] = &CaptchaProviderConfig{
 			Type:      CaptchaTypeHCaptcha,
@@ -173,7 +123,6 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		utils.LogInfo("CAPTCHA", fmt.Sprintf("hCaptcha configured: siteKey=%s...", truncateCaptchaKey(cfg.HCaptchaSiteKey, 8)))
 	}
 
-	// 检查是否有可用的验证器
 	if len(providers) == 0 {
 		utils.LogWarn("CAPTCHA", "No captcha providers configured, service will be disabled", "")
 		return &CaptchaService{
@@ -196,62 +145,39 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 	}
 }
 
-// ====================  公开方法 ====================
-
 // Verify 验证 Token
-// 参数：
-//   - token: 验证 Token
-//   - captchaType: 验证器类型（由前端指定）
-//   - remoteIP: 客户端 IP 地址（可选）
-//
-// 返回：
-//   - error: 验证失败时返回错误
 func (s *CaptchaService) Verify(token, captchaType, remoteIP string) error {
 	return s.VerifyWithContext(context.Background(), token, captchaType, remoteIP)
 }
 
 // VerifyWithContext 验证 Token（带上下文）
-// 参数：
-//   - ctx: 上下文
-//   - token: 验证 Token
-//   - captchaType: 验证器类型（由前端指定，必需）
-//   - remoteIP: 客户端 IP 地址（可选）
-//
-// 返回：
-//   - error: 验证失败时返回错误
 func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaType, remoteIP string) error {
-	// 检查服务是否启用
 	if !s.IsEnabled() {
 		utils.LogWarn("CAPTCHA", "Service is disabled, skipping verification", "")
 		return nil
 	}
 
-	// 参数验证
 	if token == "" {
 		utils.LogWarn("CAPTCHA", "Empty token provided", "")
 		return ErrCaptchaEmptyToken
 	}
 
-	// 清理 Token
 	cleanToken := strings.TrimSpace(token)
 	if cleanToken == "" {
 		return ErrCaptchaEmptyToken
 	}
 
-	// 验证器类型必须由前端指定
 	if captchaType == "" {
 		utils.LogError("CAPTCHA", "Verify", fmt.Errorf("empty captcha type"), "Captcha type is required")
 		return ErrCaptchaUnsupportedType
 	}
 
-	// 获取对应的验证器配置
 	provider, ok := s.providers[captchaType]
 	if !ok {
 		utils.LogError("CAPTCHA", "Verify", fmt.Errorf("unsupported type: %s", captchaType), "Unsupported or unconfigured captcha type")
 		return ErrCaptchaUnsupportedType
 	}
 
-	// 根据类型选择验证方法
 	switch captchaType {
 	case CaptchaTypeTurnstile:
 		return s.doVerifyJSON(ctx, turnstileVerifyURL, provider.SecretKey, cleanToken, remoteIP, turnstileErrorMessages)
@@ -264,15 +190,11 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaTy
 }
 
 // IsEnabled 检查服务是否启用
-// 返回：
-//   - bool: 是否启用
 func (s *CaptchaService) IsEnabled() bool {
 	return s != nil && s.enabled && len(s.providers) > 0
 }
 
 // GetConfig 获取前端配置（返回所有可用的验证器）
-// 返回：
-//   - []CaptchaConfig: 所有可用验证器的配置
 func (s *CaptchaService) GetConfig() []CaptchaConfig {
 	if s == nil || !s.enabled {
 		return []CaptchaConfig{}
@@ -298,12 +220,7 @@ func (s *CaptchaService) GetProviderCount() int {
 	return len(s.providers)
 }
 
-// HasProvider 检查是否有指定类型的验证器
-// 参数：
-//   - captchaType: 验证器类型
-//
-// 返回：
-//   - bool: 是否存在
+// HasProvider 检查是否支持指定的验证器类型
 func (s *CaptchaService) HasProvider(captchaType string) bool {
 	if s == nil {
 		return false
@@ -311,8 +228,6 @@ func (s *CaptchaService) HasProvider(captchaType string) bool {
 	_, ok := s.providers[captchaType]
 	return ok
 }
-
-// ====================  私有方法 ====================
 
 // doVerifyJSON 执行 JSON 格式验证请求（Turnstile）
 func (s *CaptchaService) doVerifyJSON(ctx context.Context, verifyURL, secretKey, token, remoteIP string, errorMessages map[string]string) error {
@@ -350,7 +265,6 @@ func (s *CaptchaService) doVerifyForm(ctx context.Context, verifyURL, secretKey,
 		formData += fmt.Sprintf("&remoteip=%s", strings.TrimSpace(remoteIP))
 	}
 
-	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, strings.NewReader(formData))
 	if err != nil {
 		utils.LogError("CAPTCHA", "doVerifyForm", err, "Failed to create request")
@@ -363,7 +277,6 @@ func (s *CaptchaService) doVerifyForm(ctx context.Context, verifyURL, secretKey,
 
 // sendAndParseResponse 发送请求并解析响应
 func (s *CaptchaService) sendAndParseResponse(req *http.Request, remoteIP string, errorMessages map[string]string) error {
-	// 发送请求
 	resp, err := s.client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "timeout") {
@@ -379,27 +292,23 @@ func (s *CaptchaService) sendAndParseResponse(req *http.Request, remoteIP string
 		}
 	}()
 
-	// 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
 		utils.LogError("CAPTCHA", "doVerify", fmt.Errorf("status code %d", resp.StatusCode), "Unexpected status code")
 		return fmt.Errorf("%w: status code %d", ErrCaptchaFailed, resp.StatusCode)
 	}
 
-	// 读取响应
 	body, err := io.ReadAll(io.LimitReader(resp.Body, captchaMaxResponseSize))
 	if err != nil {
 		utils.LogError("CAPTCHA", "doVerify", err, "Failed to read response")
 		return fmt.Errorf("%w: %v", ErrCaptchaNetworkErr, err)
 	}
 
-	// 解析响应
 	var result CaptchaResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		utils.LogError("CAPTCHA", "doVerify", err, "Failed to parse response")
 		return fmt.Errorf("%w: %v", ErrCaptchaInvalidResponse, err)
 	}
 
-	// 检查验证结果
 	if !result.Success {
 		errorMsg := formatCaptchaErrorCodes(result.ErrorCodes, errorMessages)
 		utils.LogWarn("CAPTCHA", "Verification failed", fmt.Sprintf("error=%s, ip=%s", errorMsg, remoteIP))
@@ -409,8 +318,6 @@ func (s *CaptchaService) sendAndParseResponse(req *http.Request, remoteIP string
 	utils.LogInfo("CAPTCHA", fmt.Sprintf("Verification successful: hostname=%s, ip=%s", result.Hostname, remoteIP))
 	return nil
 }
-
-// ====================  辅助函数 ====================
 
 // formatCaptchaErrorCodes 格式化错误码
 func formatCaptchaErrorCodes(codes []string, errorMessages map[string]string) string {

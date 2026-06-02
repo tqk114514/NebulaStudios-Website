@@ -1,13 +1,3 @@
-/**
- * internal/services/r2.go
- * Cloudflare R2 存储服务
- *
- * 功能：
- * - 上传文件到 R2
- * - 删除 R2 文件
- * - 头像上传（WebP 转换）
- */
-
 package services
 
 import (
@@ -61,7 +51,6 @@ func NewR2Service(cfg *config.Config) (*R2Service, error) {
 
 	client := s3.NewFromConfig(awsCfg)
 
-	// 初始化图片处理器
 	imgProcessor := NewImgProcessor(cfg.ImageProcessorSocket)
 
 	utils.LogInfo("R2", fmt.Sprintf("R2 service initialized: bucket=%s", cfg.R2Bucket))
@@ -76,15 +65,6 @@ func NewR2Service(cfg *config.Config) (*R2Service, error) {
 
 // UploadAvatar 上传头像到 R2
 // 将图片转换为 WebP 格式后上传
-//
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//   - imageData: 图片二进制数据
-//
-// 返回：
-//   - string: 头像 URL
-//   - error: 错误信息
 func (s *R2Service) UploadAvatar(ctx context.Context, userUID string, imageData []byte) (string, error) {
 	if s == nil || s.client == nil {
 		return "", fmt.Errorf("R2 service not initialized")
@@ -100,7 +80,6 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userUID string, imageData 
 	}
 	utils.LogInfo("R2", "Image processed by Zig")
 
-	// 上传到 R2
 	key := fmt.Sprintf("avatar/%s.webp", userUID)
 	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
@@ -119,13 +98,6 @@ func (s *R2Service) UploadAvatar(ctx context.Context, userUID string, imageData 
 }
 
 // DeleteAvatar 删除用户头像
-//
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//
-// 返回：
-//   - error: 错误信息
 func (s *R2Service) DeleteAvatar(ctx context.Context, userUID string) error {
 	if s == nil || s.client == nil {
 		return fmt.Errorf("R2 service not initialized")

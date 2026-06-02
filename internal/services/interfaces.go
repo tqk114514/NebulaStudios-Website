@@ -10,8 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  Session & Token ====================
-
 // SessionManager Session 服务接口
 type SessionManager interface {
 	GenerateToken(uid string) (string, error)
@@ -32,8 +30,6 @@ type TokenManager interface {
 	GetTokenExpiry() time.Duration
 }
 
-// ====================  Captcha & Email ====================
-
 // CaptchaVerifier 验证码服务接口
 type CaptchaVerifier interface {
 	Verify(token, captchaType, remoteIP string) error
@@ -52,8 +48,6 @@ type EmailSender interface {
 	IsConfigured() bool
 	Close()
 }
-
-// ====================  OAuth & WebSocket ====================
 
 // OAuthClientManager OAuth 客户端管理接口
 type OAuthClientManager interface {
@@ -89,16 +83,12 @@ type WebSocketManager interface {
 	GetStats() map[string]any
 }
 
-// ====================  Image Processing ====================
-
 // ImageProcessor 图像处理服务接口
 type ImageProcessor interface {
 	ToWebP(imageData []byte) ([]byte, error)
 	IsAvailable() bool
 	Shutdown(ctx context.Context)
 }
-
-// ====================  Storage & Export ====================
 
 // StorageService 对象存储服务接口
 type StorageService interface {
@@ -123,8 +113,6 @@ type ExportTokenManager interface {
 	ValidateAndConsume(token string) (string, bool)
 	Stop()
 }
-
-// ====================  Cache ====================
 
 // UserCacheStore 用户缓存接口
 type UserCacheStore interface {
