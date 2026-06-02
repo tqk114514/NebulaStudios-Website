@@ -1,17 +1,3 @@
-/**
- * internal/utils/export.go
- * 数据导出/导入加解密工具
- *
- * 提供：
- * - HKDF-SHA256 密钥派生（Salt1 + Salt2 → AES-256 密钥）
- * - AES-256-GCM 加解密（搭配 gzip 压缩）
- * - 导出文件 Header/Body 组装与解析
- *
- * 与 crypto.go 的区别：
- * - crypto.go 的 AES-GCM 用于 QR 登录，输出 base64 三段格式
- * - 本文件的 AES-GCM 用于文件导出，输出原始二进制 + gzip
- */
-
 package utils
 
 import (

@@ -1,17 +1,3 @@
-/**
- * internal/utils/bind.go
- * 请求体绑定工具模块
- *
- * 功能：
- * - 统一的 JSON 请求体绑定（封装 ShouldBindJSON）
- * - 自动识别 body-too-large 错误并返回 413
- * - 提供哨兵错误供调用方精确判断
- *
- * 依赖：
- * - net/http: HTTP 状态码
- * - github.com/gin-gonic/gin: Gin 框架
- */
-
 package utils
 
 import (
@@ -22,15 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  哨兵错误 ====================
-
 var (
-	// ErrBodyTooLarge 请求体超过大小限制
-	// 由 http.MaxBytesReader 在读取超限时触发，BindJSON 自动检测并返回此错误
 	ErrBodyTooLarge = errors.New("request body too large")
 )
-
-// ====================  绑定函数 ====================
 
 // BindJSON 绑定 JSON 请求体，自动识别 body-too-large 并返回 413
 // 调用方模式：
