@@ -1,19 +1,4 @@
-/**
- * internal/handlers/oauth/common.go
- * OAuth 公共定义和工具函数
- *
- * 功能：
- * - 错误定义
- * - 常量定义
- * - 公共数据结构
- * - 全局存储（state、pendingLinks）
- * - 辅助函数
- *
- * 依赖：
- * - internal/utils (日志)
- * - github.com/gin-gonic/gin
- */
-
+// Package oauth 提供 OAuth 公共类型、常量、状态存储和 Cookie 辅助函数。
 package oauth
 
 import (
@@ -32,72 +17,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrOAuthNotConfigured OAuth 未配置
-	ErrOAuthNotConfigured = errors.New("OAUTH_NOT_CONFIGURED")
-
-	// ErrOAuthStateMismatch OAuth state 不匹配
-	ErrOAuthStateMismatch = errors.New("OAUTH_STATE_MISMATCH")
-
-	// ErrOAuthStateExpired OAuth state 已过期
-	ErrOAuthStateExpired = errors.New("OAUTH_STATE_EXPIRED")
-
-	// ErrOAuthTokenExchange Token 交换失败
-	ErrOAuthTokenExchange = errors.New("OAUTH_TOKEN_EXCHANGE_FAILED")
-
-	// ErrOAuthUserInfo 获取用户信息失败
-	ErrOAuthUserInfo = errors.New("OAUTH_USER_INFO_FAILED")
-
-	// ErrMicrosoftAlreadyLinked 微软账户已被其他用户绑定
+	ErrOAuthNotConfigured     = errors.New("OAUTH_NOT_CONFIGURED")
+	ErrOAuthStateMismatch     = errors.New("OAUTH_STATE_MISMATCH")
+	ErrOAuthStateExpired      = errors.New("OAUTH_STATE_EXPIRED")
+	ErrOAuthTokenExchange     = errors.New("OAUTH_TOKEN_EXCHANGE_FAILED")
+	ErrOAuthUserInfo          = errors.New("OAUTH_USER_INFO_FAILED")
 	ErrMicrosoftAlreadyLinked = errors.New("MICROSOFT_ALREADY_LINKED")
-
-	// ErrNotLinked 未绑定微软账户
-	ErrNotLinked = errors.New("NOT_LINKED")
-
-	// ErrInvalidLinkToken 无效的绑定 Token
-	ErrInvalidLinkToken = errors.New("INVALID_LINK_TOKEN")
-
-	// ErrLinkTokenExpired 绑定 Token 已过期
-	ErrLinkTokenExpired = errors.New("LINK_TOKEN_EXPIRED")
+	ErrNotLinked              = errors.New("NOT_LINKED")
+	ErrInvalidLinkToken       = errors.New("INVALID_LINK_TOKEN")
+	ErrLinkTokenExpired       = errors.New("LINK_TOKEN_EXPIRED")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// StateExpiryDuration State 过期时间
-	StateExpiryDuration = 10 * time.Minute
-
-	// StateExpiryMS State 过期时间（毫秒）
-	StateExpiryMS = 10 * 60 * 1000
-
-	// CookieMaxAge OAuth Cookie 有效期（60 天）
-	CookieMaxAge = 60 * 24 * 60 * 60
-
-	// HTTPClientTimeout HTTP 客户端超时时间
-	HTTPClientTimeout = 10 * time.Second
-
-	// CleanupInterval 清理任务间隔
-	CleanupInterval = 5 * time.Minute
-
-	// ActionLogin 登录操作
-	ActionLogin = "login"
-
-	// ActionLink 绑定操作
-	ActionLink = "link"
-
-	// maxStatesCapacity states map 最大容量，防止内存耗尽
-	maxStatesCapacity = 10000
-
-	// maxPendingLinksCapacity pendingLinks map 最大容量
+	StateExpiryDuration     = 10 * time.Minute
+	StateExpiryMS           = 10 * 60 * 1000
+	CookieMaxAge            = 60 * 24 * 60 * 60
+	HTTPClientTimeout       = 10 * time.Second
+	CleanupInterval         = 5 * time.Minute
+	ActionLogin             = "login"
+	ActionLink              = "link"
+	maxStatesCapacity       = 10000
 	maxPendingLinksCapacity = 5000
 )
 
-// ====================  数据结构 ====================
-
-// State OAuth state 数据
-// 用于防止 CSRF 攻击，存储授权请求的上下文
+// State OAuth state 数据，用于防止 CSRF 攻击
 type State struct {
 	Timestamp    int64  // 创建时间戳（毫秒）
 	Action       string // 操作类型：login/link
@@ -106,8 +50,7 @@ type State struct {
 	ReturnURL    string // 登录后重定向地址
 }
 
-// PendingLink 待确认绑定数据
-// 当用户通过 OAuth 登录但邮箱已存在时，需要确认绑定
+// PendingLink 待确认绑定数据，当用户通过 OAuth 登录但邮箱已存在时需要确认绑定
 type PendingLink struct {
 	UserUID           string // 已存在用户的 UID
 	ProviderID        string // 第三方账户 ID
@@ -117,14 +60,9 @@ type PendingLink struct {
 	Timestamp         int64  // 创建时间戳（毫秒）
 }
 
-// ====================  全局存储 ====================
-
-// 注意：以下存储使用内存 map 实现，存在以下限制：
-// 1. 服务重启会丢失所有数据（正在进行的 OAuth 流程会失败）
-// 2. 多实例部署时无法共享状态（需要 sticky session 或改用 Redis）
-// 当前适用于单实例部署场景，如需多实例部署请改用 Redis 存储
-// 存储带有最大容量限制，达到上限时按 FIFO 淘汰旧条目
-// FIFO 使用自增计数器实现，插入时赋值，淘汰时找最小值
+// 注意：以下存储使用内存 map 实现，服务重启会丢失所有数据，多实例部署时无法共享状态。
+// 当前适用于单实例部署场景，如需多实例部署请改用 Redis 存储。
+// 存储带有最大容量限制，达到上限时按 FIFO 淘汰旧条目。
 var (
 	states         = make(map[string]*State)       // OAuth state 存储
 	pendingLinks   = make(map[string]*PendingLink) // 待绑定数据存储
@@ -136,20 +74,13 @@ var (
 	pendingCounter int64                           // pendingLink 自增计数器
 )
 
-// ====================  State 管理 ====================
-
-// SaveState 保存 OAuth state
-// 达到容量上限时按 FIFO 淘汰旧条目
-//
-// 参数：
-//   - state: state 字符串
-//   - data: state 数据
+// SaveState 保存 OAuth state，达到容量上限时按 FIFO 淘汰旧条目
 func SaveState(state string, data *State) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
 
 	if len(states) >= maxStatesCapacity {
-		fifoEvictLocked(states, stateIndex, &stateCounter, maxStatesCapacity/10)
+		fifoEvictLocked(states, stateIndex, maxStatesCapacity/10)
 	}
 
 	stateCounter++
@@ -157,14 +88,6 @@ func SaveState(state string, data *State) {
 	stateIndex[state] = stateCounter
 }
 
-// GetState 获取 OAuth state
-//
-// 参数：
-//   - state: state 字符串
-//
-// 返回：
-//   - *State: state 数据
-//   - bool: 是否存在
 func GetState(state string) (*State, bool) {
 	stateMu.RLock()
 	data, exists := states[state]
@@ -172,10 +95,6 @@ func GetState(state string) (*State, bool) {
 	return data, exists
 }
 
-// DeleteState 删除 OAuth state
-//
-// 参数：
-//   - state: state 字符串
 func DeleteState(state string) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
@@ -183,15 +102,7 @@ func DeleteState(state string) {
 	delete(stateIndex, state)
 }
 
-// GetAndDeleteState 获取并删除 OAuth state（原子操作）
-// 用于防止重复提交攻击
-//
-// 参数：
-//   - state: state 字符串
-//
-// 返回：
-//   - *State: state 数据
-//   - bool: 是否存在
+// GetAndDeleteState 获取并删除 OAuth state（原子操作），用于防止重复提交攻击
 func GetAndDeleteState(state string) (*State, bool) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
@@ -203,20 +114,13 @@ func GetAndDeleteState(state string) (*State, bool) {
 	return data, exists
 }
 
-// ====================  PendingLink 管理 ====================
-
-// SavePendingLink 保存待绑定数据
-// 达到容量上限时按 FIFO 淘汰旧条目
-//
-// 参数：
-//   - token: 绑定 token
-//   - data: 待绑定数据
+// SavePendingLink 保存待绑定数据，达到容量上限时按 FIFO 淘汰旧条目
 func SavePendingLink(token string, data *PendingLink) {
 	linkMu.Lock()
 	defer linkMu.Unlock()
 
 	if len(pendingLinks) >= maxPendingLinksCapacity {
-		fifoEvictLocked(pendingLinks, pendingIndex, &pendingCounter, maxPendingLinksCapacity/10)
+		fifoEvictLocked(pendingLinks, pendingIndex, maxPendingLinksCapacity/10)
 	}
 
 	pendingCounter++
@@ -224,14 +128,6 @@ func SavePendingLink(token string, data *PendingLink) {
 	pendingIndex[token] = pendingCounter
 }
 
-// GetPendingLink 获取待绑定数据
-//
-// 参数：
-//   - token: 绑定 token
-//
-// 返回：
-//   - *PendingLink: 待绑定数据
-//   - bool: 是否存在
 func GetPendingLink(token string) (*PendingLink, bool) {
 	linkMu.RLock()
 	data, exists := pendingLinks[token]
@@ -239,10 +135,6 @@ func GetPendingLink(token string) (*PendingLink, bool) {
 	return data, exists
 }
 
-// DeletePendingLink 删除待绑定数据
-//
-// 参数：
-//   - token: 绑定 token
 func DeletePendingLink(token string) {
 	linkMu.Lock()
 	defer linkMu.Unlock()
@@ -251,13 +143,6 @@ func DeletePendingLink(token string) {
 }
 
 // GetAndDeletePendingLink 获取并删除待绑定数据（原子操作）
-//
-// 参数：
-//   - token: 绑定 token
-//
-// 返回：
-//   - *PendingLink: 待绑定数据
-//   - bool: 是否存在
 func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 	linkMu.Lock()
 	defer linkMu.Unlock()
@@ -269,14 +154,7 @@ func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 	return data, exists
 }
 
-// ====================  辅助函数 ====================
-
-// GenerateState 生成随机 state
-// 用于防止 CSRF 攻击
-//
-// 返回：
-//   - string: 32 字符的十六进制字符串
-//   - error: 随机数生成错误
+// GenerateState 生成随机 state 用于防止 CSRF 攻击
 func GenerateState() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -286,12 +164,7 @@ func GenerateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// GenerateLinkToken 生成绑定 token
-// 用于待绑定确认流程
-//
-// 返回：
-//   - string: 48 字符的十六进制字符串
-//   - error: 随机数生成错误
+// GenerateLinkToken 生成绑定 token 用于待绑定确认流程
 func GenerateLinkToken() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -301,12 +174,7 @@ func GenerateLinkToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// GenerateCodeVerifier 生成 PKCE code_verifier
-// 用于 PKCE 流程，防止授权码拦截攻击
-//
-// 返回：
-//   - string: 43-128 字符的 base64url 编码字符串
-//   - error: 随机数生成错误
+// GenerateCodeVerifier 生成 PKCE code_verifier 用于防止授权码拦截攻击
 func GenerateCodeVerifier() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -316,24 +184,13 @@ func GenerateCodeVerifier() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// GenerateCodeChallenge 生成 PKCE code_challenge
-// 使用 S256 方法（SHA256 哈希）
-//
-// 参数：
-//   - verifier: code_verifier 字符串
-//
-// 返回：
-//   - string: base64url 编码的 SHA256 哈希值
+// GenerateCodeChallenge 使用 S256 方法（SHA256）生成 PKCE code_challenge
 func GenerateCodeChallenge(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 // SetAuthCookie 设置认证 Cookie
-//
-// 参数：
-//   - c: Gin 上下文
-//   - token: JWT Token
 func SetAuthCookie(c *gin.Context, token string) {
 	if token == "" {
 		utils.LogWarn("OAUTH", "Attempted to set empty token cookie", "")
@@ -343,31 +200,16 @@ func SetAuthCookie(c *gin.Context, token string) {
 }
 
 // RedirectWithError 重定向并附带错误参数
-//
-// 参数：
-//   - c: Gin 上下文
-//   - baseURL: 基础 URL
-//   - path: 重定向路径
-//   - errorCode: 错误代码
 func RedirectWithError(c *gin.Context, baseURL, path, errorCode string) {
 	c.Redirect(http.StatusFound, baseURL+path+"?error="+errorCode)
 }
 
 // RedirectWithSuccess 重定向并附带成功参数
-//
-// 参数：
-//   - c: Gin 上下文
-//   - baseURL: 基础 URL
-//   - path: 重定向路径
-//   - successCode: 成功代码
 func RedirectWithSuccess(c *gin.Context, baseURL, path, successCode string) {
 	c.Redirect(http.StatusFound, baseURL+path+"?success="+successCode)
 }
 
-// ====================  清理任务 ====================
-
-// StartCleanup 启动清理任务
-// 定期清理过期的 OAuth state 和待绑定数据
+// StartCleanup 启动清理任务，定期清理过期的 OAuth state 和待绑定数据
 func StartCleanup() {
 	go func() {
 		ticker := time.NewTicker(CleanupInterval)
@@ -413,14 +255,7 @@ func cleanupExpiredData() {
 }
 
 // fifoEvictLocked 按 FIFO 原则淘汰最旧的 N 个条目（持有锁的情况下调用）
-// 通过找最小计数器值确定最旧的条目
-//
-// 参数：
-//   - dataMap: 数据 map
-//   - indexMap: 序号 map
-//   - counter: 当前计数器指针
-//   - count: 淘汰数量
-func fifoEvictLocked(dataMap any, indexMap map[string]int64, counter *int64, count int) {
+func fifoEvictLocked(dataMap any, indexMap map[string]int64, count int) {
 	if count <= 0 {
 		return
 	}

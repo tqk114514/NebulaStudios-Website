@@ -1,11 +1,3 @@
-/**
- * internal/handlers/admin/oauth.go
- * 管理后台 API Handler - OAuth 客户端管理
- *
- * 功能：
- * - OAuth 客户端管理
- */
-
 package admin
 
 import (
@@ -21,8 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// ====================  OAuth 客户端管理响应/请求结构 ====================
 
 // oauthClientListResponse OAuth 客户端列表响应
 type oauthClientListResponse struct {
@@ -62,8 +52,6 @@ type regenerateSecretResponse struct {
 type toggleOAuthClientRequest struct {
 	Enabled bool `json:"enabled"`
 }
-
-// ====================  OAuth 客户端管理 ====================
 
 // GetOAuthClients 获取 OAuth 客户端列表
 // GET /admin/api/oauth/clients?page=1&pageSize=20&search=xxx

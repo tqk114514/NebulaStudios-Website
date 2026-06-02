@@ -1,13 +1,3 @@
-/**
- * internal/handlers/admin/system.go
- * 管理后台 API Handler - 系统管理
- *
- * 功能：
- * - 系统统计
- * - 操作日志
- * - 邮箱白名单管理
- */
-
 package admin
 
 import (
@@ -26,8 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  统计响应结构 ====================
-
 // statsResponse 统计响应
 type statsResponse struct {
 	TotalUsers    int64 `json:"totalUsers"`
@@ -35,8 +23,6 @@ type statsResponse struct {
 	AdminCount    int64 `json:"adminCount"`
 	BannedCount   int64 `json:"bannedCount"`
 }
-
-// ====================  操作日志响应结构 ====================
 
 // logListResponse 日志列表响应
 type logListResponse struct {
@@ -47,8 +33,6 @@ type logListResponse struct {
 	TotalPages int                      `json:"totalPages"`
 }
 
-// ====================  邮箱白名单管理响应/请求结构 ====================
-
 // emailWhitelistListResponse 邮箱白名单列表响应
 type emailWhitelistListResponse struct {
 	Whitelist  []*models.EmailWhitelist `json:"whitelist"`
@@ -57,8 +41,6 @@ type emailWhitelistListResponse struct {
 	PageSize   int                      `json:"pageSize"`
 	TotalPages int                      `json:"totalPages"`
 }
-
-// ====================  统计 ====================
 
 // GetStats 获取系统统计
 // GET /admin/api/stats
@@ -77,18 +59,14 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	utils.RespondSuccessWithData(c, stats)
 }
 
-// ====================  操作日志 ====================
-
 // GetLogs 获取操作日志列表
 // GET /admin/api/logs?page=1&pageSize=20
 //
 // 权限：超级管理员
 func (h *AdminHandler) GetLogs(c *gin.Context) {
-	// 解析分页参数
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize)))
 
-	// 参数校验
 	if page < 1 {
 		page = 1
 	}
@@ -99,14 +77,12 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
-	// 查询日志列表
 	logs, total, err := h.logRepo.FindAll(ctx, page, pageSize)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
 
-	// 计算总页数
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
 		totalPages++
@@ -120,8 +96,6 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 		TotalPages: totalPages,
 	})
 }
-
-// ====================  邮箱白名单管理 ====================
 
 // GetEmailWhitelist 获取邮箱白名单
 // GET /admin/api/email-whitelist?page=1&pageSize=20
@@ -202,10 +176,6 @@ func (h *AdminHandler) GetEmailWhitelistByID(c *gin.Context) {
 // POST /admin/api/email-whitelist
 //
 // 权限：仅超级管理员
-//
-// 请求体：
-//   - domain: 邮箱域名（必需，如 example.com）
-//   - signup_url: 注册页面 URL（必需）
 func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
 		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
@@ -266,11 +236,6 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 // PUT /admin/api/email-whitelist/:id
 //
 // 权限：仅超级管理员
-//
-// 请求体：
-//   - domain: 邮箱域名（可选）
-//   - signup_url: 注册页面 URL（可选）
-//   - is_enabled: 是否启用（可选）
 func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
 		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")

@@ -1,20 +1,3 @@
-/**
- * internal/handlers/oauth/microsoft/utils.go
- * Microsoft OAuth 工具方法
- *
- * 功能：
- * - 邮箱提取
- * - 头像处理（上传、哈希计算、异步处理）
- * - 绑定/登录操作处理
- * - data URL 解析
- *
- * 依赖：
- * - auth-system/internal/handlers/oauth (公共类型和常量)
- * - internal/config (配置)
- * - internal/services (R2 服务)
- * - internal/utils (日志)
- */
-
 package microsoft
 
 import (
@@ -34,8 +17,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// ====================  工具方法 ====================
 
 // extractEmail 从微软用户信息中提取邮箱
 func (h *MicrosoftHandler) extractEmail(msUser map[string]any) string {
@@ -79,10 +60,7 @@ func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
 	return imageData, contentType
 }
 
-// ====================  头像处理 ====================
-
-// uploadAvatarToR2 上传头像到 R2 并返回 URL
-// 如果 R2 未配置，返回 base64 data URL
+// uploadAvatarToR2 上传头像到 R2，如果 R2 未配置则返回 base64 data URL
 func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string, imageData []byte, contentType string) string {
 	if len(imageData) == 0 {
 		return ""
@@ -100,7 +78,6 @@ func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string,
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(imageData)
 }
 
-// calculateAvatarHash 计算头像数据的 SHA256 哈希
 func (h *MicrosoftHandler) calculateAvatarHash(imageData []byte) string {
 	if len(imageData) == 0 {
 		return ""
@@ -109,8 +86,7 @@ func (h *MicrosoftHandler) calculateAvatarHash(imageData []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// processAvatarAsync 异步处理头像上传
-// 在后台 goroutine 中执行，不阻塞登录流程
+// processAvatarAsync 异步处理头像上传，在后台 goroutine 中执行，不阻塞登录流程
 func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash string, avatarData []byte, avatarContentType string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -156,9 +132,7 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	}
 }
 
-// ====================  操作处理 ====================
-
-// handleLinkAction 处理绑定操作
+// handleLinkAction 处理绑定操作：检查是否已被绑定、更新数据库、异步处理头像
 func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserUID string, microsoftID, displayName string, avatarData []byte, avatarContentType string) {
 	existingUser, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {
@@ -195,7 +169,7 @@ func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context,
 	oauth.RedirectWithSuccess(c, h.baseURL, paths.PathAccountDashboard, "microsoft_linked")
 }
 
-// handleLoginAction 处理登录操作
+// handleLoginAction 处理登录操作：查找已绑定账户、处理同邮箱待绑定、生成 JWT 并重定向
 func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName string, avatarData []byte, avatarContentType string, returnURL string) {
 	user, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
 	if err != nil {

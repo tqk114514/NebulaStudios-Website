@@ -1,19 +1,4 @@
-/**
- * internal/handlers/auth/handler.go
- * 认证 API Handler - 主要路由处理
- *
- * 功能：
- * - 账户：注册、登录、登出、会话验证
- * - 用户信息：获取当前用户
- *
- * 依赖：
- * - internal/cache (用户缓存)
- * - internal/middleware (认证中间件、限流器)
- * - internal/models (用户模型)
- * - internal/services (Token、Session、Email、Turnstile 服务)
- * - internal/utils (验证器、加密工具)
- */
-
+// Package auth 提供认证相关 API Handler，处理注册、登录、登出、会话验证和邮箱白名单。
 package auth
 
 import (
@@ -32,39 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrInvalidRequest 请求格式无效
-	ErrInvalidRequest = errors.New("INVALID_REQUEST")
-
-	// ErrMissingParameters 缺少必需参数
-	ErrMissingParameters = errors.New("MISSING_PARAMETERS")
-
-	// ErrUnauthorized 未授权
-	ErrUnauthorized = errors.New("UNAUTHORIZED")
-
-	// ErrHandlerNotInitialized Handler 未正确初始化
+	ErrInvalidRequest        = errors.New("INVALID_REQUEST")
+	ErrMissingParameters     = errors.New("MISSING_PARAMETERS")
+	ErrUnauthorized          = errors.New("UNAUTHORIZED")
 	ErrHandlerNotInitialized = errors.New("HANDLER_NOT_INITIALIZED")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// CookieMaxAge Cookie 最大有效期（60 天，转换为秒）
-	CookieMaxAge = int(60 * 24 * time.Hour / time.Second)
-
-	// TokenExpireMinutes Token 过期时间（分钟）
+	CookieMaxAge       = int(60 * 24 * time.Hour / time.Second)
 	TokenExpireMinutes = 10
-
-	// DefaultLanguage 默认语言
-	DefaultLanguage = "zh-CN"
+	DefaultLanguage    = "zh-CN"
 )
 
-// ====================  Handler 结构 ====================
-
-// AuthHandler 认证 Handler
-// 处理所有认证相关的 HTTP 请求
+// AuthHandler 认证 Handler，处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
 	userRepo           models.UserStore
 	userLogRepo        models.UserLogStore
@@ -78,23 +44,8 @@ type AuthHandler struct {
 	baseURL            string
 }
 
-// ====================  构造函数 ====================
-
-// NewAuthHandler 创建认证 Handler
-//
-// 参数：
-//   - userRepo: 用户数据仓库（必需）
-//   - userLogRepo: 用户日志仓库（可选）
-//   - tokenService: Token 服务（必需）
-//   - sessionService: Session 服务（必需）
-//   - emailService: 邮件服务（必需）
-//   - captchaService: 验证码服务（必需）
-//   - userCache: 用户缓存（必需）
-//   - emailWhitelistRepo: 邮箱白名单仓库（可选，为 nil 时拒绝所有注册）
-//
-// 返回：
-//   - *AuthHandler: Handler 实例
-//   - error: 错误信息（参数为 nil 时返回错误）
+// NewAuthHandler 创建认证 Handler，验证所有必需依赖（userRepo、tokenService、sessionService、
+// emailService、captchaService、userCache）后初始化。emailWhitelistRepo 为可选参数。
 func NewAuthHandler(
 	cfg *config.Config,
 	userRepo models.UserStore,
@@ -144,13 +95,7 @@ func NewAuthHandler(
 	}, nil
 }
 
-// ====================  Cookie 辅助函数 ====================
-
 // setAuthCookie 设置认证 Cookie
-//
-// 参数：
-//   - c: Gin 上下文
-//   - token: JWT Token
 func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 	if token == "" {
 		utils.LogWarn("AUTH", "Attempted to set empty token cookie")
@@ -160,20 +105,11 @@ func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 }
 
 // clearAuthCookie 清除认证 Cookie
-//
-// 参数：
-//   - c: Gin 上下文
 func (h *AuthHandler) clearAuthCookie(c *gin.Context) {
 	utils.ClearTokenCookieGin(c)
 }
 
-// getLanguage 获取请求语言，支持默认值
-//
-// 参数：
-//   - language: 请求中的语言参数
-//
-// 返回：
-//   - string: 语言代码
+// getLanguage 获取请求语言，默认返回 DefaultLanguage
 func (h *AuthHandler) getLanguage(language string) string {
 	if language == "" {
 		return DefaultLanguage
@@ -181,17 +117,8 @@ func (h *AuthHandler) getLanguage(language string) string {
 	return language
 }
 
-// ====================  邮箱白名单 ====================
-
-// GetEmailWhitelist 获取允许注册的邮箱域名白名单（公开 API）
+// GetEmailWhitelist 获取允许注册的邮箱域名白名单（公开 API，无需认证）
 // GET /api/email-whitelist
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 包含 domains 字段
-//   - data.domains: 允许的邮箱域名列表（key: 域名, value: 注册页面 URL）
-//
-// 注意：此接口无需认证，因为注册页需要加载此信息
 func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
 		utils.RespondSuccessWithData(c, gin.H{"domains": gin.H{}})
@@ -214,27 +141,8 @@ func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 	utils.RespondSuccessWithData(c, gin.H{"domains": domains})
 }
 
-// ====================  账户路由 ====================
-
 // Register 用户注册
 // POST /api/auth/register
-//
-// 请求体：
-//   - username: 用户名（必需）
-//   - email: 邮箱地址（必需）
-//   - password: 密码（必需）
-//   - verificationCode: 验证码（必需）
-//
-// 响应：
-//   - success: 是否成功
-//   - message: 成功消息
-//
-// 错误码：
-//   - INVALID_REQUEST: 请求格式无效
-//   - USERNAME_* / EMAIL_* / PASSWORD_*: 验证失败
-//   - CODE_INVALID / CODE_EXPIRED: 验证码验证失败
-//   - EMAIL_ALREADY_EXISTS / USERNAME_ALREADY_EXISTS: 用户已存在
-//   - REGISTER_FAILED: 注册失败
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req struct {
 		Username         string `json:"username"`
@@ -336,23 +244,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 // Login 用户登录
 // POST /api/auth/login
-//
-// 请求体：
-//   - email: 邮箱或用户名（必需）
-//   - password: 密码（必需）
-//   - captchaToken: 验证码 Token（必需）
-//   - captchaType: 验证码类型（必需）
-//
-// 响应：
-//   - success: 是否成功
-//   - message: 成功消息
-//   - data: 用户信息（username, email）
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少参数
-//   - CAPTCHA_FAILED: 验证码验证失败
-//   - INVALID_CREDENTIALS: 用户名/密码错误
-//   - TOKEN_GENERATION_FAILED: Token 生成失败
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req struct {
 		Email        string `json:"email"`
@@ -425,20 +316,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// VerifySession 验证会话有效性
+// VerifySession 验证会话有效性，支持 Cookie 和 Authorization Header 两种方式
 // POST /api/auth/verify-session
-//
-// 认证方式：
-//   - Cookie: token
-//   - Header: Authorization: Bearer <token>
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 用户公开信息
-//
-// 错误码：
-//   - NO_TOKEN / TOKEN_EXPIRED / TOKEN_INVALID: Token 验证失败
-//   - USER_NOT_FOUND: 用户不存在
 func (h *AuthHandler) VerifySession(c *gin.Context) {
 	token, _ := utils.GetTokenCookie(c)
 	if token == "" {
@@ -484,18 +363,8 @@ func (h *AuthHandler) VerifySession(c *gin.Context) {
 	})
 }
 
-// GetMe 获取当前用户信息
+// GetMe 获取当前登录用户信息
 // GET /api/auth/me
-//
-// 认证：需要登录
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 用户公开信息
-//
-// 错误码：
-//   - UNAUTHORIZED: 未登录
-//   - USER_NOT_FOUND: 用户不存在
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
@@ -526,12 +395,8 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	})
 }
 
-// Logout 用户登出
+// Logout 用户登出，清除认证 Cookie
 // POST /api/auth/logout
-//
-// 响应：
-//   - success: 是否成功
-//   - message: 成功消息
 func (h *AuthHandler) Logout(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if ok && userUID != "" {

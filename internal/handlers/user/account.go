@@ -1,18 +1,3 @@
-/**
- * internal/handlers/user/account.go
- * 用户账户管理 API Handler
- *
- * 功能：
- * - 发送删除账户验证码
- * - 删除账户
- * - 获取用户操作日志
- * - OAuth 授权管理
- * - 数据导出
- *
- * 依赖：
- * - UserHandler 核心结构
- */
-
 package user
 
 import (
@@ -31,9 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  请求结构 ====================
-
-// sendDeleteCodeRequest 发送删除验证码请求
 type sendDeleteCodeRequest struct {
 	CaptchaToken string `json:"captchaToken"`
 	CaptchaType  string `json:"captchaType"`
@@ -45,8 +27,6 @@ type deleteAccountRequest struct {
 	Code     string `json:"code"`
 	Password string `json:"password"`
 }
-
-// ====================  账户管理 ====================
 
 // SendDeleteCode 发送删除账户验证码
 // POST /api/auth/send-delete-code
@@ -186,8 +166,6 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// ====================  操作日志 ====================
-
 // GetLogs 获取用户操作日志
 // GET /api/user/logs?page=1&pageSize=20
 func (h *UserHandler) GetLogs(c *gin.Context) {
@@ -235,9 +213,7 @@ func (h *UserHandler) GetLogs(c *gin.Context) {
 	})
 }
 
-// ====================  OAuth 授权管理 ====================
-
-// GetOAuthGrants 获取用户已授权的应用列表
+// GetOAuthGrants 获取用户已授权的 OAuth 应用列表
 // GET /api/user/oauth/grants
 func (h *UserHandler) GetOAuthGrants(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
@@ -307,8 +283,6 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 	utils.LogInfo("USER", fmt.Sprintf("OAuth grant revoked: userUID=%s, clientID=%s", userUID, clientID))
 	utils.RespondSuccess(c, gin.H{})
 }
-
-// ====================  数据导出 ====================
 
 // getDataExportFooter 获取数据导出文件的本地化页脚
 func getDataExportFooter(lang string, utcTime string) string {

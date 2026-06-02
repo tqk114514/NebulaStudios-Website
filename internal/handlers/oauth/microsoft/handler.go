@@ -1,20 +1,4 @@
-/**
- * internal/handlers/oauth/microsoft/handler.go
- * Microsoft OAuth Handler - 主要路由处理
- *
- * 功能：
- * - Microsoft OAuth 登录（授权、回调）
- * - Microsoft 账户绑定/解绑
- * - 待绑定确认流程
- *
- * 依赖：
- * - auth-system/internal/handlers/oauth (公共类型和常量)
- * - internal/cache (用户缓存)
- * - internal/middleware (认证中间件)
- * - internal/models (用户模型)
- * - internal/services (Session 服务)
- */
-
+// Package microsoft 提供 Microsoft OAuth 登录、账户绑定/解绑和待绑定确认流程。
 package microsoft
 
 import (
@@ -36,17 +20,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// MicrosoftTenant Microsoft 租户（common 支持所有账户类型）
 	MicrosoftTenant = "common"
 )
 
-// ====================  Handler 结构 ====================
-
 // MicrosoftHandler Microsoft OAuth Handler
-// 处理 Microsoft OAuth 相关的 HTTP 请求
 type MicrosoftHandler struct {
 	userRepo         models.UserStore
 	userLogRepo      models.UserLogStore
@@ -60,20 +38,8 @@ type MicrosoftHandler struct {
 	defaultAvatarURL string
 }
 
-// ====================  构造函数 ====================
-
-// NewMicrosoftHandler 创建 Microsoft OAuth Handler
-//
-// 参数：
-//   - userRepo: 用户数据仓库（必需）
-//   - userLogRepo: 用户日志仓库（可选）
-//   - sessionService: Session 服务（必需）
-//   - userCache: 用户缓存（必需）
-//   - r2Service: R2 存储服务（可选）
-//
-// 返回：
-//   - *MicrosoftHandler: Handler 实例
-//   - error: 错误信息（参数为 nil 时返回错误）
+// NewMicrosoftHandler 创建 Microsoft OAuth Handler，验证必需依赖（userRepo、sessionService、userCache）后初始化。
+// r2Service 和 userLogRepo 为可选参数。
 func NewMicrosoftHandler(
 	cfg *config.Config,
 	userRepo models.UserStore,
@@ -119,30 +85,12 @@ func NewMicrosoftHandler(
 	}, nil
 }
 
-// ====================  辅助方法 ====================
-
-// isConfigured 检查 OAuth 是否已配置
-//
-// 返回：
-//   - bool: 是否已配置
 func (h *MicrosoftHandler) isConfigured() bool {
 	return h.clientID != "" && h.clientSecret != ""
 }
 
-// ====================  路由处理 ====================
-
-// Auth 发起微软 OAuth 授权
-// GET /api/auth/microsoft
-//
-// 查询参数：
-//   - action: 操作类型（login/link，默认 login）
-//   - return: 登录后重定向地址
-//
-// 响应：
-//   - 重定向到 Microsoft 授权页面
-//
-// 错误码：
-//   - OAUTH_NOT_CONFIGURED: OAuth 未配置
+// Auth 发起微软 OAuth 授权，重定向到 Microsoft 授权页面
+// GET /api/auth/microsoft?action=login|link&return=xxx
 func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	if !h.isConfigured() {
 		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusInternalServerError, "OAUTH_NOT_CONFIGURED", "Microsoft OAuth not configured")
@@ -238,16 +186,8 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
-// Callback 微软 OAuth 回调
+// Callback 微软 OAuth 回调，验证 state、交换 token、获取用户信息后执行登录或绑定
 // GET /api/auth/microsoft/callback
-//
-// 查询参数：
-//   - code: 授权码
-//   - state: 状态参数
-//   - error: 错误信息（用户拒绝授权时）
-//
-// 响应：
-//   - 重定向到相应页面
 func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
@@ -358,20 +298,8 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 	h.handleLoginAction(c, ctx, microsoftID, email, displayName, avatarData, avatarContentType, returnURL)
 }
 
-// Unlink 解绑微软账户
+// Unlink 解绑微软账户，需要登录，同时重置头像为默认头像
 // POST /api/auth/microsoft/unlink
-//
-// 认证：需要登录
-//
-// 响应：
-//   - success: 是否成功
-//   - message: 成功消息
-//
-// 错误码：
-//   - UNAUTHORIZED: 未登录
-//   - USER_NOT_FOUND: 用户不存在
-//   - NOT_LINKED: 未绑定微软账户
-//   - UNLINK_FAILED: 解绑失败
 func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
@@ -460,17 +388,8 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{"message": "Microsoft account unlinked"})
 }
 
-// GetPendingLinkInfo 获取待绑定信息
+// GetPendingLinkInfo 获取待绑定信息（微软名称、头像、当前用户名等）
 // GET /api/auth/microsoft/pending-link
-//
-// 响应：
-//   - success: 是否成功
-//   - data: 绑定信息（microsoftName, microsoftAvatar, username, userAvatar）
-//
-// 错误码：
-//   - INVALID_TOKEN: Token 无效
-//   - TOKEN_EXPIRED: Token 已过期
-//   - USER_NOT_FOUND: 用户不存在
 func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	token, err := utils.GetLinkTokenCookie(c)
 	token = strings.TrimSpace(token)
@@ -526,19 +445,8 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 	})
 }
 
-// ConfirmLink 确认绑定
+// ConfirmLink 确认绑定，更新数据库后自动登录并清除待绑定 Token
 // POST /api/auth/microsoft/confirm-link
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - INVALID_TOKEN: Token 无效
-//   - TOKEN_EXPIRED: Token 已过期
-//   - MICROSOFT_ALREADY_LINKED: 微软账户已被其他用户绑定
-//   - USER_NOT_FOUND: 用户不存在
-//   - LINK_FAILED: 绑定失败
-//   - TOKEN_GENERATION_FAILED: Token 生成失败
 func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	token, err := utils.GetLinkTokenCookie(c)
 	token = strings.TrimSpace(token)

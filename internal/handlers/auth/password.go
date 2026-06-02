@@ -1,18 +1,3 @@
-/**
- * internal/handlers/auth/password.go
- * 认证 API Handler - 密码路由
- *
- * 功能：
- * - 密码：重置、修改
- *
- * 依赖：
- * - internal/cache (用户缓存)
- * - internal/middleware (认证中间件、限流器)
- * - internal/models (用户模型)
- * - internal/services (Token、Email、Turnstile 服务)
- * - internal/utils (验证器、加密工具)
- */
-
 package auth
 
 import (
@@ -30,27 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  密码路由 ====================
-
-// SendResetCode 发送重置密码验证码
+// SendResetCode 发送重置密码验证码（对不存在的邮箱做恒定时间防枚举）
 // POST /api/auth/send-reset-code
-//
-// 请求体：
-//   - email: 邮箱地址（必需）
-//   - captchaToken: 验证码 Token（必需）
-//   - captchaType: 验证码类型（必需）
-//   - language: 语言代码（可选，默认 zh-CN）
-//
-// 响应：
-//   - success: 是否成功
-//   - expireTime: 验证码过期时间戳（毫秒）
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少参数
-//   - CAPTCHA_FAILED: 验证码验证失败
-//   - RATE_LIMIT: 发送频率超限
-//   - TOKEN_CREATE_FAILED: Token 创建失败
-//   - SEND_FAILED: 邮件发送失败
 func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	var req struct {
 		Email        string `json:"email"`
@@ -115,23 +81,8 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{"expireTime": expireTime})
 }
 
-// ResetPassword 重置密码
+// ResetPassword 使用验证码重置密码
 // POST /api/auth/reset-password
-//
-// 请求体：
-//   - email: 邮箱地址（必需）
-//   - code: 验证码（必需）
-//   - password: 新密码（必需）
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - MISSING_PARAMETERS: 缺少参数
-//   - CODE_INVALID / CODE_EXPIRED: 验证码验证失败
-//   - PASSWORD_*: 密码验证失败
-//   - USER_NOT_FOUND: 用户不存在
-//   - RESET_FAILED: 重置失败
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req struct {
 		Email    string `json:"email"`
@@ -195,29 +146,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// ChangePassword 修改密码（已登录用户）
+// ChangePassword 修改密码（需要登录，验证当前密码和新密码不相同）
 // POST /api/auth/change-password
-//
-// 认证：需要登录
-//
-// 请求体：
-//   - currentPassword: 当前密码（必需）
-//   - newPassword: 新密码（必需）
-//   - captchaToken: 验证码 Token（必需）
-//   - captchaType: 验证码类型（必需）
-//
-// 响应：
-//   - success: 是否成功
-//
-// 错误码：
-//   - UNAUTHORIZED: 未登录
-//   - MISSING_PARAMETERS: 缺少参数
-//   - CAPTCHA_FAILED: 验证码验证失败
-//   - USER_NOT_FOUND: 用户不存在
-//   - WRONG_PASSWORD: 当前密码错误
-//   - PASSWORD_*: 新密码验证失败
-//   - SAME_PASSWORD: 新密码与旧密码相同
-//   - UPDATE_FAILED: 更新失败
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
