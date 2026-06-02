@@ -1,24 +1,3 @@
-/**
- * internal/services/websocket.go
- * 分片 WebSocket 服务
- *
- * 功能：
- * - 分片连接管理（减少锁竞争）
- * - 扫码登录状态推送
- * - 连接池限制（防止资源耗尽）
- * - 过期连接清理
- * - 优雅关闭
- *
- * 设计说明：
- * - 使用 8 个分片减少锁竞争
- * - 最大连接数 1000，防止资源耗尽
- * - 连接超时 5 分钟，自动清理
- * - 支持 Ping/Pong 心跳保活
- *
- * 依赖：
- * - github.com/gorilla/websocket: WebSocket 库
- */
-
 package services
 
 import (
@@ -39,59 +18,27 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrWSMaxConnections 达到最大连接数
-	ErrWSMaxConnections = errors.New("max connections reached")
-	// ErrWSClientNotFound 客户端未找到
-	ErrWSClientNotFound = errors.New("client not found")
-	// ErrWSUpgradeFailed WebSocket 升级失败
-	ErrWSUpgradeFailed = errors.New("websocket upgrade failed")
-	// ErrWSSendBufferFull 发送缓冲区已满
-	ErrWSSendBufferFull = errors.New("send buffer full")
-	// ErrWSServiceShutdown 服务已关闭
+	ErrWSMaxConnections  = errors.New("max connections reached")
+	ErrWSClientNotFound  = errors.New("client not found")
+	ErrWSUpgradeFailed   = errors.New("websocket upgrade failed")
+	ErrWSSendBufferFull  = errors.New("send buffer full")
 	ErrWSServiceShutdown = errors.New("websocket service is shutdown")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// wsShardCount 分片数量
-	wsShardCount = 8
-
-	// maxConnections 最大连接数
-	maxConnections = 1000
-
-	// connectionTimeout 连接超时时间
+	wsShardCount      = 8
+	maxConnections    = 1000
 	connectionTimeout = 5 * time.Minute
-
-	// cleanupInterval 清理间隔
-	cleanupInterval = 1 * time.Minute
-
-	// writeWait 写入超时
-	writeWait = 10 * time.Second
-
-	// pongWait Pong 等待时间
-	pongWait = 60 * time.Second
-
-	// pingPeriod Ping 周期（必须小于 pongWait）
-	pingPeriod = 30 * time.Second
-
-	// maxMessageSize 最大消息大小
-	maxMessageSize = 512
-
-	// sendBufferSize 发送缓冲区大小
-	sendBufferSize = 256
-
-	// readBufferSize 读取缓冲区大小
-	readBufferSize = 1024
-
-	// writeBufferSize 写入缓冲区大小
-	writeBufferSize = 1024
+	cleanupInterval   = 1 * time.Minute
+	writeWait         = 10 * time.Second
+	pongWait          = 60 * time.Second
+	pingPeriod        = 30 * time.Second
+	maxMessageSize    = 512
+	sendBufferSize    = 256
+	readBufferSize    = 1024
+	writeBufferSize   = 1024
 )
-
-// ====================  数据结构 ====================
 
 // WSClient WebSocket 客户端
 type WSClient struct {
@@ -126,8 +73,6 @@ type WSMessage struct {
 	Status string            `json:"status,omitempty"`
 	Data   map[string]string `json:"data,omitempty"`
 }
-
-// ====================  构造函数 ====================
 
 // NewWebSocketService 创建 WebSocket 服务
 func NewWebSocketService(cfg *config.Config) *WebSocketService {
@@ -164,14 +109,12 @@ func NewWebSocketService(cfg *config.Config) *WebSocketService {
 		},
 	}
 
-	// 初始化所有分片
 	for i := range wsShardCount {
 		ws.shards[i] = &wsClientShard{
 			clients: make(map[string]*WSClient),
 		}
 	}
 
-	// 启动清理协程
 	ws.wg.Add(1)
 	go ws.cleanup()
 
@@ -180,20 +123,14 @@ func NewWebSocketService(cfg *config.Config) *WebSocketService {
 	return ws
 }
 
-// ====================  公开方法 ====================
-
 // HandleQRLogin 处理扫码登录 WebSocket 连接
-// 参数：
-//   - c: Gin Context
 func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
-	// 检查服务是否已关闭
 	if ws.IsShutdown() {
 		utils.LogWarn("WS", "Service is shutdown, rejecting connection", "")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
 		return
 	}
 
-	// 获取 Token
 	token := c.Query("token")
 	if token == "" {
 		utils.LogWarn("WS", "Missing token in WebSocket request", "")
@@ -201,21 +138,18 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 		return
 	}
 
-	// 检查连接数限制
 	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
 		utils.LogWarn("WS", "Max connections reached, rejecting new client", fmt.Sprintf("max=%d", maxConnections))
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "too many connections"})
 		return
 	}
 
-	// 升级到 WebSocket
 	conn, err := ws.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		utils.LogError("WS", "HandleConnection", err, "WebSocket upgrade failed")
 		return
 	}
 
-	// 创建客户端
 	client := &WSClient{
 		conn:      conn,
 		token:     token,
@@ -223,36 +157,27 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 		createdAt: time.Now(),
 	}
 
-	// 注册客户端
 	if !ws.register(client) {
 		utils.LogWarn("WS", "Failed to register client", fmt.Sprintf("token=%s", token))
 		_ = conn.Close()
 		return
 	}
 
-	// 启动读写协程
 	go ws.writePump(client)
 	go ws.readPump(client)
 }
 
 // NotifyStatusChange 通知状态变更
-// 参数：
-//   - token: 客户端 Token
-//   - status: 状态
-//   - data: 附加数据
 func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[string]string) {
-	// 检查服务是否已关闭
 	if ws.IsShutdown() {
 		return
 	}
 
-	// 参数验证
 	if token == "" {
 		utils.LogWarn("WS", "Empty token in NotifyStatusChange", "")
 		return
 	}
 
-	// 获取客户端
 	shard := ws.getShard(token)
 
 	shard.mu.RLock()
@@ -260,29 +185,24 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	shard.mu.RUnlock()
 
 	if !ok {
-		// 客户端不存在，静默返回
 		return
 	}
 
-	// 构建消息
 	message := map[string]any{
 		"type":   "status",
 		"status": status,
 	}
 
-	// 添加附加数据
 	for k, v := range data {
 		message[k] = v
 	}
 
-	// 序列化消息
 	jsonData, err := json.Marshal(message)
 	if err != nil {
 		utils.LogError("WS", "NotifyStatusChange", err, "Failed to marshal message")
 		return
 	}
 
-	// 发送消息
 	if err := ws.sendToClient(client, jsonData); err != nil {
 		utils.LogWarn("WS", "Failed to send message", fmt.Sprintf("token=%s", token))
 	}
@@ -305,8 +225,6 @@ func (ws *WebSocketService) IsShutdown() bool {
 }
 
 // Shutdown 优雅关闭
-// 参数：
-//   - ctx: 控制关闭超时的上下文
 func (ws *WebSocketService) Shutdown(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
@@ -319,10 +237,8 @@ func (ws *WebSocketService) Shutdown(ctx context.Context) {
 		ws.isShutdown = true
 		ws.mu.Unlock()
 
-		// 发送关闭信号
 		close(ws.shutdown)
 
-		// 关闭所有连接
 		ws.closeAllConnections()
 
 		// 等待清理协程结束
@@ -334,15 +250,12 @@ func (ws *WebSocketService) Shutdown(ctx context.Context) {
 
 	select {
 	case <-done:
-		// 正常关闭
 	case <-ctx.Done():
 		utils.LogWarn("WS", "Shutdown timeout exceeded, forcing shutdown", "")
 	}
 }
 
 // GetStats 获取服务统计信息
-// 返回：
-//   - map[string]interface{}: 统计信息
 func (ws *WebSocketService) GetStats() map[string]any {
 	stats := map[string]any{
 		"connectionCount": ws.GetConnectionCount(),
@@ -351,7 +264,6 @@ func (ws *WebSocketService) GetStats() map[string]any {
 		"isShutdown":      ws.IsShutdown(),
 	}
 
-	// 统计每个分片的连接数
 	shardStats := make([]int, wsShardCount)
 	for i := range wsShardCount {
 		shard := ws.shards[i]
@@ -364,13 +276,10 @@ func (ws *WebSocketService) GetStats() map[string]any {
 	return stats
 }
 
-// ====================  私有方法 ====================
-
-// wsHashSeed maphash 种子（进程级别唯一）
-var wsHashSeed = maphash.MakeSeed()
-
 // getShard 获取 token 对应的分片
 // 使用 maphash 哈希算法分配分片，与限流器保持一致
+var wsHashSeed = maphash.MakeSeed()
+
 func (ws *WebSocketService) getShard(token string) *wsClientShard {
 	if token == "" {
 		return ws.shards[0]
@@ -381,13 +290,7 @@ func (ws *WebSocketService) getShard(token string) *wsClientShard {
 }
 
 // register 注册客户端
-// 参数：
-//   - client: 客户端
-//
-// 返回：
-//   - bool: 是否注册成功
 func (ws *WebSocketService) register(client *WSClient) bool {
-	// 检查连接数限制
 	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
 		utils.LogWarn("WS", "Max connections reached, rejecting new client", "")
 		return false
@@ -398,9 +301,7 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
-	// 检查是否已存在同 token 的连接
 	if existingClient, ok := shard.clients[client.token]; ok {
-		// 关闭旧连接
 		ws.closeClient(existingClient)
 		atomic.AddInt32(&ws.connCount, -1)
 		utils.LogInfo("WS", fmt.Sprintf("Replaced existing client: token=%s", client.token))
@@ -414,8 +315,6 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 }
 
 // unregister 注销客户端
-// 参数：
-//   - client: 客户端
 func (ws *WebSocketService) unregister(client *WSClient) {
 	shard := ws.getShard(client.token)
 
@@ -431,8 +330,6 @@ func (ws *WebSocketService) unregister(client *WSClient) {
 }
 
 // closeClient 关闭客户端连接
-// 参数：
-//   - client: 客户端
 func (ws *WebSocketService) closeClient(client *WSClient) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -446,12 +343,6 @@ func (ws *WebSocketService) closeClient(client *WSClient) {
 }
 
 // sendToClient 发送消息到客户端
-// 参数：
-//   - client: 客户端
-//   - message: 消息
-//
-// 返回：
-//   - error: 错误信息
 func (ws *WebSocketService) sendToClient(client *WSClient, message []byte) error {
 	client.mu.Lock()
 	if client.closed {
@@ -471,8 +362,6 @@ func (ws *WebSocketService) sendToClient(client *WSClient, message []byte) error
 }
 
 // writePump 写入协程
-// 参数：
-//   - client: 客户端
 func (ws *WebSocketService) writePump(client *WSClient) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -516,23 +405,18 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 }
 
 // readPump 读取协程
-// 参数：
-//   - client: 客户端
 func (ws *WebSocketService) readPump(client *WSClient) {
 	defer func() {
 		ws.unregister(client)
 	}()
 
-	// 设置读取限制
 	client.conn.SetReadLimit(maxMessageSize)
 
-	// 设置读取超时
 	if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
 		utils.LogWarn("WS", "Failed to set read deadline", "")
 		return
 	}
 
-	// 设置 Pong 处理器
 	client.conn.SetPongHandler(func(string) error {
 		if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
 			utils.LogWarn("WS", "Failed to set read deadline in pong handler", "")
@@ -541,7 +425,6 @@ func (ws *WebSocketService) readPump(client *WSClient) {
 		return nil
 	})
 
-	// 读取消息循环
 	for {
 		_, _, err := client.conn.ReadMessage()
 		if err != nil {
@@ -579,7 +462,6 @@ func (ws *WebSocketService) cleanupExpired() {
 	for i := range wsShardCount {
 		shard := ws.shards[i]
 
-		// 收集过期的客户端
 		var expiredClients []*WSClient
 
 		shard.mu.Lock()
@@ -593,7 +475,6 @@ func (ws *WebSocketService) cleanupExpired() {
 		}
 		shard.mu.Unlock()
 
-		// 关闭过期的客户端（在锁外执行）
 		for _, client := range expiredClients {
 			ws.closeClient(client)
 		}
@@ -611,7 +492,6 @@ func (ws *WebSocketService) closeAllConnections() {
 
 		shard.mu.Lock()
 		for _, client := range shard.clients {
-			// 发送关闭消息
 			if err := client.conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutdown")); err != nil {
 				utils.LogDebug("WS", "Failed to write close message")

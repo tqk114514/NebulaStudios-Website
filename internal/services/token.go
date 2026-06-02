@@ -1,23 +1,3 @@
-/**
- * internal/services/token.go
- * Token 和验证码管理服务
- *
- * 功能：
- * - 验证 Token 生成和验证
- * - 验证码生成和验证
- * - 过期数据自动清理
- * - 支持多种 Token 类型（注册、重置密码、修改密码、删除账户）
- *
- * 数据表：
- * - tokens: 存储验证 Token
- * - codes: 存储验证码
- *
- * 依赖：
- * - PostgreSQL 数据库
- * - utils.GenerateSecureToken: 安全 Token 生成
- * - utils.GenerateCode: 验证码生成
- */
-
 package services
 
 import (
@@ -34,9 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
-// 错误定义从 models 层导入
 var (
 	ErrInvalidToken    = models.ErrInvalidToken
 	ErrTokenExpired    = models.ErrTokenExpired
@@ -49,32 +26,17 @@ var (
 	ErrCodeNotVerified = models.ErrCodeNotVerified
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// TokenTypeRegister 注册 Token 类型
-	TokenTypeRegister = "register"
-	// TokenTypeResetPassword 重置密码 Token 类型
-	TokenTypeResetPassword = "reset_password"
-	// TokenTypeChangePassword 修改密码 Token 类型
+	TokenTypeRegister       = "register"
+	TokenTypeResetPassword  = "reset_password"
 	TokenTypeChangePassword = "change_password"
-	// TokenTypeDeleteAccount 删除账户 Token 类型
-	TokenTypeDeleteAccount = "delete_account"
+	TokenTypeDeleteAccount  = "delete_account"
 
-	// tokenExpiry Token 过期时间（5 分钟）
-	tokenExpiry = 5 * time.Minute
-
-	// maxCodeAttempts 验证码最大尝试次数
+	tokenExpiry     = 5 * time.Minute
 	maxCodeAttempts = 5
-
-	// tokenUsed Token 已使用标记
-	tokenUsed = 1
-
-	// codeVerified 验证码已验证标记
-	codeVerified = 1
+	tokenUsed       = 1
+	codeVerified    = 1
 )
-
-// ====================  数据结构 ====================
 
 // TokenResult Token 验证结果
 type TokenResult struct {
@@ -96,11 +58,7 @@ type TokenService struct {
 	pool      *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewTokenService 创建 Token 服务
-// 返回：
-//   - *TokenService: Token 服务实例
 func NewTokenService(pool *pgxpool.Pool) *TokenService {
 	utils.LogInfo("TOKEN", "Token service initialized")
 	return &TokenService{
@@ -110,41 +68,26 @@ func NewTokenService(pool *pgxpool.Pool) *TokenService {
 	}
 }
 
-// ====================  公开方法 ====================
-
 // CreateToken 创建 Token
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//   - tokenType: Token 类型
-//
-// 返回：
-//   - string: Token 字符串
-//   - int64: 过期时间（毫秒时间戳）
-//   - error: 错误信息
 func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string) (string, int64, error) {
 	if email == "" {
 		return "", 0, errors.New("email is empty")
 	}
 
-	// 规范化输入
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	normalizedType := strings.TrimSpace(tokenType)
 	if normalizedType == "" {
 		normalizedType = TokenTypeRegister
 	}
 
-	// 生成安全 Token
 	tokenStr, err := utils.GenerateSecureToken()
 	if err != nil {
 		return "", 0, utils.LogError("TOKEN", "GenerateSecureToken", err)
 	}
 
-	// 计算时间
 	now := time.Now().UnixMilli()
 	expireTime := now + int64(tokenExpiry.Milliseconds())
 
-	// 创建 Token 对象
 	token := &models.Token{
 		Token:      tokenStr,
 		Email:      normalizedEmail,
@@ -153,7 +96,6 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 		ExpireTime: expireTime,
 	}
 
-	// 保存到数据库
 	if err := s.tokenRepo.Create(ctx, token); err != nil {
 		return "", 0, err
 	}
@@ -170,13 +112,11 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 
 	now := time.Now().UnixMilli()
 
-	// 原子性地标记 Token 为已使用，消除竞态条件
 	token, err := s.tokenRepo.MarkUsedAndGet(ctx, tokenStr, now)
 	if err != nil {
 		return nil, err
 	}
 	if token == nil {
-		// Token 未被获取（已被使用 / 已过期 / 不存在），回退查询确定具体原因
 		existingToken, findErr := s.tokenRepo.FindByToken(ctx, tokenStr)
 		if findErr != nil {
 			if utils.IsDatabaseNotFound(findErr) {
@@ -192,7 +132,6 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 		return nil, models.ErrTokenUsed
 	}
 
-	// 生成验证码（如果没有）
 	var codeStr string
 	if token.Code == nil || *token.Code == "" {
 		codeStr, err = utils.GenerateCode()
@@ -224,17 +163,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 }
 
 // VerifyCode 验证验证码
-// 参数：
-//   - ctx: 上下文
-//   - code: 验证码
-//   - email: 邮箱地址
-//   - expectedType: 期望的类型（可为空）
-//
-// 返回：
-//   - *CodeResult: 验证结果
-//   - error: 错误信息
 func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedType string) (*CodeResult, error) {
-	// 参数验证
 	if codeStr == "" {
 		return nil, models.ErrInvalidCode
 	}
@@ -244,7 +173,6 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
-	// 查询验证码
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
@@ -254,30 +182,25 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 		return nil, err
 	}
 
-	// 检查邮箱
 	if code.Email != normalizedEmail {
 		utils.LogWarn("TOKEN", fmt.Sprintf("Email mismatch: expected=%s, got=%s", code.Email, normalizedEmail))
 		return nil, models.ErrEmailMismatch
 	}
 
-	// 检查类型
 	if expectedType != "" && code.Type != expectedType {
 		utils.LogWarn("TOKEN", fmt.Sprintf("Type mismatch: expected=%s, got=%s", expectedType, code.Type))
 		return nil, models.ErrTypeMismatch
 	}
 
-	// 检查过期
 	if code.IsExpired() {
 		s.codeRepo.DeleteByCode(ctx, codeStr)
 		return nil, models.ErrCodeExpired
 	}
 
-	// 检查是否已验证
 	if code.IsVerified() {
 		return &CodeResult{Type: code.Type, AlreadyVerified: true}, nil
 	}
 
-	// 检查尝试次数
 	newAttempts := code.Attempts + 1
 	if newAttempts > maxCodeAttempts {
 		s.codeRepo.DeleteByCode(ctx, codeStr)
@@ -285,7 +208,6 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 		return nil, models.ErrTooManyAttempts
 	}
 
-	// 更新验证状态
 	now := time.Now().UnixMilli()
 	s.codeRepo.UpdateVerification(ctx, codeStr, newAttempts, now)
 
@@ -295,16 +217,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 }
 
 // IsCodeVerified 检查验证码是否已验证
-// 参数：
-//   - ctx: 上下文
-//   - code: 验证码
-//   - email: 邮箱地址
-//
-// 返回：
-//   - bool: 是否已验证
-//   - error: 错误信息
 func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string) (bool, error) {
-	// 参数验证
 	if codeStr == "" {
 		return false, models.ErrInvalidCode
 	}
@@ -314,24 +227,20 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
-	// 查询验证码
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return false, models.ErrInvalidCode
 	}
 
-	// 检查邮箱
 	if code.Email != normalizedEmail {
 		return false, models.ErrEmailMismatch
 	}
 
-	// 检查过期
 	if code.IsExpired() {
 		s.codeRepo.DeleteByCode(ctx, codeStr)
 		return false, models.ErrCodeExpired
 	}
 
-	// 检查是否已验证
 	if !code.IsVerified() {
 		return false, models.ErrCodeNotVerified
 	}
@@ -340,15 +249,7 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string
 }
 
 // UseCode 使用验证码（删除）
-// 参数：
-//   - ctx: 上下文
-//   - code: 验证码
-//   - email: 邮箱地址
-//
-// 返回：
-//   - error: 错误信息
 func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error {
-	// 参数验证
 	if codeStr == "" {
 		return models.ErrInvalidCode
 	}
@@ -358,13 +259,11 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
-	// 查询验证码
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return models.ErrInvalidCode
 	}
 
-	// 验证邮箱和状态
 	if code.Email != normalizedEmail {
 		return models.ErrEmailMismatch
 	}
@@ -372,7 +271,6 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 		return models.ErrCodeNotVerified
 	}
 
-	// 删除验证码
 	s.codeRepo.DeleteByCode(ctx, codeStr)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Code used and removed: email=%s", normalizedEmail))
@@ -380,13 +278,6 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 }
 
 // InvalidateCodeByEmail 使指定邮箱的验证码失效
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//   - tokenType: Token 类型（可为 nil 表示所有类型）
-//
-// 返回：
-//   - error: 错误信息
 func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, tokenType *string) error {
 	if email == "" {
 		utils.LogWarn("TOKEN", "InvalidateCodeByEmail called with empty email", "")
@@ -398,16 +289,7 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 }
 
 // GetCodeExpiry 获取验证码过期时间
-// 参数：
-//   - ctx: 上下文
-//   - code: 验证码
-//   - email: 邮箱地址
-//
-// 返回：
-//   - int64: 过期时间（毫秒时间戳）
-//   - error: 错误信息
 func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string) (int64, error) {
-	// 参数验证
 	if codeStr == "" {
 		return 0, models.ErrInvalidCode
 	}
@@ -417,13 +299,11 @@ func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string)
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
-	// 查询验证码
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		return 0, models.ErrInvalidCode
 	}
 
-	// 检查邮箱
 	if code.Email != normalizedEmail {
 		return 0, models.ErrEmailMismatch
 	}
@@ -432,16 +312,7 @@ func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string)
 }
 
 // GetCodeExpiryByEmail 根据邮箱获取最新验证码的过期时间
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//
-// 返回：
-//   - expired: 是否已过期或不存在
-//   - expireTime: 过期时间（毫秒时间戳），仅当 expired=false 时有效
-//   - error: 错误信息
 func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (bool, int64, error) {
-	// 参数验证
 	if email == "" {
 		return true, 0, errors.New("email is empty")
 	}
@@ -455,7 +326,6 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 	}
 
 	if expireTime == 0 {
-		// 没有找到有效验证码
 		return true, 0, nil
 	}
 
@@ -464,12 +334,9 @@ func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (
 
 // CleanupExpired 清理过期数据
 // 所有清理操作并行执行，提高效率
-// 参数：
-//   - ctx: 上下文
 func (s *TokenService) CleanupExpired(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	// 清理过期 Token（异步）
 	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -488,7 +355,6 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}
 	})
 
-	// 清理过期验证码（异步）
 	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -507,7 +373,6 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}
 	})
 
-	// 清理过期 OAuth 授权码（异步）
 	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -523,7 +388,6 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}
 	})
 
-	// 清理过期 OAuth Access Token（异步）
 	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -539,7 +403,6 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}
 	})
 
-	// 清理过期 OAuth Refresh Token（异步）
 	wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -555,13 +418,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		}
 	})
 
-	// 等待所有清理任务完成
 	wg.Wait()
 }
 
 // GetTokenExpiry 获取 Token 过期时间配置
-// 返回：
-//   - time.Duration: Token 过期时间
 func (s *TokenService) GetTokenExpiry() time.Duration {
 	return tokenExpiry
 }

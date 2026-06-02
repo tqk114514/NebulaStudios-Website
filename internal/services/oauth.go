@@ -1,32 +1,3 @@
-/**
- * internal/services/oauth.go
- * OAuth Provider 服务
- *
- * 功能：
- * - 客户端注册和管理
- * - 客户端验证（client_id + client_secret）
- * - redirect_uri 精确匹配验证
- * - Authorization Code 生成和验证
- * - Access Token / Refresh Token 生成和验证
- * - Token 撤销
- * - 用户授权管理
- *
- * Token 有效期：
- * - Authorization Code: 10 分钟
- * - Access Token: 1 小时
- * - Refresh Token: 30 天
- *
- * 安全设计：
- * - client_secret 使用 Argon2id 哈希存储（通过 utils.HashPassword）
- * - Access Token 和 Refresh Token 使用 SHA-256 哈希存储
- * - Authorization Code 单次使用
- * - redirect_uri 必须精确匹配
- *
- * 依赖：
- * - internal/models: OAuth 模型
- * - internal/utils: 安全工具函数（HashPassword, VerifyPassword）
- */
-
 package services
 
 import (
@@ -43,16 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// 客户端错误
 	ErrOAuthInvalidClient   = errors.New("OAUTH_INVALID_CLIENT")
 	ErrOAuthInvalidSecret   = errors.New("OAUTH_INVALID_SECRET")
 	ErrOAuthClientDisabled  = errors.New("OAUTH_CLIENT_DISABLED")
 	ErrOAuthInvalidRedirect = errors.New("OAUTH_INVALID_REDIRECT_URI")
 
-	// Token 错误
 	ErrOAuthCodeNotFound     = errors.New("OAUTH_CODE_NOT_FOUND")
 	ErrOAuthCodeExpired      = errors.New("OAUTH_CODE_EXPIRED")
 	ErrOAuthCodeUsed         = errors.New("OAUTH_CODE_USED")
@@ -62,23 +29,17 @@ var (
 	ErrOAuthRedirectMismatch = errors.New("OAUTH_REDIRECT_MISMATCH")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// 长度常量
-	oauthClientIDLength     = 16 // 32 字符 hex
-	oauthClientSecretLength = 32 // 64 字符 hex
-	oauthAuthCodeLength     = 16 // 32 字符 hex
-	oauthAccessTokenLength  = 32 // 64 字符 hex
-	oauthRefreshTokenLength = 32 // 64 字符 hex
+	oauthClientIDLength     = 16
+	oauthClientSecretLength = 32
+	oauthAuthCodeLength     = 16
+	oauthAccessTokenLength  = 32
+	oauthRefreshTokenLength = 32
 
-	// 有效期常量
 	oauthAuthCodeExpiry     = 10 * time.Minute
 	oauthAccessTokenExpiry  = 1 * time.Hour
 	oauthRefreshTokenExpiry = 30 * 24 * time.Hour
 )
-
-// ====================  数据结构 ====================
 
 // OAuthService OAuth 服务
 type OAuthService struct {
@@ -98,8 +59,6 @@ type OAuthTokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// ====================  构造函数 ====================
-
 // NewOAuthService 创建 OAuth 服务
 func NewOAuthService(pool *pgxpool.Pool) *OAuthService {
 	return &OAuthService{
@@ -110,8 +69,6 @@ func NewOAuthService(pool *pgxpool.Pool) *OAuthService {
 		grantRepo:        models.NewOAuthGrantRepository(pool),
 	}
 }
-
-// ====================  客户端管理方法 ====================
 
 // CreateClient 创建客户端
 // 返回：客户端对象、明文 client_secret（仅此次返回）、错误
@@ -287,11 +244,8 @@ func (s *OAuthService) DeleteClient(ctx context.Context, id int64) error {
 	return s.clientRepo.Delete(ctx, id)
 }
 
-// ====================  Authorization Code 方法 ====================
-
 // CreateAuthorizationCode 创建授权码
 func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope, codeChallenge, codeChallengeMethod string) (string, error) {
-	// 强制要求 PKCE
 	if codeChallenge == "" {
 		return "", ErrOAuthInvalidGrant
 	}
@@ -321,7 +275,6 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 		return "", err
 	}
 
-	// 创建或更新用户授权记录
 	grant := &models.OAuthGrant{UserUID: userUID, ClientID: clientID, Scope: scope}
 	_ = s.grantRepo.CreateOrUpdate(ctx, grant)
 
@@ -355,7 +308,6 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, "", ErrOAuthRedirectMismatch
 	}
 
-	// 强制要求 PKCE 验证
 	if codeVerifier == "" {
 		return nil, "", ErrOAuthInvalidGrant
 	}
@@ -366,7 +318,6 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, "", ErrOAuthInvalidGrant
 	}
 
-	// 标记为已使用
 	if err := s.authCodeRepo.MarkUsed(ctx, authCode.ID); err != nil {
 		if errors.Is(err, models.ErrOAuthCodeUsed) {
 			return nil, "", ErrOAuthCodeUsed
@@ -374,7 +325,6 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, "", err
 	}
 
-	// 生成 Token
 	tokenResp, err := s.createTokenPair(ctx, authCode.ClientID, authCode.UserUID, authCode.Scope)
 	if err != nil {
 		return nil, "", err
@@ -383,8 +333,6 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code exchanged: client_id=%s, user_uid=%s", clientID, authCode.UserUID))
 	return tokenResp, authCode.UserUID, nil
 }
-
-// ====================  Token 方法 ====================
 
 // RefreshAccessToken 刷新 Access Token
 func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, clientID string) (*OAuthTokenResponse, string, error) {
@@ -406,13 +354,11 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 		return nil, "", ErrOAuthInvalidGrant
 	}
 
-	// 删除旧 Token
 	_ = s.refreshTokenRepo.Delete(ctx, token.ID)
 	if token.AccessTokenID > 0 {
 		_ = s.accessTokenRepo.Delete(ctx, token.AccessTokenID)
 	}
 
-	// 生成新 Token
 	tokenResp, err := s.createTokenPair(ctx, token.ClientID, token.UserUID, token.Scope)
 	if err != nil {
 		return nil, "", err
@@ -481,8 +427,6 @@ func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) 
 	return nil
 }
 
-// ====================  私有方法 ====================
-
 // createTokenPair 创建 Access Token 和 Refresh Token 对
 func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, userUID string, scope string) (*OAuthTokenResponse, error) {
 	accessToken, err := s.generateRandomHex(oauthAccessTokenLength)
@@ -495,7 +439,6 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 		return nil, err
 	}
 
-	// 保存 Access Token
 	accessTokenModel := &models.OAuthAccessToken{
 		TokenHash: s.hashToken(accessToken),
 		ClientID:  clientID,
@@ -507,7 +450,6 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 		return nil, err
 	}
 
-	// 保存 Refresh Token
 	refreshTokenModel := &models.OAuthRefreshToken{
 		TokenHash:     s.hashToken(refreshToken),
 		ClientID:      clientID,

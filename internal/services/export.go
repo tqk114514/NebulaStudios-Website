@@ -1,13 +1,3 @@
-/**
- * internal/services/export.go
- * 数据导出/导入服务
- *
- * 功能：
- * - OTAC（一次性授权码）生成、验证、销毁
- * - 临时文件 token 管理
- * - 导出数据查询与组装
- */
-
 package services
 
 import (

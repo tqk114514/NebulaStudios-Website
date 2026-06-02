@@ -1,11 +1,3 @@
-/**
- * internal/services/imgprocessor.go
- * 图片处理服务客户端
- *
- * 通过 Unix Socket 与 Zig img-processor 通信
- * 将图片转换为 WebP 格式
- */
-
 package services
 
 import (
@@ -26,25 +18,17 @@ import (
 )
 
 const (
-	// BinaryPath 二进制文件路径
-	BinaryPath = "/tmp/img-processor"
-	// ConnectTimeout 连接超时
-	ConnectTimeout = 5 * time.Second
-	// ReadWriteTimeout 读写超时
+	BinaryPath       = "/tmp/img-processor"
+	ConnectTimeout   = 5 * time.Second
 	ReadWriteTimeout = 30 * time.Second
-	// MaxImageSize 最大图片大小
-	MaxImageSize = 10 * 1024 * 1024 // 10MB
-	// MaxConcurrent 最大并发数（避免 CPU 过载）
-	MaxConcurrent = 2
+	MaxImageSize     = 10 * 1024 * 1024
+	MaxConcurrent    = 2
 )
 
 var (
-	// ErrProcessorNotAvailable 处理器不可用
 	ErrProcessorNotAvailable = errors.New("image processor not available")
-	// ErrImageTooLarge 图片太大
-	ErrImageTooLarge = errors.New("image too large")
-	// ErrProcessFailed 处理失败
-	ErrProcessFailed = errors.New("image process failed")
+	ErrImageTooLarge         = errors.New("image too large")
+	ErrProcessFailed         = errors.New("image process failed")
 )
 
 // 嵌入 Zig 二进制（编译时由 GitHub Actions 放置）
@@ -75,24 +59,20 @@ func NewImgProcessor(socketPath string) *ImgProcessor {
 
 // startProcessor 启动 Zig 处理器
 func (p *ImgProcessor) startProcessor() {
-	// 检查嵌入的二进制是否存在
 	if len(imgProcessorBin) == 0 {
 		utils.LogWarn("IMG", "Embedded binary not found, using fallback", "")
 		p.available = false
 		return
 	}
 
-	// 计算嵌入二进制的 SHA-256
 	expectedHash := sha256.Sum256(imgProcessorBin)
 
-	// 释放二进制文件
 	if err := os.WriteFile(BinaryPath, imgProcessorBin, 0755); err != nil {
 		utils.LogError("IMG", "start", err, "Failed to write binary")
 		p.available = false
 		return
 	}
 
-	// 验证写入文件的完整性
 	writtenData, err := os.ReadFile(BinaryPath)
 	if err != nil {
 		utils.LogError("IMG", "start", err, "Failed to verify binary integrity")
@@ -107,10 +87,8 @@ func (p *ImgProcessor) startProcessor() {
 		return
 	}
 
-	// 删除旧的 socket
 	os.Remove(p.socketPath)
 
-	// 启动进程
 	p.cmd = exec.Command(BinaryPath)
 	if err := p.cmd.Start(); err != nil {
 		utils.LogError("IMG", "start", err, "Failed to start processor")
@@ -118,8 +96,7 @@ func (p *ImgProcessor) startProcessor() {
 		return
 	}
 
-	// 等待 socket 就绪
-	for range 50 { // 最多等 5 秒
+	for range 50 {
 		time.Sleep(100 * time.Millisecond)
 		if _, err := os.Stat(p.socketPath); err == nil {
 			p.available = true
@@ -133,8 +110,6 @@ func (p *ImgProcessor) startProcessor() {
 }
 
 // Shutdown 关闭处理器
-// 参数：
-//   - ctx: 控制关闭超时的上下文
 func (p *ImgProcessor) Shutdown(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
@@ -150,7 +125,6 @@ func (p *ImgProcessor) Shutdown(ctx context.Context) {
 
 	select {
 	case <-done:
-		// 正常关闭
 	case <-ctx.Done():
 		utils.LogWarn("IMG", "Shutdown timeout exceeded, forcing shutdown", "")
 	}
@@ -180,26 +154,22 @@ func (p *ImgProcessor) tryRestart() {
 
 		utils.LogInfo("IMG", "Attempting to restart processor...")
 
-		// 先清理旧进程
 		if p.cmd != nil && p.cmd.Process != nil {
 			p.cmd.Process.Kill()
 			p.cmd.Wait()
 		}
 
-		// 重新启动
 		p.startProcessor()
 	}()
 }
 
 // checkAndRestart 检查进程状态，必要时重启
 func (p *ImgProcessor) checkAndRestart() {
-	// 检查进程是否还活着
 	if p.cmd == nil || p.cmd.Process == nil {
 		p.tryRestart()
 		return
 	}
 
-	// 检查 socket 是否存在
 	if _, err := os.Stat(p.socketPath); os.IsNotExist(err) {
 		p.tryRestart()
 		return
@@ -215,11 +185,9 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 		return nil, ErrImageTooLarge
 	}
 
-	// 获取信号量（限制并发）
 	p.sem <- struct{}{}
 	defer func() { <-p.sem }()
 
-	// 连接
 	conn, err := net.DialTimeout("unix", p.socketPath, ConnectTimeout)
 	if err != nil {
 		p.available = false
@@ -228,11 +196,9 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	}
 	defer conn.Close()
 
-	// 设置超时
 	deadline := time.Now().Add(ReadWriteTimeout)
 	conn.SetDeadline(deadline)
 
-	// 发送: [4字节长度][数据]
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(imageData)))
 	if _, err := conn.Write(lenBuf); err != nil {
@@ -242,7 +208,6 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("write data failed: %w", err)
 	}
 
-	// 读取响应: [1字节状态][4字节长度][数据]
 	statusBuf := make([]byte, 1)
 	if _, err := conn.Read(statusBuf); err != nil {
 		return nil, fmt.Errorf("read status failed: %w", err)
@@ -262,7 +227,6 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("read data failed: %w", err)
 	}
 
-	// 检查状态
 	if statusBuf[0] != 0 {
 		return nil, fmt.Errorf("%w: %s", ErrProcessFailed, string(respData))
 	}

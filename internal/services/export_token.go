@@ -23,12 +23,14 @@ type exportTokenEntry struct {
 	ExpiresAt time.Time
 }
 
+// ExportTokenService 数据导出 Token 服务，管理一次性下载 Token 的生成和验证
 type ExportTokenService struct {
-	cache   *lru.Cache[string, *exportTokenEntry]
-	stopCh  chan struct{}
+	cache    *lru.Cache[string, *exportTokenEntry]
+	stopCh   chan struct{}
 	stopOnce sync.Once
 }
 
+// NewExportTokenService 创建导出 Token 服务
 func NewExportTokenService() (*ExportTokenService, error) {
 	cache, err := lru.New[string, *exportTokenEntry](defaultExportTokenCapacity)
 	if err != nil {
@@ -45,6 +47,7 @@ func NewExportTokenService() (*ExportTokenService, error) {
 	return svc, nil
 }
 
+// Generate 生成一次性导出 Token
 func (s *ExportTokenService) Generate(userUID string) (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -61,6 +64,7 @@ func (s *ExportTokenService) Generate(userUID string) (string, error) {
 	return token, nil
 }
 
+// ValidateAndConsume 验证并消费导出 Token，成功返回 userUID，Token 一次性使用后立即删除
 func (s *ExportTokenService) ValidateAndConsume(token string) (string, bool) {
 	entry, ok := s.cache.Get(token)
 	if !ok {
@@ -111,6 +115,7 @@ func (s *ExportTokenService) cleanupExpired() {
 	}
 }
 
+// Stop 停止清理循环
 func (s *ExportTokenService) Stop() {
 	s.stopOnce.Do(func() {
 		close(s.stopCh)
