@@ -1,17 +1,3 @@
-/**
- * internal/utils/cookie.go
- * Cookie 工具模块
- *
- * 功能：
- * - 统一的 Cookie 配置常量
- * - Cookie 读取和写入辅助函数
- * - 简化 Gin Context 的 Cookie 操作
- *
- * 依赖：
- * - net/http: HTTP Cookie
- * - time: 时间处理
- */
-
 package utils
 
 import (
@@ -21,43 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  临时常量（与 oauth 包保持一致） ====================
-
 const (
-	// StateExpiryDuration 临时定义，与 oauth 包保持一致（10 分钟）
 	StateExpiryDuration = 10 * time.Minute
 )
 
-// ====================  Cookie 名称常量 ====================
-
 const (
-	// TokenCookieName 认证 Token Cookie 名称
-	TokenCookieName = "token"
-
-	// LanguageCookieName 语言偏好 Cookie 名称
-	LanguageCookieName = "selectedLanguage"
-
-	// LinkTokenCookieName 微软账户绑定确认 Token Cookie 名称
+	TokenCookieName     = "token"
+	LanguageCookieName  = "selectedLanguage"
 	LinkTokenCookieName = "link_token"
-
-	// CSRFTokenName CSRF Token Cookie 名称
-	CSRFTokenName = "csrf_token"
+	CSRFTokenName       = "csrf_token"
 )
 
-// ====================  Cookie 配置常量 ====================
-
 const (
-	// DefaultCookieMaxAge 默认 Cookie 有效期（60 天，转换为秒）
 	DefaultCookieMaxAge = int(60 * 24 * time.Hour / time.Second)
-
-	// DefaultCookiePath 默认 Cookie 路径
-	DefaultCookiePath = "/"
-
-	// DefaultCookieDomain 默认 Cookie 域名（仅对 www 子域名有效，隔离其他子域名）
+	DefaultCookiePath   = "/"
 	DefaultCookieDomain = "www.nebulastudios.top"
 )
 
-// secureFlag Cookie Secure 标志（由 InitSecure 在启动时设置）
 var secureFlag bool
 
 // InitSecure 初始化 Cookie Secure 标志
@@ -71,12 +37,7 @@ func IsSecure() bool {
 	return secureFlag
 }
 
-// ====================  Cookie 写入函数 ====================
-
 // SetTokenCookie 设置认证 Token Cookie
-// 参数：
-//   - w: HTTP 响应写入器
-//   - token: Token 值
 func SetTokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     TokenCookieName,
@@ -92,8 +53,6 @@ func SetTokenCookie(w http.ResponseWriter, token string) {
 
 // ClearTokenCookie 清除认证 Token Cookie
 // 通过设置 MaxAge 为 -1 使 Cookie 立即失效
-// 参数：
-//   - w: HTTP 响应写入器
 func ClearTokenCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     TokenCookieName,
@@ -108,9 +67,6 @@ func ClearTokenCookie(w http.ResponseWriter) {
 }
 
 // SetLanguageCookie 设置语言偏好 Cookie
-// 参数：
-//   - w: HTTP 响应写入器
-//   - language: 语言代码（如 "zh-CN", "en"）
 func SetLanguageCookie(w http.ResponseWriter, language string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     LanguageCookieName,
@@ -125,8 +81,6 @@ func SetLanguageCookie(w http.ResponseWriter, language string) {
 }
 
 // ClearLanguageCookie 清除语言偏好 Cookie
-// 参数：
-//   - w: HTTP 响应写入器
 func ClearLanguageCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     LanguageCookieName,
@@ -140,57 +94,33 @@ func ClearLanguageCookie(w http.ResponseWriter) {
 	})
 }
 
-// ====================  Gin Context 辅助函数 ====================
-
 // GetTokenCookie 从 Gin Context 获取 Token Cookie
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: Token 值（如果存在）
-//   - error: 错误（如果 Cookie 不存在或解析失败）
 func GetTokenCookie(c *gin.Context) (string, error) {
 	return c.Cookie(TokenCookieName)
 }
 
 // GetLanguageCookie 从 Gin Context 获取语言偏好 Cookie
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: 语言代码（如果存在）
 func GetLanguageCookie(c *gin.Context) string {
 	lang, _ := c.Cookie(LanguageCookieName)
 	return lang
 }
 
 // SetTokenCookieGin 设置认证 Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
-//   - token: Token 值
 func SetTokenCookieGin(c *gin.Context, token string) {
 	SetTokenCookie(c.Writer, token)
 }
 
 // ClearTokenCookieGin 清除认证 Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
 func ClearTokenCookieGin(c *gin.Context) {
 	ClearTokenCookie(c.Writer)
 }
 
 // SetLanguageCookieGin 设置语言偏好 Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
-//   - language: 语言代码
 func SetLanguageCookieGin(c *gin.Context, language string) {
 	SetLanguageCookie(c.Writer, language)
 }
 
 // SetLinkTokenCookie 设置微软账户绑定确认 Token Cookie
-// 参数：
-//   - w: HTTP 响应写入器
-//   - token: Token 值
 func SetLinkTokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     LinkTokenCookieName,
@@ -205,8 +135,6 @@ func SetLinkTokenCookie(w http.ResponseWriter, token string) {
 }
 
 // ClearLinkTokenCookie 清除微软账户绑定确认 Token Cookie
-// 参数：
-//   - w: HTTP 响应写入器
 func ClearLinkTokenCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     LinkTokenCookieName,
@@ -221,45 +149,26 @@ func ClearLinkTokenCookie(w http.ResponseWriter) {
 }
 
 // GetLinkTokenCookie 从 Gin Context 获取微软账户绑定确认 Token Cookie
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: Token 值（如果存在）
-//   - error: 错误（如果 Cookie 不存在或解析失败）
 func GetLinkTokenCookie(c *gin.Context) (string, error) {
 	return c.Cookie(LinkTokenCookieName)
 }
 
 // SetLinkTokenCookieGin 设置微软账户绑定确认 Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
-//   - token: Token 值
 func SetLinkTokenCookieGin(c *gin.Context, token string) {
 	SetLinkTokenCookie(c.Writer, token)
 }
 
 // ClearLinkTokenCookieGin 清除微软账户绑定确认 Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
 func ClearLinkTokenCookieGin(c *gin.Context) {
 	ClearLinkTokenCookie(c.Writer)
 }
 
-// ====================  CSRF Token Cookie ====================
-
 const (
-	// CSRFTokenMaxAge CSRF Token 有效期（秒）
 	CSRFTokenMaxAge = 86400
 )
 
 // SetCSRFCookie 设置 CSRF Token Cookie
-// HttpOnly=false（前端 JS 需要读取并放入请求头/表单）
-// SameSite=Lax
-//
-// 参数：
-//   - w: HTTP 响应写入器
-//   - token: CSRF Token 值
+// HttpOnly=false 是因为前端 JS 需要读取并放入请求头/表单
 func SetCSRFCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFTokenName,
@@ -274,8 +183,6 @@ func SetCSRFCookie(w http.ResponseWriter, token string) {
 }
 
 // ClearCSRFCookie 清除 CSRF Token Cookie
-// 参数：
-//   - w: HTTP 响应写入器
 func ClearCSRFCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFTokenName,
@@ -290,27 +197,16 @@ func ClearCSRFCookie(w http.ResponseWriter) {
 }
 
 // GetCSRFCookie 从 Gin Context 获取 CSRF Token Cookie
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: Token 值（如果存在）
-//   - error: 错误（如果 Cookie 不存在或解析失败）
 func GetCSRFCookie(c *gin.Context) (string, error) {
 	return c.Cookie(CSRFTokenName)
 }
 
 // SetCSRFCookieGin 设置 CSRF Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
-//   - token: CSRF Token 值
 func SetCSRFCookieGin(c *gin.Context, token string) {
 	SetCSRFCookie(c.Writer, token)
 }
 
 // ClearCSRFCookieGin 清除 CSRF Token Cookie（GIN 版本）
-// 参数：
-//   - c: Gin Context
 func ClearCSRFCookieGin(c *gin.Context) {
 	ClearCSRFCookie(c.Writer)
 }
