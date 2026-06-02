@@ -1,20 +1,3 @@
-/**
- * internal/utils/logger.go
- * 高性能异步日志模块（基于 zap）
- *
- * 功能：
- * - 异步日志写入，不阻塞主流程
- * - 自动脱敏敏感信息（邮箱等）
- * - 统一日志格式
- * - 支持优雅关闭
- *
- * 用法（其他包）：
- *   utils.LogInfo("AUTH", "User login", fmt.Sprintf("email=%s", email))
- *
- * 用法（utils 包内）：
- *   LogPrintf("[VALIDATOR] Email validation failed")
- */
-
 package utils
 
 import (
@@ -28,14 +11,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// ====================  全局变量 ====================
-
 var (
-	// loggerOnce 确保只初始化一次
 	loggerOnce sync.Once
 
-	// 邮箱正则（用于检测日志中的邮箱）
-	// 匹配格式：user@example.com
 	logEmailRegex = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
 
 	// IPv4 正则（用于检测日志中的 IP 地址）
@@ -52,9 +30,6 @@ var (
 	logTokenRegex = regexp.MustCompile(`(?i)(token|bearer|authorization)[=:\s]+([a-zA-Z0-9_\-\.]{32,})`)
 )
 
-// ====================  Logger 接口实现 ====================
-
-// loggerInstance 当前日志实例（可通过 SetLogger 替换）
 var loggerInstance Logger
 
 // zapLogger 基于 zap 的 Logger 实现
@@ -130,9 +105,6 @@ func GetLogger() Logger {
 	return loggerInstance
 }
 
-// ====================  初始化 ====================
-
-// initLogger 初始化 zap 日志
 func initLogger() {
 	loggerOnce.Do(func() {
 		config := zap.Config{
@@ -166,8 +138,6 @@ func initLogger() {
 	})
 }
 
-// ====================  公开函数 ====================
-
 // Log 安全日志输出，自动脱敏敏感信息
 func Log(message string) {
 	masked := maskSensitiveData(message)
@@ -194,8 +164,6 @@ func SyncLogger() {
 	GetLogger().Sync()
 }
 
-// ====================  内部函数（供 errors.go 使用） ====================
-
 func logDebug(message string) {
 	GetLogger().Debug("", message)
 }
@@ -212,32 +180,22 @@ func logError(message string) {
 	GetLogger().Error("", message)
 }
 
-// ====================  私有函数 ====================
-
 // maskSensitiveData 脱敏敏感数据
 // 按顺序处理：邮箱 -> IP -> Token
 // 先做字符串包含预检查，避免不必要的正则扫描
 func maskSensitiveData(message string) string {
-	// 1. 脱敏邮箱
-	// 必须同时包含 @ 和 . 才可能是邮箱
 	if strings.Contains(message, "@") && strings.Contains(message, ".") {
 		message = logEmailRegex.ReplaceAllStringFunc(message, maskEmail)
 	}
 
-	// 2. 脱敏 IPv4 地址
-	// 日志中数字较多，用长度过滤短字符串
 	if len(message) > 7 && strings.Contains(message, ".") {
 		message = logIPv4Regex.ReplaceAllStringFunc(message, maskIPv4)
 	}
 
-	// 3. 脱敏 IPv6 地址
-	// IPv6 地址包含冒号，用冒号预检查
 	if len(message) > 5 && strings.Contains(message, ":") {
 		message = logIPv6Regex.ReplaceAllStringFunc(message, maskIPv6)
 	}
 
-	// 4. 脱敏 Token
-	// 截断首字母实现忽略大小写匹配，避免 ToLower 内存分配
 	if strings.Contains(message, "oken") || strings.Contains(message, "OKEN") ||
 		strings.Contains(message, "earer") || strings.Contains(message, "EARER") ||
 		strings.Contains(message, "uthorization") || strings.Contains(message, "UTHORIZATION") {
@@ -262,13 +220,11 @@ func maskEmail(email string) string {
 	local := parts[0]
 	domain := parts[1]
 
-	// 脱敏本地部分：保留首字符 + ***
 	maskedLocal := "***"
 	if len(local) > 0 {
 		maskedLocal = string(local[0]) + "***"
 	}
 
-	// 脱敏域名部分：保留首字符 + *** + 后缀
 	domainParts := strings.Split(domain, ".")
 	if len(domainParts) >= 2 {
 		firstPart := domainParts[0]
@@ -307,23 +263,18 @@ func maskIPv6(ip string) string {
 		return ""
 	}
 
-	// 处理 :: 缩写格式，展开为完整格式再脱敏
 	if strings.Contains(ip, "::") {
-		// 计算需要补充的段数
 		colonCount := strings.Count(ip, ":")
-		// 完整 IPv6 有 7 个冒号，缺少的冒号数 = 需要补充的零段数 - 1
 		missingSegments := 8 - (colonCount - 1)
 		if missingSegments < 1 {
 			missingSegments = 1
 		}
 
-		// 构造零段字符串
 		zeros := "0"
 		for i := 1; i < missingSegments; i++ {
 			zeros += ":0"
 		}
 
-		// 替换 :: 为零段
 		if ip == "::" {
 			ip = "0:0:0:0:0:0:0:0"
 		} else if strings.HasPrefix(ip, "::") {
@@ -340,7 +291,6 @@ func maskIPv6(ip string) string {
 		return "****:****"
 	}
 
-	// 保留前两段，其余用 **** 替代
 	result := parts[0] + ":" + parts[1]
 	for i := 2; i < len(parts); i++ {
 		result += ":****"
@@ -356,7 +306,6 @@ func maskToken(match string) string {
 		return ""
 	}
 
-	// 找到分隔符位置（= 或 : 或空格）
 	separatorIdx := -1
 	for i, c := range match {
 		if c == '=' || c == ':' || c == ' ' {
@@ -369,7 +318,6 @@ func maskToken(match string) string {
 		return match
 	}
 
-	// 提取 key 和 value
 	key := match[:separatorIdx+1]
 	value := strings.TrimSpace(match[separatorIdx+1:])
 
@@ -377,6 +325,5 @@ func maskToken(match string) string {
 		return key + "***[MASKED]"
 	}
 
-	// 保留前 4 个字符
 	return key + value[:4] + "***[MASKED]"
 }
