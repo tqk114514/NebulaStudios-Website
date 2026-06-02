@@ -1,18 +1,3 @@
-/**
- * internal/models/oauth_token.go
- * OAuth Token 相关模型和数据访问层
- *
- * 功能：
- * - 授权码 (AuthCode) 数据结构和操作
- * - Access Token 数据结构和操作
- * - Refresh Token 数据结构和操作
- * - 用户授权记录 (Grant) 数据结构和操作
- * - 过期 Token 清理
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -26,26 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrOAuthCodeNotFound 授权码未找到
-	ErrOAuthCodeNotFound = errors.New("OAUTH_CODE_NOT_FOUND")
-	// ErrOAuthCodeExpired 授权码已过期
-	ErrOAuthCodeExpired = errors.New("OAUTH_CODE_EXPIRED")
-	// ErrOAuthCodeUsed 授权码已使用
-	ErrOAuthCodeUsed = errors.New("OAUTH_CODE_USED")
-	// ErrOAuthTokenNotFound Token 未找到
-	ErrOAuthTokenNotFound = errors.New("OAUTH_TOKEN_NOT_FOUND")
-	// ErrOAuthTokenExpired Token 已过期
-	ErrOAuthTokenExpired = errors.New("OAUTH_TOKEN_EXPIRED")
-	// ErrOAuthGrantNotFound 授权记录未找到
-	ErrOAuthGrantNotFound = errors.New("OAUTH_GRANT_NOT_FOUND")
-	// ErrOAuthTokenRepoDBNotReady 数据库未就绪
+	ErrOAuthCodeNotFound        = errors.New("OAUTH_CODE_NOT_FOUND")
+	ErrOAuthCodeExpired         = errors.New("OAUTH_CODE_EXPIRED")
+	ErrOAuthCodeUsed            = errors.New("OAUTH_CODE_USED")
+	ErrOAuthTokenNotFound       = errors.New("OAUTH_TOKEN_NOT_FOUND")
+	ErrOAuthTokenExpired        = errors.New("OAUTH_TOKEN_EXPIRED")
+	ErrOAuthGrantNotFound       = errors.New("OAUTH_GRANT_NOT_FOUND")
 	ErrOAuthTokenRepoDBNotReady = errors.New("database not ready")
 )
-
-// ====================  数据结构 ====================
 
 // OAuthAuthCode 授权码
 type OAuthAuthCode struct {
@@ -102,8 +76,6 @@ type OAuthGrantWithClient struct {
 	ClientDescription string `json:"client_description"`
 }
 
-// ====================  Repository 结构 ====================
-
 // OAuthAuthCodeRepository 授权码仓库
 type OAuthAuthCodeRepository struct {
 	pool *pgxpool.Pool
@@ -123,8 +95,6 @@ type OAuthRefreshTokenRepository struct {
 type OAuthGrantRepository struct {
 	pool *pgxpool.Pool
 }
-
-// ====================  构造函数 ====================
 
 // NewOAuthAuthCodeRepository 创建授权码仓库
 func NewOAuthAuthCodeRepository(pool *pgxpool.Pool) *OAuthAuthCodeRepository {
@@ -146,8 +116,6 @@ func NewOAuthGrantRepository(pool *pgxpool.Pool) *OAuthGrantRepository {
 	return &OAuthGrantRepository{pool: pool}
 }
 
-// ====================  OAuthAuthCode 方法 ====================
-
 // IsExpired 检查授权码是否已过期
 func (c *OAuthAuthCode) IsExpired() bool {
 	return c != nil && time.Now().After(c.ExpiresAt)
@@ -158,29 +126,17 @@ func (c *OAuthAuthCode) IsValid() bool {
 	return c != nil && !c.Used && !c.IsExpired()
 }
 
-// ====================  OAuthAccessToken 方法 ====================
-
 // IsExpired 检查 Access Token 是否已过期
 func (t *OAuthAccessToken) IsExpired() bool {
 	return t != nil && time.Now().After(t.ExpiresAt)
 }
-
-// ====================  OAuthRefreshToken 方法 ====================
 
 // IsExpired 检查 Refresh Token 是否已过期
 func (t *OAuthRefreshToken) IsExpired() bool {
 	return t != nil && time.Now().After(t.ExpiresAt)
 }
 
-// ====================  OAuthAuthCodeRepository 方法 ====================
-
 // Create 创建授权码
-// 参数：
-//   - ctx: 上下文
-//   - code: 授权码对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCode) error {
 	if code == nil {
 		return fmt.Errorf("code object is nil")
@@ -207,13 +163,6 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 }
 
 // FindByCode 根据授权码查找
-// 参数：
-//   - ctx: 上下文
-//   - code: 授权码字符串
-//
-// 返回：
-//   - *OAuthAuthCode: 授权码对象
-//   - error: 错误信息
 func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (*OAuthAuthCode, error) {
 	if code == "" {
 		return nil, fmt.Errorf("code is empty")
@@ -244,12 +193,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 }
 
 // MarkUsed 标记授权码为已使用（使用乐观锁防止并发重放）
-// 参数：
-//   - ctx: 上下文
-//   - id: 授权码 ID
-//
-// 返回：
-//   - error: 错误信息（如果已经被使用过，返回 ErrOAuthCodeUsed 或 ErrOAuthCodeNotFound）
+// 如果已经被使用过，返回 ErrOAuthCodeUsed 或 ErrOAuthCodeNotFound
 func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -272,12 +216,6 @@ func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error 
 }
 
 // DeleteExpired 删除过期的授权码
-// 参数：
-//   - ctx: 上下文
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthAuthCodeRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -306,15 +244,7 @@ func (r *OAuthAuthCodeRepository) checkDB() error {
 	return nil
 }
 
-// ====================  OAuthAccessTokenRepository 方法 ====================
-
 // Create 创建 Access Token
-// 参数：
-//   - ctx: 上下文
-//   - token: Access Token 对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAccessToken) error {
 	if token == nil {
 		return fmt.Errorf("token object is nil")
@@ -341,13 +271,6 @@ func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAcc
 }
 
 // FindByTokenHash 根据 Token Hash 查找
-// 参数：
-//   - ctx: 上下文
-//   - tokenHash: Token 的 SHA-256 哈希
-//
-// 返回：
-//   - *OAuthAccessToken: Access Token 对象
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*OAuthAccessToken, error) {
 	if tokenHash == "" {
 		return nil, fmt.Errorf("token hash is empty")
@@ -377,12 +300,6 @@ func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 }
 
 // Delete 删除 Access Token
-// 参数：
-//   - ctx: 上下文
-//   - id: Token ID
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) Delete(ctx context.Context, id int64) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -398,12 +315,6 @@ func (r *OAuthAccessTokenRepository) Delete(ctx context.Context, id int64) error
 }
 
 // DeleteByTokenHash 根据 Token Hash 删除
-// 参数：
-//   - ctx: 上下文
-//   - tokenHash: Token 的 SHA-256 哈希
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -418,14 +329,6 @@ func (r *OAuthAccessTokenRepository) DeleteByTokenHash(ctx context.Context, toke
 }
 
 // DeleteByUserAndClient 删除指定用户和客户端的所有 Access Token
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -445,13 +348,6 @@ func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, 
 }
 
 // DeleteByUser 删除指定用户的所有 Access Token
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -468,12 +364,6 @@ func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userUID s
 }
 
 // DeleteExpired 删除过期的 Access Token
-// 参数：
-//   - ctx: 上下文
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -492,13 +382,6 @@ func (r *OAuthAccessTokenRepository) DeleteExpired(ctx context.Context) (int64, 
 }
 
 // DeleteByClient 删除指定客户端的所有 Access Token
-// 参数：
-//   - ctx: 上下文
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthAccessTokenRepository) DeleteByClient(ctx context.Context, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -522,15 +405,7 @@ func (r *OAuthAccessTokenRepository) checkDB() error {
 	return nil
 }
 
-// ====================  OAuthRefreshTokenRepository 方法 ====================
-
 // Create 创建 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//   - token: Refresh Token 对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRefreshToken) error {
 	if token == nil {
 		return fmt.Errorf("token object is nil")
@@ -562,13 +437,6 @@ func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRe
 }
 
 // FindByTokenHash 根据 Token Hash 查找
-// 参数：
-//   - ctx: 上下文
-//   - tokenHash: Token 的 SHA-256 哈希
-//
-// 返回：
-//   - *OAuthRefreshToken: Refresh Token 对象
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*OAuthRefreshToken, error) {
 	if tokenHash == "" {
 		return nil, fmt.Errorf("token hash is empty")
@@ -603,12 +471,6 @@ func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, token
 }
 
 // Delete 删除 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//   - id: Token ID
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -624,12 +486,6 @@ func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) erro
 }
 
 // DeleteByTokenHash 根据 Token Hash 删除
-// 参数：
-//   - ctx: 上下文
-//   - tokenHash: Token 的 SHA-256 哈希
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -644,14 +500,6 @@ func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tok
 }
 
 // DeleteByUserAndClient 删除指定用户和客户端的所有 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -671,13 +519,6 @@ func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context,
 }
 
 // DeleteByUser 删除指定用户的所有 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -694,12 +535,6 @@ func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userUID 
 }
 
 // DeleteExpired 删除过期的 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -718,13 +553,6 @@ func (r *OAuthRefreshTokenRepository) DeleteExpired(ctx context.Context) (int64,
 }
 
 // DeleteByClient 删除指定客户端的所有 Refresh Token
-// 参数：
-//   - ctx: 上下文
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthRefreshTokenRepository) DeleteByClient(ctx context.Context, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -748,15 +576,7 @@ func (r *OAuthRefreshTokenRepository) checkDB() error {
 	return nil
 }
 
-// ====================  OAuthGrantRepository 方法 ====================
-
 // CreateOrUpdate 创建或更新授权记录
-// 参数：
-//   - ctx: 上下文
-//   - grant: 授权记录对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthGrant) error {
 	if grant == nil {
 		return fmt.Errorf("grant object is nil")
@@ -787,13 +607,6 @@ func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthG
 }
 
 // FindByUserUID 查找用户的所有授权记录（带客户端信息）
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//
-// 返回：
-//   - []*OAuthGrantWithClient: 授权记录列表
-//   - error: 错误信息
 func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string) ([]*OAuthGrantWithClient, error) {
 	if err := r.checkDB(); err != nil {
 		return nil, err
@@ -832,14 +645,6 @@ func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string
 }
 
 // FindByUserAndClient 查找指定用户和客户端的授权记录
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - *OAuthGrant: 授权记录
-//   - error: 错误信息
 func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID string, clientID string) (*OAuthGrant, error) {
 	if err := r.checkDB(); err != nil {
 		return nil, err
@@ -865,13 +670,6 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID 
 }
 
 // Delete 删除授权记录
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - error: 错误信息
 func (r *OAuthGrantRepository) Delete(ctx context.Context, userUID string, clientID string) error {
 	if err := r.checkDB(); err != nil {
 		return err
@@ -894,13 +692,6 @@ func (r *OAuthGrantRepository) Delete(ctx context.Context, userUID string, clien
 }
 
 // DeleteByUser 删除用户的所有授权记录
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 用户 UID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userUID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err
@@ -917,13 +708,6 @@ func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userUID string)
 }
 
 // DeleteByClient 删除客户端的所有授权记录
-// 参数：
-//   - ctx: 上下文
-//   - clientID: 客户端 ID
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *OAuthGrantRepository) DeleteByClient(ctx context.Context, clientID string) (int64, error) {
 	if err := r.checkDB(); err != nil {
 		return 0, err

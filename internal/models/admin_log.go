@@ -1,16 +1,3 @@
-/**
- * internal/models/admin_log.go
- * 管理员操作日志模型和数据访问层
- *
- * 功能：
- * - 管理员操作日志记录
- * - 日志查询（分页）
- * - JSON 灵活存储详情
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -24,51 +11,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrAdminLogDBNotReady 数据库未就绪
-	ErrAdminLogDBNotReady = errors.New("database not ready")
-	// ErrAdminLogInvalidData 无效的日志数据
+	ErrAdminLogDBNotReady  = errors.New("database not ready")
 	ErrAdminLogInvalidData = errors.New("invalid admin log data")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// ActionSetRole 修改用户角色
-	ActionSetRole = "set_role"
-	// ActionDeleteUser 删除用户
-	ActionDeleteUser = "delete_user"
-	// ActionBanUser 封禁用户
-	ActionBanUser = "ban_user"
-	// ActionUnbanUser 解封用户
-	ActionUnbanUser = "unban_user"
-	// ActionOAuthClientCreate 创建 OAuth 客户端
-	ActionOAuthClientCreate = "oauth_client_create"
-	// ActionOAuthClientUpdate 更新 OAuth 客户端
-	ActionOAuthClientUpdate = "oauth_client_update"
-	// ActionOAuthClientDelete 删除 OAuth 客户端
-	ActionOAuthClientDelete = "oauth_client_delete"
-	// ActionOAuthClientRegenerateSecret 重新生成 OAuth 客户端密钥
+	ActionSetRole                     = "set_role"
+	ActionDeleteUser                  = "delete_user"
+	ActionBanUser                     = "ban_user"
+	ActionUnbanUser                   = "unban_user"
+	ActionOAuthClientCreate           = "oauth_client_create"
+	ActionOAuthClientUpdate           = "oauth_client_update"
+	ActionOAuthClientDelete           = "oauth_client_delete"
 	ActionOAuthClientRegenerateSecret = "oauth_client_regenerate_secret"
-	// ActionOAuthClientToggle 启用/禁用 OAuth 客户端
-	ActionOAuthClientToggle = "oauth_client_toggle"
+	ActionOAuthClientToggle           = "oauth_client_toggle"
 
-	// ActionEmailWhitelistCreate 创建邮箱白名单
 	ActionEmailWhitelistCreate = "email_whitelist_create"
-	// ActionEmailWhitelistUpdate 更新邮箱白名单
 	ActionEmailWhitelistUpdate = "email_whitelist_update"
-	// ActionEmailWhitelistDelete 删除邮箱白名单
 	ActionEmailWhitelistDelete = "email_whitelist_delete"
 
-	// ActionDataExport 数据导出
 	ActionDataExport = "data_export"
-	// ActionDataImport 数据导入
 	ActionDataImport = "data_import"
 )
-
-// ====================  数据结构 ====================
 
 // AdminLog 管理员操作日志
 type AdminLog struct {
@@ -148,22 +113,12 @@ type AdminLogRepository struct {
 	pool *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewAdminLogRepository 创建管理员日志仓库
 func NewAdminLogRepository(pool *pgxpool.Pool) *AdminLogRepository {
 	return &AdminLogRepository{pool: pool}
 }
 
-// ====================  写入方法 ====================
-
 // Create 创建日志记录
-// 参数：
-//   - ctx: 上下文
-//   - log: 日志对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 	// 参数验证
 	if log == nil {
@@ -201,16 +156,6 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 }
 
 // LogSetRole 记录修改角色操作
-// 参数：
-//   - ctx: 上下文
-//   - adminUID: 操作者 UID
-//   - targetUID: 目标用户 UID
-//   - targetUsername: 目标用户名
-//   - oldRole: 旧角色
-//   - newRole: 新角色
-//
-// 返回：
-//   - error: 错误信息
 func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminUID, targetUID string, targetUsername string, oldRole, newRole int) error {
 	details := SetRoleDetails{
 		TargetUsername: targetUsername,
@@ -234,15 +179,6 @@ func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminUID, targetUID
 }
 
 // LogDeleteUser 记录删除用户操作
-// 参数：
-//   - ctx: 上下文
-//   - adminUID: 操作者 UID
-//   - targetUID: 目标用户 UID
-//   - targetUsername: 目标用户名
-//   - targetEmail: 目标用户邮箱
-//
-// 返回：
-//   - error: 错误信息
 func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminUID, targetUID string, targetUsername, targetEmail string) error {
 	details := DeleteUserDetails{
 		TargetUsername: targetUsername,
@@ -265,16 +201,6 @@ func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminUID, target
 }
 
 // LogBanUser 记录封禁用户操作
-// 参数：
-//   - ctx: 上下文
-//   - adminUID: 操作者 UID
-//   - targetUID: 目标用户 UID
-//   - targetUsername: 目标用户名
-//   - reason: 封禁原因
-//   - unbanAt: 解封时间（nil 表示永久封禁）
-//
-// 返回：
-//   - error: 错误信息
 func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID string, targetUsername, reason string, unbanAt *time.Time) error {
 	details := BanUserDetails{
 		TargetUsername: targetUsername,
@@ -298,14 +224,6 @@ func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID
 }
 
 // LogUnbanUser 记录解封用户操作
-// 参数：
-//   - ctx: 上下文
-//   - adminUID: 操作者 UID
-//   - targetUID: 目标用户 UID
-//   - targetUsername: 目标用户名
-//
-// 返回：
-//   - error: 错误信息
 func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminUID, targetUID string, targetUsername string) error {
 	details := UnbanUserDetails{
 		TargetUsername: targetUsername,
@@ -546,35 +464,20 @@ func (r *AdminLogRepository) LogDataImport(ctx context.Context, adminUID string,
 	return r.Create(ctx, log)
 }
 
-// ====================  查询方法 ====================
-
 // FindAll 查询日志列表（分页）
-// 参数：
-//   - ctx: 上下文
-//   - page: 页码（从 1 开始）
-//   - pageSize: 每页数量
-//
-// 返回：
-//   - []*AdminLogPublic: 日志列表
-//   - int64: 总数
-//   - error: 错误信息
 func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([]*AdminLogPublic, int64, error) {
-	// 检查数据库连接
 	if err := r.checkDB(); err != nil {
 		return nil, 0, err
 	}
 
-	// 计算偏移量
 	offset := (page - 1) * pageSize
 
-	// 查询总数
 	var total int64
 	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM admin_logs").Scan(&total)
 	if err != nil {
 		return nil, 0, utils.LogError("ADMIN_LOG", "FindAll.Count", err)
 	}
 
-	// 查询日志列表（关联用户表获取管理员用户名）
 	rows, err := r.pool.Query(ctx, `
 		SELECT l.id, l.admin_uid, u.username, l.action, l.target_uid, l.details, l.created_at
 		FROM admin_logs l
@@ -587,7 +490,6 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 	}
 	defer rows.Close()
 
-	// 扫描结果
 	logs := make([]*AdminLogPublic, 0)
 	for rows.Next() {
 		log := &AdminLogPublic{}
@@ -610,8 +512,6 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 
 	return logs, total, nil
 }
-
-// ====================  私有方法 ====================
 
 // checkDB 检查数据库连接是否就绪
 func (r *AdminLogRepository) checkDB() error {

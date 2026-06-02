@@ -1,20 +1,3 @@
-/**
- * internal/models/db.go
- * 数据库连接模块
- *
- * 功能：
- * - PostgreSQL 连接池管理
- * - 数据表初始化（从 schema.go）
- * - 索引创建
- * - 连接健康检查
- * - 优雅关闭
- *
- * 依赖：
- * - github.com/jackc/pgx/v5: PostgreSQL 驱动
- * - Config: 数据库配置
- * - schema.go: 表结构定义
- */
-
 package models
 
 import (
@@ -28,8 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
 	ErrDBNotInitialized   = fmt.Errorf("database not initialized")
 	ErrDBNilConfig        = fmt.Errorf("database config is nil")
@@ -39,8 +20,6 @@ var (
 	ErrDBTableInitFailed  = fmt.Errorf("table initialization failed")
 )
 
-// ====================  常量定义 ====================
-
 const (
 	defaultMinConns          = 2
 	defaultMaxConnLifetime   = 30 * time.Minute
@@ -49,8 +28,7 @@ const (
 	pingTimeout              = 5 * time.Second
 )
 
-// ====================  公开函数 ====================
-
+// InitDB 初始化数据库连接池并执行迁移
 func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
 	if cfg == nil {
 		utils.LogError("DATABASE", "InitDB", fmt.Errorf("config is nil"), "")
@@ -99,6 +77,7 @@ func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// CloseDB 关闭数据库连接池
 func CloseDB(pool *pgxpool.Pool) {
 	if pool != nil {
 		pool.Close()
@@ -106,6 +85,7 @@ func CloseDB(pool *pgxpool.Pool) {
 	}
 }
 
+// HealthCheck 数据库健康检查
 func HealthCheck(pool *pgxpool.Pool) error {
 	if pool == nil {
 		return ErrDBNotInitialized
@@ -121,9 +101,6 @@ func HealthCheck(pool *pgxpool.Pool) error {
 
 	return nil
 }
-
-// ====================  私有函数 ====================
-
 func configurePool(poolConfig *pgxpool.Config, cfg *config.Config) {
 	if cfg.DBMaxConns > 0 {
 		poolConfig.MaxConns = int32(cfg.DBMaxConns)
