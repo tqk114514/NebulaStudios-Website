@@ -128,7 +128,7 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services
 
 	setupQRLoginAPI(apiGroup, hdlrs, repos, svcs)
 
-	setupAdminAPI(apiGroup, hdlrs, repos, svcs)
+	setupAdminAPI(apiGroup, r, hdlrs, repos, svcs)
 
 	setupOAuthProviderAPI(r, hdlrs, repos, svcs)
 
@@ -223,7 +223,7 @@ func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Service
 	}
 }
 
-func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
+func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	adminAPI := r.Group("/admin/api")
 
 	adminAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
@@ -262,10 +262,19 @@ func setupAdminAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services)
 
 			superAdminAPI.POST("/data/export/request", hdlrs.adminHandler.RequestExport)
 			superAdminAPI.POST("/data/export/download", hdlrs.adminHandler.DownloadExport)
-			superAdminAPI.POST("/data/import/preview", hdlrs.adminHandler.PreviewImport)
 			superAdminAPI.POST("/data/import/execute", hdlrs.adminHandler.ExecuteImport)
 			superAdminAPI.DELETE("/data/otac", hdlrs.adminHandler.RevokeOTAC)
 		}
+	}
+
+	// 数据导入上传接口使用 5MB 限制（独立路由组，不继承 apiGroup 的 64KB 限制）
+	dataImportGroup := engine.Group("/admin/api/data/import")
+	dataImportGroup.Use(middleware.UploadBodySizeLimit())
+	dataImportGroup.Use(middleware.AuthMiddleware(svcs.SessionService))
+	dataImportGroup.Use(adminmw.AdminMiddleware(repos.UserRepo))
+	dataImportGroup.Use(adminmw.SuperAdminMiddleware(repos.UserRepo))
+	{
+		dataImportGroup.POST("/preview", hdlrs.adminHandler.PreviewImport)
 	}
 
 	utils.LogInfo("ROUTER", "Admin API routes configured")
