@@ -1,17 +1,3 @@
-/**
- * internal/models/qrlogin.go
- * 扫码登录模型和数据访问层
- *
- * 功能：
- * - 扫码登录 Token 数据结构定义
- * - Token CRUD 操作
- * - Token 查询和验证
- * - 事务支持（一次性消费）
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -26,20 +12,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// QRStatusPending 待扫描状态
-	QRStatusPending = "pending"
-	// QRStatusScanned 已扫描状态
-	QRStatusScanned = "scanned"
-	// QRStatusConfirmed 已确认状态
+	QRStatusPending   = "pending"
+	QRStatusScanned   = "scanned"
 	QRStatusConfirmed = "confirmed"
-	// QRStatusCancelled 已取消状态
 	QRStatusCancelled = "cancelled"
 )
-
-// ====================  数据结构 ====================
 
 // QRLoginToken 扫码登录 Token 模型
 type QRLoginToken struct {
@@ -60,23 +38,12 @@ type QRLoginRepository struct {
 	pool *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewQRLoginRepository 创建扫码登录仓库
 func NewQRLoginRepository(pool *pgxpool.Pool) *QRLoginRepository {
 	return &QRLoginRepository{pool: pool}
 }
 
-// ====================  查询方法 ====================
-
 // FindByToken 根据 Token 查找记录
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//
-// 返回：
-//   - *QRLoginToken: Token 记录
-//   - error: 错误信息
 func (r *QRLoginRepository) FindByToken(ctx context.Context, token string) (*QRLoginToken, error) {
 	if token == "" {
 		return nil, errors.New("empty token")
@@ -103,15 +70,7 @@ func (r *QRLoginRepository) FindByToken(ctx context.Context, token string) (*QRL
 	return qrToken, nil
 }
 
-// ====================  写入方法 ====================
-
 // Create 创建 Token
-// 参数：
-//   - ctx: 上下文
-//   - qrToken: Token 对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *QRLoginRepository) Create(ctx context.Context, qrToken *QRLoginToken) error {
 	if qrToken == nil {
 		return errors.New("qrToken object is nil")
@@ -138,14 +97,6 @@ func (r *QRLoginRepository) Create(ctx context.Context, qrToken *QRLoginToken) e
 }
 
 // UpdateStatus 更新 Token 状态
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//   - status: 新状态
-//   - scannedAt: 扫描时间（可选）
-//
-// 返回：
-//   - error: 错误信息
 func (r *QRLoginRepository) UpdateStatus(ctx context.Context, token, status string, scannedAt *int64) error {
 	if token == "" || status == "" {
 		return errors.New("empty token or status")
@@ -179,16 +130,6 @@ func (r *QRLoginRepository) UpdateStatus(ctx context.Context, token, status stri
 }
 
 // UpdateStatusWithCondition 带条件原子更新 Token 状态
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//   - fromStatus: 源状态（条件）
-//   - toStatus: 目标状态
-//   - scannedAt: 扫描时间（可选）
-//
-// 返回：
-//   - bool: 是否更新成功（affected rows > 0）
-//   - error: 错误信息
 func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token, fromStatus, toStatus string, scannedAt *int64) (bool, error) {
 	if token == "" || fromStatus == "" || toStatus == "" {
 		return false, errors.New("invalid parameters")
@@ -230,14 +171,6 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 }
 
 // ConfirmLogin 确认登录（更新状态、user_uid、confirmed_at 和 pc_session_token）
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//   - userUID: 用户 UID
-//   - pcSessionToken: PC 会话 Token
-//
-// 返回：
-//   - error: 错误信息
 func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, userUID string, pcSessionToken string) error {
 	if token == "" || userUID == "" || pcSessionToken == "" {
 		return errors.New("invalid parameters")
@@ -262,15 +195,6 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, token string, user
 }
 
 // ConfirmLoginWithCondition 带条件原子确认登录
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//   - userUID: 用户 UID
-//   - pcSessionToken: PC 会话 Token
-//
-// 返回：
-//   - bool: 是否更新成功
-//   - error: 错误信息
 func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token string, userUID string, pcSessionToken string) (bool, error) {
 	if token == "" || userUID == "" || pcSessionToken == "" {
 		return false, errors.New("invalid parameters")
@@ -301,12 +225,6 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 }
 
 // Delete 删除 Token
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//
-// 返回：
-//   - error: 错误信息
 func (r *QRLoginRepository) Delete(ctx context.Context, token string) error {
 	if token == "" {
 		return errors.New("empty token")
@@ -329,17 +247,7 @@ func (r *QRLoginRepository) Delete(ctx context.Context, token string) error {
 	return nil
 }
 
-// ====================  事务方法 ====================
-
 // ConsumeAndSetSession 验证并一次性消费 Token，同时验证 pc_session_token
-// 参数：
-//   - ctx: 上下文
-//   - token: Token
-//   - pcSessionToken: PC 会话 Token
-//
-// 返回：
-//   - string: 用户 UID
-//   - error: 错误信息
 func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, token, pcSessionToken string) (string, error) {
 	if token == "" || pcSessionToken == "" {
 		return "", errors.New("invalid parameters")

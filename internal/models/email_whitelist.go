@@ -1,15 +1,3 @@
-/**
- * internal/models/email_whitelist.go
- * 邮箱白名单模型和数据访问层
- *
- * 功能：
- * - 邮箱域名白名单 CRUD 操作
- * - 域名查询（按域名、检查是否在白名单中）
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -24,16 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrEmailWhitelistNotFound 邮箱白名单条目未找到
-	ErrEmailWhitelistNotFound = errors.New("email whitelist entry not found")
-	// ErrEmailWhitelistDomainExists 域名已存在
+	ErrEmailWhitelistNotFound     = errors.New("email whitelist entry not found")
 	ErrEmailWhitelistDomainExists = errors.New("domain already exists in whitelist")
 )
-
-// ====================  数据结构 ====================
 
 // EmailWhitelist 邮箱白名单
 type EmailWhitelist struct {
@@ -50,14 +32,10 @@ type EmailWhitelistRepository struct {
 	pool *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewEmailWhitelistRepository 创建邮箱白名单仓库
 func NewEmailWhitelistRepository(pool *pgxpool.Pool) *EmailWhitelistRepository {
 	return &EmailWhitelistRepository{pool: pool}
 }
-
-// ====================  读取方法 ====================
 
 // FindAll 获取所有白名单条目
 func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhitelist, error) {
@@ -200,8 +178,6 @@ func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain s
 	return isEnabled, signupURL, nil
 }
 
-// ====================  写入方法 ====================
-
 // Create 创建白名单条目
 func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL string) (*EmailWhitelist, error) {
 	if r.pool == nil {
@@ -322,8 +298,6 @@ func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isE
 
 	return nil
 }
-
-// ====================  初始化方法 ====================
 
 // InitDefaultWhitelist 初始化默认邮箱白名单
 // 如果白名单为空，自动添加 outlook.com 和 gmail.com

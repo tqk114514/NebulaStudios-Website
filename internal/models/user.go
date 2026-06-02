@@ -1,17 +1,3 @@
-/**
- * internal/models/user.go
- * 用户模型和数据访问层
- *
- * 功能：
- * - 用户数据结构定义
- * - 用户 CRUD 操作
- * - 用户查询（按 ID、邮箱、用户名、Microsoft ID）
- * - 数据验证和错误处理
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -27,14 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrEmailExists 邮箱已存在
-	ErrEmailExists = errors.New("EMAIL_EXISTS")
-	// ErrUsernameExists 用户名已存在
-	ErrUsernameExists = errors.New("USERNAME_EXISTS")
-	// ErrMicrosoftIDExists Microsoft ID 已存在
+	ErrEmailExists       = errors.New("EMAIL_EXISTS")
+	ErrUsernameExists    = errors.New("USERNAME_EXISTS")
 	ErrMicrosoftIDExists = errors.New("MICROSOFT_ID_EXISTS")
 )
 
@@ -47,17 +28,11 @@ func IsUniqueViolation(err error, column string) bool {
 	return false
 }
 
-// ====================  常量定义 ====================
-
 const (
-	// maxUpdateFields 最大更新字段数
 	maxUpdateFields = 10
 
-	// RoleUser 普通用户（无后台权限）
-	RoleUser = 0
-	// RoleAdmin 普通管理员（日常管理权限）
-	RoleAdmin = 1
-	// RoleSuperAdmin 超级管理员（全部权限）
+	RoleUser       = 0
+	RoleAdmin      = 1
 	RoleSuperAdmin = 2
 )
 
@@ -72,8 +47,6 @@ var allowedUpdateFields = map[string]bool{
 	"microsoft_avatar_hash": true,
 	"role":                  true,
 }
-
-// ====================  数据结构 ====================
 
 // User 用户模型
 type User struct {
@@ -127,11 +100,7 @@ type UserRepository struct {
 	defaultAvatarURL string
 }
 
-// ====================  User 方法 ====================
-
 // ToPublic 转换为公开信息
-// 返回：
-//   - *UserPublic: 公开的用户信息
 func (u *User) ToPublic() *UserPublic {
 	if u == nil {
 		return nil
@@ -171,23 +140,16 @@ func (u *User) ToPublic() *UserPublic {
 }
 
 // IsAdmin 检查是否为管理员（包括超级管理员）
-// 返回：
-//   - bool: 是否为管理员
 func (u *User) IsAdmin() bool {
 	return u != nil && u.Role >= RoleAdmin
 }
 
 // IsSuperAdmin 检查是否为超级管理员
-// 返回：
-//   - bool: 是否为超级管理员
 func (u *User) IsSuperAdmin() bool {
 	return u != nil && u.Role >= RoleSuperAdmin
 }
 
-// CheckBanned 检查用户是否处于封禁状态
-// 会自动检查解封时间，如果已过期则返回 false
-// 返回：
-//   - bool: 是否被封禁
+// CheckBanned 检查用户是否处于封禁状态，会自动检查解封时间，如果已过期则返回 false
 func (u *User) CheckBanned() bool {
 	if u == nil || !u.IsBanned {
 		return false
@@ -200,15 +162,11 @@ func (u *User) CheckBanned() bool {
 }
 
 // IsPermanentBan 检查是否为永久封禁
-// 返回：
-//   - bool: 是否为永久封禁
 func (u *User) IsPermanentBan() bool {
 	return u != nil && u.IsBanned && !u.UnbanAt.Valid
 }
 
 // Validate 验证用户数据
-// 返回：
-//   - error: 验证失败时返回错误
 func (u *User) Validate() error {
 	if u == nil {
 		return errors.New("user object is nil")
@@ -225,25 +183,12 @@ func (u *User) Validate() error {
 	return nil
 }
 
-// ====================  构造函数 ====================
-
 // NewUserRepository 创建用户仓库
-// 返回：
-//   - *UserRepository: 用户仓库实例
 func NewUserRepository(pool *pgxpool.Pool, defaultAvatarURL string) *UserRepository {
 	return &UserRepository{pool: pool, defaultAvatarURL: defaultAvatarURL}
 }
 
-// ====================  查询方法 ====================
-
 // FindByID 根据 ID 查找用户
-// 参数：
-//   - ctx: 上下文
-//   - id: 用户 ID
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) {
 	if id <= 0 {
 		return nil, errors.New("invalid user ID")
@@ -271,13 +216,6 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 }
 
 // FindByUID 根据 UID 查找用户
-// 参数：
-//   - ctx: 上下文
-//   - uid: 用户 UID
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, error) {
 	if uid == "" {
 		return nil, errors.New("invalid user UID")
@@ -306,14 +244,6 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 
 // FindByEmailOrUsername 根据邮箱或用户名查找用户（登录优化）
 // 单次查询同时匹配邮箱和用户名，提高登录性能
-//
-// 参数：
-//   - ctx: 上下文
-//   - identifier: 邮箱或用户名
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier string) (*User, error) {
 	if identifier == "" {
 		return nil, errors.New("empty identifier")
@@ -343,13 +273,6 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 }
 
 // FindByEmail 根据邮箱查找用户
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	if email == "" {
 		return nil, errors.New("empty email")
@@ -377,13 +300,6 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 }
 
 // FindByUsername 根据用户名查找用户
-// 参数：
-//   - ctx: 上下文
-//   - username: 用户名
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*User, error) {
 	if username == "" {
 		return nil, errors.New("empty username")
@@ -411,13 +327,6 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 }
 
 // FindByMicrosoftID 根据 Microsoft ID 查找用户
-// 参数：
-//   - ctx: 上下文
-//   - msID: Microsoft ID
-//
-// 返回：
-//   - *User: 用户对象
-//   - error: 错误信息
 func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*User, error) {
 	if msID == "" {
 		return nil, errors.New("empty microsoft ID")
@@ -444,15 +353,8 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 	return user, nil
 }
 
-// ====================  写入方法 ====================
-
 // Create 创建用户
-// 参数：
-//   - ctx: 上下文
-//   - user: 用户对象（ID、CreatedAt、UpdatedAt 会被自动填充）
-//
-// 返回：
-//   - error: 错误信息
+// ID、CreatedAt、UpdatedAt 会被自动填充
 func (r *UserRepository) Create(ctx context.Context, user *User) error {
 	if user == nil {
 		return errors.New("user object is nil")
@@ -528,13 +430,6 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 }
 
 // Update 更新用户
-// 参数：
-//   - ctx: 上下文
-//   - uid: 用户 UID
-//   - updates: 要更新的字段映射
-//
-// 返回：
-//   - error: 错误信息
 func (r *UserRepository) Update(ctx context.Context, uid string, updates map[string]any) error {
 	if uid == "" {
 		return errors.New("invalid user UID")
@@ -611,12 +506,6 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, uid, plainPassword 
 }
 
 // Delete 删除用户
-// 参数：
-//   - ctx: 上下文
-//   - uid: 用户 UID
-//
-// 返回：
-//   - error: 错误信息
 func (r *UserRepository) Delete(ctx context.Context, uid string) error {
 	if uid == "" {
 		return errors.New("invalid user UID")
@@ -639,16 +528,7 @@ func (r *UserRepository) Delete(ctx context.Context, uid string) error {
 	return nil
 }
 
-// ====================  管理后台方法 ====================
-
-// handleWriteError 处理写入错误
-// 参数：
-//   - err: 原始错误
-//   - operation: 操作名称
-//   - identifier: 相关标识符
-//
-// 返回：
-//   - error: 处理后的错误
+// handleWriteError 处理写入错误，将唯一约束冲突映射为对应的错误类型
 func (r *UserRepository) handleWriteError(err error, operation string, identifier any) error {
 	if IsUniqueViolation(err, "email") {
 		return ErrEmailExists
@@ -663,15 +543,7 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 	return utils.LogError("USER", operation, err, fmt.Sprintf("identifier=%v", identifier))
 }
 
-// buildUpdateQuery 构建更新 SQL 查询
-// 参数：
-//   - uid: 用户 UID
-//   - updates: 要更新的字段映射
-//
-// 返回：
-//   - string: SQL 查询
-//   - []interface{}: 参数列表
-//   - error: 错误信息
+// buildUpdateQuery 构建更新 SQL 查询，使用白名单验证字段防止 SQL 注入
 func (r *UserRepository) buildUpdateQuery(uid string, updates map[string]any) (string, []any, error) {
 	var setClauses []string
 	args := make([]any, 0, len(updates)+1)
@@ -704,8 +576,6 @@ func (r *UserRepository) buildUpdateQuery(uid string, updates map[string]any) (s
 	return query, args, nil
 }
 
-// ====================  管理后台方法 ====================
-
 // UserStats 用户统计数据
 type UserStats struct {
 	TotalUsers    int64 `json:"totalUsers"`
@@ -715,22 +585,11 @@ type UserStats struct {
 }
 
 // FindAll 查询用户列表（分页、搜索）
-// 参数：
-//   - ctx: 上下文
-//   - page: 页码（从 1 开始）
-//   - pageSize: 每页数量
-//   - search: 搜索关键词（匹配用户名或邮箱）
-//
-// 返回：
-//   - []*User: 用户列表
-//   - int64: 总数
-//   - error: 错误信息
 func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error) {
 	if r.pool == nil {
 		return nil, 0, errors.New("database not ready")
 	}
 
-	// 计算偏移量
 	offset := (page - 1) * pageSize
 
 	var total int64
@@ -738,7 +597,6 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	var err error
 
 	if search == "" {
-		// 无搜索条件
 		err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&total)
 		if err != nil {
 			return nil, 0, utils.LogError("USER", "CountUsers", err)
@@ -751,7 +609,6 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			LIMIT $1 OFFSET $2
 		`, pageSize, offset)
 	} else {
-		// 有搜索条件
 		searchPattern := "%" + search + "%"
 		err = r.pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM users 
@@ -775,7 +632,6 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	}
 	defer rows.Close()
 
-	// 扫描结果
 	users := make([]*User, 0)
 	pgxRows := rows.(interface {
 		Next() bool
@@ -801,12 +657,6 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 }
 
 // GetStats 获取用户统计数据
-// 参数：
-//   - ctx: 上下文
-//
-// 返回：
-//   - *UserStats: 统计数据
-//   - error: 错误信息
 func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 	if r.pool == nil {
 		return nil, errors.New("database not ready")
@@ -814,13 +664,11 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 
 	stats := &UserStats{}
 
-	// 总用户数
 	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
 	if err != nil {
 		return nil, utils.LogError("USER", "CountTotalUsers", err)
 	}
 
-	// 今日新增用户
 	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users 
 		WHERE created_at >= CURRENT_DATE
@@ -829,7 +677,6 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		return nil, utils.LogError("USER", "CountTodayUsers", err)
 	}
 
-	// 管理员数量
 	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users WHERE role >= $1
 	`, RoleAdmin).Scan(&stats.AdminCount)
@@ -837,7 +684,6 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 		return nil, utils.LogError("USER", "CountAdmins", err)
 	}
 
-	// 封禁用户数
 	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM users WHERE is_banned = true AND (unban_at IS NULL OR unban_at > CURRENT_TIMESTAMP)
 	`).Scan(&stats.BannedCount)
@@ -849,15 +695,6 @@ func (r *UserRepository) GetStats(ctx context.Context) (*UserStats, error) {
 }
 
 // Ban 封禁用户
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 被封禁用户 UID
-//   - adminUID: 操作管理员 UID
-//   - reason: 封禁原因
-//   - unbanAt: 解封时间（nil 表示永久封禁）
-//
-// 返回：
-//   - error: 错误信息
 func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reason string, unbanAt *time.Time) error {
 	if userUID == "" {
 		return errors.New("invalid user UID")
@@ -870,7 +707,6 @@ func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reas
 		return errors.New("database not ready")
 	}
 
-	// 执行封禁
 	result, err := r.pool.Exec(ctx, `
 		UPDATE users SET 
 			is_banned = true,
@@ -895,12 +731,6 @@ func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reas
 }
 
 // Unban 解封用户
-// 参数：
-//   - ctx: 上下文
-//   - userUID: 被解封用户 UID
-//
-// 返回：
-//   - error: 错误信息
 func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
 	if userUID == "" {
 		return errors.New("invalid user UID")
@@ -910,7 +740,6 @@ func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
 		return errors.New("database not ready")
 	}
 
-	// 执行解封
 	result, err := r.pool.Exec(ctx, `
 		UPDATE users SET 
 			is_banned = false,
