@@ -1,26 +1,3 @@
-/**
- * internal/middleware/ratelimit.go
- * 分片限流中间件（LRU 优化版 + 泛型抽象）
- *
- * 功能：
- * - 基于 IP 的请求限流（分片减少锁竞争）
- * - 基于邮箱的邮件发送限流
- * - 基于用户 UID 的数据导出限流
- * - LRU 淘汰策略（防止内存无限增长）
- * - 增量清理过期条目
- *
- * 设计说明：
- * - 使用 16 个分片减少锁竞争，提高并发性能
- * - 每个分片最多 1000 条目，总共最多 16000 条目
- * - 使用 LRU 淘汰策略，自动清理最少使用的条目
- * - 定期清理过期条目，防止内存泄漏
- * - ShardedCache[V] 泛型抽象统一了分片缓存的生命周期管理
- *
- * 依赖：
- * - github.com/hashicorp/golang-lru/v2: LRU 缓存实现
- * - golang.org/x/time/rate: 令牌桶限流器
- */
-
 package middleware
 
 import (
@@ -38,16 +15,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	ErrRateLimitNilLimiter       = errors.New("rate limiter is nil")
-	ErrRateLimitInvalidRate      = errors.New("invalid rate limit rate")
-	ErrRateLimitInvalidBurst     = errors.New("invalid rate limit burst")
-	ErrRateLimitCacheInitFailed  = errors.New("LRU cache initialization failed")
+	ErrRateLimitNilLimiter      = errors.New("rate limiter is nil")
+	ErrRateLimitInvalidRate     = errors.New("invalid rate limit rate")
+	ErrRateLimitInvalidBurst    = errors.New("invalid rate limit burst")
+	ErrRateLimitCacheInitFailed = errors.New("LRU cache initialization failed")
 )
-
-// ====================  常量定义 ====================
 
 const (
 	shardCount         = 16
@@ -73,9 +46,7 @@ const (
 	dataExportLimiterEntryTTL        = 24 * time.Hour
 )
 
-// ====================  泛型分片缓存（统一抽象） ====================
-
-// cacheShard 泛型缓存分片，替代原来的 rateLimiterShard / emailLimiterShard / dataExportLimiterShard
+// cacheShard 泛型缓存分片
 type cacheShard[V any] struct {
 	cache *lru.Cache[string, V]
 	mu    sync.Mutex
@@ -194,12 +165,9 @@ func (sc *ShardedCache[V]) stats() int {
 	return total
 }
 
-// ====================  数据结构 ====================
-
 // hashSeed maphash 种子（进程级别唯一）
 var hashSeed = maphash.MakeSeed()
 
-// rateLimiterEntry 限流器条目
 type rateLimiterEntry struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
@@ -224,8 +192,7 @@ type ShardedDataExportLimiter struct {
 	interval time.Duration
 }
 
-// ====================  ShardedRateLimiter 构造函数与方法 ====================
-
+// NewShardedRateLimiter 创建分片限流器
 func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	if r <= 0 {
 		utils.LogWarn("RATELIMIT", "Invalid rate, using default", fmt.Sprintf("rate=%v", r))
@@ -288,8 +255,7 @@ func (srl *ShardedRateLimiter) Stats() int {
 	return srl.cache.stats()
 }
 
-// ====================  ShardedEmailRateLimiter 构造函数与方法 ====================
-
+// NewShardedEmailRateLimiter 创建分片邮件限流器
 func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter {
 	if interval <= 0 {
 		utils.LogWarn("RATELIMIT", "Invalid email interval, using default", fmt.Sprintf("interval=%v", interval))
@@ -364,8 +330,7 @@ func (serl *ShardedEmailRateLimiter) Stats() int {
 	return serl.cache.stats()
 }
 
-// ====================  ShardedDataExportLimiter 构造函数与方法 ====================
-
+// NewShardedDataExportLimiter 创建分片数据导出限流器
 func NewShardedDataExportLimiter(interval time.Duration) *ShardedDataExportLimiter {
 	if interval <= 0 {
 		interval = 24 * time.Hour
@@ -433,8 +398,7 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
 	return int((sdel.interval - elapsed).Seconds())
 }
 
-// ====================  限流器管理器 ====================
-
+// rateLimiterManager 限流器管理器，实现 RateLimiterManager 接口
 type rateLimiterManager struct {
 	LoginLimiter          *ShardedRateLimiter
 	RegisterLimiter       *ShardedRateLimiter
@@ -507,8 +471,7 @@ func (m *rateLimiterManager) DataExportWaitTime(userUID string) int {
 	return m.DataExportLimiter.GetWaitTime(userUID)
 }
 
-// ====================  中间件 ====================
-
+// RateLimitMiddleware 基于 IP 的限流中间件，返回 429 Too Many Requests
 func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 	if limiter == nil {
 		utils.LogError("RATELIMIT", "RateLimitMiddleware", fmt.Errorf("limiter is nil"), "Returning pass-through middleware")

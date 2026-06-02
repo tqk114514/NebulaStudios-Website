@@ -1,19 +1,3 @@
-/**
- * internal/middleware/auth.go
- * JWT 认证中间件
- *
- * 功能：
- * - 从 Cookie 或 Authorization Header 提取 JWT
- * - 验证 JWT 并将用户信息挂载到 Context
- * - 提供强制认证和可选认证两种模式
- * - 访客专用中间件（含用户存在性验证，防止数据库重置后的重定向循环）
- *
- * 依赖：
- * - SessionService: 会话验证服务
- * - UserCache: 用户缓存
- * - UserRepository: 用户数据访问
- */
-
 package middleware
 
 import (
@@ -31,76 +15,47 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrAuthNilSessionService SessionService 为空
 	ErrAuthNilSessionService = errors.New("session service is nil")
-	// ErrAuthTokenNotFound Token 未找到
-	ErrAuthTokenNotFound = errors.New("TOKEN_NOT_FOUND")
-	// ErrAuthInvalidUID 用户 UID 无效
-	ErrAuthInvalidUID = errors.New("invalid user UID in context")
+	ErrAuthTokenNotFound     = errors.New("TOKEN_NOT_FOUND")
+	ErrAuthInvalidUID        = errors.New("invalid user UID in context")
 )
-
-// ====================  常量定义 ====================
 
 const (
-	// ContextKeyUID Context 中存储用户 UID 的键
-	// 使用应用前缀防止与第三方中间件冲突
-	ContextKeyUID = "auth-system:uid"
-
-	// authHeaderPrefix Authorization Header 前缀
-	authHeaderPrefix = "Bearer "
-
-	// tokenCookieName Token Cookie 名称
-	tokenCookieName = utils.TokenCookieName
+	ContextKeyUID         = "auth-system:uid"
+	authHeaderPrefix      = "Bearer "
+	tokenCookieName       = utils.TokenCookieName
+	guestOnlyCheckTimeout = 3 * time.Second
 )
 
-// ====================  公开函数 ====================
-
-// AuthMiddleware JWT 认证中间件（强制认证）
-// 从 Cookie 或 Authorization Header 提取 JWT 并验证
-// 验证失败返回 401 Unauthorized
-//
-// 参数：
-//   - sessionService: 会话服务，用于验证 Token
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
+// AuthMiddleware JWT 认证中间件（强制认证），从 Cookie 或 Authorization Header 提取 JWT 并验证，验证失败返回 401
 func AuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
-	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
 		utils.LogError("AUTH-MW", "AuthMiddleware", fmt.Errorf("SessionService is nil"), "Returning error middleware")
 		return errorMiddleware(ErrAuthNilSessionService)
 	}
 
 	return func(c *gin.Context) {
-		// 提取 Token
 		token := ExtractToken(c)
 		if token == "" {
-			// Token 未找到是预期内的业务情况，使用 DEBUG 级别避免日志洪水
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token not found: ip=%s", utils.GetClientIP(c)))
 			respondUnauthorized(c, ErrAuthTokenNotFound.Error())
 			return
 		}
 
-		// 验证 Token
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			// Token 验证失败是预期内的业务情况，使用 DEBUG 级别
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token verification failed: ip=%s", utils.GetClientIP(c)))
 			respondUnauthorized(c, err.Error())
 			return
 		}
 
-		// 验证 claims 有效性
 		if claims == nil {
 			utils.LogError("AUTH-MW", "AuthMiddleware", fmt.Errorf("claims is nil after successful verification"), "")
 			respondUnauthorized(c, "INVALID_CLAIMS")
 			return
 		}
 
-		// 验证用户 UID 有效性
 		if claims.UID == "" {
 			utils.LogWarn("AUTH-MW", "Token valid but claims contains empty UID",
 				fmt.Sprintf("path=%s, ip=%s", c.Request.URL.Path, utils.GetClientIP(c)))
@@ -108,23 +63,13 @@ func AuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 			return
 		}
 
-		// 将用户 UID 挂载到 Context
 		c.Set(ContextKeyUID, claims.UID)
 		c.Next()
 	}
 }
 
-// OptionalAuthMiddleware 可选认证中间件（不强制要求登录）
-// 如果提供了有效 Token，将用户 UID 挂载到 Context
-// 如果没有 Token 或 Token 无效，继续处理请求但不设置用户 ID
-//
-// 参数：
-//   - sessionService: 会话服务，用于验证 Token
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
+// OptionalAuthMiddleware 可选认证中间件，有有效 Token 则挂载 UID 到 Context，无 Token 或无效则继续处理
 func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
-	// 参数验证 - 在中间件创建时检查
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for optional auth, skipping auth", "")
 		return func(c *gin.Context) {
@@ -133,64 +78,48 @@ func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerF
 	}
 
 	return func(c *gin.Context) {
-		// 提取 Token
 		token := ExtractToken(c)
 		if token == "" {
-			// 可选认证，没有 Token 直接继续
 			c.Next()
 			return
 		}
 
-		// 验证 Token（不强制）
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			// 可选认证，验证失败只记录日志，不阻止请求
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Optional auth token invalid: path=%s", c.Request.URL.Path))
 			c.Next()
 			return
 		}
 
-		// 验证 claims 有效性
 		if claims == nil || claims.UID == "" {
 			utils.LogDebug("AUTH-MW", fmt.Sprintf("Optional auth invalid claims: path=%s", c.Request.URL.Path))
 			c.Next()
 			return
 		}
 
-		// 将用户 UID 挂载到 Context
 		c.Set(ContextKeyUID, claims.UID)
 		c.Next()
 	}
 }
 
 // GetUID 从 Context 获取用户 UID
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: 用户 UID
-//   - bool: 是否成功获取（false 表示未登录或数据无效）
 func GetUID(c *gin.Context) (string, bool) {
-	// 检查 Context 是否为空
 	if c == nil {
 		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("context is nil"), "")
 		return "", false
 	}
 
-	// 获取用户 UID
 	uid, exists := c.Get(ContextKeyUID)
 	if !exists {
 		return "", false
 	}
 
-	// 类型断言
 	uidStr, ok := uid.(string)
 	if !ok {
 		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("type assertion failed: got %T, want string", uid), "")
 		return "", false
 	}
 
-	// 验证 UID 有效性
 	if uidStr == "" {
 		utils.LogWarn("AUTH-MW", "Invalid user UID in context", fmt.Sprintf("uid=%s", uidStr))
 		return "", false
@@ -200,39 +129,22 @@ func GetUID(c *gin.Context) (string, bool) {
 }
 
 // IsAuthenticated 检查用户是否已认证
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - bool: 是否已认证
 func IsAuthenticated(c *gin.Context) bool {
 	_, ok := GetUID(c)
 	return ok
 }
 
-// ====================  公开函数 ====================
-
-// ExtractToken 从请求中提取 Token
-// 优先从 Cookie 获取（Cookie 比 Header 更难被 XSS 注入伪造），
-// 其次从 Authorization Header 获取（供 API 客户端使用）
-//
-// 参数：
-//   - c: Gin Context
-//
-// 返回：
-//   - string: Token 字符串，未找到返回空字符串
+// ExtractToken 从请求中提取 Token，优先从 Cookie 获取（同源 Cookie 无法被跨域脚本篡改 Header），其次从 Authorization Header 获取
 func ExtractToken(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
 
-	// 优先从 Cookie 获取（同源 Cookie 无法被跨域脚本篡改 Header）
 	token, err := c.Cookie(tokenCookieName)
 	if err == nil && token != "" {
 		return token
 	}
 
-	// 其次从 Authorization Header 获取（API 客户端备选方案）
 	authHeader := c.GetHeader("Authorization")
 	if len(authHeader) > len(authHeaderPrefix) && authHeader[:len(authHeaderPrefix)] == authHeaderPrefix {
 		return authHeader[len(authHeaderPrefix):]
@@ -242,10 +154,6 @@ func ExtractToken(c *gin.Context) string {
 }
 
 // respondUnauthorized 返回 401 未授权响应
-//
-// 参数：
-//   - c: Gin Context
-//   - errorCode: 错误代码
 func respondUnauthorized(c *gin.Context, errorCode string) {
 	c.JSON(http.StatusUnauthorized, gin.H{
 		"success":   false,
@@ -254,14 +162,7 @@ func respondUnauthorized(c *gin.Context, errorCode string) {
 	c.Abort()
 }
 
-// errorMiddleware 返回错误的中间件
-// 用于在中间件初始化失败时返回统一错误
-//
-// 参数：
-//   - err: 错误信息
-//
-// 返回：
-//   - gin.HandlerFunc: 返回 500 错误的中间件
+// errorMiddleware 返回初始化失败时的 500 错误中间件
 func errorMiddleware(err error) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		utils.LogError("AUTH-MW", "errorMiddleware", err, "Middleware initialization error")
@@ -273,20 +174,8 @@ func errorMiddleware(err error) gin.HandlerFunc {
 	}
 }
 
-// guestOnlyCheckTimeout 用户存在性检查超时时间
-const guestOnlyCheckTimeout = 3 * time.Second
-
-// GuestOnlyMiddleware 仅限未登录用户访问的中间件
-// 用于登录、注册等页面，已登录用户会被重定向到 dashboard
-// 当 JWT 有效但用户在数据库中不存在时（如数据库重置），清除 Cookie 并放行
-//
-// 参数：
-//   - sessionService: 会话服务，用于验证 Token
-//   - userCache: 用户缓存
-//   - userRepo: 用户数据仓库（缓存未命中时回源）
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
+// GuestOnlyMiddleware 仅限未登录用户访问（登录/注册页面），已登录用户重定向到 dashboard
+// 当 JWT 有效但用户在数据库中不存在时（如数据库重置），清除 Cookie 并放行，防止重定向循环
 func GuestOnlyMiddleware(sessionService services.SessionManager, userCache services.UserCacheStore, userRepo models.UserStore) gin.HandlerFunc {
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check", "")
@@ -335,14 +224,7 @@ func GuestOnlyMiddleware(sessionService services.SessionManager, userCache servi
 	}
 }
 
-// guestOnlyTokenCheck 仅基于 Token 的访客检查（降级模式）
-// 当 UserCache 或 UserRepo 不可用时使用，仅验证 JWT 有效性
-//
-// 参数：
-//   - sessionService: 会话服务，用于验证 Token
-//
-// 返回：
-//   - gin.HandlerFunc: Gin 中间件函数
+// guestOnlyTokenCheck 仅基于 Token 有效性的访客检查（UserCache/UserRepo 不可用时的降级模式）
 func guestOnlyTokenCheck(sessionService services.SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := ExtractToken(c)
