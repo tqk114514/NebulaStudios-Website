@@ -1,16 +1,3 @@
-/**
- * internal/models/user_log.go
- * 用户操作日志模型和数据访问层
- *
- * 功能：
- * - 用户账户操作日志记录
- * - 日志查询（分页）
- * - JSON 灵活存储详情
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -24,38 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
-// 移除不必要的错误定义，使用统一的错误处理
-
-// ====================  常量定义 ====================
-
 const (
-	// UserActionRegister 用户注册
-	UserActionRegister = "register"
-	// UserActionChangePassword 修改密码
-	UserActionChangePassword = "change_password"
-	// UserActionChangeUsername 修改用户名
-	UserActionChangeUsername = "change_username"
-	// UserActionChangeAvatar 修改头像
-	UserActionChangeAvatar = "change_avatar"
-	// UserActionLinkMicrosoft 绑定微软账户
-	UserActionLinkMicrosoft = "link_microsoft"
-	// UserActionUnlinkMicrosoft 解绑微软账户
-	UserActionUnlinkMicrosoft = "unlink_microsoft"
-	// UserActionDeleteAccount 删除账户
-	UserActionDeleteAccount = "delete_account"
-	// UserActionBanned 被封禁
-	UserActionBanned = "banned"
-	// UserActionUnbanned 被解封
-	UserActionUnbanned = "unbanned"
-	// UserActionOAuthAuthorize OAuth 授权第三方应用
-	UserActionOAuthAuthorize = "oauth_authorize"
-	// UserActionOAuthRevoke OAuth 撤销第三方应用授权
-	UserActionOAuthRevoke = "oauth_revoke"
+	UserActionRegister          = "register"
+	UserActionChangePassword    = "change_password"
+	UserActionChangeUsername    = "change_username"
+	UserActionChangeAvatar      = "change_avatar"
+	UserActionLinkMicrosoft     = "link_microsoft"
+	UserActionUnlinkMicrosoft   = "unlink_microsoft"
+	UserActionDeleteAccount     = "delete_account"
+	UserActionBanned            = "banned"
+	UserActionUnbanned          = "unbanned"
+	UserActionOAuthAuthorize    = "oauth_authorize"
+	UserActionOAuthRevoke       = "oauth_revoke"
 )
-
-// ====================  数据结构 ====================
 
 // UserLog 用户操作日志
 type UserLog struct {
@@ -114,14 +82,10 @@ type UserLogRepository struct {
 	pool *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewUserLogRepository 创建用户日志仓库
 func NewUserLogRepository(pool *pgxpool.Pool) *UserLogRepository {
 	return &UserLogRepository{pool: pool}
 }
-
-// ====================  写入方法 ====================
 
 // Create 创建日志记录
 func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
@@ -322,8 +286,6 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userUID string, 
 	}
 	return r.Create(ctx, log)
 }
-
-// ====================  查询方法 ====================
 
 // FindByUserUID 查询用户的操作日志（分页）
 func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, page, pageSize int) ([]*UserLog, int64, error) {

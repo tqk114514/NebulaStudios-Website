@@ -1,16 +1,3 @@
-/**
- * internal/models/schema.go
- * 数据库 Schema 定义和迁移
- *
- * 功能：
- * - 定义所有表的完整 Schema（包括约束）
- * - 使用 golang-migrate 进行版本化数据库迁移
- *
- * 依赖：
- * - github.com/golang-migrate/migrate/v4: 迁移引擎
- * - github.com/jackc/pgx/v5: PostgreSQL 驱动
- */
-
 package models
 
 import (
@@ -25,8 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
-
-// ====================  Schema 定义 ====================
 
 // ColumnDefinition 列定义
 type ColumnDefinition struct {
@@ -46,8 +31,6 @@ type TableSchema struct {
 	Columns           []ColumnDefinition // 列定义
 	UniqueConstraints [][]string         // 多列唯一约束
 }
-
-// ====================  表 Schema 定义 ====================
 
 // getTableSchemas 获取所有表的 Schema 定义
 func getTableSchemas() []TableSchema {
@@ -265,15 +248,12 @@ func getIndexDefinitions() []struct {
 	}
 }
 
-// ====================  SQL 构建 ====================
-
 // buildCreateTableSQL 构建 CREATE TABLE 语句
 func buildCreateTableSQL(schema TableSchema) string {
 	var lines []string
 
 	lines = append(lines, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (`, schema.Name))
 
-	// 添加列定义
 	for i, col := range schema.Columns {
 		line := fmt.Sprintf(`    "%s" %s`, col.Name, col.Type)
 
@@ -307,7 +287,6 @@ func buildCreateTableSQL(schema TableSchema) string {
 		lines = append(lines, line)
 	}
 
-	// 添加多列唯一约束
 	for i, constraint := range schema.UniqueConstraints {
 		line := fmt.Sprintf(`    UNIQUE("%s")`, strings.Join(constraint, `", "`))
 		if i < len(schema.UniqueConstraints)-1 {
@@ -328,13 +307,11 @@ func buildFullMigrationSQL() string {
 	sb.WriteString("-- Initialize database schema\n")
 	sb.WriteString("-- Version 1: Create all tables and indexes\n\n")
 
-	// 创建所有表
 	for _, schema := range getTableSchemas() {
 		sb.WriteString(buildCreateTableSQL(schema))
 		sb.WriteString(";\n\n")
 	}
 
-	// 创建所有索引
 	for _, idx := range getIndexDefinitions() {
 		sb.WriteString(idx.SQL)
 		sb.WriteString(";\n")

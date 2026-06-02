@@ -1,16 +1,3 @@
-/**
- * internal/models/token.go
- * Token 和验证码模型及数据访问层
- *
- * 功能：
- * - Token 数据结构和操作
- * - 验证码 (Code) 数据结构和操作
- * - 过期数据清理
- *
- * 依赖：
- * - PostgreSQL 数据库连接池
- */
-
 package models
 
 import (
@@ -24,70 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ====================  错误定义 ====================
-
 var (
-	// ErrInvalidToken Token 无效
-	ErrInvalidToken = errors.New("INVALID_TOKEN")
-	// ErrTokenExpired Token 已过期
-	ErrTokenExpired = errors.New("TOKEN_EXPIRED")
-	// ErrTokenUsed Token 已使用
-	ErrTokenUsed = errors.New("TOKEN_USED")
-	// ErrInvalidCode 验证码无效
-	ErrInvalidCode = errors.New("INVALID_CODE")
-	// ErrCodeExpired 验证码已过期
-	ErrCodeExpired = errors.New("CODE_EXPIRED")
-	// ErrEmailMismatch 邮箱不匹配
-	ErrEmailMismatch = errors.New("EMAIL_MISMATCH")
-	// ErrTypeMismatch 类型不匹配
-	ErrTypeMismatch = errors.New("TYPE_MISMATCH")
-	// ErrTooManyAttempts 尝试次数过多
+	ErrInvalidToken    = errors.New("INVALID_TOKEN")
+	ErrTokenExpired    = errors.New("TOKEN_EXPIRED")
+	ErrTokenUsed       = errors.New("TOKEN_USED")
+	ErrInvalidCode     = errors.New("INVALID_CODE")
+	ErrCodeExpired     = errors.New("CODE_EXPIRED")
+	ErrEmailMismatch   = errors.New("EMAIL_MISMATCH")
+	ErrTypeMismatch    = errors.New("TYPE_MISMATCH")
 	ErrTooManyAttempts = errors.New("TOO_MANY_ATTEMPTS")
-	// ErrCodeNotVerified 验证码未验证
 	ErrCodeNotVerified = errors.New("CODE_NOT_VERIFIED")
 )
 
-// ====================  常量定义 ====================
-
 const (
-	// maxCodeAttempts 验证码最大尝试次数
 	maxCodeAttempts = 5
-
-	// tokenUsed Token 已使用标记
-	tokenUsed = 1
-
-	// codeVerified 验证码已验证标记
-	codeVerified = 1
+	tokenUsed       = 1
+	codeVerified    = 1
 )
-
-// ====================  数据结构 ====================
 
 // Token 验证 Token
 type Token struct {
-	ID         int64     `json:"id"`
-	Token      string    `json:"-"` // 不序列化
-	Email      string    `json:"email"`
-	Type       string    `json:"type"`
-	Code       *string   `json:"-"` // 关联的验证码
-	CreatedAt  int64     `json:"created_at"`
-	ExpireTime int64     `json:"expire_time"`
-	Used       int       `json:"used"`
+	ID         int64   `json:"id"`
+	Token      string  `json:"-"` // 不序列化
+	Email      string  `json:"email"`
+	Type       string  `json:"type"`
+	Code       *string `json:"-"` // 关联的验证码
+	CreatedAt  int64   `json:"created_at"`
+	ExpireTime int64   `json:"expire_time"`
+	Used       int     `json:"used"`
 }
 
 // Code 验证码
 type Code struct {
-	ID         int64   `json:"id"`
-	Code       string  `json:"-"` // 不序列化
-	Email      string  `json:"email"`
-	Type       string  `json:"type"`
-	CreatedAt  int64   `json:"created_at"`
-	ExpireTime int64   `json:"expire_time"`
-	Attempts   int     `json:"attempts"`
-	Verified   int     `json:"verified"`
-	VerifiedAt *int64  `json:"verified_at,omitempty"`
+	ID         int64  `json:"id"`
+	Code       string `json:"-"` // 不序列化
+	Email      string `json:"email"`
+	Type       string `json:"type"`
+	CreatedAt  int64  `json:"created_at"`
+	ExpireTime int64  `json:"expire_time"`
+	Attempts   int    `json:"attempts"`
+	Verified   int    `json:"verified"`
+	VerifiedAt *int64 `json:"verified_at,omitempty"`
 }
-
-// ====================  Repository 结构 ====================
 
 // TokenRepository Token 仓库
 type TokenRepository struct {
@@ -99,8 +64,6 @@ type CodeRepository struct {
 	pool *pgxpool.Pool
 }
 
-// ====================  构造函数 ====================
-
 // NewTokenRepository 创建 Token 仓库
 func NewTokenRepository(pool *pgxpool.Pool) *TokenRepository {
 	return &TokenRepository{pool: pool}
@@ -110,8 +73,6 @@ func NewTokenRepository(pool *pgxpool.Pool) *TokenRepository {
 func NewCodeRepository(pool *pgxpool.Pool) *CodeRepository {
 	return &CodeRepository{pool: pool}
 }
-
-// ====================  Token 方法 ====================
 
 // IsExpired 检查 Token 是否已过期
 func (t *Token) IsExpired() bool {
@@ -123,8 +84,6 @@ func (t *Token) IsUsed() bool {
 	return t != nil && t.Used == tokenUsed
 }
 
-// ====================  Code 方法 ====================
-
 // IsExpired 检查验证码是否已过期
 func (c *Code) IsExpired() bool {
 	return c != nil && time.Now().UnixMilli() > c.ExpireTime
@@ -135,15 +94,7 @@ func (c *Code) IsVerified() bool {
 	return c != nil && c.Verified == codeVerified
 }
 
-// ====================  TokenRepository 方法 ====================
-
 // Create 创建 Token
-// 参数：
-//   - ctx: 上下文
-//   - token: Token 对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 	if token == nil {
 		return errors.New("token object is nil")
@@ -174,13 +125,6 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 }
 
 // FindByToken 根据 Token 字符串查找
-// 参数：
-//   - ctx: 上下文
-//   - tokenStr: Token 字符串
-//
-// 返回：
-//   - *Token: Token 对象
-//   - error: 错误信息
 func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*Token, error) {
 	if tokenStr == "" {
 		return nil, ErrInvalidToken
@@ -204,13 +148,6 @@ func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*To
 }
 
 // UpdateCode 更新 Token 的验证码
-// 参数：
-//   - ctx: 上下文
-//   - tokenStr: Token 字符串
-//   - code: 验证码
-//
-// 返回：
-//   - error: 错误信息
 func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
@@ -266,13 +203,6 @@ func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenStr string, n
 }
 
 // DeleteExpired 删除过期的 Token
-// 参数：
-//   - ctx: 上下文
-//   - now: 当前时间（毫秒时间戳）
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *TokenRepository) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	if r.pool == nil {
 		return 0, errors.New("database not ready")
@@ -287,12 +217,6 @@ func (r *TokenRepository) DeleteExpired(ctx context.Context, now int64) (int64, 
 }
 
 // DeleteByToken 删除指定 Token
-// 参数：
-//   - ctx: 上下文
-//   - tokenStr: Token 字符串
-//
-// 返回：
-//   - error: 错误信息
 func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenStr string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
@@ -305,15 +229,7 @@ func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenStr string) er
 	return err
 }
 
-// ====================  CodeRepository 方法 ====================
-
 // Create 创建验证码
-// 参数：
-//   - ctx: 上下文
-//   - code: 验证码对象
-//
-// 返回：
-//   - error: 错误信息
 func (r *CodeRepository) Create(ctx context.Context, code *Code) error {
 	if code == nil {
 		return errors.New("code object is nil")
@@ -341,13 +257,6 @@ func (r *CodeRepository) Create(ctx context.Context, code *Code) error {
 }
 
 // FindByCode 根据验证码查找
-// 参数：
-//   - ctx: 上下文
-//   - codeStr: 验证码字符串
-//
-// 返回：
-//   - *Code: 验证码对象
-//   - error: 错误信息
 func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code, error) {
 	if codeStr == "" {
 		return nil, ErrInvalidCode
@@ -371,14 +280,6 @@ func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code,
 }
 
 // UpdateVerification 更新验证状态
-// 参数：
-//   - ctx: 上下文
-//   - codeStr: 验证码字符串
-//   - attempts: 新的尝试次数
-//   - verifiedAt: 验证时间（毫秒时间戳）
-//
-// 返回：
-//   - error: 错误信息
 func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string, attempts int, verifiedAt int64) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
@@ -395,12 +296,6 @@ func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string,
 }
 
 // DeleteByCode 删除指定验证码
-// 参数：
-//   - ctx: 上下文
-//   - codeStr: 验证码字符串
-//
-// 返回：
-//   - error: 错误信息
 func (r *CodeRepository) DeleteByCode(ctx context.Context, codeStr string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
@@ -414,13 +309,6 @@ func (r *CodeRepository) DeleteByCode(ctx context.Context, codeStr string) error
 }
 
 // DeleteByEmail 删除指定邮箱的验证码
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//   - tokenType: Token 类型（可为空表示所有类型）
-//
-// 返回：
-//   - error: 错误信息
 func (r *CodeRepository) DeleteByEmail(ctx context.Context, email string, tokenType *string) error {
 	if email == "" {
 		return nil
@@ -446,14 +334,6 @@ func (r *CodeRepository) DeleteByEmail(ctx context.Context, email string, tokenT
 }
 
 // GetLatestExpiryByEmail 获取指定邮箱最新验证码的过期时间
-// 参数：
-//   - ctx: 上下文
-//   - email: 邮箱地址
-//   - now: 当前时间（毫秒时间戳）
-//
-// 返回：
-//   - int64: 过期时间（毫秒时间戳），0 表示没有有效验证码
-//   - error: 错误信息
 func (r *CodeRepository) GetLatestExpiryByEmail(ctx context.Context, email string, now int64) (int64, error) {
 	if email == "" {
 		return 0, errors.New("email is empty")
@@ -479,13 +359,6 @@ func (r *CodeRepository) GetLatestExpiryByEmail(ctx context.Context, email strin
 }
 
 // DeleteExpired 删除过期的验证码
-// 参数：
-//   - ctx: 上下文
-//   - now: 当前时间（毫秒时间戳）
-//
-// 返回：
-//   - int64: 删除的数量
-//   - error: 错误信息
 func (r *CodeRepository) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	if r.pool == nil {
 		return 0, errors.New("database not ready")
