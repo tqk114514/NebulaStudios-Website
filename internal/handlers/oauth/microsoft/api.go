@@ -1,17 +1,3 @@
-/**
- * internal/handlers/oauth/microsoft/api.go
- * Microsoft Graph API 调用
- *
- * 功能：
- * - 授权码换取 Token
- * - 获取用户信息
- * - 获取用户头像
- *
- * 依赖：
- * - auth-system/internal/handlers/oauth (公共错误和常量)
- * - internal/utils (日志)
- */
-
 package microsoft
 
 import (
@@ -26,16 +12,7 @@ import (
 	"auth-system/internal/utils"
 )
 
-// ====================  API 调用 ====================
-
-// exchangeCodeForToken 用授权码换取 token
-//
-// 参数：
-//   - code: 授权码
-//
-// 返回：
-//   - map[string]interface{}: Token 响应数据
-//   - error: 错误信息
+// exchangeCodeForToken 用授权码换取 token，同时验证 code_verifier
 func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", oauth.ErrOAuthTokenExchange)
@@ -90,14 +67,6 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 	return result, nil
 }
 
-// getUserInfo 获取微软用户信息
-//
-// 参数：
-//   - accessToken: Access Token
-//
-// 返回：
-//   - map[string]interface{}: 用户信息
-//   - error: 错误信息
 func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", oauth.ErrOAuthUserInfo)
@@ -145,15 +114,7 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, erro
 	return result, nil
 }
 
-// getAvatarData 获取微软头像
-// 返回二进制头像数据和 Content-Type，失败时返回空
-//
-// 参数：
-//   - accessToken: Access Token
-//
-// 返回：
-//   - []byte: 头像二进制数据
-//   - string: Content-Type
+// getAvatarData 获取微软头像，返回二进制数据和 Content-Type，失败时返回空
 func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
 	if accessToken == "" {
 		utils.LogWarn("OAUTH-MS", "Empty access token for avatar request", "")
