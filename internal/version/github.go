@@ -1,13 +1,3 @@
-/**
- * internal/version/github.go
- * GitHub API 版本获取与缓存
- *
- * 功能：
- * - 获取仓库 main 分支最新 commit SHA
- * - 内存缓存（10 分钟 TTL）避免频繁 API 调用
- * - 优雅降级：API 不可用时返回缓存值或 "unknown"
- */
-
 package version
 
 import (
@@ -33,6 +23,7 @@ type githubCommit struct {
 	SHA string `json:"sha"`
 }
 
+// GetRepoCommit 获取仓库 main 分支最新 commit SHA（带缓存，API 不可用时返回缓存值或 "unknown"）
 func GetRepoCommit() string {
 	repoCommitCacheMu.Lock()
 
