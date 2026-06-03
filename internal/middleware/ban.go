@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"auth-system/internal/models"
@@ -16,6 +17,14 @@ import (
 const (
 	ErrCodeUserBanned = "USER_BANNED"
 )
+
+// autoUnbanWg 跟踪自动解封 goroutine，确保服务关闭时等待完成
+var autoUnbanWg sync.WaitGroup
+
+// WaitAutoUnban 等待所有自动解封 goroutine 完成，服务关闭时调用
+func WaitAutoUnban() {
+	autoUnbanWg.Wait()
+}
 
 // BanCheckMiddleware 封禁检查中间件，独立工作不依赖 AuthMiddleware 执行顺序
 func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserStore, sessionService services.SessionManager) gin.HandlerFunc {
@@ -72,12 +81,12 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserS
 		if user.CheckBanned() {
 			utils.LogWarn("BAN-MW", "Banned user attempted API access", fmt.Sprintf("userUID=%s, reason=%s",
 				userUID, user.BanReason.String))
-			
+
 			response := gin.H{
 				"success":   false,
 				"errorCode": ErrCodeUserBanned,
 			}
-			
+
 			if user.BanReason.Valid {
 				response["banReason"] = user.BanReason.String
 			}
@@ -97,7 +106,9 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserS
 
 		// 临时封禁已过期但数据库未更新，自动解封
 		if user.IsBanned && !user.CheckBanned() {
+			autoUnbanWg.Add(1)
 			go func() {
+				defer autoUnbanWg.Done()
 				unbanCtx, unbanCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer unbanCancel()
 				if err := userRepo.Unban(unbanCtx, userUID); err != nil {

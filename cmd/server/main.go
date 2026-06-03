@@ -355,6 +355,10 @@ func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
 		utils.LogInfo("SERVER", "HTTP server stopped")
 	}
 
+	utils.LogInfo("SERVER", "Waiting for auto-unban goroutines...")
+	middleware.WaitAutoUnban()
+	utils.LogInfo("SERVER", "Auto-unban goroutines completed")
+
 	if svcs.ImgProcessor != nil {
 		utils.LogInfo("SERVER", "Shutting down image processor...")
 		imgCtx, imgCancel := context.WithTimeout(context.Background(), 5*time.Second)
