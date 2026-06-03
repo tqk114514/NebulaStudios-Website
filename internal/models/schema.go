@@ -373,6 +373,9 @@ type mapFile struct {
 }
 
 func (fsys mapFS) Open(name string) (fs.File, error) {
+	if name == "." {
+		return &mapDir{files: fsys}, nil
+	}
 	f, ok := fsys[name]
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", name)
@@ -410,3 +413,43 @@ func (fi *mapFileInfo) IsDir() bool        { return false }
 func (fi *mapFileInfo) Sys() any           { return nil }
 
 var _ io.Closer = (*mapFile)(nil)
+
+// mapDir 目录类型，实现 fs.ReadDirFile
+type mapDir struct {
+	files mapFS
+}
+
+func (d *mapDir) Stat() (fs.FileInfo, error) {
+	return &mapFileInfo{name: ".", size: 0}, nil
+}
+
+func (d *mapDir) Read([]byte) (int, error) {
+	return 0, fmt.Errorf("is a directory")
+}
+
+func (d *mapDir) Close() error {
+	return nil
+}
+
+func (d *mapDir) ReadDir(n int) ([]fs.DirEntry, error) {
+	entries := make([]fs.DirEntry, 0, len(d.files))
+	for name, f := range d.files {
+		entries = append(entries, &mapDirEntry{name: name, size: int64(len(f.data))})
+	}
+	if n <= 0 || n > len(entries) {
+		n = len(entries)
+	}
+	return entries[:n], nil
+}
+
+type mapDirEntry struct {
+	name string
+	size int64
+}
+
+func (e *mapDirEntry) Name() string      { return e.name }
+func (e *mapDirEntry) IsDir() bool       { return false }
+func (e *mapDirEntry) Type() fs.FileMode { return 0 }
+func (e *mapDirEntry) Info() (fs.FileInfo, error) {
+	return &mapFileInfo{name: e.name, size: e.size}, nil
+}
