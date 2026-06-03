@@ -96,7 +96,11 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 		path := c.Request.URL.Path
 
 		if config.EnableCSP && isHTMLPage(path) {
-			nonce := GenerateCSPNonce(c)
+			nonce, err := GenerateCSPNonce(c)
+			if err != nil {
+				c.AbortWithStatusJSON(500, gin.H{"error": "Internal server error"})
+				return
+			}
 			csp := buildCSPWithNonce(nonce)
 			if config.CustomCSP != "" {
 				csp = config.CustomCSP
@@ -279,15 +283,15 @@ func AddSecurityHeader(c *gin.Context, key, value string) {
 }
 
 // GenerateCSPNonce 每个请求生成唯一 nonce 并存入 Gin Context，用于 script-src/style-src
-func GenerateCSPNonce(c *gin.Context) string {
+func GenerateCSPNonce(c *gin.Context) (string, error) {
 	b := make([]byte, cspNonceLength)
 	if _, err := rand.Read(b); err != nil {
 		utils.LogError("SECURITY", "GenerateCSPNonce", err, "Failed to generate CSP nonce")
-		b = []byte("fallback-nonce-value")
+		return "", err
 	}
 	nonce := base64.StdEncoding.EncodeToString(b)
 	c.Set(cspNonceKey, nonce)
-	return nonce
+	return nonce, nil
 }
 
 // GetCSPNonce 从 Gin Context 获取 CSP nonce，未设置时返回空字符串
