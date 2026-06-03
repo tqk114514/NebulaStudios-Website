@@ -9,8 +9,6 @@ import (
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -35,12 +33,12 @@ type AdminHandler struct {
 	emailWhitelistRepo models.EmailWhitelistStore
 	exportService      services.ExportManager
 	dataExportSalt     string
-	pool               *pgxpool.Pool
+	dataExportRepo     models.DataExportImportStore
 }
 
 // NewAdminHandler 创建管理后台 Handler，验证必需依赖（userRepo、userCache、logRepo）后初始化。
 // oauthService 和 emailWhitelistRepo 为可选参数。
-func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthClientManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, pool *pgxpool.Pool) (*AdminHandler, error) {
+func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthClientManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, dataExportRepo models.DataExportImportStore) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -62,6 +60,6 @@ func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStor
 		emailWhitelistRepo: emailWhitelistRepo,
 		exportService:      exportService,
 		dataExportSalt:     dataExportSalt,
-		pool:               pool,
+		dataExportRepo:     dataExportRepo,
 	}, nil
 }
