@@ -101,8 +101,8 @@ func loadConfig() (*config.Config, error) {
 	}
 
 	if cfg.Port == "" {
-		utils.LogWarn("CONFIG", "Port not configured, using default 8080")
-		cfg.Port = "8080"
+		utils.LogWarn("CONFIG", "Port not configured, using default 3000")
+		cfg.Port = "3000"
 	}
 
 	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s", cfg.Port))
