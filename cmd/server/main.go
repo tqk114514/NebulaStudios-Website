@@ -129,6 +129,7 @@ type Repos struct {
 	QRLoginRepo        models.QRLoginStore
 	AdminLogRepo       models.AdminLogStore
 	EmailWhitelistRepo models.EmailWhitelistStore
+	DataExportRepo     models.DataExportImportStore
 }
 
 // Services 业务服务层容器
@@ -155,6 +156,7 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	repos.QRLoginRepo = models.NewQRLoginRepository(pool)
 	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
 	repos.AdminLogRepo = models.NewAdminLogRepository(pool)
+	repos.DataExportRepo = models.NewDataExportImportRepository(pool)
 
 	utils.LogInfo("REPOS", "All repositories initialized")
 	return repos
@@ -286,7 +288,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	hdlrs.adminHandler, err = admin.NewAdminHandler(
 		repos.UserRepo, svcs.UserCache, repos.AdminLogRepo,
 		repos.UserLogRepo, svcs.OAuthService, repos.EmailWhitelistRepo,
-		svcs.ExportService, cfg.DataExportSalt, repos.Pool,
+		svcs.ExportService, cfg.DataExportSalt, repos.DataExportRepo,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AdminHandler: %w", err)
