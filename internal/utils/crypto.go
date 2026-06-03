@@ -15,19 +15,20 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
-	ErrInvalidKeyLength       = errors.New("invalid key length, must be 32 bytes")
-	ErrDecryptionFailed       = errors.New("decryption failed")
-	ErrInvalidHash            = errors.New("invalid hash format")
-	ErrRandomGeneration       = errors.New("failed to generate random bytes")
-	ErrEmptyPassword          = errors.New("password cannot be empty")
-	ErrEmptyPlaintext         = errors.New("plaintext cannot be empty")
-	ErrEmptyCiphertext        = errors.New("ciphertext cannot be empty")
+	ErrInvalidKeyLength        = errors.New("invalid key length, must be 32 bytes")
+	ErrDecryptionFailed        = errors.New("decryption failed")
+	ErrInvalidHash             = errors.New("invalid hash format")
+	ErrRandomGeneration        = errors.New("failed to generate random bytes")
+	ErrEmptyPassword           = errors.New("password cannot be empty")
+	ErrEmptyPlaintext          = errors.New("plaintext cannot be empty")
+	ErrEmptyCiphertext         = errors.New("ciphertext cannot be empty")
 	ErrInvalidCiphertextFormat = errors.New("invalid ciphertext format")
-	ErrCipherCreation         = errors.New("failed to create AES cipher")
-	ErrGCMCreation            = errors.New("failed to create GCM mode")
+	ErrCipherCreation          = errors.New("failed to create AES cipher")
+	ErrGCMCreation             = errors.New("failed to create GCM mode")
 )
 
 const codeChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
@@ -35,7 +36,7 @@ const codeChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
 const (
 	argon2Time    = 1
 	argon2Memory  = 64 * 1024
-	argon2Threads = 2
+	argon2Threads = 1
 	argon2KeyLen  = 32
 	argon2SaltLen = 16
 )
@@ -337,9 +338,8 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// DeriveKeyFromString 使用 Argon2id 从字符串确定性派生 32 字节密钥
+// DeriveKeyFromString 使用 HKDF-SHA256 从字符串确定性派生 32 字节密钥
 // 相同输入始终产生相同输出，确保服务器重启后密钥一致
-// Salt 由 derivationSalt + keyStr 的 SHA-256 哈希确定性生成
 func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
 	if keyStr == "" {
 		LogWarn("CRYPTO", "Attempted to derive key from empty string")
@@ -350,12 +350,13 @@ func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
 		return nil, errors.New("derivation salt cannot be empty")
 	}
 
-	saltHash := sha256.Sum256([]byte(derivationSalt + ":" + keyStr))
-	salt := saltHash[:argon2SaltLen]
+	reader := hkdf.New(sha256.New, []byte(keyStr), []byte(derivationSalt), []byte("nebula-qrlogin-v1"))
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(reader, key); err != nil {
+		return nil, fmt.Errorf("hkdf key derivation failed: %w", err)
+	}
 
-	key := argon2.IDKey([]byte(keyStr), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
-
-	LogDebug("CRYPTO", fmt.Sprintf("Key derived using Argon2id (deterministic salt): salt=%s", hex.EncodeToString(salt)[:16]+"..."))
+	LogDebug("CRYPTO", fmt.Sprintf("Key derived using HKDF-SHA256: key_len=%d", len(key)))
 	return key, nil
 }
 
