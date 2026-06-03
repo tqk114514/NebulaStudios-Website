@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"auth-system/internal/middleware"
+	"auth-system/internal/models"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -69,11 +70,15 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		}
 	}
 	if existingUser != nil && existingUser.UID != userUID {
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: username=%s, existingUserUID=%s, requestUserUID=%s", newUsername, existingUser.UID, userUID))
+		utils.HTTPErrorResponse(c, "USER", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: username=%s", newUsername))
 		return
 	}
 
 	if err := h.userRepo.Update(ctx, userUID, map[string]any{"username": newUsername}); err != nil {
+		if errors.Is(err, models.ErrUsernameExists) {
+			utils.HTTPErrorResponse(c, "USER", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: username=%s", newUsername))
+			return
+		}
 		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to update username: userUID=%s", userUID))
 		return
 	}
