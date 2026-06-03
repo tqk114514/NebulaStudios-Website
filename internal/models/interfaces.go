@@ -87,3 +87,13 @@ type AdminLogStore interface {
 	LogDataImport(ctx context.Context, adminUID string, usersImported, logsImported int) error
 	FindAll(ctx context.Context, page, pageSize int) ([]*AdminLogPublic, int64, error)
 }
+
+// DataExportImportStore 数据导入导出数据访问接口
+type DataExportImportStore interface {
+	QueryAllUsers(ctx context.Context) ([]map[string]any, error)
+	QueryAllUserLogs(ctx context.Context) ([]map[string]any, error)
+	ImportUsers(ctx context.Context, users []map[string]any) (int, error)
+	ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error)
+	DeleteAllUsers(ctx context.Context) error
+	DeleteAllUserLogs(ctx context.Context) error
+}
