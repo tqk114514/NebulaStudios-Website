@@ -7,6 +7,7 @@ import (
 
 	"auth-system/internal/utils"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -126,9 +127,40 @@ func (r *DataExportImportRepository) QueryAllUserLogs(ctx context.Context) ([]ma
 	return logs, rows.Err()
 }
 
-// ImportUsers 批量导入用户（ON CONFLICT upsert）
+const importUsersSQL = `
+	INSERT INTO users (uid, username, email, password, avatar_url,
+	                   microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+	                   is_banned, ban_reason, banned_at, banned_by, unban_at, role, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	ON CONFLICT (uid) DO UPDATE SET
+		username = EXCLUDED.username,
+		email = EXCLUDED.email,
+		password = EXCLUDED.password,
+		avatar_url = EXCLUDED.avatar_url,
+		microsoft_id = EXCLUDED.microsoft_id,
+		microsoft_name = EXCLUDED.microsoft_name,
+		microsoft_avatar_url = EXCLUDED.microsoft_avatar_url,
+		microsoft_avatar_hash = EXCLUDED.microsoft_avatar_hash,
+		is_banned = EXCLUDED.is_banned,
+		ban_reason = EXCLUDED.ban_reason,
+		banned_at = EXCLUDED.banned_at,
+		banned_by = EXCLUDED.banned_by,
+		unban_at = EXCLUDED.unban_at,
+		role = EXCLUDED.role,
+		updated_at = EXCLUDED.updated_at
+`
+
+const importUserLogsSQL = `
+	INSERT INTO user_logs (id, user_uid, action, details, created_at)
+	VALUES ($1, $2, $3, $4, $5)
+	ON CONFLICT (id) DO NOTHING
+`
+
+// ImportUsers 批量导入用户（ON CONFLICT upsert），使用 pgx.Batch 减少数据库往返
 func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []map[string]any) (int, error) {
-	imported := 0
+	batch := &pgx.Batch{}
+	uids := make([]string, 0, len(users))
+
 	for _, user := range users {
 		uid, _ := user["uid"].(string)
 		if uid == "" {
@@ -137,28 +169,7 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 
 		role, _ := toInt(user["role"])
 
-		_, err := r.pool.Exec(ctx, `
-			INSERT INTO users (uid, username, email, password, avatar_url,
-			                   microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-			                   is_banned, ban_reason, banned_at, banned_by, unban_at, role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-			ON CONFLICT (uid) DO UPDATE SET
-				username = EXCLUDED.username,
-				email = EXCLUDED.email,
-				password = EXCLUDED.password,
-				avatar_url = EXCLUDED.avatar_url,
-				microsoft_id = EXCLUDED.microsoft_id,
-				microsoft_name = EXCLUDED.microsoft_name,
-				microsoft_avatar_url = EXCLUDED.microsoft_avatar_url,
-				microsoft_avatar_hash = EXCLUDED.microsoft_avatar_hash,
-				is_banned = EXCLUDED.is_banned,
-				ban_reason = EXCLUDED.ban_reason,
-				banned_at = EXCLUDED.banned_at,
-				banned_by = EXCLUDED.banned_by,
-				unban_at = EXCLUDED.unban_at,
-				role = EXCLUDED.role,
-				updated_at = EXCLUDED.updated_at
-		`,
+		batch.Queue(importUsersSQL,
 			uid,
 			toString(user["username"]),
 			toString(user["email"]),
@@ -177,19 +188,33 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 			toTime(user["created_at"]),
 			toTime(user["updated_at"]),
 		)
-		if err != nil {
+		uids = append(uids, uid)
+	}
+
+	if len(uids) == 0 {
+		return 0, nil
+	}
+
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	imported := 0
+	for _, uid := range uids {
+		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user %s: %v", uid, err))
-			continue
+		} else {
+			imported++
 		}
-		imported++
 	}
 
 	return imported, nil
 }
 
-// ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING）
+// ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
 func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
-	imported := 0
+	batch := &pgx.Batch{}
+	ids := make([]int64, 0, len(logs))
+
 	for _, log := range logs {
 		id, _ := toInt(log["id"])
 		if id == 0 {
@@ -206,16 +231,24 @@ func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []
 			detailsBytes = []byte(details)
 		}
 
-		_, err := r.pool.Exec(ctx, `
-			INSERT INTO user_logs (id, user_uid, action, details, created_at)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (id) DO NOTHING
-		`, id, userUID, action, detailsBytes, createdAt)
-		if err != nil {
+		batch.Queue(importUserLogsSQL, id, userUID, action, detailsBytes, createdAt)
+		ids = append(ids, int64(id))
+	}
+
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	imported := 0
+	for _, id := range ids {
+		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user log %d: %v", id, err))
-			continue
+		} else {
+			imported++
 		}
-		imported++
 	}
 
 	return imported, nil
