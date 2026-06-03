@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"auth-system/internal/config"
@@ -13,6 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+// ErrR2NotConfigured R2 未配置
+var ErrR2NotConfigured = errors.New("R2 not configured")
 
 // R2Service R2 存储服务
 type R2Service struct {
@@ -27,7 +31,7 @@ func NewR2Service(cfg *config.Config) (*R2Service, error) {
 
 	if cfg.R2Endpoint == "" || cfg.R2AccessKey == "" || cfg.R2SecretKey == "" || cfg.R2Bucket == "" {
 		utils.LogWarn("R2", "R2 not configured, avatar upload will be disabled", "")
-		return nil, nil
+		return nil, ErrR2NotConfigured
 	}
 
 	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...any) (aws.Endpoint, error) {
