@@ -94,6 +94,12 @@ const userColumns = `id, uid, username, email, password, avatar_url, role,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
        created_at, updated_at`
 
+// userColumnsPublic 不包含 password，用于管理后台列表等不需要密码哈希的场景
+const userColumnsPublic = `id, uid, username, email, avatar_url, role,
+       microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+       is_banned, ban_reason, banned_at, banned_by, unban_at,
+       created_at, updated_at`
+
 // UserRepository 用户仓库
 type UserRepository struct {
 	pool             *pgxpool.Pool
@@ -603,7 +609,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = r.pool.Query(ctx, `
-			SELECT `+userColumns+`
+			SELECT `+userColumnsPublic+`
 			FROM users
 			ORDER BY id DESC
 			LIMIT $1 OFFSET $2
@@ -619,7 +625,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		}
 
 		rows, err = r.pool.Query(ctx, `
-			SELECT `+userColumns+`
+			SELECT `+userColumnsPublic+`
 			FROM users
 			WHERE username ILIKE $1 OR email ILIKE $1
 			ORDER BY id DESC
@@ -641,7 +647,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 	for pgxRows.Next() {
 		user := &User{}
 		err := pgxRows.Scan(
-			&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+			&user.ID, &user.UID, &user.Username, &user.Email, &user.AvatarURL, &user.Role,
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 			&user.CreatedAt, &user.UpdatedAt,
