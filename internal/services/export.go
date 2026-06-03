@@ -19,10 +19,10 @@ const (
 
 // otacEntry OTAC 条目
 type otacEntry struct {
-	Code       string
-	RequestID  string
-	CreatedAt  time.Time
-	Attempts   int
+	Code      string
+	RequestID string
+	CreatedAt time.Time
+	Attempts  int
 }
 
 // fileTokenEntry 临时文件 token 条目
@@ -34,9 +34,9 @@ type fileTokenEntry struct {
 
 // ExportService 导出/导入服务
 type ExportService struct {
-	mu            sync.Mutex
-	currentOTAC   *otacEntry
-	fileTokenMap  map[string]*fileTokenEntry
+	mu           sync.Mutex
+	currentOTAC  *otacEntry
+	fileTokenMap map[string]*fileTokenEntry
 }
 
 // NewExportService 创建导出服务

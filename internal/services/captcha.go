@@ -25,6 +25,7 @@ var (
 	ErrCaptchaTimeout         = errors.New("CAPTCHA_TIMEOUT")
 	ErrCaptchaInvalidResponse = errors.New("CAPTCHA_INVALID_RESPONSE")
 	ErrCaptchaUnsupportedType = errors.New("CAPTCHA_UNSUPPORTED_TYPE")
+	ErrCaptchaNotConfigured   = errors.New("CAPTCHA_NOT_CONFIGURED")
 )
 
 const (
@@ -124,14 +125,7 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 	}
 
 	if len(providers) == 0 {
-		utils.LogWarn("CAPTCHA", "No captcha providers configured, service will be disabled", "")
-		return &CaptchaService{
-			enabled:   false,
-			providers: providers,
-			client: &http.Client{
-				Timeout: captchaDefaultTimeout,
-			},
-		}
+		panic("CAPTCHA configuration error: at least one captcha provider must be configured")
 	}
 
 	utils.LogInfo("CAPTCHA", fmt.Sprintf("Service initialized: providers=%d, enabled=true", len(providers)))
@@ -153,8 +147,8 @@ func (s *CaptchaService) Verify(token, captchaType, remoteIP string) error {
 // VerifyWithContext 验证 Token（带上下文）
 func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, captchaType, remoteIP string) error {
 	if !s.IsEnabled() {
-		utils.LogWarn("CAPTCHA", "Service is disabled, skipping verification", "")
-		return nil
+		utils.LogWarn("CAPTCHA", "Service is disabled, captcha verification cannot be performed", "")
+		return ErrCaptchaNotConfigured
 	}
 
 	if token == "" {
