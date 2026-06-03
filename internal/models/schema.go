@@ -3,8 +3,10 @@ package models
 import (
 	"auth-system/internal/utils"
 	"fmt"
+	"io"
+	"io/fs"
 	"strings"
-	"testing/fstest"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -336,10 +338,8 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	}
 
 	migrationSQL := buildFullMigrationSQL()
-	mapFS := fstest.MapFS{
-		"1_initial_schema.up.sql": {
-			Data: []byte(migrationSQL),
-		},
+	mapFS := mapFS{
+		"1_initial_schema.up.sql": {data: []byte(migrationSQL)},
 	}
 	source, err := iofs.New(mapFS, ".")
 	if err != nil {
@@ -362,3 +362,51 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	utils.LogInfo("DATABASE", "Migrations completed successfully")
 	return nil
 }
+
+// mapFS 内存文件系统，实现 fs.FS 接口，用于 golang-migrate iofs 驱动
+type mapFS map[string]*mapFile
+
+type mapFile struct {
+	data   []byte
+	reader *strings.Reader
+	offset int64
+}
+
+func (fsys mapFS) Open(name string) (fs.File, error) {
+	f, ok := fsys[name]
+	if !ok {
+		return nil, fmt.Errorf("file not found: %s", name)
+	}
+	f.reader = strings.NewReader(string(f.data))
+	f.offset = 0
+	return f, nil
+}
+
+func (f *mapFile) Stat() (fs.FileInfo, error) {
+	return &mapFileInfo{name: "", size: int64(len(f.data))}, nil
+}
+
+func (f *mapFile) Read(b []byte) (int, error) {
+	n, err := f.reader.Read(b)
+	f.offset += int64(n)
+	return n, err
+}
+
+func (f *mapFile) Close() error {
+	f.reader = nil
+	return nil
+}
+
+type mapFileInfo struct {
+	name string
+	size int64
+}
+
+func (fi *mapFileInfo) Name() string       { return fi.name }
+func (fi *mapFileInfo) Size() int64        { return fi.size }
+func (fi *mapFileInfo) Mode() fs.FileMode  { return 0444 }
+func (fi *mapFileInfo) ModTime() time.Time { return time.Time{} }
+func (fi *mapFileInfo) IsDir() bool        { return false }
+func (fi *mapFileInfo) Sys() any           { return nil }
+
+var _ io.Closer = (*mapFile)(nil)
