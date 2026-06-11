@@ -119,12 +119,9 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 			for _, entry := range entries {
 				if !entry.IsDir() {
 					name := entry.Name()
+					// 跳过 .br 预压缩文件，只从 .md 源文件提取版本
 					if strings.HasSuffix(name, ".md") {
-						version := name[:len(name)-3]
-						versions = append(versions, version)
-					} else if strings.HasSuffix(name, ".md.br") {
-						version := name[:len(name)-6]
-						versions = append(versions, version)
+						versions = append(versions, name[:len(name)-3])
 					}
 				}
 			}
