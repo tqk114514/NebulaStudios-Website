@@ -94,6 +94,7 @@
   "forgotPassword.codeExpired": "Verification code expired, please request a new one",
   "forgotPassword.resetSuccess": "Password reset successful, redirecting to sign in",
   "forgotPassword.resetFailed": "Reset failed, please try again later",
+  "forgotPassword.samePassword": "New password cannot be the same as old password",
 
   "verify.loading": "Loading verification code...",
   "verify.title": "Your Verification Code",

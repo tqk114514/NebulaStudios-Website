@@ -46,6 +46,7 @@ const resetPasswordErrorMap: Record<string, string> = {
   'INVALID_CODE': 'forgotPassword.invalidCode',
   'CODE_EXPIRED': 'forgotPassword.codeExpired',
   'USER_NOT_FOUND': 'forgotPassword.emailNotFound',
+  'SAME_PASSWORD': 'forgotPassword.samePassword',
   'RESET_FAILED': 'forgotPassword.resetFailed',
   'NETWORK_ERROR': 'error.networkError',
   'SERVER_ERROR': 'error.serverError'

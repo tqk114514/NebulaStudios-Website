@@ -129,6 +129,16 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	samePassword, err := utils.VerifyPassword(password, user.Password)
+	if err != nil {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", "Password comparison error in ResetPassword")
+		return
+	}
+	if samePassword {
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "SAME_PASSWORD", fmt.Sprintf("New password same as old in ResetPassword: email=%s", normalizedEmail))
+		return
+	}
+
 	if err := h.userRepo.UpdatePassword(ctx, user.UID, password); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userUID=%s", user.UID))
 		return

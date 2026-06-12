@@ -94,6 +94,7 @@
   "forgotPassword.codeExpired": "認証コードの有効期限が切れました。再取得してください",
   "forgotPassword.resetSuccess": "パスワードがリセットされました。ログインページにリダイレクト中",
   "forgotPassword.resetFailed": "リセットに失敗しました。後でもう一度お試しください",
+  "forgotPassword.samePassword": "新しいパスワードは以前のパスワードと同じにできません",
 
   "verify.loading": "認証コードを取得中...",
   "verify.title": "認証コード",
