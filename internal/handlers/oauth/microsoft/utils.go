@@ -242,7 +242,7 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 		return
 	}
 
-	token, err := h.sessionService.GenerateToken(user.UID)
+	accessToken, refreshToken, err := h.sessionService.GenerateTokens(user.UID, false)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		if returnURL != "" {
@@ -253,7 +253,8 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 		return
 	}
 
-	oauth.SetAuthCookie(c, token)
+	oauth.SetAuthCookie(c, accessToken)
+	utils.SetRefreshTokenCookieGin(c, refreshToken)
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft login successful: username=%s, userUID=%s", user.Username, user.UID))
 	if returnURL != "" {
 		c.Redirect(http.StatusFound, returnURL)

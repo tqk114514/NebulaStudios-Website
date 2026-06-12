@@ -175,7 +175,7 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	svcs.ExportService = services.NewExportService()
 	svcs.LimiterMgr = middleware.NewRateLimiterManager()
 
-	svcs.SessionService, err = services.NewSessionService(cfg)
+	svcs.SessionService, err = services.NewSessionService(cfg, pool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SessionService: %w", err)
 	}

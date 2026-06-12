@@ -307,13 +307,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 被封禁的用户允许正常登录，以便其在 Dashboard 页面查看封禁信息与解封时间。
 	// 封禁用户的其他所有操作已在业务层（中间件/服务层）冻结，因此无需在登录阶段拦截。
 
-	token, err := h.sessionService.GenerateToken(user.UID)
+	isBanned := user.CheckBanned()
+	accessToken, refreshToken, err := h.sessionService.GenerateTokens(user.UID, isBanned)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		return
 	}
 
-	h.setAuthCookie(c, token)
+	h.setAuthCookie(c, accessToken)
+	if !isBanned {
+		utils.SetRefreshTokenCookieGin(c, refreshToken)
+	}
 	h.userCache.Set(user.UID, user)
 
 	utils.LogInfo("AUTH", fmt.Sprintf("User logged in: username=%s, userUID=%s, ip=%s", user.Username, user.UID, clientIP))
@@ -405,16 +409,53 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	})
 }
 
-// Logout 用户登出，清除认证 Cookie
+// Logout 用户登出，撤销 refresh_token 并清除认证 Cookie
 // POST /api/auth/logout
 func (h *AuthHandler) Logout(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if ok && userUID != "" {
+		if err := h.sessionService.RevokeUserTokens(userUID); err != nil {
+			utils.LogWarn("AUTH", "Failed to revoke user tokens during logout", fmt.Sprintf("userUID=%s", userUID))
+		}
 		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userUID=%s", userUID))
 	} else {
 		utils.LogInfo("AUTH", "User logged out (no session)")
 	}
 
 	h.clearAuthCookie(c)
+	utils.ClearRefreshTokenCookieGin(c)
 	utils.RespondSuccess(c, gin.H{"message": "Logged out"})
+}
+
+// Refresh 使用 refresh_token 刷新 access_token
+// POST /api/auth/refresh
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	refreshToken, err := utils.GetRefreshTokenCookie(c)
+	if err != nil || refreshToken == "" {
+		utils.RespondError(c, http.StatusUnauthorized, "NO_REFRESH_TOKEN")
+		return
+	}
+
+	newAccessToken, newRefreshToken, err := h.sessionService.RefreshTokens(refreshToken)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrRefreshTokenExpired):
+			utils.ClearRefreshTokenCookieGin(c)
+			utils.RespondError(c, http.StatusUnauthorized, "REFRESH_TOKEN_EXPIRED")
+		case errors.Is(err, services.ErrRefreshTokenReused):
+			utils.ClearRefreshTokenCookieGin(c)
+			utils.RespondError(c, http.StatusUnauthorized, "REFRESH_TOKEN_REUSED")
+		case errors.Is(err, services.ErrRefreshTokenInvalid):
+			utils.ClearRefreshTokenCookieGin(c)
+			utils.RespondError(c, http.StatusBadRequest, "INVALID_REFRESH_TOKEN")
+		default:
+			utils.RespondError(c, http.StatusInternalServerError, "REFRESH_FAILED")
+		}
+		return
+	}
+
+	h.setAuthCookie(c, newAccessToken)
+	utils.SetRefreshTokenCookieGin(c, newRefreshToken)
+
+	utils.RespondSuccess(c, gin.H{"message": "Token refreshed"})
 }
