@@ -162,6 +162,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.POST("/login", svcs.LimiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
 		authAPI.POST("/verify-session", hdlrs.authHandler.VerifySession)
 		authAPI.POST("/logout", hdlrs.authHandler.Logout)
+		authAPI.POST("/refresh", hdlrs.authHandler.Refresh)
 		authAPI.GET("/me", middleware.AuthMiddleware(svcs.SessionService), hdlrs.authHandler.GetMe)
 
 		authAPI.POST("/send-reset-code", svcs.LimiterMgr.ResetPasswordRateLimit(), hdlrs.authHandler.SendResetCode)

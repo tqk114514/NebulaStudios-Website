@@ -53,18 +53,20 @@ type CodeResult struct {
 
 // TokenService Token 服务
 type TokenService struct {
-	tokenRepo *models.TokenRepository
-	codeRepo  *models.CodeRepository
-	pool      *pgxpool.Pool
+	tokenRepo        *models.TokenRepository
+	codeRepo         *models.CodeRepository
+	sessionTokenRepo *models.SessionTokenRepository
+	pool             *pgxpool.Pool
 }
 
 // NewTokenService 创建 Token 服务
 func NewTokenService(pool *pgxpool.Pool) *TokenService {
 	utils.LogInfo("TOKEN", "Token service initialized")
 	return &TokenService{
-		tokenRepo: models.NewTokenRepository(pool),
-		codeRepo:  models.NewCodeRepository(pool),
-		pool:      pool,
+		tokenRepo:        models.NewTokenRepository(pool),
+		codeRepo:         models.NewCodeRepository(pool),
+		sessionTokenRepo: models.NewSessionTokenRepository(pool),
+		pool:             pool,
 	}
 }
 
@@ -415,6 +417,23 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", err)
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth refresh tokens", count))
+		}
+	})
+
+	wg.Go(func() {
+		defer func() {
+			if r := recover(); r != nil {
+				utils.LogError("TOKEN", "SessionTokenCleanupPanic", fmt.Errorf("%v", r))
+			}
+		}()
+
+		count, err := s.sessionTokenRepo.DeleteExpired(ctx)
+		if err != nil {
+			utils.LogWarn("TOKEN", "Failed to cleanup expired session tokens", err)
+			return
+		}
+		if count > 0 {
+			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired session tokens", count))
 		}
 	})
 
