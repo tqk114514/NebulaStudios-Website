@@ -67,9 +67,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 等待翻译加载完成
     await waitForTranslations();
 
-    // 隐藏页面加载遮罩
-    hidePageLoader();
-
     // 获取卡片元素
     const card = document.querySelector('.card') as HTMLElement | null;
 
@@ -95,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await fetchApi<{ data: PendingLinkData }>('/api/auth/microsoft/pending-link');
 
       if (!result.success) {
+        hidePageLoader();
         showAlert(t(pendingLinkErrorMap[result.errorCode || ''] || 'linkConfirm.linkFailed'));
         setTimeout(() => {
           window.location.href = '/account/login';
@@ -103,6 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (!result.data) {
+        hidePageLoader();
         showAlert(t('linkConfirm.linkFailed'));
         setTimeout(() => {
           window.location.href = '/account/login';
@@ -141,7 +140,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           microsoftAvatarEl.textContent = microsoftName.charAt(0).toUpperCase();
         }
       }
+
+      // 数据全部渲染完成，隐藏 loading 遮罩
+      hidePageLoader();
     } catch {
+      hidePageLoader();
       showAlert(t('error.networkError'));
       setTimeout(() => {
         window.location.href = '/account/login';
