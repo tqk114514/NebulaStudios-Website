@@ -212,8 +212,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         errorBackBtn.addEventListener('click', () => window.close());
       }
     } else {
-      successBackBtn?.classList.add('is-hidden');
-      errorBackBtn?.classList.add('is-hidden');
+      successBackBtn?.setAttribute('hidden', '');
+      errorBackBtn?.setAttribute('hidden', '');
     }
 
     // 加载验证码
