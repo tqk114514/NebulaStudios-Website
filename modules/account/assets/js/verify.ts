@@ -16,10 +16,6 @@ import { fetchApi } from './lib/api/fetch.ts';
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
 const t = (key: string): string => window.t ? window.t(key) : key;
 
-// ==================== 类型定义 ====================
-
-type PageState = 'loading' | 'success' | 'error';
-
 // ==================== 错误码映射 ====================
 
 /**
@@ -56,14 +52,12 @@ async function verifyToken(token: string): Promise<{ success: boolean; code?: st
 // ==================== 状态管理 ====================
 
 /**
- * 切换显示状态（loading/success/error）
+ * 切换显示状态（仅 success/error，loading 由 page-loader 统一处理）
  */
-function showState(state: PageState, card: HTMLElement | null): void {
-  const loadingState = document.getElementById('loading-state');
+function showState(state: 'success' | 'error', card: HTMLElement | null): void {
   const successState = document.getElementById('success-state');
   const errorState = document.getElementById('error-state');
 
-  if (loadingState) { loadingState.classList.toggle('is-hidden', state !== 'loading'); }
   if (successState) { successState.classList.toggle('is-hidden', state !== 'success'); }
   if (errorState) { errorState.classList.toggle('is-hidden', state !== 'error'); }
 
@@ -125,6 +119,7 @@ async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
     }
 
     if (!token) {
+      hidePageLoader();
       showError('NO_TOKEN', card);
       return;
     }
@@ -132,16 +127,14 @@ async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
     const result = await verifyToken(token);
 
     if (result.success && result.code) {
+      hidePageLoader();
       const code = result.code.toString();
       const codeBoxes = document.querySelectorAll('.code-box');
 
-      // 逐个显示验证码数字（带动画延迟）
       codeBoxes.forEach((box, index) => {
         if (index < code.length) {
-          setTimeout(() => {
-            box.textContent = code[index];
-            box.classList.add('is-filled');
-          }, index * 100);
+          box.textContent = code[index];
+          box.classList.add('is-filled');
         }
       });
 
@@ -163,10 +156,12 @@ async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
         sessionStorage.setItem('verify_email', result.email);
       }
     } else {
+      hidePageLoader();
       showError(result.errorCode || 'INVALID_TOKEN', card);
     }
   } catch (error) {
     console.error('[VERIFY] ERROR: Load verification code failed:', (error as Error).message);
+    hidePageLoader();
     showError('NETWORK_ERROR', card);
   }
 }
@@ -177,7 +172,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     // 等待翻译系统就绪
     await waitForTranslations();
-    hidePageLoader();
 
     const card = document.querySelector('.card') as HTMLElement | null;
 
