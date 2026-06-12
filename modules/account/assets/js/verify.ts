@@ -63,9 +63,9 @@ function showState(state: PageState, card: HTMLElement | null): void {
   const successState = document.getElementById('success-state');
   const errorState = document.getElementById('error-state');
 
-  if (loadingState) {loadingState.style.display = state === 'loading' ? 'block' : 'none';}
-  if (successState) {successState.style.display = state === 'success' ? 'block' : 'none';}
-  if (errorState) {errorState.style.display = state === 'error' ? 'block' : 'none';}
+  if (loadingState) { loadingState.classList.toggle('is-hidden', state !== 'loading'); }
+  if (successState) { successState.classList.toggle('is-hidden', state !== 'success'); }
+  if (errorState) { errorState.classList.toggle('is-hidden', state !== 'error'); }
 
   if (card) {delayedExecution(() => adjustCardHeight(card));}
 }
