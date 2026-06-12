@@ -200,14 +200,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     updatePageTitle();
 
     // 绑定返回按钮事件（替代内联 onclick）
+    // 仅当页面由 window.open() 打开时才显示关闭按钮
     const successBackBtn = document.getElementById('success-back-btn');
     const errorBackBtn = document.getElementById('error-back-btn');
 
-    if (successBackBtn) {
-      successBackBtn.addEventListener('click', () => window.close());
-    }
-    if (errorBackBtn) {
-      errorBackBtn.addEventListener('click', () => window.close());
+    if (window.opener) {
+      if (successBackBtn) {
+        successBackBtn.addEventListener('click', () => window.close());
+      }
+      if (errorBackBtn) {
+        errorBackBtn.addEventListener('click', () => window.close());
+      }
+    } else {
+      successBackBtn?.classList.add('is-hidden');
+      errorBackBtn?.classList.add('is-hidden');
     }
 
     // 加载验证码
