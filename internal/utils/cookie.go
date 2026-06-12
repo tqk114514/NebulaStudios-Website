@@ -12,10 +12,11 @@ const (
 )
 
 const (
-	TokenCookieName     = "token"
-	LanguageCookieName  = "selectedLanguage"
-	LinkTokenCookieName = "link_token"
-	CSRFTokenName       = "csrf_token"
+	TokenCookieName        = "token"
+	RefreshTokenCookieName = "refresh_token"
+	LanguageCookieName     = "selectedLanguage"
+	LinkTokenCookieName    = "link_token"
+	CSRFTokenName          = "csrf_token"
 )
 
 const (
@@ -113,6 +114,50 @@ func SetTokenCookieGin(c *gin.Context, token string) {
 // ClearTokenCookieGin 清除认证 Token Cookie（GIN 版本）
 func ClearTokenCookieGin(c *gin.Context) {
 	ClearTokenCookie(c.Writer)
+}
+
+// SetRefreshTokenCookie 设置 Refresh Token Cookie
+// path=/api/auth/refresh 限制 Cookie 只在刷新端点发送
+func SetRefreshTokenCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    token,
+		Path:     "/api/auth/refresh",
+		Domain:   DefaultCookieDomain,
+		MaxAge:   30 * 24 * 60 * 60,
+		Secure:   IsSecure(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// ClearRefreshTokenCookie 清除 Refresh Token Cookie
+func ClearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    "",
+		Path:     "/api/auth/refresh",
+		Domain:   DefaultCookieDomain,
+		MaxAge:   -1,
+		Secure:   IsSecure(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// GetRefreshTokenCookie 从 Gin Context 获取 Refresh Token Cookie
+func GetRefreshTokenCookie(c *gin.Context) (string, error) {
+	return c.Cookie(RefreshTokenCookieName)
+}
+
+// SetRefreshTokenCookieGin 设置 Refresh Token Cookie（GIN 版本）
+func SetRefreshTokenCookieGin(c *gin.Context, token string) {
+	SetRefreshTokenCookie(c.Writer, token)
+}
+
+// ClearRefreshTokenCookieGin 清除 Refresh Token Cookie（GIN 版本）
+func ClearRefreshTokenCookieGin(c *gin.Context) {
+	ClearRefreshTokenCookie(c.Writer)
 }
 
 // SetLanguageCookieGin 设置语言偏好 Cookie（GIN 版本）

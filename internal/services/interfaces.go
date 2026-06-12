@@ -12,7 +12,10 @@ import (
 
 // SessionManager Session 服务接口
 type SessionManager interface {
-	GenerateToken(uid string) (string, error)
+	GenerateTokens(uid string, banned bool) (accessToken string, refreshToken string, err error)
+	RefreshTokens(refreshToken string) (newAccessToken string, newRefreshToken string, err error)
+	RevokeUserTokens(uid string) error
+	RevokeTokenFamily(uid string, familyID string) error
 	VerifyToken(tokenString string) (*Claims, error)
 }
 

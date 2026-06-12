@@ -201,6 +201,21 @@ func getTableSchemas() []TableSchema {
 				{"user_uid", "client_id"},
 			},
 		},
+		// session_tokens 表
+		{
+			Name: "session_tokens",
+			Columns: []ColumnDefinition{
+				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimary: true},
+				{Name: "token_hash", Type: "VARCHAR(64)", Nullable: false, IsUnique: true},
+				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: false, References: "users(uid)", OnDelete: "CASCADE"},
+				{Name: "family_id", Type: "VARCHAR(64)", Nullable: false},
+				{Name: "banned", Type: "BOOLEAN", Nullable: false, Default: "FALSE"},
+				{Name: "expires_at", Type: "TIMESTAMPTZ", Nullable: false},
+				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: true, Default: "NOW()"},
+				{Name: "used", Type: "BOOLEAN", Nullable: false, Default: "FALSE"},
+				{Name: "used_at", Type: "TIMESTAMPTZ", Nullable: true},
+			},
+		},
 		// email_whitelist 表
 		{
 			Name: "email_whitelist",
@@ -247,6 +262,10 @@ func getIndexDefinitions() []struct {
 		{"idx_oauth_refresh_tokens_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_uid ON oauth_refresh_tokens(user_uid)"},
 		{"idx_oauth_refresh_tokens_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at)"},
 		{"idx_oauth_grants_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_grants_user_uid ON oauth_grants(user_uid)"},
+		{"idx_session_tokens_user_uid", "CREATE INDEX IF NOT EXISTS idx_session_tokens_user_uid ON session_tokens(user_uid)"},
+		{"idx_session_tokens_token_hash", "CREATE INDEX IF NOT EXISTS idx_session_tokens_token_hash ON session_tokens(token_hash)"},
+		{"idx_session_tokens_family_id", "CREATE INDEX IF NOT EXISTS idx_session_tokens_family_id ON session_tokens(family_id)"},
+		{"idx_session_tokens_expires_at", "CREATE INDEX IF NOT EXISTS idx_session_tokens_expires_at ON session_tokens(expires_at)"},
 	}
 }
 

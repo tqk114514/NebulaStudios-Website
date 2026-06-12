@@ -27,10 +27,12 @@ type Config struct {
 	DatabaseURL string
 	DBMaxConns  int
 
-	JWTPrivateKey string
-	JWTExpiresIn  time.Duration
-	JWTIssuer     string
-	JWTAudience   string
+	JWTPrivateKey      string
+	JWTExpiresIn       time.Duration
+	AccessTokenExpiry  time.Duration
+	RefreshTokenExpiry time.Duration
+	JWTIssuer          string
+	JWTAudience        string
 
 	SMTPHost     string
 	SMTPPort     int
@@ -98,6 +100,18 @@ func Load() (*Config, error) {
 		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid JWT_EXPIRES_IN, using default (60 days): %v", err))
 	}
 	newCfg.JWTExpiresIn = jwtExpires
+
+	accessTokenExpiry, err := getEnvDuration("ACCESS_TOKEN_EXPIRY", 1*time.Hour)
+	if err != nil {
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid ACCESS_TOKEN_EXPIRY, using default (1h): %v", err))
+	}
+	newCfg.AccessTokenExpiry = accessTokenExpiry
+
+	refreshTokenExpiry, err := getEnvDuration("REFRESH_TOKEN_EXPIRY", 30*24*time.Hour)
+	if err != nil {
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid REFRESH_TOKEN_EXPIRY, using default (30d): %v", err))
+	}
+	newCfg.RefreshTokenExpiry = refreshTokenExpiry
 
 	newCfg.SMTPHost = getEnv("SMTP_HOST", "smtp.163.com")
 	smtpPort, err := getEnvInt("SMTP_PORT", 465)

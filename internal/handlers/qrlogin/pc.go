@@ -179,8 +179,15 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	utils.SetTokenCookieGin(c, sessionToken)
+	accessToken, refreshToken, tokenErr := h.sessionService.GenerateTokens(userUID, false)
+	if tokenErr != nil {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", "Failed to generate session tokens")
+		return
+	}
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Session cookie set for PC: userUID=%s", claims.UID))
+	utils.SetTokenCookieGin(c, accessToken)
+	utils.SetRefreshTokenCookieGin(c, refreshToken)
+
+	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Session cookies set for PC: userUID=%s", claims.UID))
 	utils.RespondSuccess(c, gin.H{})
 }
