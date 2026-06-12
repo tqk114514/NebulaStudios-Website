@@ -191,9 +191,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 等待翻译加载完成
     await waitForTranslations();
 
-    // 隐藏页面加载遮罩
-    hidePageLoader();
-
     // 获取卡片元素
     const card = document.querySelector('.card') as HTMLElement | null;
 
@@ -215,6 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 检查 URL 中是否有错误参数（从后端重定向过来的错误）
     const urlError = getUrlParameter('error');
     if (urlError) {
+      hidePageLoader();
       showError(urlError);
       return;
     }
@@ -226,6 +224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 验证必需参数
     if (!clientId || !redirectUri || !scope) {
+      hidePageLoader();
       showError('invalid_request');
       return;
     }
@@ -245,11 +244,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await fetchApi<{ data: { clientName: string; clientDescription?: string; scopes: string[]; username: string; userAvatar?: string } }>(`/oauth/authorize/info?${params.toString()}`);
 
       if (!result.success) {
+        hidePageLoader();
         showError(result.errorCode || 'unknown_error');
         return;
       }
 
       if (!result.data) {
+        hidePageLoader();
         showError('server_error');
         return;
       }
@@ -270,7 +271,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 渲染权限列表
       renderScopes(scopes);
 
+      // 数据全部渲染完成，隐藏 loading 遮罩
+      hidePageLoader();
+
     } catch {
+      hidePageLoader();
       showAlert(t('error.networkError'));
       return;
     }
