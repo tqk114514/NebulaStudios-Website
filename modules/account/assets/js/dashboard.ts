@@ -983,6 +983,9 @@ function showChangePasswordModal(): void {
     if (result.success) {
       controller.close();
       showAlert(t('dashboard.changePasswordSuccess'));
+      setTimeout(() => {
+        window.location.href = '/account/login';
+      }, 1500);
     } else {
       if (result.errorCode === 'WRONG_PASSWORD') {
         currentPasswordError!.textContent = t('dashboard.wrongPassword');
