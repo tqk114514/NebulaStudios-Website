@@ -299,47 +299,57 @@ func (r *EmailWhitelistRepository) SetEnabled(ctx context.Context, id int64, isE
 	return nil
 }
 
-// InitDefaultWhitelist 初始化默认邮箱白名单
-// 如果白名单为空，自动添加 outlook.com 和 gmail.com
-func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context) error {
+// InitDefaultWhitelist 从配置的域名列表初始化邮箱白名单
+// domains 格式: "domain1:signup_url1,domain2:signup_url2"
+// 使用 INSERT ... ON CONFLICT DO NOTHING，已存在的域名不重复插入
+func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context, domains string) error {
 	if r.pool == nil {
 		return ErrDBNotInitialized
 	}
 
-	// 检查白名单是否为空
-	var count int64
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to count email whitelist: %w", err)
+	if domains == "" {
+		return errors.New("email whitelist domains is empty")
 	}
 
-	if count > 0 {
-		utils.LogInfo("DATABASE", "Email whitelist already initialized")
-		return nil
-	}
+	entries := strings.Split(domains, ",")
 
-	// 白名单为空，添加默认域名
-	utils.LogInfo("DATABASE", "Email whitelist is empty, adding default domains")
+	var addedCount int
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
 
-	defaultDomains := []struct {
-		domain    string
-		signupURL string
-	}{
-		{"outlook.com", "https://signup.live.com/"},
-		{"gmail.com", "https://accounts.google.com/signup"},
-	}
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) != 2 {
+			utils.LogWarn("DATABASE", "Invalid whitelist entry format", fmt.Sprintf("entry=%s", entry))
+			continue
+		}
 
-	for _, d := range defaultDomains {
-		_, err := r.pool.Exec(ctx, `
+		domain := strings.ToLower(strings.TrimSpace(parts[0]))
+		signupURL := strings.TrimSpace(parts[1])
+
+		if domain == "" || signupURL == "" {
+			utils.LogWarn("DATABASE", "Skipping empty domain or signup_url in whitelist entry", fmt.Sprintf("entry=%s", entry))
+			continue
+		}
+
+		result, err := r.pool.Exec(ctx, `
 			INSERT INTO email_whitelist (domain, signup_url, is_enabled)
 			VALUES ($1, $2, true)
-		`, d.domain, d.signupURL)
+			ON CONFLICT (domain) DO NOTHING
+		`, domain, signupURL)
 		if err != nil {
-			utils.LogWarn("DATABASE", "Failed to add default domain", fmt.Sprintf("domain=%s", d.domain))
-		} else {
-			utils.LogInfo("DATABASE", "Added default domain to whitelist", fmt.Sprintf("domain=%s", d.domain))
+			utils.LogWarn("DATABASE", "Failed to add whitelist domain", fmt.Sprintf("domain=%s, err=%v", domain, err))
+			continue
+		}
+
+		if result.RowsAffected() > 0 {
+			addedCount++
+			utils.LogInfo("DATABASE", "Added whitelist domain from config", fmt.Sprintf("domain=%s", domain))
 		}
 	}
 
+	utils.LogInfo("DATABASE", "Email whitelist initialized from config", fmt.Sprintf("added=%d, configured=%d", addedCount, len(entries)))
 	return nil
 }

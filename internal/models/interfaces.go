@@ -65,7 +65,7 @@ type EmailWhitelistStore interface {
 	Update(ctx context.Context, id int64, domain, signupURL string, isEnabled bool) (*EmailWhitelist, error)
 	Delete(ctx context.Context, id int64) error
 	SetEnabled(ctx context.Context, id int64, isEnabled bool) error
-	InitDefaultWhitelist(ctx context.Context) error
+	InitDefaultWhitelist(ctx context.Context, domains string) error
 }
 
 // AdminLogStore 管理员操作日志接口
