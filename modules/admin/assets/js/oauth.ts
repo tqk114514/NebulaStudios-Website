@@ -145,15 +145,15 @@ async function deleteClient(id: number): Promise<boolean> {
 }
 
 async function regenerateSecret(id: number): Promise<string | null> {
-  const result = await fetchApi<RegenerateSecretResponse>(`/admin/api/oauth/clients/${id}/regenerate-secret`, {
+  const result = await fetchApi<RegenerateSecretResponse>(`/admin/api/oauth/clients/${id}/secret`, {
     method: 'POST'
   });
   return result.success ? result.data!.client_secret : null;
 }
 
 async function toggleClient(id: number, enabled: boolean): Promise<boolean> {
-  const result = await fetchApi(`/admin/api/oauth/clients/${id}/toggle`, {
-    method: 'POST',
+  const result = await fetchApi(`/admin/api/oauth/clients/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify({ enabled })
   });
   return result.success;

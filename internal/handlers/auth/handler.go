@@ -118,7 +118,7 @@ func (h *AuthHandler) getLanguage(language string) string {
 }
 
 // GetEmailWhitelist 获取允许注册的邮箱域名白名单（公开 API，无需认证）
-// GET /api/email-whitelist
+// GET /api/auth/email-whitelist
 func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
 		utils.RespondSuccessWithData(c, gin.H{"domains": gin.H{}})
@@ -330,53 +330,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// VerifySession 验证会话有效性，支持 Cookie 和 Authorization Header 两种方式
-// POST /api/auth/verify-session
-func (h *AuthHandler) VerifySession(c *gin.Context) {
-	token, _ := utils.GetTokenCookie(c)
-	if token == "" {
-		authHeader := c.GetHeader("Authorization")
-		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
-			token = after
-		}
-	}
-
-	if strings.TrimSpace(token) == "" {
-		utils.RespondError(c, http.StatusUnauthorized, "NO_TOKEN")
-		return
-	}
-
-	claims, err := h.sessionService.VerifyToken(token)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, err.Error(), "Session verification failed")
-		return
-	}
-
-	if claims == nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "TOKEN_INVALID", "VerifyToken returned nil claims")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	user, err := h.userCache.GetOrLoad(ctx, claims.UID, h.userRepo.FindByUID)
-	if err != nil {
-		h.clearAuthCookie(c)
-		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
-		return
-	}
-
-	if user == nil {
-		h.clearAuthCookie(c)
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user: userUID=%s", claims.UID))
-		return
-	}
-
-	utils.RespondSuccess(c, gin.H{
-		"data": user.ToPublic(),
-	})
-}
-
 // GetMe 获取当前登录用户信息
 // GET /api/auth/me
 func (h *AuthHandler) GetMe(c *gin.Context) {
@@ -400,7 +353,11 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	}
 
 	if user == nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusNotFound, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
+		utils.LogWarn("AUTH", "GetMe: valid JWT but user not found in database, clearing cookies",
+			fmt.Sprintf("userUID=%s", userUID))
+		h.clearAuthCookie(c)
+		utils.ClearRefreshTokenCookieGin(c)
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
 		return
 	}
 

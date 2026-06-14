@@ -16,11 +16,6 @@ type exportRequestResponse struct {
 	ExpiresIn int    `json:"expiresIn"`
 }
 
-type exportDownloadRequest struct {
-	RequestID string `json:"requestId"`
-	OTAC      string `json:"otac"`
-}
-
 type importPreviewResponse struct {
 	FileToken  string `json:"fileToken"`
 	UsersCount int    `json:"usersCount"`
@@ -53,17 +48,19 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 }
 
 // DownloadExport 验证 OTAC 并返回加密数据
-// POST /admin/api/data/export/download
+// GET /admin/api/data/export/:requestId/download?otac=xxx
 func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	operatorUID := c.GetString("uid")
 
-	var req exportDownloadRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	requestID := c.Param("requestId")
+	otac := c.Query("otac")
+
+	if requestID == "" || otac == "" {
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
 		return
 	}
 
-	if err := h.exportService.ValidateOTAC(req.RequestID, req.OTAC); err != nil {
+	if err := h.exportService.ValidateOTAC(requestID, otac); err != nil {
 		errMsg := err.Error()
 		errorCode := "OTAC_INVALID"
 		statusCode := http.StatusForbidden
@@ -242,7 +239,7 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 }
 
 // RevokeOTAC 主动撤销当前 OTAC
-// DELETE /admin/api/data/otac
+// DELETE /admin/api/data/one-time-access-code
 func (h *AdminHandler) RevokeOTAC(c *gin.Context) {
 	h.exportService.RevokeOTAC()
 	utils.RespondSuccess(c, gin.H{"message": "OTAC revoked"})

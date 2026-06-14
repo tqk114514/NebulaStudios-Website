@@ -37,7 +37,7 @@ const errorCodeMap: Record<string, string> = {
  * 验证 token 并获取验证码
  */
 async function verifyToken(token: string): Promise<{ success: boolean; code?: string; email?: string; errorCode?: string }> {
-  const result = await fetchApi<{ code: string; email: string }>('/api/auth/verify-token', {
+  const result = await fetchApi<{ code: string; email: string }>('/api/auth/verify-email', {
     method: 'POST',
     body: JSON.stringify({ token })
   });

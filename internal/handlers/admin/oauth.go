@@ -263,7 +263,7 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 }
 
 // RegenerateOAuthClientSecret 重新生成 OAuth 客户端密钥
-// POST /admin/api/oauth/clients/:id/regenerate-secret
+// POST /admin/api/oauth/clients/:id/secret
 //
 // 权限：超级管理员
 func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
@@ -307,7 +307,7 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 }
 
 // ToggleOAuthClient 启用/禁用 OAuth 客户端
-// POST /admin/api/oauth/clients/:id/toggle
+// PATCH /admin/api/oauth/clients/:id
 //
 // 权限：超级管理员
 func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {

@@ -24,7 +24,7 @@ type updateAvatarRequest struct {
 }
 
 // UpdateUsername 更新用户名
-// POST /api/user/username
+// PATCH /api/user/username
 func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
@@ -96,7 +96,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 }
 
 // UpdateAvatar 更新头像
-// POST /api/user/avatar
+// PATCH /api/user/avatar
 func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {

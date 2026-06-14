@@ -256,10 +256,7 @@ async function checkCodeExpiry(onExpired?: ExpiredCallback): Promise<void> {
     return;
   }
 
-  const result = await fetchApi<{ expired: boolean; expireTime?: number }>('/api/auth/check-code-expiry', {
-    method: 'POST',
-    body: JSON.stringify({ email })
-  });
+  const result = await fetchApi<{ expired: boolean; expireTime?: number }>(`/api/auth/code-expiry?email=${encodeURIComponent(email)}`);
 
   if (result.success) {
     if (result.expired) {

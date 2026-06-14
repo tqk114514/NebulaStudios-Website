@@ -246,7 +246,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
 
     confirmBtn!.disabled = true;
     const result = await fetchApi<{ avatar_url: string }>('/api/user/avatar', {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({ avatar_url: validatedUrl })
     });
 
@@ -1135,7 +1135,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
     const newUsername = usernameInput!.value.trim();
 
     const result = await fetchApi<{ username: string }>('/api/user/username', {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({
         username: newUsername,
         captchaToken: getCaptchaToken('change-username-captcha-container'),
@@ -1429,7 +1429,7 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
   controller.onConfirm(async () => {
     if (confirmBtn) { confirmBtn.disabled = true; }
 
-    const result = await fetchApi('/api/qr-login/mobile-confirm', {
+    const result = await fetchApi('/api/qr-login/confirm', {
       method: 'POST',
       body: JSON.stringify({ token })
     });
@@ -1453,7 +1453,7 @@ function showQrLoginConfirmModal(token: string, pcInfo: PcInfo): void {
   controller.onCancel(async () => {
     if (cancelBtn) { cancelBtn.disabled = true; }
 
-    await fetchApi('/api/qr-login/mobile-cancel', {
+    await fetchApi('/api/qr-login/cancel', {
       method: 'POST',
       body: JSON.stringify({ token })
     });
@@ -1738,7 +1738,7 @@ async function handleDataExport(): Promise<void> {
   });
 
   if (result.success && result.token) {
-    const downloadUrl = `/api/user/export/download?token=${encodeURIComponent(result.token)}`;
+    const downloadUrl = `/api/user/export/${encodeURIComponent(result.token)}`;
 
     const link = document.createElement('a');
     link.href = downloadUrl;
