@@ -35,10 +35,10 @@ type Config struct {
 	JWTAudience        string
 
 	SMTPHost     string
-	SMTPPort     int
+	SMTPFrom     string
 	SMTPUser     string
 	SMTPPassword string
-	SMTPFrom     string
+	SMTPPort     int
 
 	TurnstileSiteKey   string
 	TurnstileSecretKey string
@@ -47,7 +47,6 @@ type Config struct {
 
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
-	MicrosoftRedirectURI  string
 
 	QREncryptionKey     string
 	QRKeyDerivationSalt string
@@ -95,7 +94,7 @@ func Load() (*Config, error) {
 
 	newCfg.JWTPrivateKey = getEnv("JWT_PRIVATE_KEY", "")
 	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "")
-	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "auth-system-users")
+	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
 	if err != nil {
 		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid JWT_EXPIRES_IN, using default (60 days): %v", err))
@@ -114,15 +113,11 @@ func Load() (*Config, error) {
 	}
 	newCfg.RefreshTokenExpiry = refreshTokenExpiry
 
-	newCfg.SMTPHost = getEnv("SMTP_HOST", "smtp.163.com")
-	smtpPort, err := getEnvInt("SMTP_PORT", 465)
-	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid SMTP_PORT, using default (465): %v", err))
-	}
-	newCfg.SMTPPort = smtpPort
-	newCfg.SMTPUser = getEnvWithFallback("SMTP_USER", "EMAIL", "")
-	newCfg.SMTPPassword = getEnvWithFallback("SMTP_PASSWORD", "EMAIL_KEY", "")
-	newCfg.SMTPFrom = getEnvWithFallback("SMTP_FROM", "EMAIL", "")
+	newCfg.SMTPHost = getEnv("SMTP_HOST", "")
+	newCfg.SMTPFrom = getEnv("SMTP_FROM", "")
+	newCfg.SMTPUser = getEnv("SMTP_USER", "")
+	newCfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
+	newCfg.SMTPPort, _ = getEnvInt("SMTP_PORT", 0)
 
 	newCfg.TurnstileSiteKey = getEnv("TURNSTILE_SITE_KEY", "")
 	newCfg.TurnstileSecretKey = getEnv("TURNSTILE_SECRET_KEY", "")
@@ -132,7 +127,6 @@ func Load() (*Config, error) {
 
 	newCfg.MicrosoftClientID = getEnv("MICROSOFT_CLIENT_ID", "")
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
-	newCfg.MicrosoftRedirectURI = getEnv("MICROSOFT_REDIRECT_URI", "")
 
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")
@@ -143,7 +137,7 @@ func Load() (*Config, error) {
 	newCfg.R2Endpoint = getEnv("R2_ENDPOINT", "")
 	newCfg.R2Bucket = getEnv("R2_BUCKET", "")
 
-	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "https://cdn01.nebulastudios.top/images/default-avatar.svg")
+	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "")
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
 	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "")
 	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")
@@ -216,7 +210,7 @@ func (c *Config) IsHCaptchaConfigured() bool {
 }
 
 func (c *Config) IsMicrosoftOAuthConfigured() bool {
-	return c.MicrosoftClientID != "" && c.MicrosoftClientSecret != "" && c.MicrosoftRedirectURI != ""
+	return c.MicrosoftClientID != "" && c.MicrosoftClientSecret != ""
 }
 
 func (c *Config) IsQRLoginConfigured() bool {
@@ -266,16 +260,4 @@ func getEnvDuration(key string, defaultValue time.Duration) (time.Duration, erro
 	}
 
 	return defaultValue, fmt.Errorf("%w: %s=%s is not a valid duration", ErrInvalidValue, key, value)
-}
-
-// getEnvWithFallback 获取环境变量，优先使用主键名，为空时回退到兼容旧版变量名
-func getEnvWithFallback(primaryKey, fallbackKey, defaultValue string) string {
-	if value := os.Getenv(primaryKey); value != "" {
-		return value
-	}
-	if value := os.Getenv(fallbackKey); value != "" {
-		utils.LogInfo("CONFIG", fmt.Sprintf("Using fallback key %s instead of %s", fallbackKey, primaryKey))
-		return value
-	}
-	return defaultValue
 }
