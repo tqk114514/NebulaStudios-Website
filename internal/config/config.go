@@ -61,7 +61,8 @@ type Config struct {
 	DefaultAvatarURL string
 	DataExportSalt   string
 
-	ImageProcessorSocket string
+	ImageProcessorSocket  string
+	EmailWhitelistDomains string
 }
 
 // Load 从 .env 文件和系统环境变量加载配置，验证必需项后返回
@@ -93,7 +94,7 @@ func Load() (*Config, error) {
 	newCfg.DBMaxConns = dbMaxConns
 
 	newCfg.JWTPrivateKey = getEnv("JWT_PRIVATE_KEY", "")
-	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "auth-system")
+	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "")
 	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "auth-system-users")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
 	if err != nil {
@@ -144,7 +145,8 @@ func Load() (*Config, error) {
 
 	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "https://cdn01.nebulastudios.top/images/default-avatar.svg")
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
-	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "/tmp/img-processor.sock")
+	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "")
+	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")
 
 	if err := validateConfig(newCfg); err != nil {
 		return nil, err
@@ -170,6 +172,10 @@ func validateConfig(c *Config) error {
 
 	if c.QRKeyDerivationSalt == "" {
 		missingKeys = append(missingKeys, "QR_KEY_DERIVATION_SALT")
+	}
+
+	if c.EmailWhitelistDomains == "" {
+		missingKeys = append(missingKeys, "EMAIL_WHITELIST_DOMAINS")
 	}
 
 	if c.TurnstileSecretKey == "" && c.HCaptchaSecretKey == "" {

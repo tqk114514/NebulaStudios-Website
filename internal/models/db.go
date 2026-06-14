@@ -121,12 +121,6 @@ func initTables(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
-	whitelistRepo := &EmailWhitelistRepository{pool: pool}
-	if err := whitelistRepo.InitDefaultWhitelist(ctx); err != nil {
-		utils.LogError("DATABASE", "initTables", err, "Failed to initialize email whitelist")
-		return fmt.Errorf("init email whitelist failed: %w", err)
-	}
-
 	utils.LogInfo("DATABASE", "Tables initialized successfully")
 	return nil
 }

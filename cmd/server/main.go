@@ -70,6 +70,10 @@ func run() error {
 
 	repos := initRepos(cfg, pool)
 
+	if err := initEmailWhitelist(repos, cfg); err != nil {
+		return fmt.Errorf("email whitelist init failed: %w", err)
+	}
+
 	svcs, err := initServices(cfg, pool)
 	if err != nil {
 		return fmt.Errorf("services init failed: %w", err)
@@ -160,6 +164,18 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 
 	utils.LogInfo("REPOS", "All repositories initialized")
 	return repos
+}
+
+func initEmailWhitelist(repos *Repos, cfg *config.Config) error {
+	utils.LogInfo("DATABASE", "Initializing email whitelist from config...")
+
+	ctx := context.Background()
+	if err := repos.EmailWhitelistRepo.InitDefaultWhitelist(ctx, cfg.EmailWhitelistDomains); err != nil {
+		return utils.LogError("DATABASE", "initEmailWhitelist", err)
+	}
+
+	utils.LogInfo("DATABASE", "Email whitelist initialized")
+	return nil
 }
 
 func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
