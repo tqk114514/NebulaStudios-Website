@@ -66,17 +66,10 @@ type Config struct {
 
 // Load 从 .env 文件和系统环境变量加载配置，验证必需项后返回
 func Load() (*Config, error) {
-	envPaths := []string{"/var/www/.env", ".env"}
-	envLoaded := false
-	for _, path := range envPaths {
-		if err := godotenv.Load(path); err == nil {
-			utils.LogInfo("CONFIG", fmt.Sprintf("Loaded .env from %s", path))
-			envLoaded = true
-			break
-		}
-	}
-	if !envLoaded {
+	if err := godotenv.Load(".env"); err != nil {
 		utils.LogWarn("CONFIG", ".env file not found (this is OK if using system env vars)")
+	} else {
+		utils.LogInfo("CONFIG", "Loaded .env")
 	}
 
 	newCfg := &Config{}
