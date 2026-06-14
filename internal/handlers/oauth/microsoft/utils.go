@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,17 +19,32 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// extractEmail 从微软用户信息中提取邮箱
-func (h *MicrosoftHandler) extractEmail(msUser map[string]any) string {
-	if mail, ok := msUser["mail"].(string); ok && mail != "" {
-		return strings.ToLower(strings.TrimSpace(mail))
+// extractIDTokenEmail 从 ID Token 的 payload 中提取 email claim（不验证签名）。
+// 个人微软账户的 msUser.mail 可能是别名（如 xxx@outlook.com），
+// 而 ID Token 中的 email claim 才是用户真正绑定的邮箱。
+func extractIDTokenEmail(tokenData map[string]any) string {
+	idToken, ok := tokenData["id_token"].(string)
+	if !ok || idToken == "" {
+		return ""
 	}
 
-	if upn, ok := msUser["userPrincipalName"].(string); ok && upn != "" {
-		return strings.ToLower(strings.TrimSpace(upn))
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return ""
 	}
 
-	return ""
+	decoded, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return ""
+	}
+
+	email, _ := claims["email"].(string)
+	return email
 }
 
 // parseDataURL 解析 data URL，返回二进制数据和 content-type
