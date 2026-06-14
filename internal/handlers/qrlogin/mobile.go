@@ -88,7 +88,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 }
 
 // MobileConfirm 移动端确认登录，需要登录，生成 PC 端会话 Token 并通过 WebSocket 推送
-// POST /api/qr-login/mobile-confirm
+// POST /api/qr-login/confirm
 func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
@@ -176,7 +176,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 }
 
 // MobileCancel 移动端取消登录，删除 Token 并通知 PC 端
-// POST /api/qr-login/mobile-cancel
+// POST /api/qr-login/cancel
 func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`

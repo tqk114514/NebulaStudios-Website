@@ -20,7 +20,7 @@ let EMAIL_PROVIDERS: EmailProviders = {};
  */
 export async function loadEmailWhitelist(): Promise<LoadResult> {
   try {
-    const result = await fetchApi<{ data: { domains: EmailProviders } }>('/api/email-whitelist');
+    const result = await fetchApi<{ data: { domains: EmailProviders } }>('/api/auth/email-whitelist');
     if (result.success && result.data) {
       EMAIL_PROVIDERS = result.data.domains || {};
     } else {

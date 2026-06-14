@@ -114,7 +114,6 @@ func setupLegacyRedirects(r *gin.Engine) {
 }
 
 func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
-	r.GET("/health", hdlrs.staticHandler.GetHealth)
 	r.GET("/api/version", hdlrs.staticHandler.GetVersion)
 
 	apiGroup := r.Group("")
@@ -148,19 +147,17 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 }
 
 func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
-	r.GET("/api/email-whitelist", hdlrs.authHandler.GetEmailWhitelist)
-
 	authAPI := r.Group("/api/auth")
 	{
+		authAPI.GET("/email-whitelist", hdlrs.authHandler.GetEmailWhitelist)
 		authAPI.POST("/send-code", hdlrs.authHandler.SendCode)
-		authAPI.POST("/verify-token", hdlrs.authHandler.VerifyToken)
-		authAPI.POST("/check-code-expiry", hdlrs.authHandler.CheckCodeExpiry)
+		authAPI.POST("/verify-email", hdlrs.authHandler.VerifyEmail)
+		authAPI.GET("/code-expiry", hdlrs.authHandler.CheckCodeExpiry)
 		authAPI.POST("/verify-code", hdlrs.authHandler.VerifyCode)
-		authAPI.POST("/invalidate-code", svcs.LimiterMgr.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
+		authAPI.DELETE("/code", svcs.LimiterMgr.InvalidateCodeRateLimit(), hdlrs.authHandler.InvalidateCode)
 
 		authAPI.POST("/register", svcs.LimiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
 		authAPI.POST("/login", svcs.LimiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
-		authAPI.POST("/verify-session", hdlrs.authHandler.VerifySession)
 		authAPI.POST("/logout", hdlrs.authHandler.Logout)
 		authAPI.POST("/refresh", hdlrs.authHandler.Refresh)
 		authAPI.GET("/me", middleware.AuthMiddleware(svcs.SessionService), hdlrs.authHandler.GetMe)
@@ -197,8 +194,8 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 	userAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
 	userAPI.Use(middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService))
 	{
-		userAPI.POST("/username", hdlrs.userHandler.UpdateUsername)
-		userAPI.POST("/avatar", hdlrs.userHandler.UpdateAvatar)
+		userAPI.PATCH("/username", hdlrs.userHandler.UpdateUsername)
+		userAPI.PATCH("/avatar", hdlrs.userHandler.UpdateAvatar)
 		userAPI.GET("/logs", hdlrs.userHandler.GetLogs)
 		userAPI.POST("/export/request", hdlrs.userHandler.RequestDataExport)
 
@@ -206,21 +203,21 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		userAPI.DELETE("/oauth/grants/:client_id", hdlrs.userHandler.RevokeOAuthGrant)
 	}
 
-	r.GET("/api/user/export/download", hdlrs.userHandler.DownloadUserData)
+	r.GET("/api/user/export/:token", hdlrs.userHandler.DownloadUserData)
 }
 
 func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	qrAPI := r.Group("/api/qr-login")
 	{
-		qrAPI.POST("/generate", hdlrs.qrLoginHandler.Generate)
-		qrAPI.POST("/cancel", hdlrs.qrLoginHandler.Cancel)
+		qrAPI.POST("", hdlrs.qrLoginHandler.Generate)
+		qrAPI.DELETE("/:token", hdlrs.qrLoginHandler.Cancel)
 		qrAPI.POST("/scan", hdlrs.qrLoginHandler.Scan)
-		qrAPI.POST("/mobile-confirm",
+		qrAPI.POST("/confirm",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.qrLoginHandler.MobileConfirm)
-		qrAPI.POST("/mobile-cancel", hdlrs.qrLoginHandler.MobileCancel)
-		qrAPI.POST("/set-session", hdlrs.qrLoginHandler.SetSession)
+		qrAPI.POST("/cancel", hdlrs.qrLoginHandler.MobileCancel)
+		qrAPI.PATCH("/:token/session", hdlrs.qrLoginHandler.SetSession)
 	}
 }
 
@@ -237,8 +234,8 @@ func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Re
 		adminAPI.GET("/users", hdlrs.adminHandler.GetUsers)
 		adminAPI.GET("/users/:uid", hdlrs.adminHandler.GetUser)
 
-		adminAPI.POST("/users/:uid/ban", hdlrs.adminHandler.BanUser)
-		adminAPI.POST("/users/:uid/unban", hdlrs.adminHandler.UnbanUser)
+		adminAPI.PATCH("/users/:uid/ban", hdlrs.adminHandler.BanUser)
+		adminAPI.PATCH("/users/:uid/unban", hdlrs.adminHandler.UnbanUser)
 
 		superAdminAPI := adminAPI.Group("")
 		superAdminAPI.Use(adminmw.SuperAdminMiddleware(repos.UserRepo))
@@ -252,8 +249,8 @@ func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Re
 			superAdminAPI.POST("/oauth/clients", hdlrs.adminHandler.CreateOAuthClient)
 			superAdminAPI.PUT("/oauth/clients/:id", hdlrs.adminHandler.UpdateOAuthClient)
 			superAdminAPI.DELETE("/oauth/clients/:id", hdlrs.adminHandler.DeleteOAuthClient)
-			superAdminAPI.POST("/oauth/clients/:id/regenerate-secret", hdlrs.adminHandler.RegenerateOAuthClientSecret)
-			superAdminAPI.POST("/oauth/clients/:id/toggle", hdlrs.adminHandler.ToggleOAuthClient)
+			superAdminAPI.POST("/oauth/clients/:id/secret", hdlrs.adminHandler.RegenerateOAuthClientSecret)
+			superAdminAPI.PATCH("/oauth/clients/:id", hdlrs.adminHandler.ToggleOAuthClient)
 
 			superAdminAPI.GET("/email-whitelist", hdlrs.adminHandler.GetEmailWhitelist)
 			superAdminAPI.GET("/email-whitelist/:id", hdlrs.adminHandler.GetEmailWhitelistByID)
@@ -262,9 +259,9 @@ func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Re
 			superAdminAPI.DELETE("/email-whitelist/:id", hdlrs.adminHandler.DeleteEmailWhitelist)
 
 			superAdminAPI.POST("/data/export/request", hdlrs.adminHandler.RequestExport)
-			superAdminAPI.POST("/data/export/download", hdlrs.adminHandler.DownloadExport)
+			superAdminAPI.GET("/data/export/:requestId/download", hdlrs.adminHandler.DownloadExport)
 			superAdminAPI.POST("/data/import/execute", hdlrs.adminHandler.ExecuteImport)
-			superAdminAPI.DELETE("/data/otac", hdlrs.adminHandler.RevokeOTAC)
+			superAdminAPI.DELETE("/data/one-time-access-code", hdlrs.adminHandler.RevokeOTAC)
 		}
 	}
 

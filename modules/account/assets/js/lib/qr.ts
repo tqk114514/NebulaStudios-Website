@@ -80,7 +80,7 @@ const state = {
  * 从后端获取安全的扫码登录 Token
  */
 export async function fetchLoginToken(): Promise<TokenResult> {
-  const result = await fetchApi<{ token: string; expireTime: number }>('/api/qr-login/generate', {
+  const result = await fetchApi<{ token: string; expireTime: number }>('/api/qr-login', {
     method: 'POST'
   });
 
@@ -246,9 +246,9 @@ function handleStatusChange(status: string, data: WSMessage = { type: 'status' }
  * 设置会话并跳转
  */
 async function setSessionAndRedirect(sessionToken: string): Promise<void> {
-  const result = await fetchApi('/api/qr-login/set-session', {
-    method: 'POST',
-    body: JSON.stringify({ sessionToken, token: state.currentToken })
+  const result = await fetchApi(`/api/qr-login/${encodeURIComponent(state.currentToken!)}/session`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sessionToken })
   });
 
   if (!result.success) {
@@ -306,9 +306,8 @@ export async function showQrLoginModal(): Promise<void> {
 async function cancelCurrentToken(): Promise<void> {
   if (!state.currentToken) {return;}
 
-  await fetchApi('/api/qr-login/cancel', {
-    method: 'POST',
-    body: JSON.stringify({ token: state.currentToken })
+  await fetchApi(`/api/qr-login/${encodeURIComponent(state.currentToken)}`, {
+    method: 'DELETE'
   });
   console.log('[QR-LOGIN] Token cancelled');
 

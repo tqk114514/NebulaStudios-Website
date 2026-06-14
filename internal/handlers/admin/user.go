@@ -249,7 +249,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 }
 
 // BanUser 封禁用户
-// POST /admin/api/users/:uid/ban
+// PATCH /admin/api/users/:uid/ban
 //
 // 权限：管理员（不能封禁管理员及以上）
 func (h *AdminHandler) BanUser(c *gin.Context) {
@@ -343,7 +343,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 }
 
 // UnbanUser 解封用户
-// POST /admin/api/users/:uid/unban
+// PATCH /admin/api/users/:uid/unban
 //
 // 权限：管理员
 func (h *AdminHandler) UnbanUser(c *gin.Context) {

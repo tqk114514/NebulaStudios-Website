@@ -94,8 +94,8 @@ export async function login(
  * 401 响应表示未登录，属于预期行为，不会触发页面跳转
  */
 export async function verifySession(): Promise<AuthResponse> {
-  const result = await fetchApi<{ data: User }>('/api/auth/verify-session', {
-    method: 'POST',
+  const result = await fetchApi<{ data: User }>('/api/auth/me', {
+    method: 'GET',
     skipAuthRedirect: true
   });
 

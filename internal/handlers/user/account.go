@@ -335,9 +335,9 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 }
 
 // DownloadUserData 下载用户数据
-// GET /api/user/export/download?token=xxx
+// GET /api/user/export/:token
 func (h *UserHandler) DownloadUserData(c *gin.Context) {
-	token := c.Query("token")
+	token := c.Param("token")
 	if token == "" {
 		utils.RespondError(c, http.StatusBadRequest, "MISSING_TOKEN")
 		return

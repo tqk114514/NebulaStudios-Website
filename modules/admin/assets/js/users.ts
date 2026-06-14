@@ -98,7 +98,7 @@ async function deleteUser(uid: string): Promise<boolean> {
 
 async function banUser(uid: string, reason: string, days: number): Promise<boolean> {
   const result = await fetchApi(`/admin/api/users/${uid}/ban`, {
-    method: 'POST',
+    method: 'PATCH',
     body: JSON.stringify({ reason, days })
   });
   return result.success;
@@ -106,7 +106,7 @@ async function banUser(uid: string, reason: string, days: number): Promise<boole
 
 async function unbanUser(uid: string): Promise<boolean> {
   const result = await fetchApi(`/admin/api/users/${uid}/unban`, {
-    method: 'POST'
+    method: 'PATCH'
   });
   return result.success;
 }

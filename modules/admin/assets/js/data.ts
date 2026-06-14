@@ -172,13 +172,13 @@ function bindExportAuthEvents(): void {
   closeBtn?.addEventListener('click', () => {
     stopTimer();
     hideModal(modal!);
-    fetch('/admin/api/data/otac', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    fetch('/admin/api/data/one-time-access-code', { method: 'DELETE', credentials: 'include' }).catch(() => {});
   });
 
   cancelBtn?.addEventListener('click', () => {
     stopTimer();
     hideModal(modal!);
-    fetch('/admin/api/data/otac', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    fetch('/admin/api/data/one-time-access-code', { method: 'DELETE', credentials: 'include' }).catch(() => {});
   });
 
   downloadBtn?.addEventListener('click', async () => {
@@ -188,11 +188,8 @@ function bindExportAuthEvents(): void {
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
 
     try {
-      const resp = await fetch('/admin/api/data/export/download', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId: exportRequestId, otac })
+      const resp = await fetch(`/admin/api/data/export/${encodeURIComponent(exportRequestId)}/download?otac=${encodeURIComponent(otac)}`, {
+        credentials: 'include'
       });
 
       if (!resp.ok) {

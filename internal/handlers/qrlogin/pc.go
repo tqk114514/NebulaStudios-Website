@@ -15,7 +15,7 @@ import (
 )
 
 // Generate 生成扫码登录 Token，加密后返回给 PC 端用于生成二维码
-// POST /api/qr-login/generate
+// POST /api/qr-login
 func (h *QRLoginHandler) Generate(c *gin.Context) {
 	if !h.isConfigured {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusServiceUnavailable, "QR_NOT_CONFIGURED", "QR login not configured")
@@ -80,27 +80,16 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 }
 
 // Cancel PC 端取消扫码登录，总是返回成功以避免信息泄露
-// POST /api/qr-login/cancel
+// DELETE /api/qr-login/:token
 func (h *QRLoginHandler) Cancel(c *gin.Context) {
-	var req struct {
-		Token string `json:"token"`
-	}
+	encryptedToken := c.Param("token")
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.LogDebug("QR-LOGIN", "Invalid request body for Cancel")
+	if strings.TrimSpace(encryptedToken) == "" {
 		utils.RespondSuccess(c, gin.H{})
 		return
 	}
 
-	if strings.TrimSpace(req.Token) == "" {
-		utils.RespondSuccess(c, gin.H{})
-		return
-	}
-
-	originalToken, err := h.decryptToken(req.Token)
+	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
 		utils.LogDebug("QR-LOGIN", "Failed to decrypt token in Cancel")
 		utils.RespondSuccess(c, gin.H{})
@@ -120,11 +109,10 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 }
 
 // SetSession PC 端设置会话 Cookie，验证 QR Token 和会话 Token 后设置认证 Cookie
-// POST /api/qr-login/set-session
+// PATCH /api/qr-login/:token/session
 func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	var req struct {
 		SessionToken string `json:"sessionToken"`
-		Token        string `json:"token"`
 	}
 
 	if err := utils.BindJSON(c, &req); err != nil {
@@ -136,7 +124,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	}
 
 	sessionToken := strings.TrimSpace(req.SessionToken)
-	encryptedToken := strings.TrimSpace(req.Token)
+	encryptedToken := strings.TrimSpace(c.Param("token"))
 	if sessionToken == "" || encryptedToken == "" {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Empty session token or QR token in SetSession")
 		return

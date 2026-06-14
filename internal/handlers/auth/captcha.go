@@ -99,9 +99,9 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	})
 }
 
-// VerifyToken 验证邮件链接中的 Token，返回验证码和邮箱
-// POST /api/auth/verify-token
-func (h *AuthHandler) VerifyToken(c *gin.Context) {
+// VerifyEmail 验证邮件链接中的 Token，返回验证码和邮箱
+// POST /api/auth/verify-email
+func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	var req struct {
 		Token string `json:"token"`
 	}
@@ -110,12 +110,12 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 		if errors.Is(err, utils.ErrBodyTooLarge) {
 			return
 		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Invalid request body for VerifyToken")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Invalid request body for VerifyEmail")
 		return
 	}
 
 	if strings.TrimSpace(req.Token) == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Empty token in VerifyToken request")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Empty token in VerifyEmail request")
 		return
 	}
 
@@ -139,26 +139,13 @@ func (h *AuthHandler) VerifyToken(c *gin.Context) {
 }
 
 // CheckCodeExpiry 检查验证码是否已过期
-// POST /api/auth/check-code-expiry
+// GET /api/auth/code-expiry?email=xxx
 func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
-	var req struct {
-		Email string `json:"email"`
-	}
-
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for CheckCodeExpiry")
-		return
-	}
-
-	if strings.TrimSpace(req.Email) == "" {
+	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
+	if email == "" {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in CheckCodeExpiry request")
 		return
 	}
-
-	email := strings.ToLower(strings.TrimSpace(req.Email))
 
 	ctx := c.Request.Context()
 	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, email)
@@ -212,7 +199,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 }
 
 // InvalidateCode 使指定邮箱的验证码失效
-// POST /api/auth/invalidate-code
+// DELETE /api/auth/code
 func (h *AuthHandler) InvalidateCode(c *gin.Context) {
 	var req struct {
 		Email string `json:"email"`
