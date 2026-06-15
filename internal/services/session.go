@@ -129,7 +129,7 @@ func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService,
 
 // GenerateTokens 生成 access_token + refresh_token
 // banned: true = 封禁用户，只签发短期 access_token，不签发 refresh_token
-func (s *SessionService) GenerateTokens(uid string, banned bool) (accessToken string, refreshToken string, err error) {
+func (s *SessionService) GenerateTokens(ctx context.Context, uid string, banned bool) (accessToken string, refreshToken string, err error) {
 	if uid == "" {
 		utils.LogWarn("SESSION", "Invalid user UID for token generation", fmt.Sprintf("uid=%s", uid))
 		return "", "", ErrInvalidUser
@@ -167,7 +167,7 @@ func (s *SessionService) GenerateTokens(uid string, banned bool) (accessToken st
 		return accessToken, "", nil
 	}
 
-	refreshToken, err = s.generateRefreshToken(uid, false)
+	refreshToken, err = s.generateRefreshToken(ctx, uid, false)
 	if err != nil {
 		return "", "", err
 	}
@@ -178,7 +178,7 @@ func (s *SessionService) GenerateTokens(uid string, banned bool) (accessToken st
 
 // RefreshTokens 使用 refresh_token 轮转获取新的 token 对
 // 检测到已使用的 refresh_token 被重放时，撤销整个 token 家族并返回错误
-func (s *SessionService) RefreshTokens(refreshTokenStr string) (newAccessToken string, newRefreshToken string, err error) {
+func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr string) (newAccessToken string, newRefreshToken string, err error) {
 	if refreshTokenStr == "" {
 		return "", "", ErrRefreshTokenInvalid
 	}
@@ -190,7 +190,7 @@ func (s *SessionService) RefreshTokens(refreshTokenStr string) (newAccessToken s
 
 	tokenHash := models.HashToken(refreshTokenStr)
 
-	existing, findErr := s.sessionTokenRepo.FindByHash(context.TODO(), tokenHash)
+	existing, findErr := s.sessionTokenRepo.FindByHash(ctx, tokenHash)
 	if findErr != nil {
 		if errors.Is(findErr, models.ErrSessionTokenNotFound) {
 			return "", "", ErrRefreshTokenInvalid
@@ -203,13 +203,13 @@ func (s *SessionService) RefreshTokens(refreshTokenStr string) (newAccessToken s
 	}
 
 	if existing.Used {
-		s.sessionTokenRepo.RevokeFamily(context.TODO(), existing.FamilyID)
+		s.sessionTokenRepo.RevokeFamily(ctx, existing.FamilyID)
 		utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked",
 			fmt.Sprintf("user_uid=%s, family_id=%s", existing.UserUID, existing.FamilyID))
 		return "", "", ErrRefreshTokenReused
 	}
 
-	if markErr := s.sessionTokenRepo.MarkUsed(context.TODO(), existing.ID); markErr != nil {
+	if markErr := s.sessionTokenRepo.MarkUsed(ctx, existing.ID); markErr != nil {
 		return "", "", fmt.Errorf("failed to mark refresh token as used: %w", markErr)
 	}
 
@@ -218,7 +218,7 @@ func (s *SessionService) RefreshTokens(refreshTokenStr string) (newAccessToken s
 		return "", "", err
 	}
 
-	newRefreshToken, err = s.generateRefreshToken(existing.UserUID, existing.Banned)
+	newRefreshToken, err = s.generateRefreshToken(ctx, existing.UserUID, existing.Banned)
 	if err != nil {
 		return "", "", err
 	}
@@ -228,17 +228,17 @@ func (s *SessionService) RefreshTokens(refreshTokenStr string) (newAccessToken s
 }
 
 // RevokeUserTokens 撤销用户的所有 refresh_token
-func (s *SessionService) RevokeUserTokens(uid string) error {
+func (s *SessionService) RevokeUserTokens(ctx context.Context, uid string) error {
 	if uid == "" {
 		return ErrInvalidUser
 	}
 
-	_, err := s.sessionTokenRepo.RevokeUser(context.TODO(), uid)
+	_, err := s.sessionTokenRepo.RevokeUser(ctx, uid)
 	return err
 }
 
 // RevokeTokenFamily 撤销指定的 token 家族
-func (s *SessionService) RevokeTokenFamily(uid string, familyID string) error {
+func (s *SessionService) RevokeTokenFamily(ctx context.Context, uid string, familyID string) error {
 	if uid == "" {
 		return ErrInvalidUser
 	}
@@ -246,7 +246,7 @@ func (s *SessionService) RevokeTokenFamily(uid string, familyID string) error {
 		return fmt.Errorf("family_id is empty")
 	}
 
-	_, err := s.sessionTokenRepo.RevokeFamily(context.TODO(), familyID)
+	_, err := s.sessionTokenRepo.RevokeFamily(ctx, familyID)
 	return err
 }
 
@@ -341,7 +341,7 @@ func (s *SessionService) generateAccessToken(uid string, banned *bool, expiry ti
 }
 
 // generateRefreshToken 生成 refresh_token 并写入数据库
-func (s *SessionService) generateRefreshToken(uid string, banned bool) (string, error) {
+func (s *SessionService) generateRefreshToken(ctx context.Context, uid string, banned bool) (string, error) {
 	bytes := make([]byte, refreshTokenByteSize)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", utils.LogError("SESSION", "generateRefreshToken", err, "failed to generate random bytes")
@@ -364,7 +364,7 @@ func (s *SessionService) generateRefreshToken(uid string, banned bool) (string, 
 		ExpiresAt: time.Now().Add(s.refreshTokenExpiry),
 	}
 
-	if err := s.sessionTokenRepo.Create(context.TODO(), sessionToken); err != nil {
+	if err := s.sessionTokenRepo.Create(ctx, sessionToken); err != nil {
 		return "", err
 	}
 

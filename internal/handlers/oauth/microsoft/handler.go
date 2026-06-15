@@ -532,7 +532,7 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 
 	go h.processAvatarAsync(pendingData.UserUID, "", avatarData, avatarContentType)
 
-	accessToken, refreshToken, err := h.sessionService.GenerateTokens(user.UID, false)
+	accessToken, refreshToken, err := h.sessionService.GenerateTokens(c.Request.Context(), user.UID, false)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "ConfirmLink", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")

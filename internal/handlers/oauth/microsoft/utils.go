@@ -258,7 +258,7 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 		return
 	}
 
-	accessToken, refreshToken, err := h.sessionService.GenerateTokens(user.UID, false)
+	accessToken, refreshToken, err := h.sessionService.GenerateTokens(c.Request.Context(), user.UID, false)
 	if err != nil {
 		utils.LogError("OAUTH-MS", "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		if returnURL != "" {

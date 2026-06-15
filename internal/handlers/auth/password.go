@@ -143,8 +143,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.sessionService.RevokeUserTokens(user.UID); err != nil {
-		utils.LogWarn("AUTH", "Failed to revoke tokens after password reset", fmt.Sprintf("userUID=%s", user.UID))
+	if err := h.sessionService.RevokeUserTokens(c.Request.Context(), user.UID); err != nil {
+		utils.LogWarn("AUTH", "Failed to revoke user tokens during password reset", fmt.Sprintf("userUID=%s", user.UID))
 	}
 
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
@@ -236,8 +236,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.sessionService.RevokeUserTokens(userUID); err != nil {
-		utils.LogWarn("AUTH", "Failed to revoke tokens after password change", fmt.Sprintf("userUID=%s", userUID))
+	if err := h.sessionService.RevokeUserTokens(c.Request.Context(), userUID); err != nil {
+		utils.LogWarn("AUTH", "Failed to revoke user tokens during password change", fmt.Sprintf("userUID=%s", userUID))
 	}
 
 	h.userCache.Invalidate(userUID)
