@@ -19,13 +19,13 @@ const (
 	headerReferrerPolicy      = "strict-origin-when-cross-origin"
 	headerPermissionsPolicy   = "geolocation=(), microphone=(), camera=()"
 	defaultCSP                = "default-src 'none'; " +
-		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://hcaptcha.com https://*.hcaptcha.com https://static.cloudflareinsights.com; " +
+		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
 		"style-src 'self' https://cdn01.nebulastudios.top; " +
 		"font-src 'self' https://cdn01.nebulastudios.top; " +
-		"connect-src 'self' https://static.cloudflareinsights.com https://*.hcaptcha.com https://cdn01.nebulastudios.top; " +
+		"connect-src 'self' https://static.cloudflareinsights.com https://cdn01.nebulastudios.top; " +
 		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
 		"frame-ancestors 'self'; " +
-		"frame-src 'self' https://challenges.cloudflare.com https://*.hcaptcha.com; " +
+		"frame-src 'self' https://challenges.cloudflare.com; " +
 		"base-uri 'self'; " +
 		"form-action 'self'"
 

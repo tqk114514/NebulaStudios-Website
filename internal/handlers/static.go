@@ -70,7 +70,7 @@ func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsS
 	}, nil
 }
 
-// GetCaptchaConfig 获取验证码配置，返回可用验证器列表
+// GetCaptchaConfig 获取验证码配置
 // GET /api/config/captcha
 func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	if h.captchaService == nil {
@@ -78,13 +78,13 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 		return
 	}
 
-	providers := h.captchaService.GetConfig()
-	if len(providers) == 0 {
-		utils.LogWarn("STATIC", "No captcha providers configured", "")
+	siteKey := h.captchaService.GetSiteKey()
+	if siteKey == "" {
+		utils.LogWarn("STATIC", "Captcha site key not configured", "")
 	}
 
 	utils.RespondSuccessWithData(c, gin.H{
-		"providers": providers,
+		"siteKey": siteKey,
 	})
 }
 

@@ -42,8 +42,6 @@ type Config struct {
 
 	TurnstileSiteKey   string
 	TurnstileSecretKey string
-	HCaptchaSiteKey    string
-	HCaptchaSecretKey  string
 
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
@@ -115,9 +113,6 @@ func Load() (*Config, error) {
 	newCfg.TurnstileSiteKey = getEnv("TURNSTILE_SITE_KEY", "")
 	newCfg.TurnstileSecretKey = getEnv("TURNSTILE_SECRET_KEY", "")
 
-	newCfg.HCaptchaSiteKey = getEnv("HCAPTCHA_SITE_KEY", "")
-	newCfg.HCaptchaSecretKey = getEnv("HCAPTCHA_SECRET_KEY", "")
-
 	newCfg.MicrosoftClientID = getEnv("MICROSOFT_CLIENT_ID", "")
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
 
@@ -165,8 +160,8 @@ func validateConfig(c *Config) error {
 		missingKeys = append(missingKeys, "EMAIL_WHITELIST_DOMAINS")
 	}
 
-	if c.TurnstileSecretKey == "" && c.HCaptchaSecretKey == "" {
-		warnings = append(warnings, "No captcha configured (both TURNSTILE and HCAPTCHA are empty)")
+	if c.TurnstileSecretKey == "" {
+		warnings = append(warnings, "No captcha configured (TURNSTILE_SECRET_KEY is empty)")
 	}
 
 	if c.SMTPUser == "" || c.SMTPPassword == "" {
@@ -194,12 +189,8 @@ func (c *Config) IsEmailConfigured() bool {
 	return c.SMTPHost != "" && c.SMTPUser != "" && c.SMTPPassword != ""
 }
 
-func (c *Config) IsTurnstileConfigured() bool {
+func (c *Config) IsCaptchaConfigured() bool {
 	return c.TurnstileSiteKey != "" && c.TurnstileSecretKey != ""
-}
-
-func (c *Config) IsHCaptchaConfigured() bool {
-	return c.HCaptchaSiteKey != "" && c.HCaptchaSecretKey != ""
 }
 
 func (c *Config) IsMicrosoftOAuthConfigured() bool {

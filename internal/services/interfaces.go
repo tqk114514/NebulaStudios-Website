@@ -35,12 +35,10 @@ type TokenManager interface {
 
 // CaptchaVerifier 验证码服务接口
 type CaptchaVerifier interface {
-	Verify(token, captchaType, remoteIP string) error
-	VerifyWithContext(ctx context.Context, token, captchaType, remoteIP string) error
+	Verify(token, remoteIP string) error
+	VerifyWithContext(ctx context.Context, token, remoteIP string) error
 	IsEnabled() bool
-	GetConfig() []CaptchaConfig
-	GetProviderCount() int
-	HasProvider(captchaType string) bool
+	GetSiteKey() string
 }
 
 // EmailSender 邮件发送服务接口

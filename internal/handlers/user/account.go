@@ -18,7 +18,6 @@ import (
 
 type sendDeleteCodeRequest struct {
 	CaptchaToken string `json:"captchaToken"`
-	CaptchaType  string `json:"captchaType"`
 	Language     string `json:"language"`
 }
 
@@ -53,7 +52,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, utils.GetClientIP(c)); err != nil {
+	if err := h.verifyCaptcha(req.CaptchaToken, utils.GetClientIP(c)); err != nil {
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for delete code: userUID=%s", userUID))
 		return
 	}

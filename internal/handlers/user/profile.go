@@ -15,7 +15,6 @@ import (
 type updateUsernameRequest struct {
 	Username     string `json:"username"`
 	CaptchaToken string `json:"captchaToken"`
-	CaptchaType  string `json:"captchaType"`
 }
 
 // updateAvatarRequest 更新头像请求
@@ -41,7 +40,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		return
 	}
 
-	if err := h.verifyCaptcha(req.CaptchaToken, req.CaptchaType, utils.GetClientIP(c)); err != nil {
+	if err := h.verifyCaptcha(req.CaptchaToken, utils.GetClientIP(c)); err != nil {
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for username change: userUID=%s", userUID))
 		return
 	}

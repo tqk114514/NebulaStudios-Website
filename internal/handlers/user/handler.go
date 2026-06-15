@@ -87,11 +87,11 @@ func NewUserHandler(
 }
 
 // verifyCaptcha 验证人机验证 Token
-func (h *UserHandler) verifyCaptcha(token, captchaType, clientIP string) error {
+func (h *UserHandler) verifyCaptcha(token, clientIP string) error {
 	if token == "" {
 		return errors.New("captcha token is empty")
 	}
-	return h.captchaService.Verify(token, captchaType, clientIP)
+	return h.captchaService.Verify(token, clientIP)
 }
 
 func (h *UserHandler) invalidateUserCache(userUID string) {

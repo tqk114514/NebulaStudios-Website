@@ -259,7 +259,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Email        string `json:"email"`
 		Password     string `json:"password"`
 		CaptchaToken string `json:"captchaToken"`
-		CaptchaType  string `json:"captchaType"`
 	}
 
 	if err := utils.BindJSON(c, &req); err != nil {
@@ -279,7 +278,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	clientIP := utils.GetClientIP(c)
-	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for login: email=%s, ip=%s", email, clientIP))
 		return
 	}
