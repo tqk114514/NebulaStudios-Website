@@ -307,7 +307,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 封禁用户的其他所有操作已在业务层（中间件/服务层）冻结，因此无需在登录阶段拦截。
 
 	isBanned := user.CheckBanned()
-	accessToken, refreshToken, err := h.sessionService.GenerateTokens(user.UID, isBanned)
+	accessToken, refreshToken, err := h.sessionService.GenerateTokens(c.Request.Context(), user.UID, isBanned)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		return
@@ -370,7 +370,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if ok && userUID != "" {
-		if err := h.sessionService.RevokeUserTokens(userUID); err != nil {
+		if err := h.sessionService.RevokeUserTokens(c.Request.Context(), userUID); err != nil {
 			utils.LogWarn("AUTH", "Failed to revoke user tokens during logout", fmt.Sprintf("userUID=%s", userUID))
 		}
 		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userUID=%s", userUID))
@@ -392,7 +392,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	newAccessToken, newRefreshToken, err := h.sessionService.RefreshTokens(refreshToken)
+	newAccessToken, newRefreshToken, err := h.sessionService.RefreshTokens(c.Request.Context(), refreshToken)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrRefreshTokenExpired):

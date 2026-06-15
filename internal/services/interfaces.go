@@ -12,10 +12,10 @@ import (
 
 // SessionManager Session 服务接口
 type SessionManager interface {
-	GenerateTokens(uid string, banned bool) (accessToken string, refreshToken string, err error)
-	RefreshTokens(refreshToken string) (newAccessToken string, newRefreshToken string, err error)
-	RevokeUserTokens(uid string) error
-	RevokeTokenFamily(uid string, familyID string) error
+	GenerateTokens(ctx context.Context, uid string, banned bool) (accessToken string, refreshToken string, err error)
+	RefreshTokens(ctx context.Context, refreshToken string) (newAccessToken string, newRefreshToken string, err error)
+	RevokeUserTokens(ctx context.Context, uid string) error
+	RevokeTokenFamily(ctx context.Context, uid string, familyID string) error
 	VerifyToken(tokenString string) (*Claims, error)
 }
 

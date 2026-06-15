@@ -148,7 +148,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	pcSessionToken, _, err := h.sessionService.GenerateTokens(userUID, false)
+	pcSessionToken, _, err := h.sessionService.GenerateTokens(c.Request.Context(), userUID, false)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "MobileConfirm", err, fmt.Sprintf("Failed to generate PC session token: userUID=%s", userUID))
 		utils.RespondError(c, http.StatusInternalServerError, "SESSION_CREATE_FAILED")

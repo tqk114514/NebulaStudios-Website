@@ -167,7 +167,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	accessToken, refreshToken, tokenErr := h.sessionService.GenerateTokens(userUID, false)
+	accessToken, refreshToken, tokenErr := h.sessionService.GenerateTokens(c.Request.Context(), userUID, false)
 	if tokenErr != nil {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", "Failed to generate session tokens")
 		return
