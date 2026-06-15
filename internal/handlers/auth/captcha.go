@@ -20,7 +20,6 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req struct {
 		Email        string `json:"email"`
 		CaptchaToken string `json:"captchaToken"`
-		CaptchaType  string `json:"captchaType"`
 		Language     string `json:"language"`
 	}
 
@@ -55,7 +54,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	}
 
 	clientIP := utils.GetClientIP(c)
-	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
 		return
 	}

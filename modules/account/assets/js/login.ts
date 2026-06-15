@@ -13,7 +13,7 @@ import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/
 import { validateLoginForm } from './lib/validators.ts';
 import { login, errorCodeMap } from './lib/api/auth.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
-import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
+import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { initQrLogin } from './lib/qr.ts';
 
 // ==================== 类型定义 ====================
@@ -100,13 +100,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         const { email, password } = pendingLogin;
         const token = getCaptchaToken('captcha-container');
-        const captchaType = getCaptchaType();
 
         // 禁用按钮，显示加载状态
         submitButton.disabled = true;
         submitButton.textContent = t('login.loggingIn');
 
-        const result = await login(email, password, token || '', captchaType);
+        const result = await login(email, password, token || '');
 
         if (result.success) {
           // token 已通过 httpOnly cookie 存储，跳转

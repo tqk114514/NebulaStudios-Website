@@ -15,7 +15,7 @@
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { verifySession, logout } from './lib/api/auth.ts';
 import { fetchApi } from './lib/api/fetch.ts';
-import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
+import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModalController } from './lib/ui/feedback.ts';
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
@@ -725,7 +725,6 @@ function showDeleteAccountModal(): void {
       method: 'POST',
       body: JSON.stringify({
         captchaToken: getCaptchaToken('delete-captcha-container'),
-        captchaType: getCaptchaType(),
         language: document.documentElement.lang || 'zh-CN'
       })
     });
@@ -973,8 +972,7 @@ function showChangePasswordModal(): void {
       body: JSON.stringify({
         currentPassword,
         newPassword,
-        captchaToken: getCaptchaToken('change-password-captcha-container'),
-        captchaType: getCaptchaType()
+        captchaToken: getCaptchaToken('change-password-captcha-container')
       })
     });
 
@@ -1138,8 +1136,7 @@ function showChangeUsernameModal(user: User, onSuccess: (newUsername: string) =>
       method: 'PATCH',
       body: JSON.stringify({
         username: newUsername,
-        captchaToken: getCaptchaToken('change-username-captcha-container'),
-        captchaType: getCaptchaType()
+        captchaToken: getCaptchaToken('change-username-captcha-container')
       })
     });
 

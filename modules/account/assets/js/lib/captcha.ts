@@ -1,35 +1,15 @@
 /**
- * 通用人机验证模块
+ * 人机验证模块
  *
  * 功能：
- * - 支持多种验证器（Turnstile、hCaptcha、reCAPTCHA 等）
- * - 统一接口，调用方无需关心具体验证器
+ * - 统一的验证组件接口
  * - 自动加载配置和初始化
- * - 多验证器随机选择（50/50）
  * - 支持多实例（基于容器 ID 隔离状态）
- *
- * 当前支持：
- * - Turnstile (Cloudflare)
- * - hCaptcha
  */
 
 // ==================== 类型定义 ====================
 
 import { fetchApi } from './api/fetch.ts';
-
-/** 验证器类型 */
-type CaptchaType = 'turnstile' | 'hcaptcha' | 'recaptcha' | '';
-
-/** 验证器配置 */
-interface CaptchaProvider {
-  type: CaptchaType;
-  siteKey: string;
-}
-
-/** 验证码配置 */
-interface CaptchaConfig {
-  providers: CaptchaProvider[];
-}
 
 /** 回调函数类型 */
 type CaptchaCallback = (token?: string) => void;
@@ -55,45 +35,22 @@ interface TurnstileOptions {
   'expired-callback'?: () => void;
 }
 
-/** hCaptcha API */
-interface HCaptchaAPI {
-  render: (containerId: string, options: HCaptchaOptions) => string;
-  remove: (widgetId: string) => void;
-}
-
-interface HCaptchaOptions {
-  sitekey: string;
-  theme?: string;
-  callback?: (token: string) => void;
-  'error-callback'?: () => void;
-  'expired-callback'?: () => void;
-}
-
 // 扩展 Window 接口
 declare global {
   interface Window {
     turnstile?: TurnstileAPI;
-    hcaptcha?: HCaptchaAPI;
-    grecaptcha?: unknown;
   }
 }
 
 // ==================== 全局共享状态 ====================
 
-/** 所有可用的验证器配置（全局共享，只加载一次） */
-let providers: CaptchaProvider[] = [];
+const SDK_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
-/** 当前选中的验证器类型（全局共享） */
-let captchaType: CaptchaType = '';
-
-/** 当前选中的站点密钥（全局共享） */
+/** 站点密钥（全局共享） */
 let siteKey: string = '';
 
-/** SDK 脚本 URL 映射 */
-const SDK_URLS: Record<string, string> = {
-  turnstile: 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit',
-  hcaptcha: 'https://js.hcaptcha.com/1/api.js?render=explicit'
-};
+/** SDK 是否已加载 */
+let sdkLoaded = false;
 
 // ==================== 实例状态（按容器 ID 隔离） ====================
 
@@ -119,75 +76,56 @@ function getInstance(containerId: string): CaptchaInstance {
  */
 export async function loadCaptchaConfig(): Promise<boolean> {
   try {
-    const result = await fetchApi<{ data: CaptchaConfig }>('/api/config/captcha');
-    if (!result.success || !result.data || !result.data.providers || result.data.providers.length === 0) {
-      throw new Error('Invalid config: no providers available');
+    const result = await fetchApi<{ data: { siteKey: string } }>('/api/config/captcha');
+    if (!result.success || !result.data) {
+      throw new Error('Invalid captcha config response');
     }
 
-    providers = result.data.providers;
+    siteKey = result.data.siteKey || '';
 
-    const selected = providers[Math.floor(Math.random() * providers.length)];
-    captchaType = selected.type;
-    siteKey = selected.siteKey;
-
-    loadSDK(captchaType).catch((err) => {
-      console.warn('[CAPTCHA] WARN: SDK background load failed:', (err as Error).message);
-    });
+    if (siteKey) {
+      loadSDK().catch((err) => {
+        console.warn('[CAPTCHA] SDK background load failed:', (err as Error).message);
+      });
+    }
 
     return true;
   } catch (error) {
-    console.error('[CAPTCHA] ERROR: Failed to load config:', (error as Error).message);
+    console.error('[CAPTCHA] Failed to load config:', (error as Error).message);
     return false;
   }
 }
 
 /**
- * 动态加载验证器 SDK
+ * 动态加载 Turnstile SDK
  */
-function loadSDK(type: CaptchaType): Promise<void> {
+function loadSDK(): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (!type) {
-      reject(new Error('Captcha type not specified'));
-      return;
-    }
-
-    const url = SDK_URLS[type];
-    if (!url) {
-      reject(new Error(`Unknown captcha type: ${type}`));
-      return;
-    }
-
-    const existingScript = document.querySelector<HTMLScriptElement>(`script[src^="${url.split('?')[0]}"]`);
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src^="${SDK_URL.split('?')[0]}"]`);
     if (existingScript) {
       if (existingScript.dataset.loaded === 'true') {
         resolve();
         return;
       }
       existingScript.addEventListener('load', () => resolve(), { once: true });
-      existingScript.addEventListener('error', () => reject(new Error(`Failed to load SDK: ${type}`)), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Failed to load captcha SDK')), { once: true });
       return;
     }
 
     const script = document.createElement('script');
-    script.src = url;
+    script.src = SDK_URL;
     script.async = true;
     script.defer = true;
     script.onload = (): void => {
       script.dataset.loaded = 'true';
+      sdkLoaded = true;
       resolve();
     };
     script.onerror = (): void => {
-      reject(new Error(`Failed to load SDK: ${type}`));
+      reject(new Error('Failed to load captcha SDK'));
     };
     document.head.appendChild(script);
   });
-}
-
-/**
- * 获取当前验证器类型
- */
-export function getCaptchaType(): CaptchaType {
-  return captchaType;
 }
 
 /**
@@ -197,46 +135,26 @@ export function getCaptchaSiteKey(): string {
   return siteKey;
 }
 
-/**
- * 获取所有可用的验证器
- */
-export function getProviders(): CaptchaProvider[] {
-  return providers;
-}
-
-// ==================== 脚本加载 ====================
+// ==================== API 就绪等待 ====================
 
 /**
- * 等待验证器 API 就绪
+ * 等待 Turnstile API 就绪
  */
 function waitForAPI(timeout: number = 5000): Promise<boolean> {
   return new Promise((resolve) => {
-    const checkLoaded = (): boolean => {
-      switch (captchaType) {
-        case 'turnstile':
-          return !!window.turnstile;
-        case 'hcaptcha':
-          return !!window.hcaptcha;
-        case 'recaptcha':
-          return !!window.grecaptcha;
-        default:
-          return false;
-      }
-    };
-
-    if (checkLoaded()) {
+    if (window.turnstile) {
       resolve(true);
       return;
     }
 
     const startTime = Date.now();
     const checkInterval = setInterval(() => {
-      if (checkLoaded()) {
+      if (window.turnstile) {
         clearInterval(checkInterval);
         resolve(true);
       } else if (Date.now() - startTime > timeout) {
         clearInterval(checkInterval);
-        console.error('[CAPTCHA] ERROR: API not ready for', captchaType);
+        console.error('[CAPTCHA] API not ready after timeout');
         resolve(false);
       }
     }, 100);
@@ -258,16 +176,16 @@ function buildCallbacks(
   return {
     callback: (token: string) => {
       instance.token = token;
-      if (onSuccess) {onSuccess(token);}
+      if (onSuccess) { onSuccess(token); }
     },
     'error-callback': () => {
-      console.error('[CAPTCHA] ERROR: Verification failed');
-      if (onError) {onError();}
+      console.error('[CAPTCHA] Verification failed');
+      if (onError) { onError(); }
     },
     'expired-callback': () => {
-      console.warn('[CAPTCHA] WARN: Token expired');
+      console.warn('[CAPTCHA] Token expired');
       instance.token = null;
-      if (onExpired) {onExpired();}
+      if (onExpired) { onExpired(); }
     }
   };
 }
@@ -284,13 +202,13 @@ export async function initCaptcha(
   onExpired?: CaptchaCallback
 ): Promise<string | null> {
   if (!siteKey) {
-    console.warn('[CAPTCHA] WARN: Site key not loaded');
+    console.warn('[CAPTCHA] Site key not loaded');
     return null;
   }
 
   const container = document.getElementById(containerId);
   if (!container) {
-    console.error('[CAPTCHA] ERROR: Container element not found:', containerId);
+    console.error('[CAPTCHA] Container element not found:', containerId);
     return null;
   }
 
@@ -298,17 +216,17 @@ export async function initCaptcha(
 
   let ready = await waitForAPI();
   if (!ready) {
-    console.warn('[CAPTCHA] WARN: API not ready, retrying SDK load...');
+    console.warn('[CAPTCHA] API not ready, retrying SDK load...');
     try {
-      await loadSDK(captchaType);
+      await loadSDK();
       ready = await waitForAPI(8000);
     } catch (err) {
-      console.error('[CAPTCHA] ERROR: SDK reload failed:', (err as Error).message);
+      console.error('[CAPTCHA] SDK reload failed:', (err as Error).message);
     }
   }
   if (!ready) {
-    console.error('[CAPTCHA] ERROR: API not ready after retry');
-    if (onError) {onError();}
+    console.error('[CAPTCHA] API not ready after retry');
+    if (onError) { onError(); }
     return null;
   }
 
@@ -318,21 +236,17 @@ export async function initCaptcha(
   const instance = getInstance(containerId);
 
   try {
-    switch (captchaType) {
-      case 'turnstile':
-        instance.widgetId = renderTurnstile(containerId, onSuccess, onError, onExpired);
-        break;
-      case 'hcaptcha':
-        instance.widgetId = renderHCaptcha(containerId, onSuccess, onError, onExpired);
-        break;
-      default:
-        console.error('[CAPTCHA] ERROR: Unknown captcha type:', captchaType);
-        if (onError) {onError();}
-        return null;
-    }
+    const options = buildCallbacks(containerId, onSuccess, onError, onExpired);
+
+    instance.widgetId = window.turnstile!.render(`#${containerId}`, {
+      sitekey: siteKey,
+      theme: 'dark',
+      size: 'normal',
+      ...options
+    });
   } catch (error) {
-    console.error('[CAPTCHA] ERROR: Failed to render widget:', (error as Error).message);
-    if (onError) {onError();}
+    console.error('[CAPTCHA] Failed to render widget:', (error as Error).message);
+    if (onError) { onError(); }
     return null;
   }
 
@@ -340,68 +254,16 @@ export async function initCaptcha(
 }
 
 /**
- * 渲染 Turnstile widget
- */
-function renderTurnstile(
-  containerId: string,
-  onSuccess?: CaptchaCallback,
-  onError?: CaptchaCallback,
-  onExpired?: CaptchaCallback
-): string {
-  if (!window.turnstile) {
-    throw new Error('Turnstile API not loaded');
-  }
-
-  const options = buildCallbacks(containerId, onSuccess, onError, onExpired);
-
-  return window.turnstile.render(`#${containerId}`, {
-    sitekey: siteKey,
-    theme: 'dark',
-    size: 'normal',
-    ...options
-  });
-}
-
-/**
- * 渲染 hCaptcha widget
- */
-function renderHCaptcha(
-  containerId: string,
-  onSuccess?: CaptchaCallback,
-  onError?: CaptchaCallback,
-  onExpired?: CaptchaCallback
-): string {
-  if (!window.hcaptcha) {
-    throw new Error('hCaptcha API not loaded');
-  }
-
-  const options = buildCallbacks(containerId, onSuccess, onError, onExpired);
-
-  return window.hcaptcha.render(containerId, {
-    sitekey: siteKey,
-    theme: 'dark',
-    ...options
-  });
-}
-
-/**
  * 移除指定容器的 widget
  */
 function removeWidget(containerId: string): void {
   const instance = getInstance(containerId);
-  if (instance.widgetId === null) {return;}
+  if (instance.widgetId === null) { return; }
 
   try {
-    switch (captchaType) {
-      case 'turnstile':
-        if (window.turnstile) {window.turnstile.remove(instance.widgetId);}
-        break;
-      case 'hcaptcha':
-        if (window.hcaptcha) {window.hcaptcha.remove(instance.widgetId);}
-        break;
-    }
+    if (window.turnstile) { window.turnstile.remove(instance.widgetId); }
   } catch (error) {
-    console.warn('[CAPTCHA] WARN: Failed to remove widget:', (error as Error).message);
+    console.warn('[CAPTCHA] Failed to remove widget:', (error as Error).message);
   }
   instance.widgetId = null;
 }

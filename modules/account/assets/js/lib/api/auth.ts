@@ -20,8 +20,7 @@ import type { User, RegisterFormData, AuthResponse, SendCodeResponse } from '../
  */
 export async function sendVerificationCode(
   email: string,
-  captchaToken: string,
-  captchaType: string
+  captchaToken: string
 ): Promise<SendCodeResponse> {
   const currentLanguage = window.currentLanguage || 'zh-CN';
 
@@ -30,7 +29,6 @@ export async function sendVerificationCode(
     body: JSON.stringify({
       email: email,
       captchaToken: captchaToken,
-      captchaType: captchaType,
       language: currentLanguage
     })
   });
@@ -69,16 +67,14 @@ export async function register(formData: RegisterFormData): Promise<{ success: t
 export async function login(
   email: string,
   password: string,
-  captchaToken: string,
-  captchaType: string
+  captchaToken: string
 ): Promise<AuthResponse> {
   const result = await fetchApi<{ data: User }>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({
       email: email,
       password: password,
-      captchaToken: captchaToken,
-      captchaType: captchaType
+      captchaToken: captchaToken
     })
   });
 

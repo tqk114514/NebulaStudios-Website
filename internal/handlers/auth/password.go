@@ -21,7 +21,6 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	var req struct {
 		Email        string `json:"email"`
 		CaptchaToken string `json:"captchaToken"`
-		CaptchaType  string `json:"captchaType"`
 		Language     string `json:"language"`
 	}
 
@@ -42,7 +41,7 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 	normalizedEmail := strings.ToLower(email)
 
 	clientIP := utils.GetClientIP(c)
-	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for reset: email=%s, ip=%s", normalizedEmail, clientIP))
 		return
 	}
@@ -174,7 +173,6 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
 		CaptchaToken    string `json:"captchaToken"`
-		CaptchaType     string `json:"captchaType"`
 	}
 
 	if err := utils.BindJSON(c, &req); err != nil {
@@ -194,7 +192,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	clientIP := utils.GetClientIP(c)
-	if err := h.captchaService.Verify(req.CaptchaToken, req.CaptchaType, clientIP); err != nil {
+	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for change password: userUID=%s, ip=%s", userUID, clientIP))
 		return
 	}

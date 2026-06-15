@@ -14,7 +14,7 @@ import { initializeModals, showAlert, showSupportedEmailsModal } from './lib/ui/
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { loadEmailWhitelist, validateEmail, validatePassword, getEmailProviders } from './lib/validators.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
-import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
+import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 
 // ==================== 全局变量 ====================
@@ -217,14 +217,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function sendResetCode(): Promise<void> {
       const email = inputEmail.value.trim().toLowerCase();
       const token = getCaptchaToken('captcha-container');
-      const captchaType = getCaptchaType();
 
       const result = await fetchApi('/api/auth/send-reset-code', {
         method: 'POST',
         body: JSON.stringify({
           email,
           captchaToken: token,
-          captchaType: captchaType,
           language: document.documentElement.lang || 'zh-CN'
         })
       });

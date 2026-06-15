@@ -16,7 +16,7 @@ import { initializeModals, showAlert, showSupportedEmailsModal } from './lib/ui/
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { startCountdown, resumeCountdown, isCountingDown, clearCodeExpiryTimer, getCodeExpiryTime } from './lib/utils/countdown.ts';
 import { loadEmailWhitelist, validateEmail, getEmailProviders, isUsernameTooLong, validateRegisterForm } from './lib/validators.ts';
-import { loadCaptchaConfig, getCaptchaSiteKey, getCaptchaType, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
+import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { sendVerificationCode, register, verifySession, errorCodeMap } from './lib/api/auth.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 
@@ -200,9 +200,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         const email = pendingEmail;
         const token = getCaptchaToken('captcha-container');
-        const captchaType = getCaptchaType();
 
-        const result = await sendVerificationCode(email, token || '', captchaType || '');
+        const result = await sendVerificationCode(email, token || '');
 
         if (result.success) {
           // 发送成功，开始倒计时
