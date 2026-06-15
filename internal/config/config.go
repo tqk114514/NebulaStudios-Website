@@ -46,6 +46,10 @@ type Config struct {
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
 
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleProxyURL     string
+
 	QREncryptionKey     string
 	QRKeyDerivationSalt string
 
@@ -115,6 +119,10 @@ func Load() (*Config, error) {
 
 	newCfg.MicrosoftClientID = getEnv("MICROSOFT_CLIENT_ID", "")
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
+
+	newCfg.GoogleClientID = getEnv("GOOGLE_CLIENT_ID", "")
+	newCfg.GoogleClientSecret = getEnv("GOOGLE_CLIENT_SECRET", "")
+	newCfg.GoogleProxyURL = getEnv("GOOGLE_PROXY_URL", "")
 
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")
@@ -195,6 +203,10 @@ func (c *Config) IsCaptchaConfigured() bool {
 
 func (c *Config) IsMicrosoftOAuthConfigured() bool {
 	return c.MicrosoftClientID != "" && c.MicrosoftClientSecret != ""
+}
+
+func (c *Config) IsGoogleOAuthConfigured() bool {
+	return c.GoogleClientID != "" && c.GoogleClientSecret != "" && c.GoogleProxyURL != ""
 }
 
 func (c *Config) IsQRLoginConfigured() bool {

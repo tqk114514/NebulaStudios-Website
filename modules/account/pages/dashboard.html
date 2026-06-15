@@ -53,7 +53,7 @@
       </div>
     </section>
     
-    <!-- 账户信息�?-->
+    <!-- 账户信息 -->
     <section class="account-section">
       <h2 class="section-title" data-i18n="dashboard.accountInfo"></h2>
       
@@ -83,11 +83,24 @@
         
         <div class="info-item clickable" id="microsoft-link-item">
           <div class="info-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>
+            <img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="24" height="24">
           </div>
           <div class="info-content">
             <span class="info-label" data-i18n="dashboard.microsoftAccount"></span>
             <span class="info-value" id="info-microsoft" data-i18n="dashboard.notLinked"></span>
+          </div>
+          <div class="info-arrow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </div>
+        </div>
+        
+        <div class="info-item clickable" id="google-link-item">
+          <div class="info-icon">
+            <img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="24" height="24">
+          </div>
+          <div class="info-content">
+            <span class="info-label" data-i18n="dashboard.googleAccount"></span>
+            <span class="info-value" id="info-google" data-i18n="dashboard.notLinked"></span>
           </div>
           <div class="info-arrow">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
@@ -109,7 +122,7 @@
       </div>
     </section>
     
-    <!-- 快捷登录区（仅移动端显示�?-->
+    <!-- 快捷登录区（仅移动端显示）-->
     <section class="account-section is-hidden" id="quick-login-section">
       <h2 class="section-title" data-i18n="dashboard.quickLogin"></h2>
       
@@ -286,6 +299,7 @@
           </div>
           <div class="form-group">
             <button id="use-microsoft-avatar-btn" class="button-secondary is-hidden" data-i18n="dashboard.useMicrosoftAvatar"></button>
+            <button id="use-google-avatar-btn" class="button-secondary is-hidden" data-i18n="dashboard.useGoogleAvatar"></button>
           </div>
         </div>
         <div class="modal-footer modal-footer-buttons">
@@ -337,7 +351,7 @@
     </div>
   </div>
 
-  <!-- 修改用户名弹�?-->
+  <!-- 修改用户名弹窗 -->
   <div id="change-username-modal" class="modal-overlay is-hidden">
     <div class="modal-container">
       <div class="modal-content">

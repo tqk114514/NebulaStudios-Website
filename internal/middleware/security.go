@@ -23,7 +23,7 @@ const (
 		"style-src 'self' https://cdn01.nebulastudios.top; " +
 		"font-src 'self' https://cdn01.nebulastudios.top; " +
 		"connect-src 'self' https://static.cloudflareinsights.com https://cdn01.nebulastudios.top; " +
-		"img-src 'self' data: blob: https://cdn01.nebulastudios.top; " +
+		"img-src 'self' data: blob: https://cdn01.nebulastudios.top https://*.googleusercontent.com; " +
 		"frame-ancestors 'self'; " +
 		"frame-src 'self' https://challenges.cloudflare.com; " +
 		"base-uri 'self'; " +

@@ -26,6 +26,7 @@ func (r *DataExportImportRepository) QueryAllUsers(ctx context.Context) ([]map[s
 	rows, err := r.pool.Query(ctx, `
 		SELECT uid, username, email, password, avatar_url, microsoft_id,
 		       microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+		       google_id, google_name, google_avatar_url,
 		       is_banned, ban_reason, banned_at, banned_by, unban_at, role,
 		       created_at, updated_at
 		FROM users
@@ -41,6 +42,7 @@ func (r *DataExportImportRepository) QueryAllUsers(ctx context.Context) ([]map[s
 		var (
 			uid, username, email, password, avatarURL                           string
 			microsoftID, microsoftName, microsoftAvatarURL, microsoftAvatarHash *string
+			googleID, googleName, googleAvatarURL                               *string
 			isBanned                                                            bool
 			banReason, bannedBy                                                 *string
 			bannedAt, unbanAt                                                   *time.Time
@@ -51,6 +53,7 @@ func (r *DataExportImportRepository) QueryAllUsers(ctx context.Context) ([]map[s
 		if err := rows.Scan(
 			&uid, &username, &email, &password, &avatarURL,
 			&microsoftID, &microsoftName, &microsoftAvatarURL, &microsoftAvatarHash,
+			&googleID, &googleName, &googleAvatarURL,
 			&isBanned, &banReason, &bannedAt, &bannedBy, &unbanAt, &role,
 			&createdAt, &updatedAt,
 		); err != nil {
@@ -73,6 +76,9 @@ func (r *DataExportImportRepository) QueryAllUsers(ctx context.Context) ([]map[s
 		setNullableString(user, "microsoft_name", microsoftName)
 		setNullableString(user, "microsoft_avatar_url", microsoftAvatarURL)
 		setNullableString(user, "microsoft_avatar_hash", microsoftAvatarHash)
+		setNullableString(user, "google_id", googleID)
+		setNullableString(user, "google_name", googleName)
+		setNullableString(user, "google_avatar_url", googleAvatarURL)
 		setNullableString(user, "ban_reason", banReason)
 		setNullableString(user, "banned_by", bannedBy)
 		setNullableTime(user, "banned_at", bannedAt)
@@ -130,8 +136,9 @@ func (r *DataExportImportRepository) QueryAllUserLogs(ctx context.Context) ([]ma
 const importUsersSQL = `
 	INSERT INTO users (uid, username, email, password, avatar_url,
 	                   microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+	                   google_id, google_name, google_avatar_url,
 	                   is_banned, ban_reason, banned_at, banned_by, unban_at, role, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 	ON CONFLICT (uid) DO UPDATE SET
 		username = EXCLUDED.username,
 		email = EXCLUDED.email,
@@ -141,6 +148,9 @@ const importUsersSQL = `
 		microsoft_name = EXCLUDED.microsoft_name,
 		microsoft_avatar_url = EXCLUDED.microsoft_avatar_url,
 		microsoft_avatar_hash = EXCLUDED.microsoft_avatar_hash,
+		google_id = EXCLUDED.google_id,
+		google_name = EXCLUDED.google_name,
+		google_avatar_url = EXCLUDED.google_avatar_url,
 		is_banned = EXCLUDED.is_banned,
 		ban_reason = EXCLUDED.ban_reason,
 		banned_at = EXCLUDED.banned_at,
@@ -179,6 +189,9 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 			toNullableString(user["microsoft_name"]),
 			toNullableString(user["microsoft_avatar_url"]),
 			toNullableString(user["microsoft_avatar_hash"]),
+			toNullableString(user["google_id"]),
+			toNullableString(user["google_name"]),
+			toNullableString(user["google_avatar_url"]),
 			toBool(user["is_banned"]),
 			toNullableString(user["ban_reason"]),
 			toNullableTime(user["banned_at"]),

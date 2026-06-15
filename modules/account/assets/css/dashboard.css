@@ -225,7 +225,8 @@
   color: var(--error);
 }
 
-.info-icon svg {
+.info-icon svg,
+.info-icon img {
   width: 24px;
   height: 24px;
 }
@@ -626,7 +627,8 @@
   margin-top: 2px;
 }
 
-.user-log-icon svg {
+.user-log-icon svg,
+.user-log-icon img {
   width: 20px;
   height: 20px;
 }

@@ -45,6 +45,9 @@ export interface User {
   microsoft_id?: string | null;
   microsoft_name?: string | null;
   microsoft_avatar_url?: string | null;
+  google_id?: string | null;
+  google_name?: string | null;
+  google_avatar_url?: string | null;
   is_banned?: boolean;
   ban_reason?: string | null;
   banned_at?: string | null;
