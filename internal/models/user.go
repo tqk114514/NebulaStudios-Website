@@ -17,6 +17,7 @@ var (
 	ErrEmailExists       = errors.New("EMAIL_EXISTS")
 	ErrUsernameExists    = errors.New("USERNAME_EXISTS")
 	ErrMicrosoftIDExists = errors.New("MICROSOFT_ID_EXISTS")
+	ErrGoogleIDExists    = errors.New("GOOGLE_ID_EXISTS")
 )
 
 // IsUniqueViolation 检查错误是否为指定列的唯一约束冲突
@@ -45,6 +46,9 @@ var allowedUpdateFields = map[string]bool{
 	"microsoft_name":        true,
 	"microsoft_avatar_url":  true,
 	"microsoft_avatar_hash": true,
+	"google_id":            true,
+	"google_name":          true,
+	"google_avatar_url":    true,
 	"role":                  true,
 }
 
@@ -61,6 +65,9 @@ type User struct {
 	MicrosoftName       sql.NullString `json:"microsoft_name"`
 	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url"`
 	MicrosoftAvatarHash sql.NullString `json:"-"`          // 头像哈希，用于判断是否需要更新
+	GoogleID            sql.NullString `json:"google_id"`
+	GoogleName          sql.NullString `json:"google_name"`
+	GoogleAvatarURL     sql.NullString `json:"google_avatar_url"`
 	IsBanned            bool           `json:"is_banned"`  // 是否被封禁
 	BanReason           sql.NullString `json:"ban_reason"` // 封禁原因
 	BannedAt            sql.NullTime   `json:"banned_at"`  // 封禁时间
@@ -81,6 +88,9 @@ type UserPublic struct {
 	MicrosoftID        *string    `json:"microsoft_id,omitempty"`
 	MicrosoftName      *string    `json:"microsoft_name,omitempty"`
 	MicrosoftAvatarURL *string    `json:"microsoft_avatar_url,omitempty"`
+	GoogleID           *string    `json:"google_id,omitempty"`
+	GoogleName         *string    `json:"google_name,omitempty"`
+	GoogleAvatarURL    *string    `json:"google_avatar_url,omitempty"`
 	IsBanned           bool       `json:"is_banned"`
 	BanReason          *string    `json:"ban_reason,omitempty"`
 	BannedAt           *time.Time `json:"banned_at,omitempty"`
@@ -91,12 +101,14 @@ type UserPublic struct {
 // userColumns 用户表全列 SELECT 字符串，所有查询方法统一引用
 const userColumns = `id, uid, username, email, password, avatar_url, role,
        microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+       google_id, google_name, google_avatar_url,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
        created_at, updated_at`
 
 // userColumnsPublic 不包含 password，用于管理后台列表等不需要密码哈希的场景
 const userColumnsPublic = `id, uid, username, email, avatar_url, role,
        microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
+       google_id, google_name, google_avatar_url,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
        created_at, updated_at`
 
@@ -131,6 +143,15 @@ func (u *User) ToPublic() *UserPublic {
 	}
 	if u.MicrosoftAvatarURL.Valid {
 		pub.MicrosoftAvatarURL = &u.MicrosoftAvatarURL.String
+	}
+	if u.GoogleID.Valid {
+		pub.GoogleID = &u.GoogleID.String
+	}
+	if u.GoogleName.Valid {
+		pub.GoogleName = &u.GoogleName.String
+	}
+	if u.GoogleAvatarURL.Valid {
+		pub.GoogleAvatarURL = &u.GoogleAvatarURL.String
 	}
 	if u.BanReason.Valid {
 		pub.BanReason = &u.BanReason.String
@@ -210,6 +231,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 		FROM users WHERE id = $1`, id).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -237,6 +259,7 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 		FROM users WHERE uid = $1`, uid).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -267,6 +290,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 	`, identifier).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -294,6 +318,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 		FROM users WHERE email = $1`, email).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -321,6 +346,7 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 		FROM users WHERE LOWER(username) = LOWER($1)`, username).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -348,12 +374,41 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 		FROM users WHERE microsoft_id = $1`, msID).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
 		return nil, utils.HandleDatabaseError("USER", "FindByMicrosoftID", err, msID)
+	}
+
+	return user, nil
+}
+
+// FindByGoogleID 根据 Google ID 查找用户
+func (r *UserRepository) FindByGoogleID(ctx context.Context, googleID string) (*User, error) {
+	if googleID == "" {
+		return nil, errors.New("empty google ID")
+	}
+
+	if r.pool == nil {
+		return nil, errors.New("database not ready")
+	}
+
+	user := &User{}
+	err := r.pool.QueryRow(ctx, `
+		SELECT `+userColumns+`
+		FROM users WHERE google_id = $1`, googleID).Scan(
+		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
+		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, utils.HandleDatabaseError("USER", "FindByGoogleID", err, googleID)
 	}
 
 	return user, nil
@@ -545,6 +600,9 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 	if IsUniqueViolation(err, "microsoft_id") {
 		return ErrMicrosoftIDExists
 	}
+	if IsUniqueViolation(err, "google_id") {
+		return ErrGoogleIDExists
+	}
 
 	return utils.LogError("USER", operation, err, fmt.Sprintf("identifier=%v", identifier))
 }
@@ -649,6 +707,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		err := pgxRows.Scan(
 			&user.ID, &user.UID, &user.Username, &user.Email, &user.AvatarURL, &user.Role,
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 			&user.CreatedAt, &user.UpdatedAt,
 		)

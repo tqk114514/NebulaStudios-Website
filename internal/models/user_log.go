@@ -18,6 +18,8 @@ const (
 	UserActionChangeAvatar      = "change_avatar"
 	UserActionLinkMicrosoft     = "link_microsoft"
 	UserActionUnlinkMicrosoft   = "unlink_microsoft"
+	UserActionLinkGoogle        = "link_google"
+	UserActionUnlinkGoogle      = "unlink_google"
 	UserActionDeleteAccount     = "delete_account"
 	UserActionBanned            = "banned"
 	UserActionUnbanned          = "unbanned"
@@ -56,6 +58,18 @@ type LinkMicrosoftDetails struct {
 type UnlinkMicrosoftDetails struct {
 	MicrosoftID   string `json:"microsoft_id"`
 	MicrosoftName string `json:"microsoft_name"`
+}
+
+// LinkGoogleDetails 绑定 Google 账户详情
+type LinkGoogleDetails struct {
+	GoogleID   string `json:"google_id"`
+	GoogleName string `json:"google_name"`
+}
+
+// UnlinkGoogleDetails 解绑 Google 账户详情
+type UnlinkGoogleDetails struct {
+	GoogleID   string `json:"google_id"`
+	GoogleName string `json:"google_name"`
 }
 
 // BannedDetails 被封禁详情
@@ -206,6 +220,44 @@ func (r *UserLogRepository) LogUnlinkMicrosoft(ctx context.Context, userUID stri
 	log := &UserLog{
 		UserUID: userUID,
 		Action:  UserActionUnlinkMicrosoft,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogLinkGoogle 记录绑定 Google 账户操作
+func (r *UserLogRepository) LogLinkGoogle(ctx context.Context, userUID string, googleID, googleName string) error {
+	details := LinkGoogleDetails{
+		GoogleID:   googleID,
+		GoogleName: googleName,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionLinkGoogle,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogUnlinkGoogle 记录解绑 Google 账户操作
+func (r *UserLogRepository) LogUnlinkGoogle(ctx context.Context, userUID string, googleID, googleName string) error {
+	details := UnlinkGoogleDetails{
+		GoogleID:   googleID,
+		GoogleName: googleName,
+	}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionUnlinkGoogle,
 		Details: detailsJSON,
 	}
 	return r.Create(ctx, log)

@@ -13,6 +13,7 @@ type UserStore interface {
 	FindByEmailOrUsername(ctx context.Context, identifier string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	FindByMicrosoftID(ctx context.Context, msID string) (*User, error)
+	FindByGoogleID(ctx context.Context, googleID string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, uid string, updates map[string]any) error
 	UpdatePassword(ctx context.Context, uid, plainPassword string) error
@@ -32,6 +33,8 @@ type UserLogStore interface {
 	LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string) error
 	LogLinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error
 	LogUnlinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error
+	LogLinkGoogle(ctx context.Context, userUID string, googleID, googleName string) error
+	LogUnlinkGoogle(ctx context.Context, userUID string, googleID, googleName string) error
 	LogDeleteAccount(ctx context.Context, userUID string) error
 	LogBanned(ctx context.Context, userUID string, reason string, unbanAt *time.Time) error
 	LogUnbanned(ctx context.Context, userUID string) error

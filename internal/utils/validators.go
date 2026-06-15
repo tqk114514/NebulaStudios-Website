@@ -213,6 +213,10 @@ func ValidateAvatarURL(avatarURL string) ValidationResult {
 		return ValidationResult{Valid: true, Value: "microsoft"}
 	}
 
+	if trimmed == "google" {
+		return ValidationResult{Valid: true, Value: "google"}
+	}
+
 	if strings.HasPrefix(trimmed, "data:") {
 		return validateDataURL(trimmed)
 	}

@@ -18,6 +18,7 @@ import (
 	"auth-system/internal/handlers/auth"
 	"auth-system/internal/handlers/oauth"
 	msauth "auth-system/internal/handlers/oauth/microsoft"
+	googleauth "auth-system/internal/handlers/oauth/google"
 	"auth-system/internal/handlers/qrlogin"
 	userhandler "auth-system/internal/handlers/user"
 	"auth-system/internal/middleware"
@@ -235,6 +236,7 @@ type Handlers struct {
 	authHandler          *auth.AuthHandler
 	userHandler          *userhandler.UserHandler
 	microsoftHandler     *msauth.MicrosoftHandler
+	googleHandler         *googleauth.GoogleHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
 	qrLoginHandler       *qrlogin.QRLoginHandler
 	staticHandler        *handlers.StaticHandler
@@ -276,6 +278,15 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 		return nil, fmt.Errorf("MicrosoftHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "MicrosoftHandler initialized")
+
+	hdlrs.googleHandler, err = googleauth.NewGoogleHandler(
+		cfg, repos.UserRepo, repos.UserLogRepo, svcs.SessionService,
+		svcs.UserCache,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GoogleHandler: %w", err)
+	}
+	utils.LogInfo("HANDLERS", "GoogleHandler initialized")
 
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
 		svcs.OAuthService, repos.UserRepo, repos.UserLogRepo,

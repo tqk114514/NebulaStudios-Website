@@ -99,6 +99,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   const urlInput = document.getElementById('avatar-url-input') as HTMLInputElement | null;
   const errorEl = document.getElementById('avatar-error');
   const microsoftBtn = document.getElementById('use-microsoft-avatar-btn');
+  const googleBtn = document.getElementById('use-google-avatar-btn');
   const confirmBtn = document.getElementById('avatar-confirm-btn') as HTMLButtonElement | null;
 
   if (!urlInput || !confirmBtn || !currentPreview || !newPreview || !errorEl) { return; }
@@ -114,6 +115,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
       urlInput.removeEventListener('blur', handleBlur);
       urlInput.removeEventListener('focus', handleFocus);
       microsoftBtn?.removeEventListener('click', handleMicrosoftClick);
+      googleBtn?.removeEventListener('click', handleGoogleClick);
     }
   });
 
@@ -131,8 +133,9 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
 
   // 显示当前头像预览
   currentPreview.innerHTML = '';
-  // 如果是 "microsoft"，用实际的微软头像 URL
-  const currentAvatarUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
+  // 如果是 "microsoft" 或 "google"，用实际的第三方头像 URL
+  const currentAvatarUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url :
+    user.avatar_url === 'google' ? user.google_avatar_url : user.avatar_url;
   if (currentAvatarUrl) {
     const img = document.createElement('img');
     img.src = currentAvatarUrl;
@@ -148,6 +151,14 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     microsoftBtn?.classList.remove('is-hidden');
   } else {
     microsoftBtn?.classList.add('is-hidden');
+  }
+
+  // Google头像按钮（只有绑定了Google账户且有头像时才显示）
+  const hasGoogleAvatar = user.google_avatar_url && user.google_avatar_url.trim();
+  if (hasGoogleAvatar) {
+    googleBtn?.classList.remove('is-hidden');
+  } else {
+    googleBtn?.classList.add('is-hidden');
   }
 
   /**
@@ -195,9 +206,9 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     loadNewAvatar(urlInput!.value.trim());
   };
 
-  // 输入框获得焦点时，如果是微软头像占位符则清除
+  // 输入框获得焦点时，如果是头像占位符则清除
   const handleFocus = (): void => {
-    if (urlInput!.readOnly && urlInput!.value === '[Microsoft Avatar]') {
+    if (urlInput!.readOnly && (urlInput!.value === '[Microsoft Avatar]' || urlInput!.value === '[Google Avatar]')) {
       urlInput!.value = '';
       urlInput!.readOnly = false;
       urlInput!.classList.remove('is-readonly');
@@ -240,6 +251,36 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     img.src = msAvatarUrl;
   };
 
+  // 使用Google头像按钮点击
+  const handleGoogleClick = (): void => {
+    const googleAvatarUrl = user.google_avatar_url;
+    if (!googleAvatarUrl) { return; }
+
+    urlInput!.value = '[Google Avatar]';
+    urlInput!.readOnly = true;
+    urlInput!.classList.add('is-readonly');
+
+    newPreview!.innerHTML = '';
+    newPreview!.classList.remove('is-loaded');
+    errorEl!.classList.add('is-hidden');
+    urlInput!.classList.remove('is-error');
+
+    const img = document.createElement('img');
+    img.onload = (): void => {
+      newPreview!.innerHTML = '';
+      newPreview!.appendChild(img);
+      newPreview!.classList.add('is-loaded');
+      confirmBtn!.disabled = false;
+      validatedUrl = 'google';
+    };
+    img.onerror = (): void => {
+      errorEl!.textContent = t('dashboard.avatarLoadFailed');
+      errorEl!.classList.remove('is-hidden');
+      urlInput!.classList.add('is-error');
+    };
+    img.src = googleAvatarUrl;
+  };
+
   // 确认更换头像
   controller.onConfirm(async () => {
     if (!validatedUrl || controller.isCleanedUp()) { return; }
@@ -271,6 +312,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   urlInput.addEventListener('blur', handleBlur);
   urlInput.addEventListener('focus', handleFocus);
   microsoftBtn?.addEventListener('click', handleMicrosoftClick);
+  googleBtn?.addEventListener('click', handleGoogleClick);
 
   // 显示弹窗并聚焦输入框
   controller.open();
@@ -310,6 +352,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const messages: Record<string, string> = {
       'success:microsoft_linked': 'dashboard.linkSuccess',
       'error:microsoft_already_linked': 'dashboard.microsoftAlreadyLinked',
+      'success:google_linked': 'dashboard.linkSuccessGoogle',
+      'error:google_already_linked': 'dashboard.googleAlreadyLinked',
       'error:session_expired': 'error.sessionExpired',
       'error:user_banned': 'error.userBanned'
     };
@@ -408,7 +452,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 显示头像
     if (avatarEl) {
-      const displayUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
+      const displayUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url :
+        user.avatar_url === 'google' ? user.google_avatar_url : user.avatar_url;
       if (displayUrl) {
         const img = document.createElement('img');
         img.src = displayUrl;
@@ -426,11 +471,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const infoUsername = document.getElementById('info-username');
     const infoEmail = document.getElementById('info-email');
     const infoMicrosoft = document.getElementById('info-microsoft');
+    const infoGoogle = document.getElementById('info-google');
 
     if (infoUsername) { infoUsername.textContent = user.username; }
     if (infoEmail) { infoEmail.textContent = user.email; }
 
     const microsoftLinkItem = document.getElementById('microsoft-link-item');
+    const googleLinkItem = document.getElementById('google-link-item');
 
     /**
      * 更新微软账户绑定状态显示
@@ -460,6 +507,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初始化微软账户状态
     updateMicrosoftStatus(!!user.microsoft_id, user.microsoft_name || null);
+
+    /**
+     * 更新 Google 账户绑定状态显示
+     */
+    function updateGoogleStatus(isLinked: boolean, googleName: string | null): void {
+      if (infoGoogle) {
+        if (isLinked && googleName) {
+          infoGoogle.textContent = googleName;
+          infoGoogle.classList.add('is-linked');
+          infoGoogle.classList.remove('is-not-linked');
+          infoGoogle.removeAttribute('data-i18n');
+        } else if (isLinked) {
+          infoGoogle.textContent = t('dashboard.linked');
+          infoGoogle.classList.add('is-linked');
+          infoGoogle.classList.remove('is-not-linked');
+          infoGoogle.removeAttribute('data-i18n');
+        } else {
+          infoGoogle.textContent = t('dashboard.notLinked');
+          infoGoogle.classList.remove('is-linked');
+          infoGoogle.classList.add('is-not-linked');
+        }
+      }
+    }
+
+    // 初始化 Google 账户状态
+    updateGoogleStatus(!!user.google_id, user.google_name || null);
 
     // ==================== 微软账户绑定/解绑 ====================
 
@@ -493,6 +566,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
+    // ==================== Google 账户绑定/解绑 ====================
+
+    if (googleLinkItem) {
+      googleLinkItem.addEventListener('click', async () => {
+        if (user.google_id) {
+          // 解绑流程
+          const confirmed = await showConfirm(t('dashboard.confirmUnlinkGoogle'), t('dashboard.unlinkThirdParty'));
+          if (!confirmed) { return; }
+
+          const result = await fetchApi('/api/auth/google/unlink', {
+            method: 'POST'
+          });
+
+          if (result.success) {
+            const freshSession = await verifySession();
+            if (freshSession.success) {
+              Object.assign(user, freshSession.data);
+            }
+            updateGoogleStatus(false, null);
+            showAlert(t('dashboard.unlinkSuccessGoogle'));
+          } else {
+            showAlert(t('dashboard.unlinkFailed'));
+          }
+        } else {
+          // 绑定流程
+          const confirmed = await showConfirm(t('dashboard.confirmLinkGoogle'), t('dashboard.linkThirdParty'));
+          if (!confirmed) { return; }
+          window.location.href = '/api/auth/google?action=link';
+        }
+      });
+    }
+
     // 更新页面标题
     updatePageTitle();
 
@@ -518,6 +623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       updatePageTitle();
       // 语言切换后重新应用微软账户状态和按钮文本
       updateMicrosoftStatus(!!user.microsoft_id, user.microsoft_name || null);
+      updateGoogleStatus(!!user.google_id, user.google_name || null);
       // 语言切换后重新应用封禁状态
       updateBannedDisplay();
       // 触发高度过渡动画
@@ -550,7 +656,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (freshSession.success) {
             Object.assign(user, freshSession.data);
           }
-          const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url : newAvatarUrl;
+          const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url :
+            newAvatarUrl === 'google' ? user.google_avatar_url : newAvatarUrl;
           updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
         });
       });
@@ -1474,6 +1581,8 @@ interface UserLogItem {
     new_avatar_url?: string;
     microsoft_id?: string;
     microsoft_name?: string;
+    google_id?: string;
+    google_name?: string;
   };
   created_at: string;
 }
@@ -1500,11 +1609,19 @@ function getLogActionIcon(action: string): { svg: string; type: 'normal' | 'dang
       type: 'normal'
     },
     link_microsoft: {
-      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>',
+      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
       type: 'success'
     },
     unlink_microsoft: {
-      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z"/></svg>',
+      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
+      type: 'danger'
+    },
+    link_google: {
+      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
+      type: 'success'
+    },
+    unlink_google: {
+      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
       type: 'danger'
     },
     delete_account: {
@@ -1536,6 +1653,13 @@ function formatLogDetails(action: string, details?: UserLogItem['details']): str
       if (details.microsoft_name) {
         // 对第三方名称进行转义，防止 XSS
         return escapeHtml(details.microsoft_name);
+      }
+      break;
+    case 'link_google':
+    case 'unlink_google':
+      if (details.google_name) {
+        // 对第三方名称进行转义，防止 XSS
+        return escapeHtml(details.google_name);
       }
       break;
   }
