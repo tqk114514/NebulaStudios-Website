@@ -37,6 +37,7 @@ export interface EmailWhitelistEntry {
   id: number;
   domain: string;
   signup_url: string;
+  logo_url: string;
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -78,18 +79,18 @@ async function getEntry(id: number): Promise<EmailWhitelistEntry | null> {
   return result.success && result.data ? result.data.item || null : null;
 }
 
-async function createEntry(domain: string, signupUrl: string): Promise<EmailWhitelistEntry | null> {
+async function createEntry(domain: string, signupUrl: string, logoUrl: string): Promise<EmailWhitelistEntry | null> {
   const result = await fetchApi<{ item: EmailWhitelistEntry }>('/admin/api/email-whitelist', {
     method: 'POST',
-    body: JSON.stringify({ domain, signup_url: signupUrl }),
+    body: JSON.stringify({ domain, signup_url: signupUrl, logo_url: logoUrl }),
   });
   return result.success && result.data ? result.data.item || null : null;
 }
 
-async function updateEntry(id: number, domain: string, signupUrl: string, isEnabled: boolean): Promise<EmailWhitelistEntry | null> {
+async function updateEntry(id: number, domain: string, signupUrl: string, logoUrl: string, isEnabled: boolean): Promise<EmailWhitelistEntry | null> {
   const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ domain, signup_url: signupUrl, is_enabled: isEnabled }),
+    body: JSON.stringify({ domain, signup_url: signupUrl, logo_url: logoUrl, is_enabled: isEnabled }),
   });
   return result.success && result.data ? result.data.item || null : null;
 }
@@ -112,9 +113,13 @@ async function toggleEntry(id: number, isEnabled: boolean): Promise<boolean> {
 // ==================== 渲染 ====================
 
 function renderWhitelistRow(entry: EmailWhitelistEntry): string {
+  const logoCell = entry.logo_url
+    ? `<img src="${escapeHtml(entry.logo_url)}" class="whitelist-logo-thumb" alt="" width="24" height="24">`
+    : '<span class="whitelist-no-logo">-</span>';
   return `
     <tr data-id="${entry.id}">
       <td>${escapeHtml(entry.domain)}</td>
+      <td>${logoCell}</td>
       <td class="url-cell" title="${escapeHtml(entry.signup_url)}">${escapeHtml(entry.signup_url)}</td>
       <td>${renderStatusBadge(entry.is_enabled)}</td>
       <td>${formatDate(entry.created_at)}</td>
@@ -166,7 +171,7 @@ function removeWhitelistRow(entryId: number): void {
     rowIdAttr: 'data-id',
     cache: whitelistCache as DataCache<unknown>,
     cacheKey: entryId,
-    colspan: 5
+    colspan: 6
   });
 }
 
@@ -190,7 +195,7 @@ async function loadWhitelist(): Promise<void> {
     bindEvents: bindWhitelistRowEvents,
     cache: whitelistCache,
     getCacheKey: (entry) => entry.id,
-    colspan: 5,
+    colspan: 6,
     onPageChange: (newPage) => {
       currentPage = newPage;
       loadWhitelist();
@@ -207,6 +212,10 @@ const whitelistDetailSkeleton = `
     <div class="detail-row">
       <span class="detail-label">域名</span>
       <span class="detail-value skeleton-text"></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">徽标 URL</span>
+      <span class="detail-value skeleton-text skeleton-wide"></span>
     </div>
     <div class="detail-row">
       <span class="detail-label">注册页面 URL</span>
@@ -228,11 +237,22 @@ const whitelistDetailSkeleton = `
 `;
 
 function renderWhitelistDetailContent(entry: EmailWhitelistEntry, cachedAt?: number, isRefreshing?: boolean): string {
+  const logoDisplay = entry.logo_url
+    ? `<img src="${escapeHtml(entry.logo_url)}" class="detail-logo" alt="" style="max-width:48px;max-height:48px;">`
+    : '<span class="text-muted">未设置</span>';
   return `
     <div class="detail">
       <div class="detail-row">
         <span class="detail-label">域名</span>
         <span class="detail-value">${escapeHtml(entry.domain)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">徽标 URL</span>
+        <span class="detail-value">${entry.logo_url ? escapeHtml(entry.logo_url) : '<span class="text-muted">未设置</span>'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">徽标预览</span>
+        <span class="detail-value">${logoDisplay}</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">注册页面 URL</span>
@@ -326,6 +346,7 @@ function openFormModal(entry?: EmailWhitelistEntry): void {
   const formSubmit = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
   const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
   const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+  const logoInput = document.getElementById('whitelist-logo-url') as HTMLInputElement | null;
   const formModal = document.getElementById('whitelist-form-modal') as HTMLElement | null;
 
   editingEntryId = entry ? entry.id : null;
@@ -333,6 +354,7 @@ function openFormModal(entry?: EmailWhitelistEntry): void {
   if (formSubmit) formSubmit.textContent = entry ? '保存' : '添加';
   if (domainInput) domainInput.value = entry ? entry.domain : '';
   if (urlInput) urlInput.value = entry ? entry.signup_url : '';
+  if (logoInput) logoInput.value = entry ? (entry.logo_url || '') : '';
   if (formModal) formModal.classList.remove('is-hidden');
 }
 
@@ -347,12 +369,14 @@ async function handleSubmit(e: Event): Promise<void> {
 
   const domainInput = document.getElementById('whitelist-domain') as HTMLInputElement | null;
   const urlInput = document.getElementById('whitelist-signup-url') as HTMLInputElement | null;
+  const logoInput = document.getElementById('whitelist-logo-url') as HTMLInputElement | null;
   const submitBtn = document.getElementById('whitelist-form-submit') as HTMLButtonElement | null;
 
   if (!domainInput || !urlInput || !submitBtn) return;
 
   const domain = domainInput.value.trim();
   const signupUrl = urlInput.value.trim();
+  const logoUrl = logoInput ? logoInput.value.trim() : '';
 
   if (!domain) {
     showToast('请输入域名', 'error');
@@ -370,12 +394,12 @@ async function handleSubmit(e: Event): Promise<void> {
     if (editingEntryId) {
       const entryId = editingEntryId;
       const entry = currentEntries.find(e => e.id === entryId);
-      await updateEntry(entryId, domain, signupUrl, entry?.is_enabled ?? true);
+      await updateEntry(entryId, domain, signupUrl, logoUrl, entry?.is_enabled ?? true);
       showToast('更新成功', 'success');
       closeFormModal();
       await updateWhitelistRow(entryId);
     } else {
-      const newEntry = await createEntry(domain, signupUrl);
+      const newEntry = await createEntry(domain, signupUrl, logoUrl);
       if (newEntry) {
         showToast('添加成功', 'success');
         closeFormModal();

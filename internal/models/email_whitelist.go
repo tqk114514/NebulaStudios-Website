@@ -22,6 +22,7 @@ type EmailWhitelist struct {
 	ID        int64     `json:"id"`
 	Domain    string    `json:"domain"`
 	SignupURL string    `json:"signup_url"`
+	LogoURL   string    `json:"logo_url,omitempty"`
 	IsEnabled bool      `json:"is_enabled"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -44,7 +45,7 @@ func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhiteli
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
+		SELECT id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		ORDER BY domain ASC
 	`)
@@ -56,7 +57,7 @@ func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhiteli
 	var whitelist []*EmailWhitelist
 	for rows.Next() {
 		item := &EmailWhitelist{}
-		err := rows.Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+		err := rows.Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan email whitelist: %w", err)
 		}
@@ -75,7 +76,7 @@ func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page in
 	offset := (page - 1) * pageSize
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
+		SELECT id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		ORDER BY domain ASC
 		LIMIT $1 OFFSET $2
@@ -88,7 +89,7 @@ func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page in
 	var whitelist []*EmailWhitelist
 	for rows.Next() {
 		item := &EmailWhitelist{}
-		err := rows.Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+		err := rows.Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan email whitelist: %w", err)
 		}
@@ -114,10 +115,10 @@ func (r *EmailWhitelistRepository) FindByDomain(ctx context.Context, domain stri
 
 	var item EmailWhitelist
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
+		SELECT id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		WHERE domain = $1
-	`, domain).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+	`, domain).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -137,10 +138,10 @@ func (r *EmailWhitelistRepository) FindByID(ctx context.Context, id int64) (*Ema
 
 	var item EmailWhitelist
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, domain, signup_url, is_enabled, created_at, updated_at
+		SELECT id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
 		FROM email_whitelist
 		WHERE id = $1
-	`, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+	`, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -179,13 +180,14 @@ func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain s
 }
 
 // Create 创建白名单条目
-func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL string) (*EmailWhitelist, error) {
+func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL, logoURL string) (*EmailWhitelist, error) {
 	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	signupURL = strings.TrimSpace(signupURL)
+	logoURL = strings.TrimSpace(logoURL)
 
 	if domain == "" {
 		return nil, errors.New("domain is required")
@@ -196,10 +198,10 @@ func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL
 
 	var item EmailWhitelist
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO email_whitelist (domain, signup_url, is_enabled)
-		VALUES ($1, $2, true)
-		RETURNING id, domain, signup_url, is_enabled, created_at, updated_at
-	`, domain, signupURL).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+		INSERT INTO email_whitelist (domain, signup_url, logo_url, is_enabled)
+		VALUES ($1, $2, $3, true)
+		RETURNING id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
+	`, domain, signupURL, logoURL).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
@@ -212,13 +214,14 @@ func (r *EmailWhitelistRepository) Create(ctx context.Context, domain, signupURL
 }
 
 // Update 更新白名单条目
-func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain, signupURL string, isEnabled bool) (*EmailWhitelist, error) {
+func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain, signupURL, logoURL string, isEnabled bool) (*EmailWhitelist, error) {
 	if r.pool == nil {
 		return nil, ErrDBNotInitialized
 	}
 
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	signupURL = strings.TrimSpace(signupURL)
+	logoURL = strings.TrimSpace(logoURL)
 
 	if id <= 0 {
 		return nil, errors.New("invalid id")
@@ -233,10 +236,10 @@ func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain,
 	var item EmailWhitelist
 	err := r.pool.QueryRow(ctx, `
 		UPDATE email_whitelist
-		SET domain = $1, signup_url = $2, is_enabled = $3, updated_at = NOW()
-		WHERE id = $4
-		RETURNING id, domain, signup_url, is_enabled, created_at, updated_at
-	`, domain, signupURL, isEnabled, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
+		SET domain = $1, signup_url = $2, logo_url = $3, is_enabled = $4, updated_at = NOW()
+		WHERE id = $5
+		RETURNING id, domain, signup_url, logo_url, is_enabled, created_at, updated_at
+	`, domain, signupURL, logoURL, isEnabled, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

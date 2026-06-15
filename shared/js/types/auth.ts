@@ -91,8 +91,14 @@ export interface SendCodeResponse {
 
 // ==================== 其他 ====================
 
-/** 邮箱服务商信息（域名到注册URL的映射，或简单域名列表） */
-export type EmailProviders = Record<string, string> | string[];
+/** 邮箱服务商信息 */
+export interface EmailProviderInfo {
+  signup_url: string;
+  logo_url: string;
+}
+
+/** 邮箱服务商信息（域名到信息的映射） */
+export type EmailProviders = Record<string, EmailProviderInfo>;
 
 /** PC 端信息（扫码登录） */
 export interface PcInfo {

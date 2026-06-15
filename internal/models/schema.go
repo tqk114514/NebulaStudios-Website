@@ -226,6 +226,7 @@ func getTableSchemas() []TableSchema {
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimary: true},
 				{Name: "domain", Type: "VARCHAR(255)", Nullable: false, IsUnique: true},
 				{Name: "signup_url", Type: "TEXT", Nullable: false},
+				{Name: "logo_url", Type: "TEXT", Nullable: false, Default: "''"},
 				{Name: "is_enabled", Type: "BOOLEAN", Nullable: false, Default: "true"},
 				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
 				{Name: "updated_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
@@ -361,8 +362,10 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	}
 
 	migrationSQL := buildFullMigrationSQL()
+	v2SQL := "ALTER TABLE email_whitelist ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';"
 	mapFS := mapFS{
 		"1_initial_schema.up.sql": {data: []byte(migrationSQL)},
+		"2_add_logo_url.up.sql":   {data: []byte(v2SQL)},
 	}
 	source, err := iofs.New(mapFS, ".")
 	if err != nil {

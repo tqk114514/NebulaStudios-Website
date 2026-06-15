@@ -185,6 +185,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	var req struct {
 		Domain    string `json:"domain"`
 		SignupURL string `json:"signup_url"`
+		LogoURL   string `json:"logo_url"`
 	}
 
 	if err := utils.BindJSON(c, &req); err != nil {
@@ -196,6 +197,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	}
 	domain := strings.TrimSpace(req.Domain)
 	signupURL := strings.TrimSpace(req.SignupURL)
+	logoURL := strings.TrimSpace(req.LogoURL)
 
 	if domain == "" {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_DOMAIN", "Domain is required")
@@ -214,7 +216,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
-	item, err := h.emailWhitelistRepo.Create(ctx, domain, signupURL)
+	item, err := h.emailWhitelistRepo.Create(ctx, domain, signupURL, logoURL)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistDomainExists) {
 			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, "DOMAIN_EXISTS", fmt.Sprintf("Domain %s already exists", domain))
@@ -251,6 +253,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	var req struct {
 		Domain    *string `json:"domain"`
 		SignupURL *string `json:"signup_url"`
+		LogoURL   *string `json:"logo_url"`
 		IsEnabled *bool   `json:"is_enabled"`
 	}
 
@@ -295,12 +298,17 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		isEnabled = *req.IsEnabled
 	}
 
-	if domain == existing.Domain && signupURL == existing.SignupURL && isEnabled == existing.IsEnabled {
+	logoURL := existing.LogoURL
+	if req.LogoURL != nil {
+		logoURL = strings.TrimSpace(*req.LogoURL)
+	}
+
+	if domain == existing.Domain && signupURL == existing.SignupURL && logoURL == existing.LogoURL && isEnabled == existing.IsEnabled {
 		utils.RespondSuccess(c, gin.H{"message": "No change"})
 		return
 	}
 
-	item, err := h.emailWhitelistRepo.Update(ctx, id, domain, signupURL, isEnabled)
+	item, err := h.emailWhitelistRepo.Update(ctx, id, domain, signupURL, logoURL, isEnabled)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
 			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
