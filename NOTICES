@@ -8,43 +8,43 @@ Their respective licenses are listed below.
 License: Apache-2.0
 ------------------------------------------------------------
   github.com/aws/aws-sdk-go-v2
-    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.8/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/v1.42.0/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream
-    https://github.com/aws/aws-sdk-go-v2/blob/aws/protocol/eventstream/v1.7.10/aws/protocol/eventstream/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/aws/protocol/eventstream/v1.7.13/aws/protocol/eventstream/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/config
-    https://github.com/aws/aws-sdk-go-v2/blob/config/v1.32.19/config/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/config/v1.32.25/config/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/credentials
-    https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.18/credentials/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.24/credentials/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/feature/ec2/imds
-    https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.18.24/feature/ec2/imds/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.18.29/feature/ec2/imds/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/configsources
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.4.24/internal/configsources/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.4.29/internal/configsources/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.7.24/internal/endpoints/v2/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.7.29/internal/endpoints/v2/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/ini
     https://github.com/aws/aws-sdk-go-v2/blob/internal/ini/v1.8.6/internal/ini/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/internal/v4a
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.4.25/internal/v4a/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.4.30/internal/v4a/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.9/service/internal/accept-encoding/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.12/service/internal/accept-encoding/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/checksum
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.17/service/internal/checksum/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.22/service/internal/checksum/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.13.24/service/internal/presigned-url/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.13.29/service/internal/presigned-url/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/internal/s3shared
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/s3shared/v1.19.24/service/internal/s3shared/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/s3shared/v1.19.29/service/internal/s3shared/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/s3
-    https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.102.1/service/s3/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.103.3/service/s3/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/signin
-    https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.1.0/service/signin/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.2.0/service/signin/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/sso
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.30.18/service/sso/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.31.3/service/sso/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/ssooidc
-    https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.36.1/service/ssooidc/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.36.6/service/ssooidc/LICENSE.txt
   github.com/aws/aws-sdk-go-v2/service/sts
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.42.2/service/sts/LICENSE.txt
+    https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.42.3/service/sts/LICENSE.txt
   github.com/aws/smithy-go
-    https://github.com/aws/smithy-go/blob/v1.26.0/LICENSE
+    https://github.com/aws/smithy-go/blob/v1.27.2/LICENSE
   go.mongodb.org/mongo-driver/v2
     https://github.com/mongodb/mongo-go-driver/blob/v2.6.0/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
@@ -52,9 +52,9 @@ License: Apache-2.0
   github.com/bytedance/gopkg
     https://github.com/bytedance/gopkg/blob/v0.1.4/LICENSE
   github.com/bytedance/sonic
-    https://github.com/bytedance/sonic/tree/v1.15.1
+    https://github.com/bytedance/sonic/blob/v1.15.2/LICENSE
   github.com/bytedance/sonic/loader
-    https://github.com/bytedance/sonic/tree/v1.15.1
+    https://github.com/bytedance/sonic/blob/loader/v0.5.1/LICENSE
   github.com/cloudwego/base64x
     https://github.com/cloudwego/base64x/blob/v0.1.7/LICENSE
   github.com/modern-go/concurrent
@@ -80,15 +80,15 @@ License: BSD-3-Clause
   github.com/wneessen/go-mail/smtp
     https://github.com/wneessen/go-mail/blob/v0.7.3/smtp/LICENSE
   golang.org/x/crypto
-    https://cs.opensource.google/go/x/crypto/+/v0.50.0:LICENSE
+    https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE
   golang.org/x/net
-    https://cs.opensource.google/go/x/net/+/v0.55.0:LICENSE
+    https://cs.opensource.google/go/x/net/+/v0.56.0:LICENSE
   golang.org/x/sync
-    https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
+    https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE
   golang.org/x/sys
-    https://cs.opensource.google/go/x/sys/+/v0.44.0:LICENSE
+    https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE
   golang.org/x/text
-    https://cs.opensource.google/go/x/text/+/v0.36.0:LICENSE
+    https://cs.opensource.google/go/x/text/+/v0.38.0:LICENSE
   golang.org/x/time/rate
     https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
   google.golang.org/protobuf
@@ -96,7 +96,7 @@ License: BSD-3-Clause
   github.com/twitchyliquid64/golang-asm
     https://github.com/twitchyliquid64/golang-asm/blob/v0.15.1/LICENSE
   golang.org/x/arch
-    https://cs.opensource.google/go/x/arch/+/v0.27.0:LICENSE
+    https://cs.opensource.google/go/x/arch/+/v0.28.0:LICENSE
 
 ------------------------------------------------------------
 License: MIT
@@ -104,7 +104,7 @@ License: MIT
   github.com/andybalholm/brotli
     https://github.com/andybalholm/brotli/blob/v1.2.1/LICENSE
   github.com/evanw/esbuild
-    https://github.com/evanw/esbuild/blob/v0.28.0/LICENSE.md
+    https://github.com/evanw/esbuild/blob/v0.28.1/LICENSE.md
   github.com/evanw/esbuild/internal/xxhash
     https://github.com/evanw/esbuild/blob/v0.27.4/internal/xxhash/LICENSE.txt
   github.com/gabriel-vasile/mimetype
@@ -118,7 +118,7 @@ License: MIT
   github.com/go-playground/universal-translator
     https://github.com/go-playground/universal-translator/blob/v0.18.1/LICENSE
   github.com/go-playground/validator/v10
-    https://github.com/go-playground/validator/blob/v10.30.2/LICENSE
+    https://github.com/go-playground/validator/blob/v10.30.3/LICENSE
   github.com/goccy/go-yaml
     https://github.com/goccy/go-yaml/blob/v1.19.2/LICENSE
   github.com/golang-jwt/jwt/v5
@@ -128,7 +128,7 @@ License: MIT
   github.com/jackc/pgservicefile
     https://github.com/jackc/pgservicefile/blob/5a60cdf6a761/LICENSE
   github.com/jackc/pgx/v5
-    https://github.com/jackc/pgx/blob/v5.9.2/LICENSE
+    https://github.com/jackc/pgx/blob/v5.10.0/LICENSE
   github.com/jackc/puddle/v2
     https://github.com/jackc/puddle/blob/v2.2.2/LICENSE
   github.com/joho/godotenv
@@ -142,7 +142,7 @@ License: MIT
   github.com/quic-go/qpack
     https://github.com/quic-go/qpack/blob/v0.6.0/LICENSE.md
   github.com/quic-go/quic-go
-    https://github.com/quic-go/quic-go/blob/v0.59.1/LICENSE
+    https://github.com/quic-go/quic-go/blob/v0.60.0/LICENSE
   github.com/ugorji/go/codec
     https://github.com/ugorji/go/blob/codec/v1.3.1/codec/LICENSE
   github.com/wneessen/go-mail
