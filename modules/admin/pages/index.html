@@ -212,6 +212,7 @@
             <thead>
               <tr>
                 <th>域名</th>
+                <th>徽标</th>
                 <th>注册页面 URL</th>
                 <th>状态</th>
                 <th>创建时间</th>
@@ -220,7 +221,7 @@
             </thead>
             <tbody id="whitelist-table-body">
               <tr>
-                <td colspan="5" class="loading-cell">加载中...</td>
+                <td colspan="6" class="loading-cell">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -594,6 +595,11 @@
             <label for="whitelist-signup-url">注册页面 URL <span class="required">*</span></label>
             <input type="text" id="whitelist-signup-url" class="form-input" placeholder="例如: https://example.com/register" maxlength="500">
             <span class="form-hint">该邮箱服务商的注册页面 URL</span>
+          </div>
+          <div class="form-group">
+            <label for="whitelist-logo-url">徽标 URL</label>
+            <input type="text" id="whitelist-logo-url" class="form-input" placeholder="例如: https://example.com/logo.svg" maxlength="500">
+            <span class="form-hint">非必填，显示在"支持的邮箱服务商"弹窗中的徽标图片地址</span>
           </div>
           <div class="modal-footer">
             <button type="button" id="whitelist-form-cancel" class="btn btn-secondary">取消</button>

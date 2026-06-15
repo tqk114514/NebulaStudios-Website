@@ -64,8 +64,8 @@ type EmailWhitelistStore interface {
 	FindByDomain(ctx context.Context, domain string) (*EmailWhitelist, error)
 	FindByID(ctx context.Context, id int64) (*EmailWhitelist, error)
 	IsDomainAllowed(ctx context.Context, domain string) (bool, string, error)
-	Create(ctx context.Context, domain, signupURL string) (*EmailWhitelist, error)
-	Update(ctx context.Context, id int64, domain, signupURL string, isEnabled bool) (*EmailWhitelist, error)
+	Create(ctx context.Context, domain, signupURL, logoURL string) (*EmailWhitelist, error)
+	Update(ctx context.Context, id int64, domain, signupURL, logoURL string, isEnabled bool) (*EmailWhitelist, error)
 	Delete(ctx context.Context, id int64) error
 	SetEnabled(ctx context.Context, id int64, isEnabled bool) error
 	InitDefaultWhitelist(ctx context.Context, domains string) error

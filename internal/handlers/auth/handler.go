@@ -131,10 +131,13 @@ func (h *AuthHandler) GetEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	domains := make(map[string]string)
+	domains := make(map[string]gin.H)
 	for _, entry := range entries {
 		if entry.IsEnabled {
-			domains[entry.Domain] = entry.SignupURL
+			domains[entry.Domain] = gin.H{
+				"signup_url": entry.SignupURL,
+				"logo_url":   entry.LogoURL,
+			}
 		}
 	}
 

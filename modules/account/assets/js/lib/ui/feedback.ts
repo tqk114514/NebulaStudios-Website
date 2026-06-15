@@ -301,25 +301,37 @@ export function showSupportedEmailsModal(emailProviders: EmailProviders, t: Tran
 
   supportedEmailsList.innerHTML = '';
 
-  if (Array.isArray(emailProviders)) {
-    emailProviders.forEach(domain => {
-      const item = document.createElement('div');
-      item.className = 'email-provider-item';
-      item.textContent = domain;
-      supportedEmailsList.appendChild(item);
-    });
-  } else {
-    Object.entries(emailProviders).forEach(([domain, url]) => {
-      const item = document.createElement('div');
-      item.className = 'email-provider-item';
-      item.textContent = domain;
+  Object.entries(emailProviders).forEach(([domain, info]) => {
+    const item = document.createElement('div');
+    item.className = 'email-provider-item';
+
+    const logo = document.createElement('img');
+    logo.className = 'email-provider-logo';
+    if (info.logo_url) {
+      logo.src = info.logo_url;
+      logo.alt = domain;
+    } else {
+      logo.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3C/svg%3E';
+      logo.alt = '';
+      logo.classList.add('empty-logo');
+    }
+    logo.loading = 'lazy';
+    item.appendChild(logo);
+
+    const domainText = document.createElement('span');
+    domainText.className = 'email-provider-domain';
+    domainText.textContent = domain;
+    item.appendChild(domainText);
+
+    if (info.signup_url) {
       item.style.cursor = 'pointer';
       item.addEventListener('click', () => {
-        showExternalLinkConfirm(url, t);
+        showExternalLinkConfirm(info.signup_url, t);
       });
-      supportedEmailsList.appendChild(item);
-    });
-  }
+    }
+
+    supportedEmailsList.appendChild(item);
+  });
 
   if (modalCloseBtn) {modalCloseBtn.textContent = t('modal.close');}
   modalOverlay.classList.remove('is-hidden');
