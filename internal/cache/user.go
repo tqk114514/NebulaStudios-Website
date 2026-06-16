@@ -48,6 +48,9 @@ type UserCache struct {
 	misses  uint64
 	mu      sync.RWMutex
 	sf      singleflight.Group
+	// 版本号用于防止缓存中毒：GetOrLoad 记录 loader 前的版本号，
+	// loader 返回后若版本号变化（期间发生过 Invalidate）则丢弃结果不写入缓存
+	version uint64
 }
 
 // NewUserCache 创建用户缓存实例，maxSize 和 ttl 必须大于 0
@@ -155,6 +158,10 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 		default:
 		}
 
+		// 记录 loader 前的版本号，loader 返回后检查是否变化
+		// 若变化说明期间发生过 Invalidate，loader 返回的可能是旧数据，不应写入缓存
+		versionBefore := atomic.LoadUint64(&c.version)
+
 		user, err := loader(ctx, uid)
 		if err != nil {
 			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", err, fmt.Sprintf("uid=%s", uid))
@@ -164,7 +171,12 @@ func (c *UserCache) GetOrLoad(ctx context.Context, uid string, loader func(conte
 			return nil, utils.LogError("CACHE", "GetOrLoad.Loader", ErrNilUser, fmt.Sprintf("uid=%s", uid))
 		}
 
-		c.Set(uid, user)
+		// 版本号未变化才写入缓存，防止 loader 期间的 Invalidate 被旧数据覆盖
+		if atomic.LoadUint64(&c.version) == versionBefore {
+			c.Set(uid, user)
+		} else {
+			utils.LogInfo("CACHE", fmt.Sprintf("Skipping cache set for uid=%s: version changed during loader (stale data)", uid))
+		}
 
 		return user, nil
 	})
@@ -222,6 +234,9 @@ func (c *UserCache) Invalidate(uid string) {
 	removed := c.cache.Remove(uid)
 	c.mu.Unlock()
 
+	// 递增版本号，使 in-flight 的 GetOrLoad loader 返回后不会写入缓存
+	atomic.AddUint64(&c.version, 1)
+
 	if removed {
 		utils.LogInfo("CACHE", fmt.Sprintf("Cache invalidated for uid: %s", uid))
 	}
@@ -232,6 +247,9 @@ func (c *UserCache) InvalidateAll() {
 	c.mu.Lock()
 	c.cache.Purge()
 	c.mu.Unlock()
+
+	// 递增版本号，使 in-flight 的 GetOrLoad loader 返回后不会写入缓存
+	atomic.AddUint64(&c.version, 1)
 
 	atomic.StoreUint64(&c.hits, 0)
 	atomic.StoreUint64(&c.misses, 0)
