@@ -46,9 +46,9 @@ var allowedUpdateFields = map[string]bool{
 	"microsoft_name":        true,
 	"microsoft_avatar_url":  true,
 	"microsoft_avatar_hash": true,
-	"google_id":            true,
-	"google_name":          true,
-	"google_avatar_url":    true,
+	"google_id":             true,
+	"google_name":           true,
+	"google_avatar_url":     true,
 	"role":                  true,
 }
 
@@ -64,7 +64,7 @@ type User struct {
 	MicrosoftID         sql.NullString `json:"microsoft_id"`
 	MicrosoftName       sql.NullString `json:"microsoft_name"`
 	MicrosoftAvatarURL  sql.NullString `json:"microsoft_avatar_url"`
-	MicrosoftAvatarHash sql.NullString `json:"-"`          // 头像哈希，用于判断是否需要更新
+	MicrosoftAvatarHash sql.NullString `json:"-"` // 头像哈希，用于判断是否需要更新
 	GoogleID            sql.NullString `json:"google_id"`
 	GoogleName          sql.NullString `json:"google_name"`
 	GoogleAvatarURL     sql.NullString `json:"google_avatar_url"`
@@ -673,9 +673,11 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			LIMIT $1 OFFSET $2
 		`, pageSize, offset)
 	} else {
-		searchPattern := "%" + search + "%"
+		// 转义 LIKE 通配符，避免用户输入 % 或 _ 改变搜索语义
+		escapedSearch := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		searchPattern := "%" + escapedSearch + "%"
 		err = r.pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM users 
+			SELECT COUNT(*) FROM users
 			WHERE username ILIKE $1 OR email ILIKE $1
 		`, searchPattern).Scan(&total)
 		if err != nil {
@@ -707,7 +709,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 		err := pgxRows.Scan(
 			&user.ID, &user.UID, &user.Username, &user.Email, &user.AvatarURL, &user.Role,
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+			&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 			&user.CreatedAt, &user.UpdatedAt,
 		)

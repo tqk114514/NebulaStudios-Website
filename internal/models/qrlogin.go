@@ -304,10 +304,13 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash,
 		return "", errors.New("INVALID_USER")
 	}
 
-	// 删除 Token（一次性消费）
+	// 删除 Token（一次性消费）—— 失败必须回滚，否则 token 未被消费可重放
 	_, err = tx.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		utils.LogWarn("QRLOGIN", "Failed to delete token in ConsumeAndSetSession", "")
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			utils.LogError("QRLOGIN", "ConsumeAndSetSession", rbErr, "Failed to rollback after delete failure")
+		}
+		return "", utils.LogError("QRLOGIN", "ConsumeAndSetSession", err, "Failed to delete token")
 	}
 
 	// 提交事务

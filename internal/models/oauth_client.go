@@ -194,9 +194,11 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 			LIMIT $1 OFFSET $2
 		`, pageSize, offset)
 	} else {
-		searchPattern := "%" + search + "%"
+		// 转义 LIKE 通配符，避免用户输入 % 或 _ 改变搜索语义
+		escapedSearch := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		searchPattern := "%" + escapedSearch + "%"
 		err = r.pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM oauth_clients 
+			SELECT COUNT(*) FROM oauth_clients
 			WHERE name ILIKE $1 OR description ILIKE $1 OR client_id ILIKE $1
 		`, searchPattern).Scan(&total)
 		if err != nil {

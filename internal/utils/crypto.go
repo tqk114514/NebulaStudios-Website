@@ -368,9 +368,11 @@ func S256CodeChallenge(codeVerifier string) string {
 }
 
 // VerifyPKCE 验证 code_verifier 是否匹配 code_challenge
+// 本项目强制 PKCE（CreateAuthorizationCode 要求 codeChallenge 非空），
+// 因此 codeChallenge 为空时 fail-closed 返回 false，避免 DB 篡改等绕过。
 func VerifyPKCE(codeVerifier, codeChallenge, codeChallengeMethod string) bool {
 	if codeChallenge == "" {
-		return true
+		return false
 	}
 
 	if codeVerifier == "" {

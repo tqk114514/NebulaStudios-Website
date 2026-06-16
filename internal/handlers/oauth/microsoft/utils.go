@@ -2,14 +2,18 @@ package microsoft
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"auth-system/internal/handlers/oauth"
@@ -17,29 +21,196 @@ import (
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// extractIDTokenEmail 从 ID Token 的 payload 中提取 email claim（不验证签名）。
+// microsoftJWKSCache Microsoft JWKS 公钥缓存，避免每次 ID Token 验证都请求 JWKS 端点
+var microsoftJWKSCache struct {
+	sync.RWMutex
+	keys      map[string]*rsa.PublicKey // kid -> public key
+	fetchedAt time.Time
+}
+
+const (
+	microsoftJWKSURL  = "https://login.microsoftonline.com/" + MicrosoftTenant + "/discovery/v2.0/keys"
+	microsoftJWKSTTL  = 24 * time.Hour
+	microsoftIssuerV2 = "https://login.microsoftonline.com/" + MicrosoftTenant + "/v2.0"
+)
+
+// jwk JSON Web Key 结构（仅提取验证 ID Token 所需字段）
+type jwk struct {
+	Kty string `json:"kty"`
+	Kid string `json:"kid"`
+	Use string `json:"use"`
+	N   string `json:"n"`
+	E   string `json:"e"`
+}
+
+// fetchMicrosoftJWKS 获取 Microsoft JWKS 并缓存，TTL 内直接返回缓存
+func fetchMicrosoftJWKS(ctx context.Context) (map[string]*rsa.PublicKey, error) {
+	microsoftJWKSCache.RLock()
+	if time.Since(microsoftJWKSCache.fetchedAt) < microsoftJWKSTTL && len(microsoftJWKSCache.keys) > 0 {
+		keys := microsoftJWKSCache.keys
+		microsoftJWKSCache.RUnlock()
+		return keys, nil
+	}
+	microsoftJWKSCache.RUnlock()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, microsoftJWKSURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create JWKS request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch JWKS: %w", err)
+	}
+	defer func(Body io.ReadCloser) { _ = Body.Close() }(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read JWKS response: %w", err)
+	}
+
+	var jwks struct {
+		Keys []jwk `json:"keys"`
+	}
+	if err := json.Unmarshal(body, &jwks); err != nil {
+		return nil, fmt.Errorf("parse JWKS JSON: %w", err)
+	}
+
+	keys := make(map[string]*rsa.PublicKey, len(jwks.Keys))
+	for _, k := range jwks.Keys {
+		if k.Kty != "RSA" || k.Use != "sig" || k.Kid == "" {
+			continue
+		}
+		pubKey, err := jwkToRSAPublicKey(k)
+		if err != nil {
+			utils.LogWarn("OAUTH-MS", "Failed to parse JWK", fmt.Sprintf("kid=%s: %v", k.Kid, err))
+			continue
+		}
+		keys[k.Kid] = pubKey
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no valid RSA signing keys in JWKS")
+	}
+
+	microsoftJWKSCache.Lock()
+	microsoftJWKSCache.keys = keys
+	microsoftJWKSCache.fetchedAt = time.Now()
+	microsoftJWKSCache.Unlock()
+
+	return keys, nil
+}
+
+// jwkToRSAPublicKey 将 JWK 的 n/e base64url 参数转换为 *rsa.PublicKey
+func jwkToRSAPublicKey(k jwk) (*rsa.PublicKey, error) {
+	nBytes, err := base64.RawURLEncoding.DecodeString(k.N)
+	if err != nil {
+		return nil, fmt.Errorf("decode n: %w", err)
+	}
+	eBytes, err := base64.RawURLEncoding.DecodeString(k.E)
+	if err != nil {
+		return nil, fmt.Errorf("decode e: %w", err)
+	}
+
+	// e 通常是 AQAB (65537)，需要转成 int
+	var eInt int
+	for _, b := range eBytes {
+		eInt = eInt<<8 + int(b)
+	}
+
+	pubKey := &rsa.PublicKey{
+		N: new(big.Int).SetBytes(nBytes),
+		E: eInt,
+	}
+	return pubKey, nil
+}
+
+// extractIDTokenEmail 验证 ID Token 签名后提取 email claim。
 // 个人微软账户的 msUser.mail 可能是别名（如 xxx@outlook.com），
 // 而 ID Token 中的 email claim 才是用户真正绑定的邮箱。
-func extractIDTokenEmail(tokenData map[string]any) string {
+// 验证失败（签名无效、过期、issuer/audience 不匹配）时返回空字符串。
+func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData map[string]any) string {
 	idToken, ok := tokenData["id_token"].(string)
 	if !ok || idToken == "" {
 		return ""
 	}
 
-	parts := strings.Split(idToken, ".")
-	if len(parts) != 3 {
-		return ""
-	}
-
-	decoded, err := base64.RawURLEncoding.DecodeString(parts[1])
+	// 先解析 header 获取 kid
+	unverifiedToken, _, err := jwt.NewParser().ParseUnverified(idToken, jwt.MapClaims{})
 	if err != nil {
+		utils.LogWarn("OAUTH-MS", "Failed to parse ID token header", err.Error())
 		return ""
 	}
 
-	var claims map[string]any
-	if err := json.Unmarshal(decoded, &claims); err != nil {
+	kid := ""
+	if kidVal, ok := unverifiedToken.Header["kid"].(string); ok {
+		kid = kidVal
+	}
+	if kid == "" {
+		utils.LogWarn("OAUTH-MS", "ID token missing kid header", "")
+		return ""
+	}
+
+	// 获取 JWKS 公钥
+	keys, err := fetchMicrosoftJWKS(ctx)
+	if err != nil {
+		utils.LogError("OAUTH-MS", "extractIDTokenEmail", err, "Failed to fetch JWKS")
+		return ""
+	}
+
+	pubKey, ok := keys[kid]
+	if !ok {
+		utils.LogWarn("OAUTH-MS", "ID token kid not found in JWKS", fmt.Sprintf("kid=%s", kid))
+		return ""
+	}
+
+	// 解析并验证签名
+	token, err := jwt.Parse(idToken, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return pubKey, nil
+	}, jwt.WithValidMethods([]string{"RS256"}))
+	if err != nil {
+		utils.LogWarn("OAUTH-MS", "ID token signature verification failed", err.Error())
+		return ""
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return ""
+	}
+
+	// 校验 issuer
+	iss, _ := claims["iss"].(string)
+	if iss != microsoftIssuerV2 {
+		utils.LogWarn("OAUTH-MS", "ID token issuer mismatch", fmt.Sprintf("iss=%s", iss))
+		return ""
+	}
+
+	// 校验 audience（必须是本应用的 client_id）
+	audValid := false
+	switch aud := claims["aud"].(type) {
+	case string:
+		audValid = aud == h.clientID
+	case []any:
+		for _, a := range aud {
+			if s, ok := a.(string); ok && s == h.clientID {
+				audValid = true
+				break
+			}
+		}
+	}
+	if !audValid {
+		utils.LogWarn("OAUTH-MS", "ID token audience mismatch", fmt.Sprintf("clientID=%s", h.clientID))
 		return ""
 	}
 

@@ -216,6 +216,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// 立即消费验证码（一次性），避免 VerifyCode 与用户创建之间的窗口期被并发重放
+	_ = h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, &tokenType)
+
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", "Password hashing failed")
@@ -256,8 +259,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userUID=%s", user.UID))
 		}
 	}
-
-	_ = h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, nil)
 
 	utils.LogInfo("AUTH", fmt.Sprintf("User registered successfully: username=%s, email=%s", usernameResult.Value, emailResult.Value))
 	utils.RespondSuccess(c, gin.H{"message": "Registration successful"})
