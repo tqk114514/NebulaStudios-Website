@@ -154,9 +154,9 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, token)
+	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, models.HashToken(token))
 	if err != nil {
-		utils.LogWarn("WS", "Invalid QR token for WebSocket", fmt.Sprintf("token=%s, err=%v", token, err))
+		utils.LogWarn("WS", "Invalid QR token for WebSocket", fmt.Sprintf("token=%s, err=%v", utils.TruncateIdentifier(token), err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}

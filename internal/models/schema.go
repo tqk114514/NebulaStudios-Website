@@ -95,7 +95,7 @@ func getTableSchemas() []TableSchema {
 		{
 			Name: "qr_login_tokens",
 			Columns: []ColumnDefinition{
-				{Name: "token", Type: "VARCHAR(64)", Nullable: false, IsPrimary: true},
+				{Name: "token_hash", Type: "VARCHAR(64)", Nullable: false, IsPrimary: true},
 				{Name: "status", Type: "VARCHAR(20)", Nullable: true, Default: "'pending'"},
 				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: true},
 				{Name: "pc_ip", Type: "VARCHAR(45)", Nullable: true},
@@ -150,7 +150,7 @@ func getTableSchemas() []TableSchema {
 			Name: "oauth_auth_codes",
 			Columns: []ColumnDefinition{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimary: true},
-				{Name: "code", Type: "VARCHAR(64)", Nullable: false, IsUnique: true},
+				{Name: "code_hash", Type: "VARCHAR(64)", Nullable: false, IsUnique: true},
 				{Name: "client_id", Type: "VARCHAR(64)", Nullable: false},
 				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: false, References: "users(uid)", OnDelete: "CASCADE"},
 				{Name: "redirect_uri", Type: "TEXT", Nullable: false},
@@ -258,7 +258,7 @@ func getIndexDefinitions() []struct {
 		{"idx_user_logs_user_uid", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_uid ON user_logs(user_uid)"},
 		{"idx_user_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at DESC)"},
 		{"idx_oauth_clients_client_id", "CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id ON oauth_clients(client_id)"},
-		{"idx_oauth_auth_codes_code", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_code ON oauth_auth_codes(code)"},
+		{"idx_oauth_auth_codes_code", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_code ON oauth_auth_codes(code_hash)"},
 		{"idx_oauth_auth_codes_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_expires ON oauth_auth_codes(expires_at)"},
 		{"idx_oauth_access_tokens_hash", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_hash ON oauth_access_tokens(token_hash)"},
 		{"idx_oauth_access_tokens_user_uid", "CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_user_uid ON oauth_access_tokens(user_uid)"},
@@ -362,10 +362,8 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	}
 
 	migrationSQL := buildFullMigrationSQL()
-	v2SQL := "ALTER TABLE email_whitelist ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';"
 	mapFS := mapFS{
 		"1_initial_schema.up.sql": {data: []byte(migrationSQL)},
-		"2_add_logo_url.up.sql":   {data: []byte(v2SQL)},
 	}
 	source, err := iofs.New(mapFS, ".")
 	if err != nil {

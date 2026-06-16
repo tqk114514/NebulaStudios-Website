@@ -326,7 +326,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 
 // ExchangeAuthorizationCode 用授权码换取 Token
 func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI, codeVerifier string) (*OAuthTokenResponse, string, error) {
-	authCode, err := s.authCodeRepo.FindByCode(ctx, code)
+	authCode, err := s.authCodeRepo.FindByCode(ctx, models.HashToken(code))
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthCodeNotFound) {
 			return nil, "", ErrOAuthCodeNotFound
