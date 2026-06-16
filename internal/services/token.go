@@ -92,6 +92,7 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 
 	token := &models.Token{
 		Token:      tokenStr,
+		TokenHash:  models.HashToken(tokenStr),
 		Email:      normalizedEmail,
 		Type:       normalizedType,
 		CreatedAt:  now,
@@ -113,22 +114,23 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 	}
 
 	now := time.Now().UnixMilli()
+	tokenHash := models.HashToken(tokenStr)
 
-	token, err := s.tokenRepo.MarkUsedAndGet(ctx, tokenStr, now)
+	token, err := s.tokenRepo.MarkUsedAndGet(ctx, tokenHash, now)
 	if err != nil {
 		return nil, err
 	}
 	if token == nil {
-		existingToken, findErr := s.tokenRepo.FindByToken(ctx, tokenStr)
+		existingToken, findErr := s.tokenRepo.FindByToken(ctx, tokenHash)
 		if findErr != nil {
 			if utils.IsDatabaseNotFound(findErr) {
-				utils.LogDebug("TOKEN", "Token not found", tokenStr)
+				utils.LogDebug("TOKEN", "Token not found", utils.TruncateIdentifier(tokenHash))
 				return nil, models.ErrInvalidToken
 			}
 			return nil, findErr
 		}
 		if existingToken.IsExpired() {
-			s.tokenRepo.DeleteByToken(ctx, tokenStr)
+			s.tokenRepo.DeleteByToken(ctx, tokenHash)
 			return nil, models.ErrTokenExpired
 		}
 		return nil, models.ErrTokenUsed
@@ -141,7 +143,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 			return nil, utils.LogError("TOKEN", "GenerateCode", err)
 		}
 
-		s.tokenRepo.UpdateCode(ctx, tokenStr, codeStr)
+		s.tokenRepo.UpdateCode(ctx, tokenHash, codeStr)
 
 		code := &models.Code{
 			Code:       codeStr,

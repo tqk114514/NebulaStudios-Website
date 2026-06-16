@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"auth-system/internal/models"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -45,16 +46,17 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	tokenHash := models.HashToken(originalToken)
 
-	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
+	qrToken, err := h.qrLoginRepo.FindByToken(ctx, tokenHash)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_NOT_FOUND", "Token not found in Scan")
 		return
 	}
 
 	if time.Now().UnixMilli() > qrToken.ExpireTime {
-		utils.LogWarn("QR-LOGIN", "Token expired in Scan", fmt.Sprintf("token=%s", originalToken[:8]+"..."))
-		_ = h.qrLoginRepo.Delete(ctx, originalToken)
+		utils.LogWarn("QR-LOGIN", "Token expired in Scan", fmt.Sprintf("token=%s", utils.TruncateIdentifier(originalToken)))
+		_ = h.qrLoginRepo.Delete(ctx, tokenHash)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -62,7 +64,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	browser, os := parseUserAgent(qrToken.PcUserAgent)
 
 	now := time.Now().UnixMilli()
-	success, err := h.qrLoginRepo.UpdateStatusWithCondition(ctx, originalToken, QRStatusPending, QRStatusScanned, &now)
+	success, err := h.qrLoginRepo.UpdateStatusWithCondition(ctx, tokenHash, QRStatusPending, QRStatusScanned, &now)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Scan", err, "Failed to update token status in Scan")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
@@ -134,8 +136,9 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	tokenHash := models.HashToken(originalToken)
 
-	qrToken, err := h.qrLoginRepo.FindByToken(ctx, originalToken)
+	qrToken, err := h.qrLoginRepo.FindByToken(ctx, tokenHash)
 	if err != nil {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "TOKEN_NOT_FOUND", "Token not found in MobileConfirm")
 		return
@@ -143,7 +146,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 
 	if time.Now().UnixMilli() > qrToken.ExpireTime {
 		utils.LogWarn("QR-LOGIN", "Token expired in MobileConfirm", "")
-		_ = h.qrLoginRepo.Delete(ctx, originalToken)
+		_ = h.qrLoginRepo.Delete(ctx, tokenHash)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -155,7 +158,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, originalToken, userUID, pcSessionToken)
+	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, tokenHash, userUID, pcSessionToken)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
@@ -203,8 +206,9 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	tokenHash := models.HashToken(originalToken)
 
-	err = h.qrLoginRepo.Delete(ctx, originalToken)
+	err = h.qrLoginRepo.Delete(ctx, tokenHash)
 	if err != nil {
 		utils.LogWarn("QR-LOGIN", "Failed to delete token in MobileCancel", "")
 	}

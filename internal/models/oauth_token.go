@@ -24,7 +24,8 @@ var (
 // OAuthAuthCode 授权码
 type OAuthAuthCode struct {
 	ID                  int64     `json:"id"`
-	Code                string    `json:"-"` // 不序列化
+	Code                string    `json:"-"` // 明文授权码，仅业务层使用
+	CodeHash            string    `json:"-"` // 授权码的 SHA-256 hash，写入 DB
 	ClientID            string    `json:"client_id"`
 	UserUID             string    `json:"user_uid"`
 	RedirectURI         string    `json:"redirect_uri"`
@@ -147,10 +148,10 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	}
 
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO oauth_auth_codes (code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used)
+		INSERT INTO oauth_auth_codes (code_hash, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
-	`, code.Code, code.ClientID, code.UserUID, code.RedirectURI, code.Scope, code.CodeChallenge, code.CodeChallengeMethod, code.ExpiresAt, code.Used).Scan(
+	`, code.CodeHash, code.ClientID, code.UserUID, code.RedirectURI, code.Scope, code.CodeChallenge, code.CodeChallengeMethod, code.ExpiresAt, code.Used).Scan(
 		&code.ID, &code.CreatedAt,
 	)
 
@@ -162,22 +163,22 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	return nil
 }
 
-// FindByCode 根据授权码查找
-func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (*OAuthAuthCode, error) {
-	if code == "" {
-		return nil, fmt.Errorf("code is empty")
+// FindByCode 根据授权码 hash 查找
+func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, codeHash string) (*OAuthAuthCode, error) {
+	if codeHash == "" {
+		return nil, fmt.Errorf("code hash is empty")
 	}
 
 	if err := r.checkDB(); err != nil {
 		return nil, err
 	}
 
-	authCode := &OAuthAuthCode{}
+	authCode := &OAuthAuthCode{CodeHash: codeHash}
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, code, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used, created_at
-		FROM oauth_auth_codes WHERE code = $1
-	`, code).Scan(
-		&authCode.ID, &authCode.Code, &authCode.ClientID, &authCode.UserUID,
+		SELECT id, client_id, user_uid, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used, created_at
+		FROM oauth_auth_codes WHERE code_hash = $1
+	`, codeHash).Scan(
+		&authCode.ID, &authCode.ClientID, &authCode.UserUID,
 		&authCode.RedirectURI, &authCode.Scope, &authCode.CodeChallenge, &authCode.CodeChallengeMethod,
 		&authCode.ExpiresAt, &authCode.Used, &authCode.CreatedAt,
 	)
@@ -186,7 +187,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthCodeNotFound
 		}
-		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code=%s", utils.TruncateIdentifier(code)))
+		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code_hash=%s", utils.TruncateIdentifier(codeHash)))
 	}
 
 	return authCode, nil

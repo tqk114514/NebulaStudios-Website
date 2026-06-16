@@ -32,7 +32,8 @@ const (
 // Token 验证 Token
 type Token struct {
 	ID         int64   `json:"id"`
-	Token      string  `json:"-"` // 不序列化
+	Token      string  `json:"-"` // 明文 token，仅业务层使用，不写入 DB
+	TokenHash  string  `json:"-"` // token 的 SHA-256 hash，写入 DB
 	Email      string  `json:"email"`
 	Type       string  `json:"type"`
 	Code       *string `json:"-"` // 关联的验证码
@@ -102,8 +103,8 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 	if token.Email == "" {
 		return errors.New("email is empty")
 	}
-	if token.Token == "" {
-		return errors.New("token is empty")
+	if token.TokenHash == "" {
+		return errors.New("token_hash is empty")
 	}
 
 	if r.pool == nil {
@@ -111,9 +112,9 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 	}
 
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO tokens (token, email, type, created_at, expire_time, used)
+		INSERT INTO tokens (token_hash, email, type, created_at, expire_time, used)
 		VALUES ($1, $2, $3, $4, $5, 0)
-	`, token.Token, token.Email, token.Type, token.CreatedAt, token.ExpireTime)
+	`, token.TokenHash, token.Email, token.Type, token.CreatedAt, token.ExpireTime)
 
 	if err != nil {
 		return utils.LogError("TOKEN", "Create", err,
@@ -124,9 +125,9 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 	return nil
 }
 
-// FindByToken 根据 Token 字符串查找
-func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*Token, error) {
-	if tokenStr == "" {
+// FindByToken 根据 token hash 查找
+func (r *TokenRepository) FindByToken(ctx context.Context, tokenHash string) (*Token, error) {
+	if tokenHash == "" {
 		return nil, ErrInvalidToken
 	}
 
@@ -134,26 +135,25 @@ func (r *TokenRepository) FindByToken(ctx context.Context, tokenStr string) (*To
 		return nil, errors.New("database not ready")
 	}
 
-	token := &Token{}
+	token := &Token{TokenHash: tokenHash}
 	err := r.pool.QueryRow(ctx, `
-		SELECT email, type, code, expire_time, used FROM tokens WHERE token = $1
-	`, strings.TrimSpace(tokenStr)).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime, &token.Used)
+		SELECT email, type, code, expire_time, used FROM tokens WHERE token_hash = $1
+	`, tokenHash).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime, &token.Used)
 
 	if err != nil {
-		return nil, utils.HandleDatabaseError("TOKEN", "FindByToken", err, tokenStr)
+		return nil, utils.HandleDatabaseError("TOKEN", "FindByToken", err, utils.TruncateIdentifier(tokenHash))
 	}
 
-	token.Token = tokenStr
 	return token, nil
 }
 
 // UpdateCode 更新 Token 的验证码
-func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string) error {
+func (r *TokenRepository) UpdateCode(ctx context.Context, tokenHash, code string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := r.pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token = $2", code, tokenStr)
+	_, err := r.pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token_hash = $2", code, tokenHash)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to update token code", err)
 	}
@@ -161,12 +161,12 @@ func (r *TokenRepository) UpdateCode(ctx context.Context, tokenStr, code string)
 }
 
 // MarkUsed 标记 Token 为已使用
-func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
+func (r *TokenRepository) MarkUsed(ctx context.Context, tokenHash string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := r.pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token = $1", tokenStr)
+	_, err := r.pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token_hash = $1", tokenHash)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to mark token as used", err)
 	}
@@ -176,8 +176,8 @@ func (r *TokenRepository) MarkUsed(ctx context.Context, tokenStr string) error {
 // MarkUsedAndGet 原子性地标记 Token 为已使用并返回 Token 数据
 // 使用单条 UPDATE ... RETURNING 消除 SELECT → 检查 → UPDATE 之间的竞态条件
 // 仅在 used=0 且未过期时成功，失败返回 nil 表示 Token 已被使用或已过期
-func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenStr string, now int64) (*Token, error) {
-	if tokenStr == "" {
+func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenHash string, now int64) (*Token, error) {
+	if tokenHash == "" {
 		return nil, ErrInvalidToken
 	}
 
@@ -185,18 +185,18 @@ func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenStr string, n
 		return nil, errors.New("database not ready")
 	}
 
-	token := &Token{Token: tokenStr}
+	token := &Token{TokenHash: tokenHash}
 	err := r.pool.QueryRow(ctx, `
 		UPDATE tokens SET used = 1
-		WHERE token = $1 AND used = 0 AND expire_time > $2
+		WHERE token_hash = $1 AND used = 0 AND expire_time > $2
 		RETURNING email, type, code, expire_time
-	`, tokenStr, now).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime)
+	`, tokenHash, now).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime)
 
 	if err != nil {
 		if err.Error() == "no rows in result set" {
 			return nil, nil
 		}
-		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, utils.TruncateIdentifier(tokenStr))
+		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, utils.TruncateIdentifier(tokenHash))
 	}
 
 	return token, nil
@@ -217,12 +217,12 @@ func (r *TokenRepository) DeleteExpired(ctx context.Context, now int64) (int64, 
 }
 
 // DeleteByToken 删除指定 Token
-func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenStr string) error {
+func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenHash string) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
-	_, err := r.pool.Exec(ctx, "DELETE FROM tokens WHERE token = $1", tokenStr)
+	_, err := r.pool.Exec(ctx, "DELETE FROM tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to delete token", err)
 	}

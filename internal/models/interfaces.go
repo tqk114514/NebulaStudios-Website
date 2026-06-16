@@ -48,13 +48,13 @@ type UserLogStore interface {
 // QRLoginStore 扫码登录数据访问接口
 type QRLoginStore interface {
 	Create(ctx context.Context, qrToken *QRLoginToken) error
-	FindByToken(ctx context.Context, token string) (*QRLoginToken, error)
-	UpdateStatus(ctx context.Context, token, status string, scannedAt *int64) error
-	UpdateStatusWithCondition(ctx context.Context, token, fromStatus, toStatus string, scannedAt *int64) (bool, error)
-	ConfirmLogin(ctx context.Context, token string, userUID string, pcSessionToken string) error
-	ConfirmLoginWithCondition(ctx context.Context, token string, userUID string, pcSessionToken string) (bool, error)
-	Delete(ctx context.Context, token string) error
-	ConsumeAndSetSession(ctx context.Context, token, pcSessionToken string) (string, error)
+	FindByToken(ctx context.Context, tokenHash string) (*QRLoginToken, error)
+	UpdateStatus(ctx context.Context, tokenHash, status string, scannedAt *int64) error
+	UpdateStatusWithCondition(ctx context.Context, tokenHash, fromStatus, toStatus string, scannedAt *int64) (bool, error)
+	ConfirmLogin(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) error
+	ConfirmLoginWithCondition(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) (bool, error)
+	Delete(ctx context.Context, tokenHash string) error
+	ConsumeAndSetSession(ctx context.Context, tokenHash, pcSessionToken string) (string, error)
 }
 
 // EmailWhitelistStore 邮件白名单数据访问接口
