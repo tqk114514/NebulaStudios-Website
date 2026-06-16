@@ -103,7 +103,7 @@ func (h *MicrosoftHandler) Auth(c *gin.Context) {
 		action = oauth.ActionLogin
 	}
 
-	returnURL := c.Query("return")
+	returnURL := oauth.SafeReturnURL(c.Query("return"), h.baseURL, "")
 
 	state, err := oauth.GenerateState()
 	if err != nil {

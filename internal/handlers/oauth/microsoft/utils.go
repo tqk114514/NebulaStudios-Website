@@ -272,8 +272,9 @@ func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context
 	oauth.SetAuthCookie(c, accessToken)
 	utils.SetRefreshTokenCookieGin(c, refreshToken)
 	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft login successful: username=%s, userUID=%s", user.Username, user.UID))
-	if returnURL != "" {
-		c.Redirect(http.StatusFound, returnURL)
+	safeReturn := oauth.SafeReturnURL(returnURL, h.baseURL, "")
+	if safeReturn != "" {
+		c.Redirect(http.StatusFound, safeReturn)
 	} else {
 		c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountDashboard)
 	}
