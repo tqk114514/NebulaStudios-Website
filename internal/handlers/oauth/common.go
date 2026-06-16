@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -207,6 +209,58 @@ func RedirectWithError(c *gin.Context, baseURL, path, errorCode string) {
 // RedirectWithSuccess 重定向并附带成功参数
 func RedirectWithSuccess(c *gin.Context, baseURL, path, successCode string) {
 	c.Redirect(http.StatusFound, baseURL+path+"?success="+successCode)
+}
+
+// SafeReturnURL 校验登录后的 return URL，防止开放重定向攻击。
+// 仅允许相对于 baseURL 的同源路径（绝对路径或同源完整 URL）。
+// 返回安全的重定向目标；若不安全则返回 fallback。
+//
+// 安全规则：
+//  1. 空字符串直接返回空
+//  2. 必须能被解析为 URL
+//  3. 若包含 scheme/host（绝对 URL），必须与 baseURL 同源
+//  4. 若为相对路径，必须以 "/" 开头但不能以 "//" 开头（防止协议相对 URL 绕过）
+//  5. 路径不能包含回车/换行（防止 Header 注入）
+func SafeReturnURL(returnURL, baseURL, fallback string) string {
+	returnURL = strings.TrimSpace(returnURL)
+	if returnURL == "" {
+		return ""
+	}
+
+	// 禁止包含 CR/LF，防止 Header 注入
+	if strings.ContainsAny(returnURL, "\r\n") {
+		return fallback
+	}
+
+	parsed, err := url.Parse(returnURL)
+	if err != nil {
+		return fallback
+	}
+
+	// 绝对 URL：必须与 baseURL 同源
+	if parsed.Scheme != "" || parsed.Host != "" {
+		base, err := url.Parse(baseURL)
+		if err != nil {
+			return fallback
+		}
+		if !strings.EqualFold(parsed.Scheme, base.Scheme) ||
+			!strings.EqualFold(parsed.Host, base.Host) {
+			return fallback
+		}
+		return parsed.String()
+	}
+
+	// 相对路径：禁止协议相对 URL（"//evil.com"）
+	if strings.HasPrefix(returnURL, "//") {
+		return fallback
+	}
+
+	// 必须以 "/" 开头
+	if !strings.HasPrefix(returnURL, "/") {
+		return fallback
+	}
+
+	return returnURL
 }
 
 // StartCleanup 启动清理任务，定期清理过期的 OAuth state 和待绑定数据

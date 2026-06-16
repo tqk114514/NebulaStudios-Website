@@ -99,7 +99,7 @@ func (h *GoogleHandler) Auth(c *gin.Context) {
 		action = oauth.ActionLogin
 	}
 
-	returnURL := c.Query("return")
+	returnURL := oauth.SafeReturnURL(c.Query("return"), h.baseURL, "")
 
 	state, err := oauth.GenerateState()
 	if err != nil {
@@ -647,8 +647,9 @@ func (h *GoogleHandler) handleLoginAction(c *gin.Context, ctx context.Context, g
 	oauth.SetAuthCookie(c, accessToken)
 	utils.SetRefreshTokenCookieGin(c, refreshToken)
 	utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("Google login successful: username=%s, userUID=%s", user.Username, user.UID))
-	if returnURL != "" {
-		c.Redirect(http.StatusFound, returnURL)
+	safeReturn := oauth.SafeReturnURL(returnURL, h.baseURL, "")
+	if safeReturn != "" {
+		c.Redirect(http.StatusFound, safeReturn)
 	} else {
 		c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountDashboard)
 	}
