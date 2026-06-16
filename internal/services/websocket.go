@@ -85,8 +85,10 @@ func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *W
 			WriteBufferSize: writeBufferSize,
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
+				// 浏览器 WebSocket 握手必发 Origin，空 Origin 来自非浏览器客户端，拒绝以防绕过
 				if origin == "" {
-					return true
+					utils.LogWarn("WS", "WebSocket origin rejected", "empty origin")
+					return false
 				}
 
 				if cfg.CORSAllowOrigins == "" {
