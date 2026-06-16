@@ -460,6 +460,12 @@ func (s *OAuthService) GetUserGrants(ctx context.Context, userUID string) ([]*mo
 	return s.grantRepo.FindByUserUID(ctx, userUID)
 }
 
+// FindUserGrant 查询用户对某客户端的授权记录
+// 用于撤销前校验 grant 归属，不存在返回 ErrOAuthGrantNotFound
+func (s *OAuthService) FindUserGrant(ctx context.Context, userUID, clientID string) (*models.OAuthGrant, error) {
+	return s.grantRepo.FindByUserAndClient(ctx, userUID, clientID)
+}
+
 // RevokeClientTokens 撤销某客户端的所有 Token（用于禁用/删除客户端）
 func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) error {
 	_, _ = s.accessTokenRepo.DeleteByClient(ctx, clientID)

@@ -262,9 +262,22 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	// 校验 client 存在
 	client, err := h.oauthService.GetClientByClientID(ctx, clientID)
 	if err != nil {
-		utils.LogWarn("USER", "OAuth client not found for revoke", fmt.Sprintf("userUID=%s, clientID=%s", userUID, clientID))
+		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		return
+	}
+
+	// 校验 grant 归属当前用户，防止撤销他人或不存在的授权
+	if _, err := h.oauthService.FindUserGrant(ctx, userUID, clientID); err != nil {
+		if errors.Is(err, models.ErrOAuthGrantNotFound) {
+			utils.RespondError(c, http.StatusNotFound, "GRANT_NOT_FOUND")
+			return
+		}
+		utils.LogError("USER", "RevokeOAuthGrant", err, fmt.Sprintf("Failed to find grant: userUID=%s, clientID=%s", userUID, clientID))
+		utils.RespondError(c, http.StatusInternalServerError, "GRANT_LOOKUP_FAILED")
+		return
 	}
 
 	if err := h.oauthService.RevokeUserClientTokens(ctx, userUID, clientID); err != nil {
@@ -273,7 +286,7 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 		return
 	}
 
-	if h.userLogRepo != nil && client != nil {
+	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogOAuthRevoke(ctx, userUID, clientID, client.Name); err != nil {
 			utils.LogWarn("USER", "Failed to log OAuth revoke", fmt.Sprintf("userUID=%s", userUID))
 		}
