@@ -73,8 +73,13 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserS
 
 		user, err := userCache.GetOrLoad(ctx, userUID, userRepo.FindByUID)
 		if err != nil {
+			// fail-closed：缓存故障时拒绝请求，防止被封禁用户绕过封禁
 			utils.LogError("BAN-MW", "BanCheckMiddleware", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
-			c.Next()
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"success":   false,
+				"errorCode": "SERVICE_UNAVAILABLE",
+			})
+			c.Abort()
 			return
 		}
 
