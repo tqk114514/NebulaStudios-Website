@@ -26,6 +26,7 @@ var (
 	ErrEmailSMTPConfigMissing  = errors.New("SMTP configuration is missing")
 	ErrEmailClientCreateFailed = errors.New("failed to create SMTP client")
 	ErrEmailSendFailed         = errors.New("failed to send email")
+	ErrEmailHeaderInjection    = errors.New("email header injection detected")
 )
 
 const (
@@ -276,6 +277,12 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 		return ErrEmailEmptySubject
 	}
 
+	// 校验 CRLF 防止邮件头部注入：to/subject/from 含换行符可注入 Bcc/Reply-To 等头
+	if containsNewline(to) || containsNewline(subject) || containsNewline(s.cfg.SMTPFrom) {
+		utils.LogError("EMAIL", "send", ErrEmailHeaderInjection, fmt.Sprintf("CRLF detected in email headers: to=%q, subject=%q", to, subject))
+		return ErrEmailHeaderInjection
+	}
+
 	client, err := s.getClient()
 	if err != nil {
 		return err
@@ -378,6 +385,11 @@ func (s *EmailService) getClient() (*mail.Client, error) {
 	utils.LogInfo("EMAIL", "SMTP connection established (pooled)")
 
 	return s.client, nil
+}
+
+// containsNewline 检查字符串是否含 CR/LF，用于防止邮件头部注入
+func containsNewline(s string) bool {
+	return strings.ContainsAny(s, "\r\n")
 }
 
 // closeClient 关闭当前连接
