@@ -203,12 +203,20 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_DOMAIN", "Domain is required")
 		return
 	}
+	if !validateEmailWhitelistDomain(domain) {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_DOMAIN", "Domain format is invalid")
+		return
+	}
 	if signupURL == "" {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_SIGNUP_URL", "Signup URL is required")
 		return
 	}
-	if _, err := url.Parse(signupURL); err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL format is invalid")
+	if !validateEmailWhitelistURL(signupURL) {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL scheme is not allowed")
+		return
+	}
+	if !validateEmailWhitelistURL(logoURL) {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_LOGO_URL", "Logo URL scheme is not allowed")
 		return
 	}
 
@@ -282,13 +290,17 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	domain := existing.Domain
 	if req.Domain != nil && *req.Domain != "" {
 		domain = strings.TrimSpace(*req.Domain)
+		if !validateEmailWhitelistDomain(domain) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_DOMAIN", "Domain format is invalid")
+			return
+		}
 	}
 
 	signupURL := existing.SignupURL
 	if req.SignupURL != nil && *req.SignupURL != "" {
 		signupURL = strings.TrimSpace(*req.SignupURL)
-		if _, err := url.Parse(signupURL); err != nil {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL format is invalid")
+		if !validateEmailWhitelistURL(signupURL) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL scheme is not allowed")
 			return
 		}
 	}
@@ -301,6 +313,10 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	logoURL := existing.LogoURL
 	if req.LogoURL != nil {
 		logoURL = strings.TrimSpace(*req.LogoURL)
+		if !validateEmailWhitelistURL(logoURL) {
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_LOGO_URL", "Logo URL scheme is not allowed")
+			return
+		}
 	}
 
 	if domain == existing.Domain && signupURL == existing.SignupURL && logoURL == existing.LogoURL && isEnabled == existing.IsEnabled {
@@ -366,4 +382,55 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 
 	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist deleted: operatorUID=%s, id=%d", operatorUID, id))
 	utils.RespondSuccess(c, gin.H{"message": "Email whitelist entry deleted"})
+}
+
+// validateEmailWhitelistDomain 校验邮箱白名单的 domain 字段
+// 仅允许合法域名格式（example.com 或 sub.example.com），防止注入 javascript:/含特殊字符等
+func validateEmailWhitelistDomain(domain string) bool {
+	if domain == "" || len(domain) > 253 {
+		return false
+	}
+	// 禁止 scheme、path、query、fragment、userinfo
+	if strings.ContainsAny(domain, ":/@?# \t\n\r") {
+		return false
+	}
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		// 仅允许字母、数字、连字符，且不以连字符开头/结尾
+		for i, r := range label {
+			ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || (r == '-' && i != 0 && i != len(label)-1)
+			if !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// validateEmailWhitelistURL 校验邮箱白名单的 signup_url / logo_url 字段
+// 仅允许 http/https scheme（http 仅限 localhost），防止 javascript:/data: 等 XSS
+func validateEmailWhitelistURL(rawURL string) bool {
+	if rawURL == "" {
+		return true // 允许空值（logo_url 可选）
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Hostname())
+	switch scheme {
+	case "https":
+		return host != ""
+	case "http":
+		return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	default:
+		return false
+	}
 }
