@@ -21,6 +21,7 @@ const (
 type otacEntry struct {
 	Code      string
 	RequestID string
+	UserUID   string // 绑定生成 OTAC 的用户，ValidateOTAC 时校验调用者身份
 	CreatedAt time.Time
 	Attempts  int
 }
@@ -48,8 +49,8 @@ func NewExportService() *ExportService {
 	return svc
 }
 
-// GenerateOTAC 生成新的 OTAC（旧 OTAC 立即失效）
-func (s *ExportService) GenerateOTAC() (requestID, code string, expiresAt time.Time) {
+// GenerateOTAC 生成新的 OTAC（旧 OTAC 立即失效），绑定生成者 userUID
+func (s *ExportService) GenerateOTAC(userUID string) (requestID, code string, expiresAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -69,6 +70,7 @@ func (s *ExportService) GenerateOTAC() (requestID, code string, expiresAt time.T
 	s.currentOTAC = &otacEntry{
 		Code:      code,
 		RequestID: requestID,
+		UserUID:   userUID,
 		CreatedAt: now,
 		Attempts:  0,
 	}
@@ -76,8 +78,8 @@ func (s *ExportService) GenerateOTAC() (requestID, code string, expiresAt time.T
 	return requestID, code, now.Add(otacTTL)
 }
 
-// ValidateOTAC 验证 OTAC，成功则销毁
-func (s *ExportService) ValidateOTAC(requestID, code string) error {
+// ValidateOTAC 验证 OTAC，成功则销毁。校验调用者 userUID 必须与生成者一致。
+func (s *ExportService) ValidateOTAC(requestID, code, userUID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -87,6 +89,10 @@ func (s *ExportService) ValidateOTAC(requestID, code string) error {
 
 	if s.currentOTAC.RequestID != requestID {
 		return fmt.Errorf("request ID mismatch")
+	}
+
+	if s.currentOTAC.UserUID != userUID {
+		return fmt.Errorf("user mismatch")
 	}
 
 	if time.Since(s.currentOTAC.CreatedAt) > otacTTL {

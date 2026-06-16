@@ -38,9 +38,10 @@ type importExecuteResponse struct {
 // RequestExport 生成 OTAC（一次性授权码）
 // POST /admin/api/data/export/request
 func (h *AdminHandler) RequestExport(c *gin.Context) {
-	requestID, otac, expiresAt := h.exportService.GenerateOTAC()
+	operatorUID, _ := middleware.GetUID(c)
+	requestID, otac, expiresAt := h.exportService.GenerateOTAC(operatorUID)
 
-	utils.LogInfo("DATA-EXPORT", fmt.Sprintf("OTAC: %s | request_id: %s", otac, requestID))
+	utils.LogInfo("DATA-EXPORT", fmt.Sprintf("OTAC: %s | request_id: %s | user: %s", otac, requestID, operatorUID))
 
 	utils.RespondSuccess(c, gin.H{
 		"requestId": requestID,
@@ -61,7 +62,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 		return
 	}
 
-	if err := h.exportService.ValidateOTAC(requestID, otac); err != nil {
+	if err := h.exportService.ValidateOTAC(requestID, otac, operatorUID); err != nil {
 		errMsg := err.Error()
 		errorCode := "OTAC_INVALID"
 		statusCode := http.StatusForbidden

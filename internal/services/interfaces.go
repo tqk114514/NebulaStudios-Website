@@ -101,8 +101,8 @@ type StorageService interface {
 
 // ExportManager 数据导出服务接口
 type ExportManager interface {
-	GenerateOTAC() (requestID, code string, expiresAt time.Time)
-	ValidateOTAC(requestID, code string) error
+	GenerateOTAC(userUID string) (requestID, code string, expiresAt time.Time)
+	ValidateOTAC(requestID, code, userUID string) error
 	RevokeOTAC()
 	StoreFile(data []byte, filename string) string
 	RetrieveFile(token string) ([]byte, string, error)

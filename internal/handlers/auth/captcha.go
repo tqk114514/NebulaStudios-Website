@@ -196,31 +196,3 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	utils.LogInfo("AUTH", fmt.Sprintf("Code verified successfully: email=%s, tokenType=%s", email, tokenType))
 	utils.RespondSuccess(c, gin.H{})
 }
-
-// InvalidateCode 使指定邮箱的验证码失效
-// DELETE /api/auth/code
-func (h *AuthHandler) InvalidateCode(c *gin.Context) {
-	var req struct {
-		Email string `json:"email"`
-	}
-
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for InvalidateCode")
-		return
-	}
-
-	email := strings.TrimSpace(req.Email)
-	if email == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in InvalidateCode request")
-		return
-	}
-
-	ctx := c.Request.Context()
-	_ = h.tokenService.InvalidateCodeByEmail(ctx, email, nil)
-
-	utils.LogInfo("AUTH", fmt.Sprintf("Code invalidated: email=%s", email))
-	utils.RespondSuccess(c, gin.H{})
-}
