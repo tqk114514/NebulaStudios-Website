@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,6 +75,10 @@ func NewOAuthService(pool *pgxpool.Pool) *OAuthService {
 // CreateClient 创建客户端
 // 返回：客户端对象、明文 client_secret（仅此次返回）、错误
 func (s *OAuthService) CreateClient(ctx context.Context, name, description, redirectURI string) (*models.OAuthClient, string, error) {
+	if err := validateRedirectURIScheme(redirectURI); err != nil {
+		return nil, "", err
+	}
+
 	clientID, err := s.generateRandomHex(oauthClientIDLength)
 	if err != nil {
 		utils.LogError("OAUTH", "CreateClient", err, "Failed to generate client_id")
@@ -151,6 +157,36 @@ func (s *OAuthService) ValidateRedirectURI(client *models.OAuthClient, redirectU
 	return client != nil && redirectURI != "" && client.RedirectURI == redirectURI
 }
 
+// validateRedirectURIScheme 校验 redirect_uri 的 scheme 安全性
+// 仅允许 http/https，http 仅允许 localhost/127.0.0.1/::1（开发环境）
+// 防止 javascript:/data: 等危险 scheme 被注册为回调地址
+func validateRedirectURIScheme(redirectURI string) error {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return ErrOAuthInvalidRedirect
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Hostname())
+
+	switch scheme {
+	case "https":
+		if host == "" {
+			return ErrOAuthInvalidRedirect
+		}
+	case "http":
+		// 开发环境仅允许本地回环地址
+		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+			return ErrOAuthInvalidRedirect
+		}
+	default:
+		// 拒绝 javascript:/data:/file:/blob: 等所有非 http(s) scheme
+		return ErrOAuthInvalidRedirect
+	}
+
+	return nil
+}
+
 // RegenerateSecret 重新生成客户端密钥
 func (s *OAuthService) RegenerateSecret(ctx context.Context, id int64) (string, error) {
 	newSecret, err := s.generateRandomHex(oauthClientSecretLength)
@@ -190,6 +226,12 @@ func (s *OAuthService) GetClients(ctx context.Context, page, pageSize int, searc
 
 // UpdateClient 更新客户端
 func (s *OAuthService) UpdateClient(ctx context.Context, id int64, name string, description *string, redirectURI string) error {
+	if redirectURI != "" {
+		if err := validateRedirectURIScheme(redirectURI); err != nil {
+			return err
+		}
+	}
+
 	updates := map[string]any{}
 	if name != "" {
 		updates["name"] = name
