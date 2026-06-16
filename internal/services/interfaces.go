@@ -71,6 +71,7 @@ type OAuthClientManager interface {
 	RevokeUserClientTokens(ctx context.Context, userUID string, clientID string) error
 	RevokeUserTokens(ctx context.Context, userUID string) error
 	GetUserGrants(ctx context.Context, userUID string) ([]*models.OAuthGrantWithClient, error)
+	FindUserGrant(ctx context.Context, userUID, clientID string) (*models.OAuthGrant, error)
 	RevokeClientTokens(ctx context.Context, clientID string) error
 }
 
