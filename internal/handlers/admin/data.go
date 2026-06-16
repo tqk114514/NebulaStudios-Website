@@ -216,7 +216,7 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 		}
 	}
 
-	usersImported, err := h.dataExportRepo.ImportUsers(ctx, payload.Users)
+	usersResult, err := h.dataExportRepo.ImportUsers(ctx, payload.Users)
 	if err != nil {
 		utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
 		utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
@@ -230,13 +230,15 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogDataImport(ctx, operatorUID, usersImported, logsImported); err != nil {
+	if err := h.logRepo.LogDataImport(ctx, operatorUID, usersResult.Imported, logsImported); err != nil {
 		utils.LogWarn("DATA-IMPORT", "Failed to log import", err.Error())
 	}
 
 	utils.RespondSuccess(c, gin.H{
-		"usersImported": usersImported,
-		"logsImported":  logsImported,
+		"usersImported":        usersResult.Imported,
+		"usersPasswordSkipped": usersResult.PasswordSkipped,
+		"usersRoleDowngraded":  usersResult.RoleDowngraded,
+		"logsImported":         logsImported,
 	})
 }
 

@@ -95,7 +95,7 @@ type AdminLogStore interface {
 type DataExportImportStore interface {
 	QueryAllUsers(ctx context.Context) ([]map[string]any, error)
 	QueryAllUserLogs(ctx context.Context) ([]map[string]any, error)
-	ImportUsers(ctx context.Context, users []map[string]any) (int, error)
+	ImportUsers(ctx context.Context, users []map[string]any) (ImportUsersResult, error)
 	ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error)
 	DeleteAllUsers(ctx context.Context) error
 	DeleteAllUserLogs(ctx context.Context) error

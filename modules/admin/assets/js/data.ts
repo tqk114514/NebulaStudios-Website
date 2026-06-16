@@ -303,7 +303,16 @@ function bindImportPreviewEvents(): void {
         return;
       }
 
-      showToast(`导入成功: 用户 ${data.usersImported} 条, 日志 ${data.logsImported} 条`, 'success');
+      const passwordSkipped = Number(data.usersPasswordSkipped) || 0;
+      const roleDowngraded = Number(data.usersRoleDowngraded) || 0;
+      if (passwordSkipped > 0 || roleDowngraded > 0) {
+        const anomalies: string[] = [];
+        if (passwordSkipped > 0) anomalies.push(`${passwordSkipped} 个用户因密码哈希不合法被跳过`);
+        if (roleDowngraded > 0) anomalies.push(`${roleDowngraded} 个用户因 role 非法被降级为普通用户`);
+        showToast(`导入完成: 用户 ${data.usersImported} 条, 日志 ${data.logsImported} 条；${anomalies.join('，')}（疑似备份篡改）`, 'warning');
+      } else {
+        showToast(`导入成功: 用户 ${data.usersImported} 条, 日志 ${data.logsImported} 条`, 'success');
+      }
       hideModal(modal!);
     } catch {
       showToast('网络错误', 'error');

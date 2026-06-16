@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"auth-system/internal/utils"
@@ -166,10 +167,19 @@ const importUserLogsSQL = `
 	ON CONFLICT (id) DO NOTHING
 `
 
+// ImportUsersResult 导入用户结果统计
+type ImportUsersResult struct {
+	Imported        int // 成功导入数
+	PasswordSkipped int // 因 password 不合法被跳过的数量（疑似篡改）
+	RoleDowngraded  int // 因 role 不合法被降级为普通用户的数量（疑似篡改）
+}
+
 // ImportUsers 批量导入用户（ON CONFLICT upsert），使用 pgx.Batch 减少数据库往返
-func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []map[string]any) (int, error) {
+// 安全校验：role 必须为合法枚举值，password 必须为 Argon2id 哈希格式，防止篡改备份提权
+func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []map[string]any) (ImportUsersResult, error) {
 	batch := &pgx.Batch{}
 	uids := make([]string, 0, len(users))
+	result := ImportUsersResult{}
 
 	for _, user := range users {
 		uid, _ := user["uid"].(string)
@@ -177,13 +187,29 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 			continue
 		}
 
+		// 校验 role：仅允许合法枚举值，非法值降级为普通用户并计数
 		role, _ := toInt(user["role"])
+		switch role {
+		case RoleUser, RoleAdmin, RoleSuperAdmin:
+		default:
+			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("User %s has invalid role %d, downgraded to RoleUser", uid, role))
+			role = RoleUser
+			result.RoleDowngraded++
+		}
+
+		// 校验 password：必须是 Argon2id 哈希格式，防止篡改备份重置他人密码
+		password := toString(user["password"])
+		if !strings.HasPrefix(password, "$argon2") {
+			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Skip importing user %s: invalid password hash format", uid))
+			result.PasswordSkipped++
+			continue
+		}
 
 		batch.Queue(importUsersSQL,
 			uid,
 			toString(user["username"]),
 			toString(user["email"]),
-			toString(user["password"]),
+			password,
 			toString(user["avatar_url"]),
 			toNullableString(user["microsoft_id"]),
 			toNullableString(user["microsoft_name"]),
@@ -205,22 +231,21 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 	}
 
 	if len(uids) == 0 {
-		return 0, nil
+		return result, nil
 	}
 
 	br := r.pool.SendBatch(ctx, batch)
 	defer br.Close()
 
-	imported := 0
 	for _, uid := range uids {
 		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user %s: %v", uid, err))
 		} else {
-			imported++
+			result.Imported++
 		}
 	}
 
-	return imported, nil
+	return result, nil
 }
 
 // ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
