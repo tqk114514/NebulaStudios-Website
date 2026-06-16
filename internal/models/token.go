@@ -196,7 +196,7 @@ func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenStr string, n
 		if err.Error() == "no rows in result set" {
 			return nil, nil
 		}
-		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, tokenStr)
+		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, utils.TruncateIdentifier(tokenStr))
 	}
 
 	return token, nil
@@ -272,7 +272,7 @@ func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code,
 	`, strings.TrimSpace(codeStr)).Scan(&code.Email, &code.Type, &code.ExpireTime, &code.Attempts, &code.Verified)
 
 	if err != nil {
-		return nil, utils.HandleDatabaseError("TOKEN", "FindByCode", err, codeStr)
+		return nil, utils.HandleDatabaseError("TOKEN", "FindByCode", err, utils.TruncateIdentifier(codeStr))
 	}
 
 	code.Code = codeStr

@@ -123,6 +123,18 @@ func IsDatabaseNotFound(err error) bool {
 	return false
 }
 
+// TruncateIdentifier 截断标识符用于日志显示，防止敏感 token/码明文写入日志
+// 保留前 8 个字符用于定位，其余用 *** 替代
+func TruncateIdentifier(id string) string {
+	if id == "" {
+		return "(empty)"
+	}
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8] + "***"
+}
+
 // HTTPErrorResponse HTTP 错误响应辅助函数
 // 自动记录日志并返回 JSON 错误响应
 func HTTPErrorResponse(c *gin.Context, module string, statusCode int, errorCode string, logMessage ...string) {
