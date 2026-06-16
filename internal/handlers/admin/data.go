@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"auth-system/internal/middleware"
 	"auth-system/internal/utils"
 	"context"
 	"fmt"
@@ -50,7 +51,7 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 // DownloadExport 验证 OTAC 并返回加密数据
 // GET /admin/api/data/export/:requestId/download?otac=xxx
 func (h *AdminHandler) DownloadExport(c *gin.Context) {
-	operatorUID := c.GetString("uid")
+	operatorUID, _ := middleware.GetUID(c)
 
 	requestID := c.Param("requestId")
 	otac := c.Query("otac")
@@ -170,7 +171,7 @@ func (h *AdminHandler) PreviewImport(c *gin.Context) {
 // ExecuteImport 确认导入
 // POST /admin/api/data/import/execute
 func (h *AdminHandler) ExecuteImport(c *gin.Context) {
-	operatorUID := c.GetString("uid")
+	operatorUID, _ := middleware.GetUID(c)
 
 	var req importExecuteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
