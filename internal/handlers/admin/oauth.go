@@ -9,6 +9,7 @@ import (
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
+	"auth-system/internal/services"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -151,6 +152,10 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 
 	client, clientSecret, err := h.oauthService.CreateClient(ctx, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
+		if errors.Is(err, services.ErrOAuthInvalidRedirect) {
+			utils.RespondError(c, http.StatusBadRequest, "INVALID_REDIRECT_URI")
+			return
+		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "CREATE_FAILED", err.Error())
 		return
 	}
@@ -206,6 +211,10 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 
 	err = h.oauthService.UpdateClient(ctx, clientID, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
+		if errors.Is(err, services.ErrOAuthInvalidRedirect) {
+			utils.RespondError(c, http.StatusBadRequest, "INVALID_REDIRECT_URI")
+			return
+		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
 		return
 	}
