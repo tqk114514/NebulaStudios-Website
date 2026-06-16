@@ -2,6 +2,7 @@ package services
 
 import (
 	"auth-system/internal/config"
+	"auth-system/internal/models"
 	"auth-system/internal/utils"
 	"context"
 	"encoding/json"
@@ -58,13 +59,14 @@ type wsClientShard struct {
 
 // WebSocketService 分片 WebSocket 服务
 type WebSocketService struct {
-	shards     [wsShardCount]*wsClientShard
-	connCount  int32
-	shutdown   chan struct{}
-	wg         sync.WaitGroup
-	isShutdown bool
-	mu         sync.RWMutex
-	upgrader   websocket.Upgrader
+	shards      [wsShardCount]*wsClientShard
+	connCount   int32
+	shutdown    chan struct{}
+	wg          sync.WaitGroup
+	isShutdown  bool
+	mu          sync.RWMutex
+	upgrader    websocket.Upgrader
+	qrLoginRepo models.QRLoginStore
 }
 
 // WSMessage WebSocket 消息
@@ -75,7 +77,7 @@ type WSMessage struct {
 }
 
 // NewWebSocketService 创建 WebSocket 服务
-func NewWebSocketService(cfg *config.Config) *WebSocketService {
+func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *WebSocketService {
 	ws := &WebSocketService{
 		shutdown: make(chan struct{}),
 		upgrader: websocket.Upgrader{
@@ -107,6 +109,7 @@ func NewWebSocketService(cfg *config.Config) *WebSocketService {
 				utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
 			},
 		},
+		qrLoginRepo: qrLoginRepo,
 	}
 
 	for i := range wsShardCount {
@@ -135,6 +138,37 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	if token == "" {
 		utils.LogWarn("WS", "Missing token in WebSocket request", "")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+		return
+	}
+
+	// 校验 token 合法性：必须存在于 qr_login_tokens 表、未过期、状态为 pending 或 scanned
+	// 防止任意字符串占用连接配额，或越权接收他人状态推送
+	if ws.qrLoginRepo == nil {
+		utils.LogError("WS", "HandleQRLogin", nil, "qrLoginRepo not configured")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "service not configured"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, token)
+	if err != nil {
+		utils.LogWarn("WS", "Invalid QR token for WebSocket", fmt.Sprintf("token=%s, err=%v", token, err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	now := time.Now().UnixMilli()
+	if qrToken.ExpireTime > 0 && now > qrToken.ExpireTime {
+		utils.LogWarn("WS", "Expired QR token for WebSocket", fmt.Sprintf("token=%s", token))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "token expired"})
+		return
+	}
+
+	if qrToken.Status != models.QRStatusPending && qrToken.Status != models.QRStatusScanned {
+		utils.LogWarn("WS", "QR token in invalid state for WebSocket", fmt.Sprintf("token=%s, status=%s", token, qrToken.Status))
+		c.JSON(http.StatusConflict, gin.H{"error": "token already consumed"})
 		return
 	}
 
