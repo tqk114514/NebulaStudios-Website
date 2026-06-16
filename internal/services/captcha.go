@@ -10,9 +10,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"auth-system/internal/config"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 var (
@@ -32,6 +35,10 @@ const (
 	captchaDefaultTimeout  = 10 * time.Second
 	captchaMaxResponseSize = 1024 * 1024
 	captchaContentTypeJSON = "application/json"
+
+	// 本地防重放：Cloudflare duplicate 检测是 best-effort，应用层需自行保证一次性
+	captchaUsedTokenCapacity = 5000            // 容量覆盖 300s 窗口内的预期请求数
+	captchaUsedTokenTTL      = 5 * time.Minute // 与 Turnstile token 有效期对齐
 )
 
 var captchaErrorMessages = map[string]string{
@@ -58,6 +65,9 @@ type CaptchaService struct {
 	secretKey string
 	client    *http.Client
 	enabled   bool
+	// 本地防重放：记录已使用的 token，防止同一 token 在 300s 窗口内被复用
+	usedTokens *lru.Cache[string, time.Time]
+	mu         sync.Mutex // 保护 usedTokens 的检查+记录原子性
 }
 
 // NewCaptchaService 创建验证服务
@@ -76,12 +86,18 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		panic("CAPTCHA configuration error: turnstile site key and secret key must be configured")
 	}
 
+	usedTokens, err := lru.New[string, time.Time](captchaUsedTokenCapacity)
+	if err != nil {
+		panic(fmt.Sprintf("CAPTCHA configuration error: failed to create used token cache: %v", err))
+	}
+
 	utils.LogInfo("CAPTCHA", fmt.Sprintf("Service initialized: siteKey=%s...", truncateCaptchaKey(cfg.TurnstileSiteKey, 8)))
 
 	return &CaptchaService{
-		siteKey:   cfg.TurnstileSiteKey,
-		secretKey: cfg.TurnstileSecretKey,
-		enabled:   true,
+		siteKey:    cfg.TurnstileSiteKey,
+		secretKey:  cfg.TurnstileSecretKey,
+		enabled:    true,
+		usedTokens: usedTokens,
 		client: &http.Client{
 			Timeout: captchaDefaultTimeout,
 		},
@@ -110,7 +126,27 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, remoteIP 
 		return ErrCaptchaEmptyToken
 	}
 
-	return s.doVerify(ctx, cleanToken, remoteIP)
+	// 本地防重放：检查并预占 token，加锁保证原子性
+	// 预占（而非验证成功后才记录）可防止并发请求在 doVerify 期间都通过检查
+	s.mu.Lock()
+	if _, used := s.usedTokens.Get(cleanToken); used {
+		s.mu.Unlock()
+		utils.LogWarn("CAPTCHA", "Token replay detected (local)", fmt.Sprintf("ip=%s", remoteIP))
+		return ErrCaptchaFailed
+	}
+	// 预占：先记录，验证失败则回滚
+	s.usedTokens.Add(cleanToken, time.Now())
+	s.mu.Unlock()
+
+	if err := s.doVerify(ctx, cleanToken, remoteIP); err != nil {
+		// 验证失败回滚预占，允许该 token 重试
+		s.mu.Lock()
+		s.usedTokens.Remove(cleanToken)
+		s.mu.Unlock()
+		return err
+	}
+
+	return nil
 }
 
 // IsEnabled 检查服务是否启用
