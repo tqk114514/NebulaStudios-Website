@@ -191,7 +191,6 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
 		authAPI.POST("/microsoft/confirm-link",
-			middleware.AuthMiddleware(svcs.SessionService),
 			hdlrs.microsoftHandler.ConfirmLink)
 
 		authAPI.GET("/google", hdlrs.googleHandler.Auth)
@@ -202,7 +201,6 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 			hdlrs.googleHandler.Unlink)
 		authAPI.GET("/google/pending-link", hdlrs.googleHandler.GetPendingLinkInfo)
 		authAPI.POST("/google/confirm-link",
-			middleware.AuthMiddleware(svcs.SessionService),
 			hdlrs.googleHandler.ConfirmLink)
 	}
 }
