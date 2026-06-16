@@ -26,17 +26,15 @@ const (
 	shardCount         = 16
 	maxEntriesPerShard = 1000
 
-	defaultLoginRate           = 12 * time.Second
-	defaultLoginBurst          = 5
-	defaultRegisterRate        = 20 * time.Second
-	defaultRegisterBurst       = 3
-	defaultResetPasswordRate   = 20 * time.Second
-	defaultResetPasswordBurst  = 3
-	defaultOAuthTokenRate      = 2 * time.Second
-	defaultOAuthTokenBurst     = 10
-	defaultInvalidateCodeRate  = 60 * time.Second
-	defaultInvalidateCodeBurst = 2
-	defaultEmailInterval       = 60 * time.Second
+	defaultLoginRate          = 12 * time.Second
+	defaultLoginBurst         = 5
+	defaultRegisterRate       = 20 * time.Second
+	defaultRegisterBurst      = 3
+	defaultResetPasswordRate  = 20 * time.Second
+	defaultResetPasswordBurst = 3
+	defaultOAuthTokenRate     = 2 * time.Second
+	defaultOAuthTokenBurst    = 10
+	defaultEmailInterval      = 60 * time.Second
 
 	rateLimiterCleanupInterval       = 5 * time.Minute
 	rateLimiterEntryTTL              = 1 * time.Hour
@@ -400,24 +398,22 @@ func (sdel *ShardedDataExportLimiter) GetWaitTime(userUID string) int {
 
 // rateLimiterManager 限流器管理器，实现 RateLimiterManager 接口
 type rateLimiterManager struct {
-	LoginLimiter          *ShardedRateLimiter
-	RegisterLimiter       *ShardedRateLimiter
-	ResetPasswordLimiter  *ShardedRateLimiter
-	OAuthTokenLimiter     *ShardedRateLimiter
-	InvalidateCodeLimiter *ShardedRateLimiter
-	EmailLimiter          *ShardedEmailRateLimiter
-	DataExportLimiter     *ShardedDataExportLimiter
+	LoginLimiter         *ShardedRateLimiter
+	RegisterLimiter      *ShardedRateLimiter
+	ResetPasswordLimiter *ShardedRateLimiter
+	OAuthTokenLimiter    *ShardedRateLimiter
+	EmailLimiter         *ShardedEmailRateLimiter
+	DataExportLimiter    *ShardedDataExportLimiter
 }
 
 func NewRateLimiterManager() RateLimiterManager {
 	return &rateLimiterManager{
-		LoginLimiter:          NewShardedRateLimiter(rate.Every(defaultLoginRate), defaultLoginBurst),
-		RegisterLimiter:       NewShardedRateLimiter(rate.Every(defaultRegisterRate), defaultRegisterBurst),
-		ResetPasswordLimiter:  NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst),
-		OAuthTokenLimiter:     NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst),
-		InvalidateCodeLimiter: NewShardedRateLimiter(rate.Every(defaultInvalidateCodeRate), defaultInvalidateCodeBurst),
-		EmailLimiter:          NewShardedEmailRateLimiter(defaultEmailInterval),
-		DataExportLimiter:     NewShardedDataExportLimiter(24 * time.Hour),
+		LoginLimiter:         NewShardedRateLimiter(rate.Every(defaultLoginRate), defaultLoginBurst),
+		RegisterLimiter:      NewShardedRateLimiter(rate.Every(defaultRegisterRate), defaultRegisterBurst),
+		ResetPasswordLimiter: NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst),
+		OAuthTokenLimiter:    NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst),
+		EmailLimiter:         NewShardedEmailRateLimiter(defaultEmailInterval),
+		DataExportLimiter:    NewShardedDataExportLimiter(24 * time.Hour),
 	}
 }
 
@@ -429,7 +425,6 @@ func (m *rateLimiterManager) StopAll() {
 	m.RegisterLimiter.Stop()
 	m.ResetPasswordLimiter.Stop()
 	m.OAuthTokenLimiter.Stop()
-	m.InvalidateCodeLimiter.Stop()
 	m.EmailLimiter.Stop()
 	m.DataExportLimiter.Stop()
 	utils.LogInfo("RATELIMIT", "All rate limiters stopped")
@@ -449,10 +444,6 @@ func (m *rateLimiterManager) ResetPasswordRateLimit() gin.HandlerFunc {
 
 func (m *rateLimiterManager) OAuthTokenRateLimit() gin.HandlerFunc {
 	return RateLimitMiddleware(m.OAuthTokenLimiter)
-}
-
-func (m *rateLimiterManager) InvalidateCodeRateLimit() gin.HandlerFunc {
-	return RateLimitMiddleware(m.InvalidateCodeLimiter)
 }
 
 func (m *rateLimiterManager) EmailAllow(email string) bool {
