@@ -18,6 +18,12 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 
 	r := gin.New()
 
+	// 仅信任本地回环（CF Tunnel 架构下 cloudflared 通过本地回环连接本服务）。
+	// 若部署架构变更（直接暴露公网、改用其他反代），需重新评估此处配置。
+	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
+		utils.LogError("ROUTER", "setupRouter", err, "Failed to set trusted proxies")
+	}
+
 	setupMiddleware(r, cfg)
 
 	setupStaticFiles(r, cfg)
