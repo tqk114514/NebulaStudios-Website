@@ -133,6 +133,51 @@ func jwkToRSAPublicKey(k jwk) (*rsa.PublicKey, error) {
 	return pubKey, nil
 }
 
+// isValidMicrosoftIssuer 校验 ID token 的 issuer 是否合法。
+// 使用 common 租户时，Microsoft 返回的 iss 为用户实际所属租户的 ID 而非 "common"：
+//   - 个人账户：https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+//   - 工作/学校账户：https://login.microsoftonline.com/{tenant-guid}/v2.0
+//
+// 校验策略：前缀必须为 https://login.microsoftonline.com/，后缀必须为 /v2.0，
+// 中间部分为租户 ID（UUID 格式或 "common"）。
+func isValidMicrosoftIssuer(iss string) bool {
+	const prefix = "https://login.microsoftonline.com/"
+	const suffix = "/v2.0"
+	if !strings.HasPrefix(iss, prefix) || !strings.HasSuffix(iss, suffix) {
+		return false
+	}
+	tenant := strings.TrimSuffix(strings.TrimPrefix(iss, prefix), suffix)
+	if tenant == "" {
+		return false
+	}
+	// 接受 "common"、"organizations"、"consumers" 或 UUID 格式的租户 ID
+	if tenant == "common" || tenant == "organizations" || tenant == "consumers" {
+		return true
+	}
+	// 校验 UUID 格式（8-4-4-4-12 hex）
+	return isValidUUID(tenant)
+}
+
+// isValidUUID 校验字符串是否为标准 UUID 格式（8-4-4-4-12 hex）
+func isValidUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // extractIDTokenEmail 验证 ID Token 签名后提取 email claim。
 // 个人微软账户的 msUser.mail 可能是别名（如 xxx@outlook.com），
 // 而 ID Token 中的 email claim 才是用户真正绑定的邮箱。
@@ -190,8 +235,12 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 	}
 
 	// 校验 issuer
+	// 使用 common 租户时，ID token 的 iss 不是 "common" 而是用户实际所属租户的 ID：
+	//   - 个人账户：https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+	//   - 工作/学校账户：https://login.microsoftonline.com/{tenant-guid}/v2.0
+	// 因此需要校验 iss 前缀和格式，而非精确匹配 "common"
 	iss, _ := claims["iss"].(string)
-	if iss != microsoftIssuerV2 {
+	if !isValidMicrosoftIssuer(iss) {
 		utils.LogWarn("OAUTH-MS", "ID token issuer mismatch", fmt.Sprintf("iss=%s", iss))
 		return ""
 	}
