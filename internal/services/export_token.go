@@ -26,6 +26,7 @@ type exportTokenEntry struct {
 // ExportTokenService 数据导出 Token 服务，管理一次性下载 Token 的生成和验证
 type ExportTokenService struct {
 	cache    *lru.Cache[string, *exportTokenEntry]
+	mu       sync.Mutex // 保护 ValidateAndConsume 的 Get+Remove 原子性，防止 token 重放
 	stopCh   chan struct{}
 	stopOnce sync.Once
 }
@@ -65,7 +66,11 @@ func (s *ExportTokenService) Generate(userUID string) (string, error) {
 }
 
 // ValidateAndConsume 验证并消费导出 Token，成功返回 userUID，Token 一次性使用后立即删除
+// 加锁保证 Get+Remove 原子性，防止并发请求重放同一个 token
 func (s *ExportTokenService) ValidateAndConsume(token string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	entry, ok := s.cache.Get(token)
 	if !ok {
 		return "", false
