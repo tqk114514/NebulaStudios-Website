@@ -42,6 +42,7 @@ type AuthHandler struct {
 	emailWhitelistRepo models.EmailWhitelistStore
 	limiterMgr         middleware.RateLimiterManager
 	baseURL            string
+	dummyPasswordHash  string // 用于用户不存在时执行 dummy 密码验证，实现恒定时间防枚举
 }
 
 // NewAuthHandler 创建认证 Handler，验证所有必需依赖（userRepo、tokenService、sessionService、
@@ -79,6 +80,12 @@ func NewAuthHandler(
 
 	baseURL := cfg.BaseURL
 
+	// 生成 dummy 密码哈希，用于用户不存在时执行等价耗时的密码验证，防止时序枚举攻击
+	dummyHash, err := utils.HashPassword("timing-constant-dummy-password")
+	if err != nil {
+		return nil, utils.LogError("AUTH", "NewAuthHandler", err, "Failed to generate dummy password hash")
+	}
+
 	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s, whitelistEnabled=%v", baseURL, emailWhitelistRepo != nil))
 
 	return &AuthHandler{
@@ -92,6 +99,7 @@ func NewAuthHandler(
 		emailWhitelistRepo: emailWhitelistRepo,
 		limiterMgr:         limiterMgr,
 		baseURL:            baseURL,
+		dummyPasswordHash:  dummyHash,
 	}, nil
 }
 
@@ -291,6 +299,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	user, err := h.userRepo.FindByEmailOrUsername(ctx, normalizedEmail)
 	if err != nil {
+		// 用户不存在时执行 dummy 密码验证，使响应时间与用户存在但密码错误的情况一致，防止时序枚举
+		if utils.IsDatabaseNotFound(err) {
+			_, _ = utils.VerifyPassword(password, h.dummyPasswordHash)
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - user not found: email=%s, ip=%s", email, clientIP))
+			return
+		}
 		utils.HTTPDatabaseError(c, "AUTH", err, "INVALID_CREDENTIALS")
 		return
 	}
