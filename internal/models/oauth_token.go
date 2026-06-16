@@ -186,7 +186,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, code string) (
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthCodeNotFound
 		}
-		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code=%s", code))
+		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code=%s", utils.TruncateIdentifier(code)))
 	}
 
 	return authCode, nil

@@ -64,7 +64,7 @@ func (r *QRLoginRepository) FindByToken(ctx context.Context, token string) (*QRL
 	)
 
 	if err != nil {
-		return nil, utils.HandleDatabaseError("QRLOGIN", "FindByToken", err, token)
+		return nil, utils.HandleDatabaseError("QRLOGIN", "FindByToken", err, utils.TruncateIdentifier(token))
 	}
 
 	return qrToken, nil
