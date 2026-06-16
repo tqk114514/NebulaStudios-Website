@@ -59,21 +59,27 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	existingUser, err := h.userRepo.FindByEmail(ctx, validatedEmail)
-	if err != nil {
-		if !utils.IsDatabaseNotFound(err) {
-			utils.HTTPDatabaseError(c, "AUTH", err)
-			return
-		}
-	}
-	if existingUser != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "EMAIL_ALREADY_REGISTERED", fmt.Sprintf("Email already registered: %s", validatedEmail))
-		return
-	}
-
+	// 限流检查在邮箱存在性检查之前，防止攻击者在被限流前枚举邮箱
 	if !h.limiterMgr.EmailAllow(validatedEmail) {
 		waitTime := h.limiterMgr.EmailWaitTime(validatedEmail)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
+		return
+	}
+
+	// 邮箱已注册时不泄露状态：执行 dummy CreateToken 保持响应时间一致，返回与未注册相同的成功响应
+	existingUser, err := h.userRepo.FindByEmail(ctx, validatedEmail)
+	if err != nil && !utils.IsDatabaseNotFound(err) {
+		utils.HTTPDatabaseError(c, "AUTH", err)
+		return
+	}
+	if existingUser != nil {
+		_, _, _ = h.tokenService.CreateToken(ctx, "timing-constant-dummy@invalid", services.TokenTypeRegister)
+		utils.LogInfo("AUTH", fmt.Sprintf("SendCode requested for already-registered email (suppressed): email=%s", validatedEmail))
+		utils.RespondSuccess(c, gin.H{
+			"message":    "Code sent",
+			"expireTime": time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli(),
+			"email":      validatedEmail,
+		})
 		return
 	}
 

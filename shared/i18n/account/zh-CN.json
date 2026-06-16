@@ -58,7 +58,6 @@
   "register.codeInvalid": "验证码错误",
   "register.codeExpired": "验证码已过期，请重新获取",
   "register.emailExists": "该邮箱已被注册",
-  "register.emailAlreadyRegistered": "此邮箱已注册，请直接登录",
   "register.usernameExists": "该用户名已被使用",
   "register.fillAllFields": "请填写所有必填项",
   "register.failed": "注册失败，请稍后重试",

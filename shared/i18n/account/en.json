@@ -58,7 +58,6 @@
   "register.codeInvalid": "Invalid verification code",
   "register.codeExpired": "Verification code expired, please request new code",
   "register.emailExists": "Email already registered",
-  "register.emailAlreadyRegistered": "This email is already registered, please sign in",
   "register.usernameExists": "Username already taken",
   "register.fillAllFields": "Please fill in all required fields",
   "register.failed": "Registration failed, please try again later",

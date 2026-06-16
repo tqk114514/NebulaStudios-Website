@@ -131,7 +131,6 @@ export const errorCodeMap: Record<string, string> = {
   'INVALID_EMAIL': 'register.emailInvalid',
   'EMAIL_NOT_SUPPORTED': 'register.emailNotSupported',
   'EMAIL_ALREADY_EXISTS': 'register.emailExists',
-  'EMAIL_ALREADY_REGISTERED': 'register.emailAlreadyRegistered',
   'EMAIL_NOT_FOUND': 'error.emailNotFound',
   'SEND_FAILED': 'register.sendFailed',
 
