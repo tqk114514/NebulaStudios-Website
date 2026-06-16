@@ -187,7 +187,7 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 
 	svcs.TokenService = services.NewTokenService(pool)
 	svcs.CaptchaService = services.NewCaptchaService(cfg)
-	svcs.WSService = services.NewWebSocketService(cfg)
+	svcs.WSService = services.NewWebSocketService(cfg, models.NewQRLoginRepository(pool))
 	svcs.OAuthService = services.NewOAuthService(pool)
 	svcs.ExportService = services.NewExportService()
 	svcs.LimiterMgr = middleware.NewRateLimiterManager()
