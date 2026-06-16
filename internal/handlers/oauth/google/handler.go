@@ -275,9 +275,16 @@ func (h *GoogleHandler) Callback(c *gin.Context) {
 		return
 	}
 
+	// 仅信任已验证的邮箱：未验证邮箱不参与 pending link 绑定逻辑，防止攻击者用未验证邮箱劫持已存在账户
 	email, _ := googleUser["email"].(string)
+	if email != "" {
+		if verified, ok := googleUser["email_verified"].(bool); !ok || !verified {
+			utils.LogWarn("OAUTH-GOOGLE", "Google email not verified, ignoring for linking", fmt.Sprintf("googleID=%s, email=%s", googleID, email))
+			email = ""
+		}
+	}
 	if email == "" {
-		utils.LogWarn("OAUTH-GOOGLE", "No email in Google user info", fmt.Sprintf("googleID=%s", googleID))
+		utils.LogWarn("OAUTH-GOOGLE", "No verified email in Google user info", fmt.Sprintf("googleID=%s", googleID))
 	}
 
 	displayName := "User"
