@@ -23,6 +23,10 @@ func NewDataExportImportRepository(pool *pgxpool.Pool) *DataExportImportReposito
 }
 
 // QueryAllUsers 导出所有用户数据（包含密码哈希等完整字段）
+// 注意：password 字段为 Argon2id 哈希，导出文件本身已通过 AES-GCM 加密保护。
+// 保留密码哈希是为了支持备份恢复后用户可继续使用原密码登录；
+// 离线爆破需先破解 AES-GCM 加密层，风险可控。
+// 导入侧 (ImportUsers) 会校验 password 必须为 $argon2 前缀格式以防篡改。
 func (r *DataExportImportRepository) QueryAllUsers(ctx context.Context) ([]map[string]any, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT uid, username, email, password, avatar_url, microsoft_id,

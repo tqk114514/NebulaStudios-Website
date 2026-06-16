@@ -2,6 +2,7 @@ package services
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -102,7 +103,7 @@ func (s *ExportService) ValidateOTAC(requestID, code, userUID string) error {
 
 	s.currentOTAC.Attempts++
 
-	if s.currentOTAC.Code != code {
+	if subtle.ConstantTimeCompare([]byte(s.currentOTAC.Code), []byte(code)) != 1 {
 		if s.currentOTAC.Attempts >= otacMaxTries {
 			s.currentOTAC = nil
 			return fmt.Errorf("OTAC invalidated after %d failed attempts", otacMaxTries)

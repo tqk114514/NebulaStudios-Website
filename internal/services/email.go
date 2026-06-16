@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	"html"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ var (
 	ErrEmailClientCreateFailed = errors.New("failed to create SMTP client")
 	ErrEmailSendFailed         = errors.New("failed to send email")
 	ErrEmailHeaderInjection    = errors.New("email header injection detected")
+	ErrEmailInvalidVerifyURL   = errors.New("invalid verify URL scheme")
 )
 
 const (
@@ -161,6 +163,11 @@ func (s *EmailService) SendVerificationEmail(to, emailType, language, verifyURL 
 	if verifyURL == "" {
 		return errors.New("verify URL is empty")
 	}
+	// 校验 verifyURL scheme 必须为 http/https，防止 javascript:/data: 等注入
+	parsedURL, err := url.Parse(verifyURL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return ErrEmailInvalidVerifyURL
+	}
 
 	s.mu.RLock()
 	langTexts := s.getLanguageTexts(language)
@@ -246,20 +253,22 @@ func (s *EmailService) getTypeTexts(langTexts map[string]map[string]string, emai
 
 // renderTemplate 渲染邮件模板
 func (s *EmailService) renderTemplate(common, typeTexts map[string]string, verifyURL string) string {
-	html := s.template
+	out := s.template
+	// HTML 上下文转义 verifyURL，防止 & 等字符破坏 HTML 结构（defense in depth）
+	escapedVerifyURL := html.EscapeString(verifyURL)
 
-	html = strings.ReplaceAll(html, "{{PAGE_TITLE}}", safeGet(typeTexts, "pageTitle", "Verification"))
-	html = strings.ReplaceAll(html, "{{DESCRIPTION}}", safeGet(typeTexts, "description", ""))
+	out = strings.ReplaceAll(out, "{{PAGE_TITLE}}", safeGet(typeTexts, "pageTitle", "Verification"))
+	out = strings.ReplaceAll(out, "{{DESCRIPTION}}", safeGet(typeTexts, "description", ""))
 
-	html = strings.ReplaceAll(html, "{{GREETING}}", safeGet(common, "greeting", "Hello"))
-	html = strings.ReplaceAll(html, "{{VERIFY_URL}}", verifyURL)
-	html = strings.ReplaceAll(html, "{{BUTTON_TEXT}}", safeGet(common, "buttonText", "Verify"))
-	html = strings.ReplaceAll(html, "{{LINK_HINT}}", safeGet(common, "linkHint", ""))
-	html = strings.ReplaceAll(html, "{{EXPIRE_NOTICE}}", safeGet(common, "expireNotice", ""))
-	html = strings.ReplaceAll(html, "{{SECURITY_TIP}}", safeGet(common, "securityTip", ""))
-	html = strings.ReplaceAll(html, "{{FOOTER}}", safeGet(common, "footer", ""))
+	out = strings.ReplaceAll(out, "{{GREETING}}", safeGet(common, "greeting", "Hello"))
+	out = strings.ReplaceAll(out, "{{VERIFY_URL}}", escapedVerifyURL)
+	out = strings.ReplaceAll(out, "{{BUTTON_TEXT}}", safeGet(common, "buttonText", "Verify"))
+	out = strings.ReplaceAll(out, "{{LINK_HINT}}", safeGet(common, "linkHint", ""))
+	out = strings.ReplaceAll(out, "{{EXPIRE_NOTICE}}", safeGet(common, "expireNotice", ""))
+	out = strings.ReplaceAll(out, "{{SECURITY_TIP}}", safeGet(common, "securityTip", ""))
+	out = strings.ReplaceAll(out, "{{FOOTER}}", safeGet(common, "footer", ""))
 
-	return html
+	return out
 }
 
 // renderTextBody 渲染纯文本邮件内容

@@ -279,7 +279,7 @@ func (h *MicrosoftHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	email := extractIDTokenEmail(tokenData)
+	email := h.extractIDTokenEmail(c.Request.Context(), tokenData)
 
 	displayName := "User"
 	if dn, ok := msUser["displayName"].(string); ok && dn != "" {

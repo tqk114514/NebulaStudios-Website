@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -184,7 +185,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, codeHash strin
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOAuthCodeNotFound
 		}
 		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code_hash=%s", utils.TruncateIdentifier(codeHash)))
