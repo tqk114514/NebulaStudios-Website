@@ -212,15 +212,6 @@ func RedirectWithSuccess(c *gin.Context, baseURL, path, successCode string) {
 }
 
 // SafeReturnURL 校验登录后的 return URL，防止开放重定向攻击。
-// 仅允许相对于 baseURL 的同源路径（绝对路径或同源完整 URL）。
-// 返回安全的重定向目标；若不安全则返回 fallback。
-//
-// 安全规则：
-//  1. 空字符串直接返回空
-//  2. 必须能被解析为 URL
-//  3. 若包含 scheme/host（绝对 URL），必须与 baseURL 同源
-//  4. 若为相对路径，必须以 "/" 开头但不能以 "//" 开头（防止协议相对 URL 绕过）
-//  5. 路径不能包含回车/换行（防止 Header 注入）
 func SafeReturnURL(returnURL, baseURL, fallback string) string {
 	returnURL = strings.TrimSpace(returnURL)
 	if returnURL == "" {
