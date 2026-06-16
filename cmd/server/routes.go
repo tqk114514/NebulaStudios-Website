@@ -190,7 +190,9 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
-		authAPI.POST("/microsoft/confirm-link", hdlrs.microsoftHandler.ConfirmLink)
+		authAPI.POST("/microsoft/confirm-link",
+			middleware.AuthMiddleware(svcs.SessionService),
+			hdlrs.microsoftHandler.ConfirmLink)
 
 		authAPI.GET("/google", hdlrs.googleHandler.Auth)
 		authAPI.GET("/google/callback", hdlrs.googleHandler.Callback)
@@ -199,7 +201,9 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
 			hdlrs.googleHandler.Unlink)
 		authAPI.GET("/google/pending-link", hdlrs.googleHandler.GetPendingLinkInfo)
-		authAPI.POST("/google/confirm-link", hdlrs.googleHandler.ConfirmLink)
+		authAPI.POST("/google/confirm-link",
+			middleware.AuthMiddleware(svcs.SessionService),
+			hdlrs.googleHandler.ConfirmLink)
 	}
 }
 
