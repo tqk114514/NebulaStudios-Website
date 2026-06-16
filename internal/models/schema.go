@@ -68,7 +68,7 @@ func getTableSchemas() []TableSchema {
 		{
 			Name: "tokens",
 			Columns: []ColumnDefinition{
-				{Name: "token", Type: "VARCHAR(64)", Nullable: false, IsPrimary: true},
+				{Name: "token_hash", Type: "VARCHAR(64)", Nullable: false, IsPrimary: true},
 				{Name: "email", Type: "VARCHAR(255)", Nullable: false},
 				{Name: "type", Type: "VARCHAR(50)", Nullable: true, Default: "'register'"},
 				{Name: "code", Type: "VARCHAR(10)", Nullable: true},
