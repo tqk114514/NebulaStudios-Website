@@ -327,25 +327,32 @@ func (ws *WebSocketService) getShard(token string) *wsClientShard {
 
 // register 注册客户端
 func (ws *WebSocketService) register(client *WSClient) bool {
-	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
-		utils.LogWarn("WS", "Max connections reached, rejecting new client", "")
-		return false
-	}
-
 	shard := ws.getShard(client.token)
 
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
+	// 替换已存在的同 token 客户端：计数不增加，直接替换
 	if existingClient, ok := shard.clients[client.token]; ok {
 		ws.closeClient(existingClient)
-		atomic.AddInt32(&ws.connCount, -1)
+		shard.clients[client.token] = client
 		utils.LogInfo("WS", fmt.Sprintf("Replaced existing client: token=%s", client.token))
+		return true
+	}
+
+	// 新连接：用 CAS 循环原子地检查容量并递增，防止高并发突破 maxConnections
+	for {
+		current := atomic.LoadInt32(&ws.connCount)
+		if current >= maxConnections {
+			utils.LogWarn("WS", "Max connections reached, rejecting new client", fmt.Sprintf("max=%d", maxConnections))
+			return false
+		}
+		if atomic.CompareAndSwapInt32(&ws.connCount, current, current+1) {
+			break
+		}
 	}
 
 	shard.clients[client.token] = client
-	atomic.AddInt32(&ws.connCount, 1)
-
 	utils.LogInfo("WS", fmt.Sprintf("Client registered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount)))
 	return true
 }
