@@ -159,7 +159,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.POST("/send-code", hdlrs.authHandler.SendCode)
 		authAPI.POST("/verify-email", hdlrs.authHandler.VerifyEmail)
 		authAPI.GET("/code-expiry", hdlrs.authHandler.CheckCodeExpiry)
-		authAPI.POST("/verify-code", hdlrs.authHandler.VerifyCode)
+		authAPI.POST("/verify-code", svcs.LimiterMgr.VerifyCodeRateLimit(), hdlrs.authHandler.VerifyCode)
 
 		authAPI.POST("/register", svcs.LimiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
 		authAPI.POST("/login", svcs.LimiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
