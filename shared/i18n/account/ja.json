@@ -58,7 +58,6 @@
   "register.codeInvalid": "認証コードが間違っています",
   "register.codeExpired": "認証コードの有効期限が切れました。再取得してください",
   "register.emailExists": "このメールアドレスは既に登録されています",
-  "register.emailAlreadyRegistered": "このメールは既に登録されています。ログインしてください",
   "register.usernameExists": "このユーザー名は既に使用されています",
   "register.fillAllFields": "すべての必須項目を入力してください",
   "register.failed": "登録に失敗しました。後でもう一度お試しください",
