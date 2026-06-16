@@ -18,11 +18,14 @@ import (
 )
 
 const (
-	BinaryPath       = "/tmp/img-processor"
-	ConnectTimeout   = 5 * time.Second
-	ReadWriteTimeout = 30 * time.Second
-	MaxImageSize     = 10 * 1024 * 1024
-	MaxConcurrent    = 2
+	// imgProcessorDirName 私有临时目录名前缀，权限 0700，防止其他用户写入或预置符号链接
+	imgProcessorDirName = "nebula-imgproc"
+	// imgProcessorFilePrefix 临时二进制文件名前缀，配合 os.CreateTemp 生成随机后缀
+	imgProcessorFilePrefix = "proc-"
+	ConnectTimeout         = 5 * time.Second
+	ReadWriteTimeout       = 30 * time.Second
+	MaxImageSize           = 10 * 1024 * 1024
+	MaxConcurrent          = 2
 )
 
 var (
@@ -45,6 +48,8 @@ type ImgProcessor struct {
 	cmd        *exec.Cmd     // 子进程
 	restarting bool          // 是否正在重启
 	socketPath string        // Unix Socket 路径
+	binaryPath string        // 已写入的二进制路径（每次启动随机生成）
+	tempDir    string        // 私有临时目录路径
 }
 
 // NewImgProcessor 创建图片处理服务
@@ -59,6 +64,13 @@ func NewImgProcessor(socketPath string) *ImgProcessor {
 
 // startProcessor 启动 Zig 处理器
 func (p *ImgProcessor) startProcessor() {
+	// 清理上次启动遗留的临时目录（如重启场景）
+	if p.tempDir != "" {
+		os.RemoveAll(p.tempDir)
+		p.tempDir = ""
+		p.binaryPath = ""
+	}
+
 	if len(imgProcessorBin) == 0 {
 		utils.LogWarn("IMG", "Embedded binary not found, using fallback", "")
 		p.available = false
@@ -67,31 +79,77 @@ func (p *ImgProcessor) startProcessor() {
 
 	expectedHash := sha256.Sum256(imgProcessorBin)
 
-	if err := os.WriteFile(BinaryPath, imgProcessorBin, 0755); err != nil {
-		utils.LogError("IMG", "start", err, "Failed to write binary")
+	// 创建权限 0700 的私有临时目录，防止其他用户预置符号链接或写入文件
+	tempDir, err := os.MkdirTemp("", imgProcessorDirName+"-*")
+	if err != nil {
+		utils.LogError("IMG", "start", err, "Failed to create private temp dir")
 		p.available = false
 		return
 	}
+	if err := os.Chmod(tempDir, 0o700); err != nil {
+		utils.LogError("IMG", "start", err, "Failed to chmod temp dir")
+		os.RemoveAll(tempDir)
+		p.available = false
+		return
+	}
+	p.tempDir = tempDir
 
-	writtenData, err := os.ReadFile(BinaryPath)
+	// 在私有目录内用 os.CreateTemp 生成随机文件名的二进制文件。
+	// CreateTemp 内部使用 O_CREAT|O_EXCL（不覆盖已有文件，不跟随符号链接），
+	// 配合 0700 私有目录和随机文件名，阻断符号链接劫持。
+	tempFile, err := os.CreateTemp(tempDir, imgProcessorFilePrefix)
+	if err != nil {
+		utils.LogError("IMG", "start", err, "Failed to create temp binary file")
+		os.RemoveAll(tempDir)
+		p.available = false
+		return
+	}
+	binaryPath := tempFile.Name()
+
+	if _, err := tempFile.Write(imgProcessorBin); err != nil {
+		utils.LogError("IMG", "start", err, "Failed to write binary")
+		tempFile.Close()
+		os.RemoveAll(tempDir)
+		p.available = false
+		return
+	}
+	if err := tempFile.Close(); err != nil {
+		utils.LogError("IMG", "start", err, "Failed to close binary file")
+		os.RemoveAll(tempDir)
+		p.available = false
+		return
+	}
+	// 显式设置权限为 0700（仅属主可读写执行）
+	if err := os.Chmod(binaryPath, 0o700); err != nil {
+		utils.LogError("IMG", "start", err, "Failed to chmod binary")
+		os.RemoveAll(tempDir)
+		p.available = false
+		return
+	}
+	p.binaryPath = binaryPath
+
+	// 写入后校验哈希，确认内容完整（此时文件已安全写入，校验失败直接清理）
+	writtenData, err := os.ReadFile(binaryPath)
 	if err != nil {
 		utils.LogError("IMG", "start", err, "Failed to verify binary integrity")
+		os.RemoveAll(tempDir)
 		p.available = false
 		return
 	}
 	actualHash := sha256.Sum256(writtenData)
 	if !bytes.Equal(expectedHash[:], actualHash[:]) {
 		utils.LogError("IMG", "start", nil, "Binary integrity check failed: hash mismatch")
-		os.Remove(BinaryPath)
+		os.RemoveAll(tempDir)
 		p.available = false
 		return
 	}
 
 	os.Remove(p.socketPath)
 
-	p.cmd = exec.Command(BinaryPath)
+	p.cmd = exec.Command(binaryPath)
 	if err := p.cmd.Start(); err != nil {
 		utils.LogError("IMG", "start", err, "Failed to start processor")
+		os.RemoveAll(tempDir)
 		p.available = false
 		return
 	}
@@ -119,7 +177,10 @@ func (p *ImgProcessor) Shutdown(ctx context.Context) {
 			utils.LogInfo("IMG", "Image processor stopped")
 		}
 		os.Remove(p.socketPath)
-		os.Remove(BinaryPath)
+		// 清理私有临时目录及其中的二进制文件
+		if p.tempDir != "" {
+			os.RemoveAll(p.tempDir)
+		}
 		close(done)
 	}()
 
