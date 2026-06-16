@@ -448,6 +448,13 @@ func (h *MicrosoftHandler) GetPendingLinkInfo(c *gin.Context) {
 // ConfirmLink 确认绑定，更新数据库后自动登录并清除待绑定 Token
 // POST /api/auth/microsoft/confirm-link
 func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
+	// 校验当前登录用户身份，防止攻击者用窃取的 link_token 绑定到他人账户
+	currentUserUID, ok := middleware.GetUID(c)
+	if !ok || currentUserUID == "" {
+		utils.HTTPErrorResponse(c, "OAUTH-MS", http.StatusUnauthorized, "UNAUTHORIZED", "ConfirmLink called without valid userUID")
+		return
+	}
+
 	token, err := utils.GetLinkTokenCookie(c)
 	token = strings.TrimSpace(token)
 	if err != nil || token == "" {
@@ -465,6 +472,13 @@ func (h *MicrosoftHandler) ConfirmLink(c *gin.Context) {
 	if pendingData == nil {
 		utils.LogError("OAUTH-MS", "ConfirmLink", fmt.Errorf("pending link data is nil"), fmt.Sprintf("token=%s", token))
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		return
+	}
+
+	// 校验当前登录用户与 pending link 的目标用户一致
+	if currentUserUID != pendingData.UserUID {
+		utils.LogWarn("OAUTH-MS", "User mismatch in ConfirmLink", fmt.Sprintf("currentUserUID=%s, pendingUserUID=%s", currentUserUID, pendingData.UserUID))
+		utils.RespondError(c, http.StatusForbidden, "USER_MISMATCH")
 		return
 	}
 
