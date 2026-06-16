@@ -227,7 +227,7 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
 	qrAPI := r.Group("/api/qr-login")
 	{
-		qrAPI.POST("", hdlrs.qrLoginHandler.Generate)
+		qrAPI.POST("", svcs.LimiterMgr.QRLoginRateLimit(), hdlrs.qrLoginHandler.Generate)
 		qrAPI.DELETE("/:token", hdlrs.qrLoginHandler.Cancel)
 		qrAPI.POST("/scan", hdlrs.qrLoginHandler.Scan)
 		qrAPI.POST("/confirm",

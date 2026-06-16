@@ -36,6 +36,8 @@ const (
 	defaultOAuthTokenBurst    = 10
 	defaultVerifyCodeRate     = 10 * time.Second
 	defaultVerifyCodeBurst    = 5
+	defaultQRLoginRate        = 10 * time.Second
+	defaultQRLoginBurst       = 3
 	defaultEmailInterval      = 60 * time.Second
 
 	rateLimiterCleanupInterval       = 5 * time.Minute
@@ -405,6 +407,7 @@ type rateLimiterManager struct {
 	ResetPasswordLimiter *ShardedRateLimiter
 	OAuthTokenLimiter    *ShardedRateLimiter
 	VerifyCodeLimiter    *ShardedRateLimiter
+	QRLoginLimiter       *ShardedRateLimiter
 	EmailLimiter         *ShardedEmailRateLimiter
 	DataExportLimiter    *ShardedDataExportLimiter
 }
@@ -416,6 +419,7 @@ func NewRateLimiterManager() RateLimiterManager {
 		ResetPasswordLimiter: NewShardedRateLimiter(rate.Every(defaultResetPasswordRate), defaultResetPasswordBurst),
 		OAuthTokenLimiter:    NewShardedRateLimiter(rate.Every(defaultOAuthTokenRate), defaultOAuthTokenBurst),
 		VerifyCodeLimiter:    NewShardedRateLimiter(rate.Every(defaultVerifyCodeRate), defaultVerifyCodeBurst),
+		QRLoginLimiter:       NewShardedRateLimiter(rate.Every(defaultQRLoginRate), defaultQRLoginBurst),
 		EmailLimiter:         NewShardedEmailRateLimiter(defaultEmailInterval),
 		DataExportLimiter:    NewShardedDataExportLimiter(24 * time.Hour),
 	}
@@ -430,6 +434,7 @@ func (m *rateLimiterManager) StopAll() {
 	m.ResetPasswordLimiter.Stop()
 	m.OAuthTokenLimiter.Stop()
 	m.VerifyCodeLimiter.Stop()
+	m.QRLoginLimiter.Stop()
 	m.EmailLimiter.Stop()
 	m.DataExportLimiter.Stop()
 	utils.LogInfo("RATELIMIT", "All rate limiters stopped")
@@ -453,6 +458,10 @@ func (m *rateLimiterManager) OAuthTokenRateLimit() gin.HandlerFunc {
 
 func (m *rateLimiterManager) VerifyCodeRateLimit() gin.HandlerFunc {
 	return RateLimitMiddleware(m.VerifyCodeLimiter)
+}
+
+func (m *rateLimiterManager) QRLoginRateLimit() gin.HandlerFunc {
+	return RateLimitMiddleware(m.QRLoginLimiter)
 }
 
 func (m *rateLimiterManager) EmailAllow(email string) bool {
