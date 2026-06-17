@@ -1609,19 +1609,19 @@ function getLogActionIcon(action: string): { svg: string; type: 'normal' | 'dang
       type: 'normal'
     },
     link_microsoft: {
-      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
+      svg: '<img src="{{CDN_URL}}/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
       type: 'success'
     },
     unlink_microsoft: {
-      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
+      svg: '<img src="{{CDN_URL}}/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">',
       type: 'danger'
     },
     link_google: {
-      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
+      svg: '<img src="{{CDN_URL}}/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
       type: 'success'
     },
     unlink_google: {
-      svg: '<img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
+      svg: '<img src="{{CDN_URL}}/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
       type: 'danger'
     },
     delete_account: {
