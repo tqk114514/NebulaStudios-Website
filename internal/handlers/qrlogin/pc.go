@@ -99,7 +99,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	err = h.qrLoginRepo.Delete(ctx, originalToken)
+	err = h.qrLoginRepo.Delete(ctx, models.HashToken(originalToken))
 	if err != nil {
 		utils.LogWarn("QR-LOGIN", "Failed to delete token in Cancel", "")
 	} else {
