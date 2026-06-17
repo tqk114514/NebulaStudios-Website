@@ -133,7 +133,7 @@ func Load() (*Config, error) {
 	newCfg.R2Endpoint = getEnv("R2_ENDPOINT", "")
 	newCfg.R2Bucket = getEnv("R2_BUCKET", "")
 
-	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "")
+	newCfg.DefaultAvatarURL = newCfg.R2URL + "/images/default-avatar.svg"
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
 	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "")
 	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")

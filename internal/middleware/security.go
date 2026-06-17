@@ -18,7 +18,7 @@ const (
 	headerXContentTypeOptions = "nosniff"
 	headerReferrerPolicy      = "strict-origin-when-cross-origin"
 	headerPermissionsPolicy   = "geolocation=(), microphone=(), camera=()"
-	// defaultCSPTemplate CSP 模板，%s 占位符由 CDNURL 注入
+	// defaultCSPTemplate CSP 模板，%s 占位符由 R2_URL 注入
 	defaultCSPTemplate = "default-src 'none'; " +
 		"script-src 'self' %s https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
 		"style-src 'self' %s; " +
