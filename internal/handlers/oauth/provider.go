@@ -360,7 +360,7 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 
 	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI, codeVerifier)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s", clientID))
+		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s, error=%s, redirectURI=%s, hasVerifier=%v", clientID, err.Error(), redirectURI, codeVerifier != ""))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid authorization code")
 		return
 	}
@@ -387,7 +387,7 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 
 	tokenResp, userUID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s", clientID))
+		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s, error=%s", clientID, err.Error()))
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid refresh token")
 		return
 	}
