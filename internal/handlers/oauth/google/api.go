@@ -12,8 +12,10 @@ import (
 	"auth-system/internal/utils"
 )
 
-// doWithProxyFailover 遍历代理列表执行请求，遇到网络错误或 5xx 时自动切换到下一个代理。
-// 仅在网络错误或服务端错误（5xx）时故障转移；2xx/4xx 视为终态
+// doWithProxyFailover 遍历代理列表执行请求，仅 HTTP 200 视为成功（终态）。
+// 网络错误或任何非 200 状态码都自动切换到下一个代理：
+//   - 代理本身故障（404/502 等）→ 重试能恢复
+//   - Google 的真实错误（400 invalid_grant 等）→ 同一 code 在多个代理上结果一致，重试无害
 func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (statusCode int, body []byte, err error)) (int, []byte, error) {
 	if len(h.proxyURLs) == 0 {
 		return 0, nil, fmt.Errorf("no google proxy configured")
@@ -23,7 +25,7 @@ func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (
 	var lastErr error
 	for i, base := range h.proxyURLs {
 		status, body, err := fn(base)
-		if err == nil && status < 500 {
+		if err == nil && status == http.StatusOK {
 			return status, body, nil
 		}
 		lastStatus, lastBody, lastErr = status, body, err
