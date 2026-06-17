@@ -303,6 +303,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 
 	authCode := &models.OAuthAuthCode{
 		Code:                code,
+		CodeHash:            s.hashToken(code),
 		ClientID:            clientID,
 		UserUID:             userUID,
 		RedirectURI:         redirectURI,
