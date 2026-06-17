@@ -12,7 +12,33 @@ import (
 	"auth-system/internal/utils"
 )
 
-// exchangeCodeForToken 通过代理用授权码换取 token
+// doWithProxyFailover 遍历代理列表执行请求，遇到网络错误或 5xx 时自动切换到下一个代理。
+// 仅在网络错误或服务端错误（5xx）时故障转移；2xx/4xx 视为终态
+func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (statusCode int, body []byte, err error)) (int, []byte, error) {
+	if len(h.proxyURLs) == 0 {
+		return 0, nil, fmt.Errorf("no google proxy configured")
+	}
+	var lastStatus int
+	var lastBody []byte
+	var lastErr error
+	for i, base := range h.proxyURLs {
+		status, body, err := fn(base)
+		if err == nil && status < 500 {
+			return status, body, nil
+		}
+		lastStatus, lastBody, lastErr = status, body, err
+		if i < len(h.proxyURLs)-1 {
+			if err != nil {
+				utils.LogWarn("OAUTH-GOOGLE", fmt.Sprintf("%s: proxy %s failed (%v), trying next", op, base, err), "")
+			} else {
+				utils.LogWarn("OAUTH-GOOGLE", fmt.Sprintf("%s: proxy %s returned status %d, trying next", op, base, status), "")
+			}
+		}
+	}
+	return lastStatus, lastBody, lastErr
+}
+
+// exchangeCodeForToken 通过代理用授权码换取 token，支持多代理故障转移
 func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", oauth.ErrOAuthTokenExchange)
@@ -29,26 +55,29 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 	data.Set("redirect_uri", h.redirectURI)
 	data.Set("grant_type", "authorization_code")
 	data.Set("code_verifier", codeVerifier)
+	encoded := data.Encode()
 
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
-	resp, err := client.Post(h.proxyURL+"/token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	status, body, err := h.doWithProxyFailover("token exchange", func(base string) (int, []byte, error) {
+		resp, err := client.Post(base+"/token", "application/x-www-form-urlencoded", strings.NewReader(encoded))
+		if err != nil {
+			return 0, nil, err
+		}
+		defer func(Body io.ReadCloser) {
+			if Body != nil {
+				_ = Body.Close()
+			}
+		}(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		return resp.StatusCode, b, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: request failed: %v", oauth.ErrOAuthTokenExchange, err)
 	}
-	defer func(Body io.ReadCloser) {
-		if Body != nil {
-			_ = Body.Close()
-		}
-	}(resp.Body)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to read response: %v", oauth.ErrOAuthTokenExchange, err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		utils.LogError("OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("status %d", resp.StatusCode), fmt.Sprintf("Token exchange failed with status %d: %s", resp.StatusCode, string(body)))
-		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthTokenExchange, resp.StatusCode)
+	if status != http.StatusOK {
+		utils.LogError("OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("status %d", status), fmt.Sprintf("Token exchange failed with status %d: %s", status, string(body)))
+		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthTokenExchange, status)
 	}
 
 	var result map[string]any
@@ -65,37 +94,38 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 	return result, nil
 }
 
-// getUserInfo 通过代理获取 Google 用户信息
+// getUserInfo 通过代理获取 Google 用户信息，支持多代理故障转移
 func (h *GoogleHandler) getUserInfo(accessToken string) (map[string]any, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", oauth.ErrOAuthUserInfo)
 	}
 
-	req, err := http.NewRequest("GET", h.proxyURL+"/userinfo", nil)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to create request: %v", oauth.ErrOAuthUserInfo, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
-	resp, err := client.Do(req)
+	status, body, err := h.doWithProxyFailover("userinfo", func(base string) (int, []byte, error) {
+		req, err := http.NewRequest("GET", base+"/userinfo", nil)
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		resp, err := client.Do(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		defer func(Body io.ReadCloser) {
+			if Body != nil {
+				_ = Body.Close()
+			}
+		}(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		return resp.StatusCode, b, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: request failed: %v", oauth.ErrOAuthUserInfo, err)
 	}
-	defer func(Body io.ReadCloser) {
-		if Body != nil {
-			_ = Body.Close()
-		}
-	}(resp.Body)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to read response: %v", oauth.ErrOAuthUserInfo, err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		utils.LogError("OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("status %d", resp.StatusCode), fmt.Sprintf("Get user info failed with status %d: %s", resp.StatusCode, string(body)))
-		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthUserInfo, resp.StatusCode)
+	if status != http.StatusOK {
+		utils.LogError("OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("status %d", status), fmt.Sprintf("Get user info failed with status %d: %s", status, string(body)))
+		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthUserInfo, status)
 	}
 
 	var result map[string]any
