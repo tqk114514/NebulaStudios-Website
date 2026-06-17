@@ -206,7 +206,19 @@ func (c *Config) IsMicrosoftOAuthConfigured() bool {
 }
 
 func (c *Config) IsGoogleOAuthConfigured() bool {
-	return c.GoogleClientID != "" && c.GoogleClientSecret != "" && c.GoogleProxyURL != ""
+	return c.GoogleClientID != "" && c.GoogleClientSecret != "" && len(c.GoogleProxyURLs()) > 0
+}
+
+// GoogleProxyURLs 解析 GOOGLE_PROXY_URL（逗号分隔），返回去空格后的代理地址列表。
+// 支持单个或多个代理，用于故障转移：首个失败时自动切换到下一个。
+func (c *Config) GoogleProxyURLs() []string {
+	var urls []string
+	for _, s := range strings.Split(c.GoogleProxyURL, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			urls = append(urls, s)
+		}
+	}
+	return urls
 }
 
 func (c *Config) IsQRLoginConfigured() bool {

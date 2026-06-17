@@ -29,7 +29,7 @@ type GoogleHandler struct {
 	userCache        services.UserCacheStore
 	clientID         string
 	clientSecret     string
-	proxyURL         string
+	proxyURLs        []string
 	redirectURI      string
 	baseURL          string
 	defaultAvatarURL string
@@ -56,16 +56,16 @@ func NewGoogleHandler(
 	baseURL := cfg.BaseURL
 	clientID := cfg.GoogleClientID
 	clientSecret := cfg.GoogleClientSecret
-	proxyURL := cfg.GoogleProxyURL
+	proxyURLs := cfg.GoogleProxyURLs()
 
-	if clientID == "" || clientSecret == "" || proxyURL == "" {
+	if clientID == "" || clientSecret == "" || len(proxyURLs) == 0 {
 		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)", "")
 	}
 
 	redirectURI := baseURL + "/api/auth/google/callback"
 
-	utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("GoogleHandler initialized: baseURL=%s, configured=%v",
-		baseURL, clientID != "" && clientSecret != "" && proxyURL != ""))
+	utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("GoogleHandler initialized: baseURL=%s, proxies=%d, configured=%v",
+		baseURL, len(proxyURLs), clientID != "" && clientSecret != "" && len(proxyURLs) > 0))
 
 	return &GoogleHandler{
 		userRepo:         userRepo,
@@ -74,7 +74,7 @@ func NewGoogleHandler(
 		userCache:        userCache,
 		clientID:         clientID,
 		clientSecret:     clientSecret,
-		proxyURL:         proxyURL,
+		proxyURLs:        proxyURLs,
 		redirectURI:      redirectURI,
 		baseURL:          baseURL,
 		defaultAvatarURL: cfg.DefaultAvatarURL,
@@ -82,7 +82,7 @@ func NewGoogleHandler(
 }
 
 func (h *GoogleHandler) isConfigured() bool {
-	return h.clientID != "" && h.clientSecret != "" && h.proxyURL != ""
+	return h.clientID != "" && h.clientSecret != "" && len(h.proxyURLs) > 0
 }
 
 // Auth 发起 Google OAuth 授权，重定向到 Google 授权页面
