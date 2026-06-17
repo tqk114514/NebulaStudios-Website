@@ -147,7 +147,7 @@ async function init(): Promise<void> {
     // 如果是 "microsoft"，用实际的微软头像 URL
     const avatarUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url : user.avatar_url;
     const img = document.createElement('img');
-    img.src = avatarUrl || 'https://cdn01.nebulastudios.top/images/default-avatar.svg';
+    img.src = avatarUrl || '{{CDN_URL}}/images/default-avatar.svg';
     img.alt = user.username;
     currentAvatarEl.appendChild(img);
   }

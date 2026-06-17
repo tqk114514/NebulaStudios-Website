@@ -153,6 +153,9 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		name := f.Name()
 		if strings.HasSuffix(name, ".js") {
 			originalPath := filepath.Join(outdir, name)
+			if err := replaceCDNURLInFile(originalPath); err != nil {
+				log.Printf("[BUILD] WARN: Failed to replace {{CDN_URL}} in %s: %v", name, err)
+			}
 			_, err := addToManifest(originalPath)
 			if err != nil {
 				log.Printf("[BUILD] WARN: Failed to hash %s: %v", name, err)

@@ -66,6 +66,23 @@ type AssetManifest map[string]string
 
 var assetManifest AssetManifest = make(AssetManifest)
 
+// replaceCDNURL 将内容中的 {{CDN_URL}} 占位符替换为构建时注入的 CDN 地址
+func replaceCDNURL(content string) string {
+	return strings.ReplaceAll(content, "{{CDN_URL}}", cdnURL)
+}
+
+// replaceCDNURLInFile 替换文件中的 {{CDN_URL}} 占位符，无占位符时跳过
+func replaceCDNURLInFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(string(data), "{{CDN_URL}}") {
+		return nil
+	}
+	return os.WriteFile(path, []byte(replaceCDNURL(string(data))), filePerm)
+}
+
 func hashFile(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nebula Account</title>
-  <link rel="stylesheet" href="https://cdn01.nebulastudios.top/fonts/fonts.css">
+  <link rel="stylesheet" href="{{CDN_URL}}/fonts/fonts.css">
   <link rel="stylesheet" href="/shared/css/general.css">
   <link rel="stylesheet" href="/account/assets/css/common.css">
   <link rel="stylesheet" href="/account/assets/css/login.css">
@@ -40,11 +40,11 @@
     
     <div class="oauth-buttons">
       <a href="/api/auth/microsoft" class="button-secondary">
-        <img src="https://cdn01.nebulastudios.top/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">
+        <img src="{{CDN_URL}}/images/logo/microsoft/Symbol.svg" alt="Microsoft" width="20" height="20">
         <span data-i18n="login.microsoftLogin"></span>
       </a>
       <a href="/api/auth/google" class="button-secondary">
-        <img src="https://cdn01.nebulastudios.top/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">
+        <img src="{{CDN_URL}}/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">
         <span data-i18n="login.googleLogin"></span>
       </a>
       <button type="button" id="qr-login-btn" class="button-secondary is-hidden">
@@ -107,6 +107,6 @@
   <script type="module" src="/account/assets/js/login.js"></script>
   <script type="module" src="/shared/js/translations.js"></script>
   <script type="module" src="/shared/js/cookie-consent.js"></script>
-  <script src="https://cdn01.nebulastudios.top/js/ua-parser.@1.0.41.min.js.br"></script>
+  <script src="{{CDN_URL}}/js/ua-parser.@1.0.41.min.js.br"></script>
 </body>
 </html>

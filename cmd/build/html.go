@@ -137,6 +137,7 @@ func minifyHTMLFile(src, outDir string) error {
 
 	content := string(data)
 	content = replaceAssetRefs(content)
+	content = replaceCDNURL(content)
 	minified := minifyHTML(content)
 	filename := filepath.Base(src)
 	dst := filepath.Join(outDir, filename)
@@ -171,6 +172,7 @@ func minifyHTMLFileWithHeader(src, outDir, headerContent, initLangScript string)
 	}
 
 	content = replaceAssetRefs(content)
+	content = replaceCDNURL(content)
 
 	minified := minifyHTML(content)
 	filename := filepath.Base(src)
@@ -198,6 +200,7 @@ func minifyHTMLFileTo(src, dst string) error {
 
 	content := string(data)
 	content = replaceAssetRefs(content)
+	content = replaceCDNURL(content)
 	minified := minifyHTML(content)
 
 	if err := os.WriteFile(dst, []byte(minified), filePerm); err != nil {
