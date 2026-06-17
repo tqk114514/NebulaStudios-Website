@@ -18,12 +18,13 @@ const (
 	headerXContentTypeOptions = "nosniff"
 	headerReferrerPolicy      = "strict-origin-when-cross-origin"
 	headerPermissionsPolicy   = "geolocation=(), microphone=(), camera=()"
-	defaultCSP                = "default-src 'none'; " +
-		"script-src 'self' https://cdn01.nebulastudios.top https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
-		"style-src 'self' https://cdn01.nebulastudios.top; " +
-		"font-src 'self' https://cdn01.nebulastudios.top; " +
-		"connect-src 'self' https://static.cloudflareinsights.com https://cdn01.nebulastudios.top; " +
-		"img-src 'self' data: blob: https://cdn01.nebulastudios.top https://*.googleusercontent.com; " +
+	// defaultCSPTemplate CSP 模板，%s 占位符由 CDNURL 注入
+	defaultCSPTemplate = "default-src 'none'; " +
+		"script-src 'self' %s https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
+		"style-src 'self' %s; " +
+		"font-src 'self' %s; " +
+		"connect-src 'self' https://static.cloudflareinsights.com %s; " +
+		"img-src 'self' data: blob: %s https://*.googleusercontent.com; " +
 		"frame-ancestors 'self'; " +
 		"frame-src 'self' https://challenges.cloudflare.com; " +
 		"base-uri 'self'; " +
@@ -47,6 +48,7 @@ type SecurityConfig struct {
 	EnableReferrerPolicy    bool
 	EnablePermissionsPolicy bool
 	CustomCSP               string
+	CDNURL                  string
 }
 
 // htmlPages HTML 页面路径映射
@@ -72,11 +74,12 @@ var htmlPages = map[string]bool{
 }
 
 // SecurityHeaders 安全头中间件（使用默认配置：启用 CSP、ReferrerPolicy、PermissionsPolicy）
-func SecurityHeaders() gin.HandlerFunc {
+func SecurityHeaders(cdnURL string) gin.HandlerFunc {
 	return SecurityHeadersWithConfig(SecurityConfig{
 		EnableCSP:               true,
 		EnableReferrerPolicy:    true,
 		EnablePermissionsPolicy: true,
+		CDNURL:                  cdnURL,
 	})
 }
 
@@ -101,7 +104,7 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 				c.AbortWithStatusJSON(500, gin.H{"error": "Internal server error"})
 				return
 			}
-			csp := buildCSPWithNonce(nonce)
+			csp := buildCSPWithNonce(nonce, config.CDNURL)
 			if config.CustomCSP != "" {
 				csp = config.CustomCSP
 			}
@@ -303,10 +306,10 @@ func GetCSPNonce(c *gin.Context) string {
 	return ""
 }
 
-// buildCSPWithNonce 在 defaultCSP 的 script-src 和 style-src 中注入 nonce 指令
-func buildCSPWithNonce(nonce string) string {
+// buildCSPWithNonce 在 CSP 模板的 script-src 和 style-src 中注入 nonce 指令，并用 cdnURL 填充占位符
+func buildCSPWithNonce(nonce, cdnURL string) string {
 	nonceDirective := "'nonce-" + nonce + "'"
-	csp := defaultCSP
+	csp := fmt.Sprintf(defaultCSPTemplate, cdnURL, cdnURL, cdnURL, cdnURL, cdnURL)
 	csp = strings.Replace(csp, "script-src ", "script-src "+nonceDirective+" ", 1)
 	csp = strings.Replace(csp, "style-src ", "style-src "+nonceDirective+" ", 1)
 	return csp
