@@ -393,7 +393,9 @@ function parseHashRoute(): { policy: PolicyType; version: string | null } {
 }
 
 function navigateTo(policy: PolicyType): void {
-  window.location.hash = policy;
+  // 保持当前版本（由 loadPolicyMarkdown 的语言回退逻辑处理）
+  const { version } = parseHashRoute();
+  window.location.hash = version ? `${policy}/${version}` : policy;
 }
 
 function updateNavActive(policy: PolicyType): void {
@@ -472,9 +474,12 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   contentEl.classList.add('fade-in');
   contentEl.innerHTML = html;
 
-  const versionInfo = await fetchVersionInfo();
-  if (versionInfo) {
-    contentEl.innerHTML += createVersionElement(versionInfo);
+  // 仅最新版本的隐私政策显示服务器/代码库版本信息
+  if (type === 'privacy' && !specifiedVersion) {
+    const versionInfo = await fetchVersionInfo();
+    if (versionInfo) {
+      contentEl.innerHTML += createVersionElement(versionInfo);
+    }
   }
 
   // 隐藏加载动画，显示内容
