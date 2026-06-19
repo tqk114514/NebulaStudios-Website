@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"auth-system/internal/config"
@@ -90,16 +89,16 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
-// PolicyVersionEntry 政策版本条目，包含版本号、更新日期与生效日期
-type PolicyVersionEntry struct {
-	Version       string `json:"version"`
+// policyVersionMeta 对应 manifest.json 中每个文件条目的元数据
+type policyVersionMeta struct {
 	UpdateDate    string `json:"update_date"`
 	EffectiveDate string `json:"effective_date"`
 }
 
-// GetPolicyVersions 获取政策版本列表，按政策类型和语言分组
-// 通过读取 dist/shared/i18n/policy/manifest.json 获取版本元数据
-// 响应结构：{ policyType: { lang: [{version, update_date, effective_date}, ...] } }
+// GetPolicyVersions 获取政策版本清单
+// 读取 dist/shared/i18n/policy/manifest.json 并原样返回其嵌套结构：
+// { policyType: { lang: { filename: { update_date, effective_date } } } }
+// 后端仅做读取与格式校验，不对结构做扁平化或排序
 // GET /api/policy/versions
 func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
@@ -111,41 +110,15 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 		return
 	}
 
-	// 解析 manifest：{ type: { lang: { filename: { update_date, effective_date } } } }
-	var manifest map[string]map[string]map[string]struct {
-		UpdateDate    string `json:"update_date"`
-		EffectiveDate string `json:"effective_date"`
-	}
+	// 校验 manifest 格式：{ type: { lang: { filename: { update_date, effective_date } } } }
+	var manifest map[string]map[string]map[string]policyVersionMeta
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		utils.LogError("STATIC", "GetPolicyVersions", err, "Failed to parse manifest")
 		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_INVALID", "Policy manifest is invalid")
 		return
 	}
 
-	// 转换为响应结构：{ type: { lang: [{version, update_date, effective_date}, ...] } }
-	// 按 effective_date 降序排序（最新版本在前）
-	result := make(map[string]map[string][]PolicyVersionEntry)
-	for policyType, langs := range manifest {
-		result[policyType] = make(map[string][]PolicyVersionEntry)
-		for lang, files := range langs {
-			entries := make([]PolicyVersionEntry, 0, len(files))
-			for filename, meta := range files {
-				// 文件名形如 "2026-03-24.md"，去掉 .md 后缀作为版本号
-				version := strings.TrimSuffix(filename, ".md")
-				entries = append(entries, PolicyVersionEntry{
-					Version:       version,
-					UpdateDate:    meta.UpdateDate,
-					EffectiveDate: meta.EffectiveDate,
-				})
-			}
-			sort.Slice(entries, func(i, j int) bool {
-				return entries[i].EffectiveDate > entries[j].EffectiveDate
-			})
-			result[policyType][lang] = entries
-		}
-	}
-
-	utils.RespondSuccessWithData(c, result)
+	utils.RespondSuccessWithData(c, manifest)
 }
 
 // GetVersion 获取服务端与代码库版本（repo commit 缓存 10 分钟）

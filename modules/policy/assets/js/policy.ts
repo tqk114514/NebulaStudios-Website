@@ -26,9 +26,8 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
 // ==================== 类型定义 ====================
 
-// 政策版本条目（与后端 PolicyVersionEntry 对应）
-interface PolicyVersionEntry {
-  version: string;
+// 政策版本元数据（与 manifest.json 中每个文件条目对应）
+interface PolicyVersionMeta {
   update_date: string;
   effective_date: string;
 }
@@ -43,8 +42,8 @@ interface LoadPolicyResult {
 // ==================== 状态管理 ====================
 
 let currentPolicy: PolicyType = 'privacy';
-// 政策版本结构：{ policyType: { lang: [{version, update_date, effective_date}, ...] } }
-let policyVersions: Record<string, Record<string, PolicyVersionEntry[]>> = {};
+// 政策版本结构（与 manifest.json 镜像）：{ policyType: { lang: { filename: { update_date, effective_date } } } }
+let policyVersions: Record<string, Record<string, Record<string, PolicyVersionMeta>>> = {};
 // 缓存键：{policyType}:{lang}
 let policyCache: Record<string, LoadPolicyResult> = {};
 
@@ -80,6 +79,29 @@ async function loadPolicyVersions(): Promise<void> {
   }
 }
 
+// 从 manifest 中的文件名键提取版本号（去掉 .md 后缀）
+function filenameToVersion(filename: string): string {
+  return filename.replace(/\.md$/, '');
+}
+
+// 获取指定语言下 effective_date 最大的版本条目
+// 返回 { version, meta } 或 null（语言不存在或无文件时）
+function getLatestEntryForLang(type: PolicyType, lang: string): { version: string; meta: PolicyVersionMeta } | null {
+  const files = policyVersions[type]?.[lang];
+  if (!files) return null;
+
+  let latestVersion = '';
+  let latestMeta: PolicyVersionMeta | null = null;
+  for (const filename in files) {
+    const meta = files[filename];
+    if (!latestMeta || meta.effective_date > latestMeta.effective_date) {
+      latestMeta = meta;
+      latestVersion = filenameToVersion(filename);
+    }
+  }
+  return latestMeta ? { version: latestVersion, meta: latestMeta } : null;
+}
+
 // 获取政策的最新版本号（所有语言中 effective_date 最大的版本）
 function getLatestVersion(type: PolicyType): string {
   if (!policyVersions[type]) return '';
@@ -87,13 +109,10 @@ function getLatestVersion(type: PolicyType): string {
   let latestVersion = '';
   let latestEffectiveDate = '';
   for (const lang in policyVersions[type]) {
-    const entries = policyVersions[type][lang];
-    if (entries && entries.length > 0) {
-      const top = entries[0]; // 后端已按 effective_date 降序排序
-      if (top.effective_date > latestEffectiveDate) {
-        latestEffectiveDate = top.effective_date;
-        latestVersion = top.version;
-      }
+    const entry = getLatestEntryForLang(type, lang);
+    if (entry && entry.meta.effective_date > latestEffectiveDate) {
+      latestEffectiveDate = entry.meta.effective_date;
+      latestVersion = entry.version;
     }
   }
   return latestVersion;
@@ -134,33 +153,33 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
   let displayVersion = '';
   
   // 规则1：检查当前语言版本是否等于最新版本
-  if (policyVersions[type][currentLang] && policyVersions[type][currentLang].length > 0) {
-    const currentLangEntry = policyVersions[type][currentLang][0];
-    if (currentLangEntry.version === latestVersion) {
-      markdown = await tryLoad(currentLang, currentLangEntry.version);
-      if (markdown) {
-        displayLang = currentLang;
-        displayVersion = currentLangEntry.version;
-      }
+  const currentLangEntry = getLatestEntryForLang(type, currentLang);
+  if (currentLangEntry && currentLangEntry.version === latestVersion) {
+    markdown = await tryLoad(currentLang, currentLangEntry.version);
+    if (markdown) {
+      displayLang = currentLang;
+      displayVersion = currentLangEntry.version;
     }
   }
 
   // 规则2：如果规则1失败，尝试使用 zh-CN
-  if (!markdown && policyVersions[type]['zh-CN'] && policyVersions[type]['zh-CN'].length > 0) {
-    const zhCnEntry = policyVersions[type]['zh-CN'][0];
-    markdown = await tryLoad('zh-CN', zhCnEntry.version);
-    if (markdown) {
-      isFallback = true;
-      displayLang = 'zh-CN';
-      displayVersion = zhCnEntry.version;
+  if (!markdown) {
+    const zhCnEntry = getLatestEntryForLang(type, 'zh-CN');
+    if (zhCnEntry) {
+      markdown = await tryLoad('zh-CN', zhCnEntry.version);
+      if (markdown) {
+        isFallback = true;
+        displayLang = 'zh-CN';
+        displayVersion = zhCnEntry.version;
+      }
     }
   }
 
   // 规则3：如果规则2也失败，尝试找到有最新版本的任意语言
   if (!markdown) {
     for (const lang in policyVersions[type]) {
-      const entries = policyVersions[type][lang];
-      if (entries && entries.length > 0 && entries[0].version === latestVersion) {
+      const entry = getLatestEntryForLang(type, lang);
+      if (entry && entry.version === latestVersion) {
         markdown = await tryLoad(lang, latestVersion);
         if (markdown) {
           isFallback = true;
