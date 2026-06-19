@@ -2,5 +2,7 @@
   "policy.privacyPolicy": "개인정보 처리방침",
   "policy.termsOfService": "서비스 약관",
   "policy.cookiePolicy": "쿠키 정책",
-  "policy.versionFallback": "{policy} [{version}]는 {lang} 버전이 제공되지 않습니다. 현재 버전: {displayLang}"
+  "policy.versionFallback": "{policy} [{version}]는 {lang} 버전이 제공되지 않습니다. 현재 버전: {displayLang}",
+  "policy.historyNotice": "과거 버전을 보고 있습니다",
+  "policy.historyLatest": "최신 버전 보기"
 }

@@ -2,5 +2,7 @@
   "policy.privacyPolicy": "プライバシーポリシー",
   "policy.termsOfService": "利用規約",
   "policy.cookiePolicy": "Cookie ポリシー",
-  "policy.versionFallback": "{policy} [{version}] は {lang} 版が提供されていません。現在のバージョン：{displayLang}"
+  "policy.versionFallback": "{policy} [{version}] は {lang} 版が提供されていません。現在のバージョン：{displayLang}",
+  "policy.historyNotice": "過去のバージョンを表示中",
+  "policy.historyLatest": "最新バージョンを表示"
 }

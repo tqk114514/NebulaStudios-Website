@@ -2,5 +2,7 @@
   "policy.privacyPolicy": "隐私政策",
   "policy.termsOfService": "服务条款",
   "policy.cookiePolicy": "Cookie 政策",
-  "policy.versionFallback": "{policy}[{version}] 暂未提供 {lang} 版本。当前版本为：{displayLang}"
+  "policy.versionFallback": "{policy}[{version}] 暂未提供 {lang} 版本。当前版本为：{displayLang}",
+  "policy.historyNotice": "您正在查看历史版本",
+  "policy.historyLatest": "查看最新版本"
 }

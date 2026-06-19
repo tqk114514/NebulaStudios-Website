@@ -2,5 +2,7 @@
   "policy.privacyPolicy": "Privacy Policy",
   "policy.termsOfService": "Terms of Service",
   "policy.cookiePolicy": "Cookie Policy",
-  "policy.versionFallback": "{policy} [{version}] is not available in {lang}. Current version: {displayLang}"
+  "policy.versionFallback": "{policy} [{version}] is not available in {lang}. Current version: {displayLang}",
+  "policy.historyNotice": "You are viewing a historical version",
+  "policy.historyLatest": "View latest version"
 }
