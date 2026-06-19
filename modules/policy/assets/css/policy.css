@@ -57,7 +57,8 @@
 }
 
 /* --- 历史版本提示横幅 --- */
-.policy-history-notice {
+.policy-history-notice,
+.policy-fallback-warning {
   padding: 16px;
   margin-bottom: 24px;
   background: var(--dim);
@@ -68,7 +69,8 @@
   color: var(--fg);
 }
 
-.policy-history-notice a {
+.policy-history-notice a,
+.policy-fallback-warning a {
   color: var(--fg);
   text-decoration: underline;
   text-underline-offset: 3px;

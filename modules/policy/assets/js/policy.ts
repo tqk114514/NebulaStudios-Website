@@ -437,17 +437,7 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   // 使用 DOMPurify 净化 HTML
   html = DOMPurify.sanitize(html);
 
-  // 历史版本提示横幅（指定版本且不是最新生效版本时显示）
-  const latestVersion = getLatestVersion(type);
-  if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion) {
-    const t = (window as any).t;
-    if (t) {
-      const noticeHtml = `<div class="policy-history-notice">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
-      html = noticeHtml + html;
-    }
-  }
-
-  // 如果是回退显示，添加提示信息
+  // 语言回退提示（先加，显示在下方）
   if (result.isFallback) {
     const t = (window as any).t;
     if (t) {
@@ -461,8 +451,18 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
         .replace('{lang}', langName)
         .replace('{displayLang}', displayLangName);
 
-      const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: 0.12em; color: var(--fg);">${formattedMessage}</div>`;
+      const warningDiv = `<div class="policy-fallback-warning">${formattedMessage}</div>`;
       html = warningDiv + html;
+    }
+  }
+
+  // 历史版本提示横幅（后加，显示在上方）
+  const latestVersion = getLatestVersion(type);
+  if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion) {
+    const t = (window as any).t;
+    if (t) {
+      const noticeHtml = `<div class="policy-history-notice">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+      html = noticeHtml + html;
     }
   }
 
