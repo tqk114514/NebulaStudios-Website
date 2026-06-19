@@ -474,17 +474,27 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   contentEl.classList.add('fade-in');
   contentEl.innerHTML = html;
 
-  // 仅最新版本的隐私政策显示服务器/代码库版本信息
+  // 仅最新版本的隐私政策显示服务器/代码库版本信息（占位符，异步加载不阻塞政策显示）
   if (type === 'privacy' && !specifiedVersion) {
-    const versionInfo = await fetchVersionInfo();
-    if (versionInfo) {
-      contentEl.innerHTML += createVersionElement(versionInfo);
-    }
+    contentEl.innerHTML += '<div class="version-info-loading"><div class="loader-spinner"></div></div>';
   }
 
   // 隐藏加载动画，显示内容
   loadingEl.classList.add('is-hidden');
   contentEl.classList.add('is-visible');
+
+  // 异步加载版本信息，替换占位符
+  if (type === 'privacy' && !specifiedVersion) {
+    const versionInfo = await fetchVersionInfo();
+    const placeholder = contentEl.querySelector('.version-info-loading');
+    if (placeholder) {
+      if (versionInfo) {
+        placeholder.outerHTML = createVersionElement(versionInfo);
+      } else {
+        placeholder.remove();
+      }
+    }
+  }
 }
 
 // ==================== 路由处理 ====================
