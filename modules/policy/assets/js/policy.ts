@@ -424,11 +424,11 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   // 历史版本提示横幅（指定版本且不是最新生效版本时显示）
   const latestVersion = getLatestVersion(type);
   if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion) {
-    const t = (window as any).t || ((k: string) => k);
-    const noticeText = t('policy.historyNotice') || '您正在查看历史版本';
-    const latestText = t('policy.historyLatest') || '查看最新版本';
-    const noticeHtml = `<div class="policy-history-notice">${noticeText}（${specifiedVersion}）<a href="#${type}">${latestText}</a></div>`;
-    html = noticeHtml + html;
+    const t = (window as any).t;
+    if (t) {
+      const noticeHtml = `<div class="policy-history-notice">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+      html = noticeHtml + html;
+    }
   }
 
   // 如果是回退显示，添加提示信息
@@ -472,7 +472,17 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
 let currentRouteKey = '';
 
 async function handleRouteChange(): Promise<void> {
-  const { policy, version } = parseHashRoute();
+  let { policy, version } = parseHashRoute();
+
+  // 如果指定版本等于最新生效版本，清除版本号
+  // #privacy 就代表最新生效版，无需冗余带版本号
+  if (version) {
+    const latestVersion = getLatestVersion(policy);
+    if (latestVersion && version === latestVersion) {
+      version = null;
+      history.replaceState(null, '', `#${policy}`);
+    }
+  }
 
   // 避免重复渲染
   const routeKey = `${policy}:${version || 'latest'}`;
