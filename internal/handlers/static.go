@@ -2,11 +2,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"auth-system/internal/config"
@@ -88,54 +90,58 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
+// PolicyVersionEntry 政策版本条目，包含版本号、更新日期与生效日期
+type PolicyVersionEntry struct {
+	Version       string `json:"version"`
+	UpdateDate    string `json:"update_date"`
+	EffectiveDate string `json:"effective_date"`
+}
+
 // GetPolicyVersions 获取政策版本列表，按政策类型和语言分组
+// 通过读取 dist/shared/i18n/policy/manifest.json 获取版本元数据
+// 响应结构：{ policyType: { lang: [{version, update_date, effective_date}, ...] } }
 // GET /api/policy/versions
 func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
-	policyBasePath := "dist/shared/i18n/policy"
+	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
 
-	// 政策类型列表
-	policyTypes := []string{"privacy", "terms", "cookies"}
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		utils.LogError("STATIC", "GetPolicyVersions", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		return
+	}
 
-	// 支持的语言列表
-	supportedLanguages := []string{"zh-CN", "zh-TW", "en", "ja", "ko"}
+	// 解析 manifest：{ type: { lang: { filename: { update_date, effective_date } } } }
+	var manifest map[string]map[string]map[string]struct {
+		UpdateDate    string `json:"update_date"`
+		EffectiveDate string `json:"effective_date"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		utils.LogError("STATIC", "GetPolicyVersions", err, "Failed to parse manifest")
+		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_INVALID", "Policy manifest is invalid")
+		return
+	}
 
-	// 结果结构：{ policyType: { lang: [versions] } }
-	result := make(map[string]map[string][]string)
-
-	for _, policyType := range policyTypes {
-		result[policyType] = make(map[string][]string)
-
-		for _, lang := range supportedLanguages {
-			policyPath := filepath.Join(policyBasePath, policyType, lang)
-
-			entries, err := os.ReadDir(policyPath)
-			if err != nil {
-				utils.LogWarn("STATIC", fmt.Sprintf("Failed to read policy directory: %s", policyPath), err.Error())
-				result[policyType][lang] = []string{}
-				continue
+	// 转换为响应结构：{ type: { lang: [{version, update_date, effective_date}, ...] } }
+	// 按 effective_date 降序排序（最新版本在前）
+	result := make(map[string]map[string][]PolicyVersionEntry)
+	for policyType, langs := range manifest {
+		result[policyType] = make(map[string][]PolicyVersionEntry)
+		for lang, files := range langs {
+			entries := make([]PolicyVersionEntry, 0, len(files))
+			for filename, meta := range files {
+				// 文件名形如 "2026-03-24.md"，去掉 .md 后缀作为版本号
+				version := strings.TrimSuffix(filename, ".md")
+				entries = append(entries, PolicyVersionEntry{
+					Version:       version,
+					UpdateDate:    meta.UpdateDate,
+					EffectiveDate: meta.EffectiveDate,
+				})
 			}
-
-			var versions []string
-			for _, entry := range entries {
-				if !entry.IsDir() {
-					name := entry.Name()
-					// 跳过 .br 预压缩文件，只从 .md 源文件提取版本
-					if strings.HasSuffix(name, ".md") {
-						versions = append(versions, name[:len(name)-3])
-					}
-				}
-			}
-
-			// 按日期降序排序
-			for i := range versions {
-				for j := i + 1; j < len(versions); j++ {
-					if versions[i] < versions[j] {
-						versions[i], versions[j] = versions[j], versions[i]
-					}
-				}
-			}
-
-			result[policyType][lang] = versions
+			sort.Slice(entries, func(i, j int) bool {
+				return entries[i].EffectiveDate > entries[j].EffectiveDate
+			})
+			result[policyType][lang] = entries
 		}
 	}
 
