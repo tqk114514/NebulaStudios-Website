@@ -244,25 +244,41 @@ async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | 
 
   // 指定版本：直接按回退顺序加载该版本
   if (specifiedVersion) {
-    // 规则1：当前语言
-    let markdown = await tryLoad(currentLang, specifiedVersion);
-    if (markdown) {
-      return { markdown, isFallback: false, displayLang: currentLang, displayVersion: specifiedVersion };
+    const filename = `${specifiedVersion}.md`;
+    let result: LoadPolicyResult | null = null;
+
+    // 规则1：当前语言有该版本（先查 manifest 避免无效 404）
+    if (policyVersions[type][currentLang]?.[filename]) {
+      const markdown = await tryLoad(currentLang, specifiedVersion);
+      if (markdown) {
+        result = { markdown, isFallback: false, displayLang: currentLang, displayVersion: specifiedVersion };
+      }
     }
 
-    // 规则2：zh-CN
-    markdown = await tryLoad('zh-CN', specifiedVersion);
-    if (markdown) {
-      return { markdown, isFallback: true, displayLang: 'zh-CN', displayVersion: specifiedVersion };
+    // 规则2：zh-CN 有该版本
+    if (!result && policyVersions[type]['zh-CN']?.[filename]) {
+      const markdown = await tryLoad('zh-CN', specifiedVersion);
+      if (markdown) {
+        result = { markdown, isFallback: true, displayLang: 'zh-CN', displayVersion: specifiedVersion };
+      }
     }
 
     // 规则3：任意有该版本的语言
-    for (const lang in policyVersions[type]) {
-      if (lang === currentLang || lang === 'zh-CN') continue;
-      markdown = await tryLoad(lang, specifiedVersion);
-      if (markdown) {
-        return { markdown, isFallback: true, displayLang: lang, displayVersion: specifiedVersion };
+    if (!result) {
+      for (const lang in policyVersions[type]) {
+        if (lang === currentLang || lang === 'zh-CN') continue;
+        if (!policyVersions[type][lang]?.[filename]) continue;
+        const markdown = await tryLoad(lang, specifiedVersion);
+        if (markdown) {
+          result = { markdown, isFallback: true, displayLang: lang, displayVersion: specifiedVersion };
+          break;
+        }
       }
+    }
+
+    if (result) {
+      policyCache[cacheKey] = result;
+      return result;
     }
 
     return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
