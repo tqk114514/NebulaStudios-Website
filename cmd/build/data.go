@@ -114,7 +114,15 @@ func buildPolicyMarkdown() error {
 		}
 	}
 
+	// 复制 manifest.json（政策版本清单，后端读取以获取各版本的公示/生效日期）
+	manifestSrc := filepath.Join(sharedDir, "i18n/policy/manifest.json")
+	manifestDst := filepath.Join(distDir, "shared/i18n/policy/manifest.json")
+	if err := copyFile(manifestSrc, manifestDst); err != nil {
+		return fmt.Errorf("failed to copy policy manifest: %w", err)
+	}
+	processedCount++
+
 	atomic.AddInt64(&stats.FilesProcessed, int64(processedCount))
-	log.Printf("[BUILD] Processed %d policy markdown files", processedCount)
+	log.Printf("[BUILD] Processed %d policy markdown files (incl. manifest)", processedCount)
 	return nil
 }
