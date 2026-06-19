@@ -9,7 +9,7 @@
  * - 支持扩展新政策类型
  */
 
-import { initLanguageSwitcher, updatePageTitle, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
 
 declare const marked: {
   parse: (markdown: string) => string;
@@ -220,7 +220,7 @@ function getLatestVersion(type: PolicyType): string {
 // 加载政策 Markdown 文件（带版本回退逻辑）
 // specifiedVersion 为 null/undefined 时加载最新生效版本，否则加载指定版本
 async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | null): Promise<LoadPolicyResult> {
-  const currentLang = (window as any).currentLanguage || 'zh-CN';
+  const currentLang = getCurrentLanguage();
   const cacheKey = specifiedVersion ? `${type}:${currentLang}:${specifiedVersion}` : `${type}:${currentLang}`;
 
   if (policyCache[cacheKey]) {
@@ -411,7 +411,7 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   const contentEl = container?.querySelector('.policy-content');
   if (!container || !loadingEl || !contentEl) return;
 
-  const currentLang = (window as any).currentLanguage || 'zh-CN';
+  const currentLang = getCurrentLanguage();
   const cacheKey = specifiedVersion ? `${type}:${currentLang}:${specifiedVersion}` : `${type}:${currentLang}`;
 
   // 先检查缓存，如果没有缓存则显示加载动画
@@ -500,8 +500,9 @@ async function handleRouteChange(): Promise<void> {
     }
   }
 
-  // 避免重复渲染
-  const routeKey = `${policy}:${version || 'latest'}`;
+  // 避免重复渲染（包含语言，确保切换语言时重新渲染）
+  const currentLang = getCurrentLanguage();
+  const routeKey = `${policy}:${version || 'latest'}:${currentLang}`;
   if (routeKey === currentRouteKey && document.querySelector('.policy-content.is-visible')) return;
   currentRouteKey = routeKey;
 
