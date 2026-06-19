@@ -13,9 +13,22 @@
 
   <!-- 政策导航 -->
   <nav class="policy-nav">
-    <a href="#privacy" class="policy-nav-item" data-policy="privacy" data-i18n="policy.privacyPolicy"></a>
-    <a href="#terms" class="policy-nav-item" data-policy="terms" data-i18n="policy.termsOfService"></a>
-    <a href="#cookies" class="policy-nav-item" data-policy="cookies" data-i18n="policy.cookiePolicy"></a>
+    <div class="policy-nav-items">
+      <a href="#privacy" class="policy-nav-item" data-policy="privacy" data-i18n="policy.privacyPolicy"></a>
+      <a href="#terms" class="policy-nav-item" data-policy="terms" data-i18n="policy.termsOfService"></a>
+      <a href="#cookies" class="policy-nav-item" data-policy="cookies" data-i18n="policy.cookiePolicy"></a>
+    </div>
+    <div class="language-switcher version-switcher is-hidden" role="listbox">
+      <button class="language-current" aria-haspopup="listbox" aria-expanded="false">
+        <span class="lang-text"></span>
+        <svg class="lang-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="language-dropdown" role="listbox">
+        <!-- 版本选项由 JS 动态生成 -->
+      </div>
+    </div>
   </nav>
   
   <!-- 政策内容容器 -->

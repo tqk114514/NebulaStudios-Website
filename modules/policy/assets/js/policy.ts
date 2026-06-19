@@ -64,6 +64,105 @@ function getPolicyDisplayName(type: PolicyType): string {
   return t(key) || type;
 }
 
+// 获取政策的所有版本（跨语言并集，按 effective_date 降序）
+// 用于版本切换器选项填充
+function getAllVersions(type: PolicyType): { version: string; meta: PolicyVersionMeta }[] {
+  if (!policyVersions[type]) return [];
+
+  const versionMap = new Map<string, PolicyVersionMeta>();
+  for (const lang in policyVersions[type]) {
+    const files = policyVersions[type][lang];
+    for (const filename in files) {
+      const version = filenameToVersion(filename);
+      if (!versionMap.has(version)) {
+        versionMap.set(version, files[filename]);
+      }
+    }
+  }
+
+  return Array.from(versionMap.entries())
+    .map(([version, meta]) => ({ version, meta }))
+    .sort((a, b) => b.meta.effective_date.localeCompare(a.meta.effective_date));
+}
+
+// ==================== 版本切换器 ====================
+
+// 初始化版本切换器的开关交互（点击按钮 toggle、点击外部关闭、ESC 关闭）
+function initVersionSwitcherToggle(): void {
+  const switcher = document.querySelector('.version-switcher');
+  const currentBtn = document.querySelector('.version-switcher .language-current');
+  if (!switcher || !currentBtn) return;
+
+  currentBtn.addEventListener('click', (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isOpen = switcher.classList.toggle('is-open');
+    currentBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!switcher.contains(e.target as Node)) {
+      switcher.classList.remove('is-open');
+      currentBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && switcher.classList.contains('is-open')) {
+      switcher.classList.remove('is-open');
+      currentBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+// 根据当前政策类型填充版本切换器选项
+// 只有一个版本时隐藏切换器；多个版本时显示并填充选项
+function updateVersionSwitcher(type: PolicyType, currentVersion: string): void {
+  const switcher = document.querySelector('.version-switcher');
+  const dropdown = document.querySelector('.version-switcher .language-dropdown');
+  const textEl = document.querySelector('.version-switcher .lang-text');
+  if (!switcher || !dropdown || !textEl) return;
+
+  const allVersions = getAllVersions(type);
+
+  // 只有一个版本时无需切换器
+  if (allVersions.length <= 1) {
+    switcher.classList.add('is-hidden');
+    return;
+  }
+
+  switcher.classList.remove('is-hidden');
+
+  // 填充选项（复用 .language-option 类名以套用 general.css 样式）
+  dropdown.innerHTML = allVersions.map(({ version }) => `
+    <button class="language-option ${version === currentVersion ? 'active' : ''}" data-version="${version}" role="option" aria-selected="${version === currentVersion}">
+      <span>${version}</span>
+      <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  `).join('');
+
+  // 更新当前显示文本
+  textEl.textContent = currentVersion;
+
+  // 绑定选项点击事件
+  dropdown.querySelectorAll('.language-option').forEach(option => {
+    option.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const version = option.getAttribute('data-version');
+      if (!version) return;
+
+      switcher.classList.remove('is-open');
+      (document.querySelector('.version-switcher .language-current') as HTMLElement)?.setAttribute('aria-expanded', 'false');
+
+      // 通过更新 hash 触发路由变化，由 handleRouteChange 统一处理
+      window.location.hash = `${type}/${version}`;
+    });
+  });
+}
+
 // ==================== 数据加载 ====================
 
 async function loadPolicyVersions(): Promise<void> {
@@ -119,23 +218,19 @@ function getLatestVersion(type: PolicyType): string {
 }
 
 // 加载政策 Markdown 文件（带版本回退逻辑）
-async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
+// specifiedVersion 为 null/undefined 时加载最新生效版本，否则加载指定版本
+async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | null): Promise<LoadPolicyResult> {
   const currentLang = (window as any).currentLanguage || 'zh-CN';
-  const cacheKey = `${type}:${currentLang}`;
-  
+  const cacheKey = specifiedVersion ? `${type}:${currentLang}:${specifiedVersion}` : `${type}:${currentLang}`;
+
   if (policyCache[cacheKey]) {
     return policyCache[cacheKey];
   }
-  
+
   if (!policyVersions[type]) {
     return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
   }
-  
-  const latestVersion = getLatestVersion(type);
-  if (!latestVersion) {
-    return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
-  }
-  
+
   // 尝试加载文件的辅助函数
   const tryLoad = async (lang: string, version: string): Promise<string | null> => {
     try {
@@ -146,12 +241,44 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
       return null;
     }
   };
-  
+
+  // 指定版本：直接按回退顺序加载该版本
+  if (specifiedVersion) {
+    // 规则1：当前语言
+    let markdown = await tryLoad(currentLang, specifiedVersion);
+    if (markdown) {
+      return { markdown, isFallback: false, displayLang: currentLang, displayVersion: specifiedVersion };
+    }
+
+    // 规则2：zh-CN
+    markdown = await tryLoad('zh-CN', specifiedVersion);
+    if (markdown) {
+      return { markdown, isFallback: true, displayLang: 'zh-CN', displayVersion: specifiedVersion };
+    }
+
+    // 规则3：任意有该版本的语言
+    for (const lang in policyVersions[type]) {
+      if (lang === currentLang || lang === 'zh-CN') continue;
+      markdown = await tryLoad(lang, specifiedVersion);
+      if (markdown) {
+        return { markdown, isFallback: true, displayLang: lang, displayVersion: specifiedVersion };
+      }
+    }
+
+    return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
+  }
+
+  // 未指定版本：加载最新生效版本（按 effective_date 最大）
+  const latestVersion = getLatestVersion(type);
+  if (!latestVersion) {
+    return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
+  }
+
   let markdown: string | null = null;
   let isFallback = false;
   let displayLang = '';
   let displayVersion = '';
-  
+
   // 规则1：检查当前语言版本是否等于最新版本
   const currentLangEntry = getLatestEntryForLang(type, currentLang);
   if (currentLangEntry && currentLangEntry.version === latestVersion) {
@@ -190,12 +317,12 @@ async function loadPolicyMarkdown(type: PolicyType): Promise<LoadPolicyResult> {
       }
     }
   }
-  
+
   const result: LoadPolicyResult = { markdown, isFallback, displayLang, displayVersion };
   if (markdown) {
     policyCache[cacheKey] = result;
   }
-  
+
   return result;
 }
 
@@ -237,9 +364,16 @@ function createVersionElement(info: VersionInfo): string {
 
 // ==================== 路由管理 ====================
 
-function getHashRoute(): PolicyType {
+// 解析 hash 路由：{policy}[/{version}]
+// 例：#privacy → 最新生效版；#privacy/2025-12-18 → 指定历史版本
+function parseHashRoute(): { policy: PolicyType; version: string | null } {
   const hash = window.location.hash.slice(1); // 去掉 #
-  return hash || 'privacy'; // 默认显示隐私政策
+  if (!hash) return { policy: 'privacy', version: null };
+
+  const parts = hash.split('/');
+  const policy = parts[0] as PolicyType;
+  const version = parts[1] || null;
+  return { policy, version };
 }
 
 function navigateTo(policy: PolicyType): void {
@@ -255,14 +389,14 @@ function updateNavActive(policy: PolicyType): void {
 
 // ==================== 内容渲染 ====================
 
-async function renderPolicy(type: PolicyType): Promise<void> {
+async function renderPolicy(type: PolicyType, specifiedVersion?: string | null): Promise<void> {
   const container = document.querySelector('.policy-container');
   const loadingEl = container?.querySelector('.policy-loading');
   const contentEl = container?.querySelector('.policy-content');
   if (!container || !loadingEl || !contentEl) return;
 
   const currentLang = (window as any).currentLanguage || 'zh-CN';
-  const cacheKey = `${type}:${currentLang}`;
+  const cacheKey = specifiedVersion ? `${type}:${currentLang}:${specifiedVersion}` : `${type}:${currentLang}`;
 
   // 先检查缓存，如果没有缓存则显示加载动画
   const hasCache = !!policyCache[cacheKey];
@@ -271,7 +405,7 @@ async function renderPolicy(type: PolicyType): Promise<void> {
     contentEl.classList.remove('is-visible');
   }
 
-  const result = await loadPolicyMarkdown(type);
+  const result = await loadPolicyMarkdown(type, specifiedVersion);
 
   if (!result.markdown) {
     loadingEl.classList.add('is-hidden');
@@ -287,6 +421,16 @@ async function renderPolicy(type: PolicyType): Promise<void> {
   // 使用 DOMPurify 净化 HTML
   html = DOMPurify.sanitize(html);
 
+  // 历史版本提示横幅（指定版本且不是最新生效版本时显示）
+  const latestVersion = getLatestVersion(type);
+  if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion) {
+    const t = (window as any).t || ((k: string) => k);
+    const noticeText = t('policy.historyNotice') || '您正在查看历史版本';
+    const latestText = t('policy.historyLatest') || '查看最新版本';
+    const noticeHtml = `<div class="policy-history-notice">${noticeText}（${specifiedVersion}）<a href="#${type}">${latestText}</a></div>`;
+    html = noticeHtml + html;
+  }
+
   // 如果是回退显示，添加提示信息
   if (result.isFallback) {
     const t = (window as any).t;
@@ -300,7 +444,7 @@ async function renderPolicy(type: PolicyType): Promise<void> {
         .replace('{version}', result.displayVersion)
         .replace('{lang}', langName)
         .replace('{displayLang}', displayLangName);
-      
+
       const warningDiv = `<div class="policy-fallback-warning" style="padding: 16px; margin-bottom: 24px; background: var(--dim); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: 0.12em; color: var(--fg);">${formattedMessage}</div>`;
       html = warningDiv + html;
     }
@@ -324,15 +468,28 @@ async function renderPolicy(type: PolicyType): Promise<void> {
 
 // ==================== 路由处理 ====================
 
+// 当前路由键，用于避免重复渲染
+let currentRouteKey = '';
+
 async function handleRouteChange(): Promise<void> {
-  const policy = getHashRoute();
+  const { policy, version } = parseHashRoute();
 
   // 避免重复渲染
-  if (policy === currentPolicy && document.querySelector('.policy-title')) return;
+  const routeKey = `${policy}:${version || 'latest'}`;
+  if (routeKey === currentRouteKey && document.querySelector('.policy-content.is-visible')) return;
+  currentRouteKey = routeKey;
 
   currentPolicy = policy;
   updateNavActive(policy);
-  await renderPolicy(policy);
+
+  // 确定要显示的版本（用于版本切换器高亮）
+  const allVersions = getAllVersions(policy);
+  const displayVersion = version || (allVersions.length > 0 ? allVersions[0].version : '');
+
+  // 更新版本切换器
+  updateVersionSwitcher(policy, displayVersion);
+
+  await renderPolicy(policy, version);
 
   // 滚动到顶部
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -348,6 +505,9 @@ async function init(): Promise<void> {
 
     // 加载政策版本列表
     await loadPolicyVersions();
+
+    // 初始化版本切换器开关交互
+    initVersionSwitcherToggle();
 
     // 初始渲染
     await handleRouteChange();

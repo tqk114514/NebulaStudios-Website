@@ -16,12 +16,18 @@
   left: 0;
   right: 0;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding: 12px 20px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   z-index: 900;
+}
+
+.policy-nav-items {
+  display: flex;
+  gap: 8px;
 }
 
 .policy-nav-item {
@@ -43,6 +49,29 @@
 .policy-nav-item.active {
   color: var(--fg);
   font-weight: 700;
+}
+
+/* --- 版本切换器（复用 general.css 中 .language-switcher 系列样式，此处仅补充钩子类） --- */
+.version-switcher.is-hidden {
+  display: none;
+}
+
+/* --- 历史版本提示横幅 --- */
+.policy-history-notice {
+  padding: 16px;
+  margin-bottom: 24px;
+  background: var(--dim);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  letter-spacing: 0.12em;
+  color: var(--fg);
+}
+
+.policy-history-notice a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* --- 文档容器 --- */
