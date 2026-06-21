@@ -92,7 +92,7 @@ func (s *TokenService) CreateToken(ctx context.Context, email, tokenType string)
 
 	token := &models.Token{
 		Token:      tokenStr,
-		TokenHash:  models.HashToken(tokenStr),
+		TokenHash:  utils.HashToken(tokenStr),
 		Email:      normalizedEmail,
 		Type:       normalizedType,
 		CreatedAt:  now,
@@ -114,7 +114,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 	}
 
 	now := time.Now().UnixMilli()
-	tokenHash := models.HashToken(tokenStr)
+	tokenHash := utils.HashToken(tokenStr)
 
 	token, err := s.tokenRepo.MarkUsedAndGet(ctx, tokenHash, now)
 	if err != nil {

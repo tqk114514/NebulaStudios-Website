@@ -87,13 +87,18 @@ func NewQRLoginHandler(
 
 	utils.LogInfo("QR-LOGIN", fmt.Sprintf("QRLoginHandler initialized: configured=%v", isConfigured))
 
-	return &QRLoginHandler{
+	h := &QRLoginHandler{
 		sessionService: sessionService,
 		wsService:      wsService,
 		qrLoginRepo:    qrLoginRepo,
 		encryptKey:     derivedKey,
 		isConfigured:   isConfigured,
-	}, nil
+	}
+
+	// 向 WebSocket 服务注册解密回调，使 WS 握手时能校验加密 token
+	wsService.SetTokenDecrypter(h.decryptToken)
+
+	return h, nil
 }
 
 // decryptToken 解密 Token 并提取原始 Token

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"auth-system/internal/models"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -46,7 +45,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	tokenHash := models.HashToken(originalToken)
+	tokenHash := utils.HashToken(originalToken)
 
 	qrToken, err := h.qrLoginRepo.FindByToken(ctx, tokenHash)
 	if err != nil {
@@ -136,7 +135,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	tokenHash := models.HashToken(originalToken)
+	tokenHash := utils.HashToken(originalToken)
 
 	qrToken, err := h.qrLoginRepo.FindByToken(ctx, tokenHash)
 	if err != nil {
@@ -206,7 +205,7 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	tokenHash := models.HashToken(originalToken)
+	tokenHash := utils.HashToken(originalToken)
 
 	err = h.qrLoginRepo.Delete(ctx, tokenHash)
 	if err != nil {

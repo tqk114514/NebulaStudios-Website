@@ -39,7 +39,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 
 	qrToken := &models.QRLoginToken{
 		Token:       token,
-		TokenHash:   models.HashToken(token),
+		TokenHash:   utils.HashToken(token),
 		Status:      QRStatusPending,
 		PcIP:        pcIP,
 		PcUserAgent: pcUserAgent,
@@ -59,7 +59,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	})
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to marshal payload")
-		_ = h.qrLoginRepo.Delete(ctx, models.HashToken(token))
+		_ = h.qrLoginRepo.Delete(ctx, utils.HashToken(token))
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -67,7 +67,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 	encryptedToken, err := utils.EncryptAESGCM(payload, h.encryptKey)
 	if err != nil {
 		utils.LogError("QR-LOGIN", "Generate", err, "Failed to encrypt token")
-		_ = h.qrLoginRepo.Delete(ctx, models.HashToken(token))
+		_ = h.qrLoginRepo.Delete(ctx, utils.HashToken(token))
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -99,7 +99,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	err = h.qrLoginRepo.Delete(ctx, models.HashToken(originalToken))
+	err = h.qrLoginRepo.Delete(ctx, utils.HashToken(originalToken))
 	if err != nil {
 		utils.LogWarn("QR-LOGIN", "Failed to delete token in Cancel", "")
 	} else {
@@ -139,7 +139,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, models.HashToken(originalToken), sessionToken)
+	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, utils.HashToken(originalToken), sessionToken)
 	if err != nil {
 		errStr := err.Error()
 		switch {

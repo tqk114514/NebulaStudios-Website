@@ -5,7 +5,6 @@ import (
 	"auth-system/internal/utils"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -303,7 +302,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 
 	authCode := &models.OAuthAuthCode{
 		Code:                code,
-		CodeHash:            s.hashToken(code),
+		CodeHash:            utils.HashToken(code),
 		ClientID:            clientID,
 		UserUID:             userUID,
 		RedirectURI:         redirectURI,
@@ -327,7 +326,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 
 // ExchangeAuthorizationCode 用授权码换取 Token
 func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI, codeVerifier string) (*OAuthTokenResponse, string, error) {
-	authCode, err := s.authCodeRepo.FindByCode(ctx, models.HashToken(code))
+	authCode, err := s.authCodeRepo.FindByCode(ctx, utils.HashToken(code))
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthCodeNotFound) {
 			return nil, "", ErrOAuthCodeNotFound
@@ -379,7 +378,7 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 
 // RefreshAccessToken 刷新 Access Token
 func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, clientID string) (*OAuthTokenResponse, string, error) {
-	tokenHash := s.hashToken(refreshToken)
+	tokenHash := utils.HashToken(refreshToken)
 
 	token, err := s.refreshTokenRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
@@ -413,7 +412,7 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 
 // ValidateAccessToken 验证 Access Token
 func (s *OAuthService) ValidateAccessToken(ctx context.Context, accessToken string) (*models.OAuthAccessToken, error) {
-	tokenHash := s.hashToken(accessToken)
+	tokenHash := utils.HashToken(accessToken)
 
 	token, err := s.accessTokenRepo.FindByTokenHash(ctx, tokenHash)
 	if err != nil {
@@ -432,7 +431,7 @@ func (s *OAuthService) ValidateAccessToken(ctx context.Context, accessToken stri
 
 // RevokeToken 撤销 Token（始终返回成功，防止探测）
 func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
-	tokenHash := s.hashToken(token)
+	tokenHash := utils.HashToken(token)
 	_ = s.accessTokenRepo.DeleteByTokenHash(ctx, tokenHash)
 	_ = s.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
 	return nil
@@ -489,7 +488,7 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 	}
 
 	accessTokenModel := &models.OAuthAccessToken{
-		TokenHash: s.hashToken(accessToken),
+		TokenHash: utils.HashToken(accessToken),
 		ClientID:  clientID,
 		UserUID:   userUID,
 		Scope:     scope,
@@ -500,7 +499,7 @@ func (s *OAuthService) createTokenPair(ctx context.Context, clientID string, use
 	}
 
 	refreshTokenModel := &models.OAuthRefreshToken{
-		TokenHash:     s.hashToken(refreshToken),
+		TokenHash:     utils.HashToken(refreshToken),
 		ClientID:      clientID,
 		UserUID:       userUID,
 		Scope:         scope,
@@ -528,10 +527,4 @@ func (s *OAuthService) generateRandomHex(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-// hashToken 计算 Token 的 SHA-256 哈希
-func (s *OAuthService) hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }

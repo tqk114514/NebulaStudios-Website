@@ -59,14 +59,15 @@ type wsClientShard struct {
 
 // WebSocketService 分片 WebSocket 服务
 type WebSocketService struct {
-	shards      [wsShardCount]*wsClientShard
-	connCount   int32
-	shutdown    chan struct{}
-	wg          sync.WaitGroup
-	isShutdown  bool
-	mu          sync.RWMutex
-	upgrader    websocket.Upgrader
-	qrLoginRepo models.QRLoginStore
+	shards         [wsShardCount]*wsClientShard
+	connCount      int32
+	shutdown       chan struct{}
+	wg             sync.WaitGroup
+	isShutdown     bool
+	mu             sync.RWMutex
+	upgrader       websocket.Upgrader
+	qrLoginRepo    models.QRLoginStore
+	tokenDecrypter func(string) (string, error) // 解密加密 token 为原始 token，用于 DB 校验
 }
 
 // WSMessage WebSocket 消息
@@ -128,6 +129,14 @@ func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *W
 	return ws
 }
 
+// SetTokenDecrypter 注册 token 解密回调，由 QRLoginHandler 初始化时调用
+func (ws *WebSocketService) SetTokenDecrypter(fn func(string) (string, error)) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	ws.tokenDecrypter = fn
+	utils.LogInfo("WS", "Token decrypter registered")
+}
+
 // HandleQRLogin 处理扫码登录 WebSocket 连接
 func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	if ws.IsShutdown() {
@@ -151,10 +160,28 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 		return
 	}
 
+	ws.mu.RLock()
+	decrypter := ws.tokenDecrypter
+	ws.mu.RUnlock()
+
+	if decrypter == nil {
+		utils.LogError("WS", "HandleQRLogin", nil, "Token decrypter not configured")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "service not configured"})
+		return
+	}
+
+	// 前端传入的是加密 token，需解密为原始 token 后再哈希查库
+	originalToken, err := decrypter(token)
+	if err != nil {
+		utils.LogWarn("WS", "Failed to decrypt QR token for WebSocket", fmt.Sprintf("err=%v", err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, models.HashToken(token))
+	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, utils.HashToken(originalToken))
 	if err != nil {
 		utils.LogWarn("WS", "Invalid QR token for WebSocket", fmt.Sprintf("token=%s, err=%v", utils.TruncateIdentifier(token), err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})

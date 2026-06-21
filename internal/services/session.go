@@ -188,7 +188,7 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 		return "", "", ErrTokenError
 	}
 
-	tokenHash := models.HashToken(refreshTokenStr)
+	tokenHash := utils.HashToken(refreshTokenStr)
 
 	existing, findErr := s.sessionTokenRepo.FindByHash(ctx, tokenHash)
 	if findErr != nil {
@@ -348,7 +348,7 @@ func (s *SessionService) generateRefreshToken(ctx context.Context, uid string, b
 	}
 
 	tokenStr := hex.EncodeToString(bytes)
-	tokenHash := models.HashToken(tokenStr)
+	tokenHash := utils.HashToken(tokenStr)
 
 	familyIDBytes := make([]byte, 16)
 	if _, err := rand.Read(familyIDBytes); err != nil {
