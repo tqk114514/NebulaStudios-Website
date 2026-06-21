@@ -157,7 +157,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		return
 	}
 
-	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, tokenHash, userUID, pcSessionToken)
+	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, tokenHash, userUID, utils.HashToken(pcSessionToken))
 	if err != nil {
 		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")

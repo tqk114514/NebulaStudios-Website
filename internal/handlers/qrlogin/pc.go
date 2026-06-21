@@ -139,7 +139,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, utils.HashToken(originalToken), sessionToken)
+	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, utils.HashToken(originalToken), utils.HashToken(sessionToken))
 	if err != nil {
 		errStr := err.Error()
 		switch {

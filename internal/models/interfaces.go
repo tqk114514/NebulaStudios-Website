@@ -51,10 +51,10 @@ type QRLoginStore interface {
 	FindByToken(ctx context.Context, tokenHash string) (*QRLoginToken, error)
 	UpdateStatus(ctx context.Context, tokenHash, status string, scannedAt *int64) error
 	UpdateStatusWithCondition(ctx context.Context, tokenHash, fromStatus, toStatus string, scannedAt *int64) (bool, error)
-	ConfirmLogin(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) error
-	ConfirmLoginWithCondition(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) (bool, error)
+	ConfirmLogin(ctx context.Context, tokenHash string, userUID string, pcSessionTokenHash string) error
+	ConfirmLoginWithCondition(ctx context.Context, tokenHash string, userUID string, pcSessionTokenHash string) (bool, error)
 	Delete(ctx context.Context, tokenHash string) error
-	ConsumeAndSetSession(ctx context.Context, tokenHash, pcSessionToken string) (string, error)
+	ConsumeAndSetSession(ctx context.Context, tokenHash, pcSessionTokenHash string) (string, error)
 }
 
 // EmailWhitelistStore 邮件白名单数据访问接口
