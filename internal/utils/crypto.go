@@ -217,7 +217,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 
 // EncryptAESGCM 使用 AES-256-GCM 加密数据
 // key 必须是 32 字节（256 位）
-// 返回格式：iv.authTag.ciphertext（三段 base64，兼容 Node.js 版本）
+// 返回格式：iv.authTag.ciphertext（三段 base64 URLEncoding，URL 安全）
 func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 	if len(plaintext) == 0 {
 		LogWarn("CRYPTO", "Attempted to encrypt empty plaintext")
@@ -260,9 +260,9 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 	actualCiphertext := ciphertext[:len(ciphertext)-tagSize]
 	authTag := ciphertext[len(ciphertext)-tagSize:]
 
-	result := base64.StdEncoding.EncodeToString(nonce) + "." +
-		base64.StdEncoding.EncodeToString(authTag) + "." +
-		base64.StdEncoding.EncodeToString(actualCiphertext)
+	result := base64.URLEncoding.EncodeToString(nonce) + "." +
+		base64.URLEncoding.EncodeToString(authTag) + "." +
+		base64.URLEncoding.EncodeToString(actualCiphertext)
 
 	LogDebug("CRYPTO", fmt.Sprintf("Data encrypted successfully: plaintext_size=%d, ciphertext_size=%d", len(plaintext), len(result)))
 	return result, nil
@@ -270,7 +270,7 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 
 // DecryptAESGCM 使用 AES-256-GCM 解密数据
 // key 必须是 32 字节（256 位）
-// 输入格式：iv.authTag.ciphertext（三段 base64，兼容 Node.js 版本）
+// 输入格式：iv.authTag.ciphertext（三段 base64 URLEncoding，URL 安全）
 func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 	if ciphertextB64 == "" {
 		LogWarn("CRYPTO", "Attempted to decrypt empty ciphertext")
@@ -288,7 +288,7 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 		return nil, ErrInvalidCiphertextFormat
 	}
 
-	nonce, err := base64.StdEncoding.DecodeString(parts[0])
+	nonce, err := base64.URLEncoding.DecodeString(parts[0])
 	if err != nil {
 		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode nonce: %v", err))
 		return nil, fmt.Errorf("%w: invalid nonce", ErrDecryptionFailed)
@@ -299,7 +299,7 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: invalid nonce size", ErrDecryptionFailed)
 	}
 
-	authTag, err := base64.StdEncoding.DecodeString(parts[1])
+	authTag, err := base64.URLEncoding.DecodeString(parts[1])
 	if err != nil {
 		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode authTag: %v", err))
 		return nil, fmt.Errorf("%w: invalid authTag", ErrDecryptionFailed)
@@ -310,7 +310,7 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: invalid authTag size", ErrDecryptionFailed)
 	}
 
-	ciphertext, err := base64.StdEncoding.DecodeString(parts[2])
+	ciphertext, err := base64.URLEncoding.DecodeString(parts[2])
 	if err != nil {
 		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode ciphertext: %v", err))
 		return nil, fmt.Errorf("%w: invalid ciphertext", ErrDecryptionFailed)
