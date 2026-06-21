@@ -11,10 +11,7 @@
 
 import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
 import { marked } from '../../../../shared/js/lib/markedjs-marked@18.0.5/src/marked.ts';
-
-declare const DOMPurify: {
-  sanitize: (html: string) => string;
-};
+import DOMPurify from '../../../../shared/js/lib/cure53-DOMPurify@3.4.11/src/purify.ts';
 
 // ==================== 类型定义 ====================
 
