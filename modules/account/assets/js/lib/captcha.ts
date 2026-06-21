@@ -44,7 +44,7 @@ declare global {
 
 // ==================== 全局共享状态 ====================
 
-const SDK_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const SDK_URL = '{{TURNSTILE_SDK_URL}}';
 
 /** 站点密钥（全局共享） */
 let siteKey: string = '';
