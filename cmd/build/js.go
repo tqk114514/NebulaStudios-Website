@@ -110,6 +110,9 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		KeepNames:   *isDev,
 		Write:       true,
 		LogLevel:    api.LogLevelWarning,
+		Define: map[string]string{
+			"VERSION": `"3.4.11"`,
+		},
 	}
 
 	if !*isDev {
