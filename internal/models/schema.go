@@ -104,7 +104,7 @@ func getTableSchemas() []TableSchema {
 				{Name: "expire_time", Type: "BIGINT", Nullable: false},
 				{Name: "scanned_at", Type: "BIGINT", Nullable: true},
 				{Name: "confirmed_at", Type: "BIGINT", Nullable: true},
-				{Name: "pc_session_token", Type: "VARCHAR(512)", Nullable: true},
+				{Name: "pc_session_token_hash", Type: "VARCHAR(64)", Nullable: true},
 			},
 		},
 		// admin_logs 表

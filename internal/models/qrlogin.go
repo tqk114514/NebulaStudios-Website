@@ -21,17 +21,17 @@ const (
 
 // QRLoginToken 扫码登录 Token 模型
 type QRLoginToken struct {
-	Token          string         `json:"token"` // 明文 token，仅业务层使用
-	TokenHash      string         `json:"-"`     // token 的 SHA-256 hash，写入 DB
-	Status         string         `json:"status"`
-	UserUID        sql.NullString `json:"user_uid"`
-	PcIP           string         `json:"pc_ip"`
-	PcUserAgent    string         `json:"pc_user_agent"`
-	PcSessionToken sql.NullString `json:"pc_session_token"`
-	CreatedAt      int64          `json:"created_at"`
-	ScannedAt      sql.NullInt64  `json:"scanned_at"`
-	ConfirmedAt    sql.NullInt64  `json:"confirmed_at"`
-	ExpireTime     int64          `json:"expire_time"`
+	Token              string         `json:"token"` // 明文 token，仅业务层使用
+	TokenHash          string         `json:"-"`     // token 的 SHA-256 hash，写入 DB
+	Status             string         `json:"status"`
+	UserUID            sql.NullString `json:"user_uid"`
+	PcIP               string         `json:"pc_ip"`
+	PcUserAgent        string         `json:"pc_user_agent"`
+	PcSessionTokenHash sql.NullString `json:"pc_session_token_hash"`
+	CreatedAt          int64          `json:"created_at"`
+	ScannedAt          sql.NullInt64  `json:"scanned_at"`
+	ConfirmedAt        sql.NullInt64  `json:"confirmed_at"`
+	ExpireTime         int64          `json:"expire_time"`
 }
 
 // QRLoginRepository 扫码登录仓库
@@ -56,12 +56,12 @@ func (r *QRLoginRepository) FindByToken(ctx context.Context, tokenHash string) (
 
 	qrToken := &QRLoginToken{TokenHash: tokenHash}
 	err := r.pool.QueryRow(ctx, `
-		SELECT status, user_uid, pc_ip, pc_user_agent, pc_session_token,
+		SELECT status, user_uid, pc_ip, pc_user_agent, pc_session_token_hash,
 		       created_at, scanned_at, confirmed_at, expire_time
 		FROM qr_login_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(
 		&qrToken.Status, &qrToken.UserUID, &qrToken.PcIP, &qrToken.PcUserAgent,
-		&qrToken.PcSessionToken, &qrToken.CreatedAt, &qrToken.ScannedAt, &qrToken.ConfirmedAt, &qrToken.ExpireTime,
+		&qrToken.PcSessionTokenHash, &qrToken.CreatedAt, &qrToken.ScannedAt, &qrToken.ConfirmedAt, &qrToken.ExpireTime,
 	)
 
 	if err != nil {
@@ -171,9 +171,9 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 	return success, nil
 }
 
-// ConfirmLogin 确认登录（更新状态、user_uid、confirmed_at 和 pc_session_token）
-func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) error {
-	if tokenHash == "" || userUID == "" || pcSessionToken == "" {
+// ConfirmLogin 确认登录（更新状态、user_uid、confirmed_at 和 pc_session_token_hash）
+func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, tokenHash string, userUID string, pcSessionTokenHash string) error {
+	if tokenHash == "" || userUID == "" || pcSessionTokenHash == "" {
 		return errors.New("invalid parameters")
 	}
 
@@ -183,9 +183,9 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, tokenHash string, 
 
 	_, err := r.pool.Exec(ctx, `
 		UPDATE qr_login_tokens
-		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
+		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token_hash = $4
 		WHERE token_hash = $5
-	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionToken, tokenHash)
+	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionTokenHash, tokenHash)
 
 	if err != nil {
 		return utils.LogError("QRLOGIN", "ConfirmLogin", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
@@ -196,8 +196,8 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, tokenHash string, 
 }
 
 // ConfirmLoginWithCondition 带条件原子确认登录
-func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, tokenHash string, userUID string, pcSessionToken string) (bool, error) {
-	if tokenHash == "" || userUID == "" || pcSessionToken == "" {
+func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, tokenHash string, userUID string, pcSessionTokenHash string) (bool, error) {
+	if tokenHash == "" || userUID == "" || pcSessionTokenHash == "" {
 		return false, errors.New("invalid parameters")
 	}
 
@@ -207,9 +207,9 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 
 	commandTag, err := r.pool.Exec(ctx, `
 		UPDATE qr_login_tokens
-		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token = $4
+		SET status = $1, user_uid = $2, confirmed_at = $3, pc_session_token_hash = $4
 		WHERE token_hash = $5 AND status = $6
-	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionToken, tokenHash, QRStatusScanned)
+	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionTokenHash, tokenHash, QRStatusScanned)
 
 	if err != nil {
 		return false, utils.LogError("QRLOGIN", "ConfirmLoginWithCondition", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
@@ -248,9 +248,9 @@ func (r *QRLoginRepository) Delete(ctx context.Context, tokenHash string) error 
 	return nil
 }
 
-// ConsumeAndSetSession 验证并一次性消费 Token，同时验证 pc_session_token
-func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash, pcSessionToken string) (string, error) {
-	if tokenHash == "" || pcSessionToken == "" {
+// ConsumeAndSetSession 验证并一次性消费 Token，同时验证 pc_session_token_hash
+func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash, pcSessionTokenHash string) (string, error) {
+	if tokenHash == "" || pcSessionTokenHash == "" {
 		return "", errors.New("invalid parameters")
 	}
 
@@ -266,16 +266,16 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash,
 
 	var status string
 	var expireTime int64
-	var dbPcSessionToken sql.NullString
+	var dbPcSessionTokenHash sql.NullString
 	var userUID sql.NullString
 
 	// 查询 Token 信息并加锁
 	err = tx.QueryRow(ctx, `
-		SELECT status, expire_time, pc_session_token, user_uid
+		SELECT status, expire_time, pc_session_token_hash, user_uid
 		FROM qr_login_tokens
 		WHERE token_hash = $1
 		FOR UPDATE
-	`, tokenHash).Scan(&status, &expireTime, &dbPcSessionToken, &userUID)
+	`, tokenHash).Scan(&status, &expireTime, &dbPcSessionTokenHash, &userUID)
 
 	if err != nil {
 		return "", utils.HandleDatabaseError("QRLOGIN", "ConsumeAndSetSession", err, utils.TruncateIdentifier(tokenHash))
@@ -294,8 +294,8 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash,
 		return "", fmt.Errorf("invalid token status: %s", status)
 	}
 
-	// 验证 pc_session_token 是否匹配
-	if !dbPcSessionToken.Valid || dbPcSessionToken.String != pcSessionToken {
+	// 验证 pc_session_token_hash 是否匹配
+	if !dbPcSessionTokenHash.Valid || dbPcSessionTokenHash.String != pcSessionTokenHash {
 		return "", errors.New("INVALID_SESSION")
 	}
 
