@@ -115,7 +115,7 @@ func (h *GoogleHandler) Auth(c *gin.Context) {
 		return
 	}
 
-	codeChallenge := oauth.GenerateCodeChallenge(codeVerifier)
+	codeChallenge := utils.S256CodeChallenge(codeVerifier)
 
 	stateData := &oauth.State{
 		Timestamp:    time.Now().UnixMilli(),

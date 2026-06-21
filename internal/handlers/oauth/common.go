@@ -3,7 +3,6 @@ package oauth
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -184,12 +183,6 @@ func GenerateCodeVerifier() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-// GenerateCodeChallenge 使用 S256 方法（SHA256）生成 PKCE code_challenge
-func GenerateCodeChallenge(verifier string) string {
-	h := sha256.Sum256([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 // SetAuthCookie 设置认证 Cookie

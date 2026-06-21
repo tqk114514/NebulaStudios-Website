@@ -360,6 +360,12 @@ func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
 	return key, nil
 }
 
+// HashToken 计算 token 的 SHA-256 哈希（hex 编码），用于 token 的数据库存储与查询
+func HashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
+}
+
 // S256CodeChallenge 从 code_verifier 生成 S256 方式的 code_challenge
 // RFC 7636: code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
 func S256CodeChallenge(codeVerifier string) string {

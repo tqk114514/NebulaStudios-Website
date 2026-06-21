@@ -3,8 +3,6 @@ package models
 import (
 	"auth-system/internal/utils"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -36,12 +34,6 @@ type SessionToken struct {
 // IsExpired 检查是否已过期
 func (t *SessionToken) IsExpired() bool {
 	return t != nil && time.Now().After(t.ExpiresAt)
-}
-
-// HashToken 计算 token 的 SHA-256 哈希值
-func HashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }
 
 // SessionTokenRepository 刷新令牌仓库

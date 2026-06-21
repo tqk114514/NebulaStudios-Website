@@ -83,6 +83,7 @@ type WebSocketManager interface {
 	IsShutdown() bool
 	Shutdown(ctx context.Context)
 	GetStats() map[string]any
+	SetTokenDecrypter(fn func(string) (string, error))
 }
 
 // ImageProcessor 图像处理服务接口
