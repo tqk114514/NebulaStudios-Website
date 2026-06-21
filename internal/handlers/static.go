@@ -185,7 +185,13 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 	if cacheControl != "" {
 		c.Header("Cache-Control", cacheControl)
 	}
-	c.Data(200, ContentTypeHTML, []byte(html))
+	// 保留调用方已设置的状态码（如 NotFoundHandler 设置的 404），
+	// 避免被 c.Data 默认的 200 覆盖，从而掩盖真实状态。
+	statusCode := c.Writer.Status()
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	c.Data(statusCode, ContentTypeHTML, []byte(html))
 }
 
 func serve404Fallback(c *gin.Context) {
