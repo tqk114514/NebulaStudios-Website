@@ -152,7 +152,7 @@ License: MIT
   go.uber.org/zap
     https://github.com/uber-go/zap/blob/v1.28.0/LICENSE
   github.com/markedjs/marked
-    https://github.com/markedjs/marked/blob/v18.0.2/LICENSE.md
+    https://github.com/markedjs/marked/blob/v18.0.5/LICENSE.md
   github.com/faisalman/ua-parser-js
     https://github.com/faisalman/ua-parser-js/blob/1.0.41/LICENSE
   github.com/goccy/go-json
