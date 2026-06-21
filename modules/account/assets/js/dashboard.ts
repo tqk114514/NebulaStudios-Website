@@ -1379,7 +1379,8 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
     const parts = data.split('.');
     if (parts.length !== 3) { return false; }
 
-    const base64Regex = /^[A-Za-z0-9+/=]+$/;
+    // 同时支持标准 Base64（+/=）和 URL 安全 Base64（-_）
+    const base64Regex = /^[A-Za-z0-9+/_=-]+$/;
     for (const part of parts) {
       if (!part || !base64Regex.test(part)) { return false; }
     }
