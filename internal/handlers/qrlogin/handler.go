@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
+
+	"github.com/ua-parser/uap-go/uaparser"
 )
 
 var (
@@ -119,6 +120,9 @@ func (h *QRLoginHandler) decryptToken(encryptedToken string) (string, error) {
 	return originalToken, nil
 }
 
+// uaParser 全局 UAParser 实例（线程安全，内置 LRU 缓存）
+var uaParser = uaparser.NewFromSaved()
+
 // parseUserAgent 解析 User-Agent 提取浏览器和操作系统信息
 func parseUserAgent(userAgent string) (browser, os string) {
 	browser = "Unknown"
@@ -128,56 +132,14 @@ func parseUserAgent(userAgent string) (browser, os string) {
 		return
 	}
 
-	switch {
-	case strings.Contains(userAgent, "Edg/"):
-		browser = "Edge"
-	case strings.Contains(userAgent, "OPR/") || strings.Contains(userAgent, "Opera"):
-		browser = "Opera"
-	case strings.Contains(userAgent, "Chrome/") && !strings.Contains(userAgent, "Edg/") && !strings.Contains(userAgent, "OPR/"):
-		browser = "Chrome"
-	case strings.Contains(userAgent, "Firefox/"):
-		browser = "Firefox"
-	case strings.Contains(userAgent, "Safari/") && !strings.Contains(userAgent, "Chrome"):
-		browser = "Safari"
-	case strings.Contains(userAgent, "MSIE") || strings.Contains(userAgent, "Trident/"):
-		browser = "Internet Explorer"
+	client := uaParser.Parse(userAgent)
+
+	if client.UserAgent.Family != "" {
+		browser = client.UserAgent.Family
 	}
 
-	switch {
-	case strings.Contains(userAgent, "Windows NT 10.0"):
-		os = "Windows 10/11"
-	case strings.Contains(userAgent, "Windows NT 6.3"):
-		os = "Windows 8.1"
-	case strings.Contains(userAgent, "Windows NT 6.2"):
-		os = "Windows 8"
-	case strings.Contains(userAgent, "Windows NT 6.1"):
-		os = "Windows 7"
-	case strings.Contains(userAgent, "Windows NT 6.0"):
-		os = "Windows Vista"
-	case strings.Contains(userAgent, "Windows NT 5.1"):
-		os = "Windows XP"
-	case strings.Contains(userAgent, "Windows NT 5.0"):
-		os = "Windows 2000"
-	case strings.Contains(userAgent, "Windows"):
-		os = "Windows"
-	case strings.Contains(userAgent, "iPhone"):
-		os = "iOS"
-	case strings.Contains(userAgent, "iPad"):
-		os = "iPadOS"
-	case strings.Contains(userAgent, "Mac"):
-		os = "macOS"
-	case strings.Contains(userAgent, "HarmonyOS"):
-		os = "HarmonyOS"
-	case strings.Contains(userAgent, "Android"):
-		os = "Android"
-	case strings.Contains(userAgent, "CrOS"):
-		os = "Chrome OS"
-	case strings.Contains(userAgent, "FreeBSD"):
-		os = "FreeBSD"
-	case strings.Contains(userAgent, "Linux"):
-		os = "Linux"
-	case strings.Contains(userAgent, "X11"):
-		os = "UNIX"
+	if client.Os.Family != "" {
+		os = client.Os.Family
 	}
 
 	return
