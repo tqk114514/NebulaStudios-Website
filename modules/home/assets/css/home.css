@@ -19,6 +19,20 @@
   cursor: none !important;
 }
 
+/* 移动端恢复默认光标（由 JS 给 body 加 no-custom-cursor 类触发） */
+body.no-custom-cursor *,
+body.no-custom-cursor *::before,
+body.no-custom-cursor *::after,
+body.no-custom-cursor a,
+body.no-custom-cursor button,
+body.no-custom-cursor [role="button"],
+body.no-custom-cursor input,
+body.no-custom-cursor select,
+body.no-custom-cursor textarea,
+body.no-custom-cursor label {
+  cursor: auto !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -54,6 +68,11 @@ body::before {
   transform: translate(-50%, -50%);
   transition: transform 0.1s, width 0.3s var(--ease), height 0.3s var(--ease), opacity 0.3s;
   mix-blend-mode: difference;
+  opacity: 0;
+}
+
+#cursor.visible {
+  opacity: 1;
 }
 
 #cursor-ring {
@@ -66,6 +85,11 @@ body::before {
   z-index: 9998;
   transform: translate(-50%, -50%);
   transition: transform 0.18s var(--ease), width 0.4s var(--ease), height 0.4s var(--ease), border-color 0.3s;
+  opacity: 0;
+}
+
+#cursor-ring.visible {
+  opacity: 1;
 }
 
 body:has(a:hover) #cursor-ring,

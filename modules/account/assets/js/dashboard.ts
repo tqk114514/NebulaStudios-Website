@@ -19,7 +19,7 @@ import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCap
 import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModalController } from './lib/ui/feedback.ts';
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
 import { startCountdown, resumeCountdown, clearCountdown } from './lib/utils/countdown.ts';
-import { isMobileDevice } from './lib/utils/device.ts';
+import { isMobileDevice } from '../../../../shared/js/utils/device.ts';
 import { QRCanvas, QRCamera, frameLoop } from '../../../../shared/js/lib/paulmillr-qr@0.6.0/src/dom.ts';
 import type { User, PcInfo } from '../../../../shared/js/types/auth.ts';
 

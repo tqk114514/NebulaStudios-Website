@@ -10,6 +10,7 @@
  */
 
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle } from '../../../../shared/js/utils/language-switcher.ts';
+import { isMobileDevice } from '../../../../shared/js/utils/device.ts';
 
 // ==================== 页面可见性管理 ====================
 
@@ -37,16 +38,33 @@ let mouseY = 0;
 let ringX = 0;
 let ringY = 0;
 let cursorAnimFrameId: number | null = null;
+let cursorVisible = false;
 
-document.addEventListener('mousemove', (e) => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
+const isMobile = isMobileDevice();
 
-  if (cursor) {
-    cursor.style.left = mouseX + 'px';
-    cursor.style.top = mouseY + 'px';
-  }
-});
+if (isMobile) {
+  // 移动端：移除自定义光标元素，加类恢复默认光标
+  cursor?.remove();
+  ring?.remove();
+  document.body.classList.add('no-custom-cursor');
+} else {
+  document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    if (cursor) {
+      cursor.style.left = mouseX + 'px';
+      cursor.style.top = mouseY + 'px';
+
+      // 首次移动才显示光标，避免刷新后停在左上角
+      if (!cursorVisible) {
+        cursorVisible = true;
+        cursor.classList.add('visible');
+        ring?.classList.add('visible');
+      }
+    }
+  });
+}
 
 function animateRing(): void {
   ringX += (mouseX - ringX) * 0.12;
@@ -61,6 +79,7 @@ function animateRing(): void {
 }
 
 function startCursorAnimation(): void {
+  if (isMobile) return;
   if (cursorAnimFrameId === null) {
     cursorAnimFrameId = requestAnimationFrame(animateRing);
   }
@@ -73,7 +92,9 @@ function stopCursorAnimation(): void {
   }
 }
 
-startCursorAnimation();
+if (!isMobile) {
+  startCursorAnimation();
+}
 
 // ==================== 星云环动画 ====================
 
