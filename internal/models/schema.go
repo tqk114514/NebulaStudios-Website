@@ -130,6 +130,17 @@ func getTableSchemas() []TableSchema {
 				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: true, Default: "NOW()"},
 			},
 		},
+		// user_consents 表（用户政策同意记录，审计保留与 user_logs 相同）
+		{
+			Name: "user_consents",
+			Columns: []ColumnDefinition{
+				{Name: "id", Type: "SERIAL", Nullable: false, IsPrimary: true},
+				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: false},
+				{Name: "policy_type", Type: "VARCHAR(20)", Nullable: false},
+				{Name: "policy_version", Type: "VARCHAR(20)", Nullable: false},
+				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: true, Default: "NOW()"},
+			},
+		},
 		// oauth_clients 表
 		{
 			Name: "oauth_clients",
@@ -257,6 +268,7 @@ func getIndexDefinitions() []struct {
 		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
 		{"idx_user_logs_user_uid", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_uid ON user_logs(user_uid)"},
 		{"idx_user_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_user_logs_created_at ON user_logs(created_at DESC)"},
+		{"idx_user_consents_user_uid", "CREATE INDEX IF NOT EXISTS idx_user_consents_user_uid ON user_consents(user_uid)"},
 		{"idx_oauth_clients_client_id", "CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id ON oauth_clients(client_id)"},
 		{"idx_oauth_auth_codes_code", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_code ON oauth_auth_codes(code_hash)"},
 		{"idx_oauth_auth_codes_expires", "CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_expires ON oauth_auth_codes(expires_at)"},

@@ -2,7 +2,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -89,12 +88,6 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
-// policyVersionMeta 对应 manifest.json 中每个文件条目的元数据
-type policyVersionMeta struct {
-	UpdateDate    string `json:"update_date"`
-	EffectiveDate string `json:"effective_date"`
-}
-
 // GetPolicyVersions 获取政策版本清单
 // 读取 dist/shared/i18n/policy/manifest.json 并原样返回其嵌套结构：
 // { policyType: { lang: { filename: { update_date, effective_date } } } }
@@ -103,18 +96,10 @@ type policyVersionMeta struct {
 func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
 
-	data, err := os.ReadFile(manifestPath)
+	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogError("STATIC", "GetPolicyVersions", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
 		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
-		return
-	}
-
-	// 校验 manifest 格式：{ type: { lang: { filename: { update_date, effective_date } } } }
-	var manifest map[string]map[string]map[string]policyVersionMeta
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		utils.LogError("STATIC", "GetPolicyVersions", err, "Failed to parse manifest")
-		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_INVALID", "Policy manifest is invalid")
 		return
 	}
 

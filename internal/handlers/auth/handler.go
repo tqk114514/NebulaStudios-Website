@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ const (
 type AuthHandler struct {
 	userRepo           models.UserStore
 	userLogRepo        models.UserLogStore
+	userConsentRepo    models.UserConsentStore
 	tokenService       services.TokenManager
 	sessionService     services.SessionManager
 	emailService       services.EmailSender
@@ -46,11 +48,12 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler 创建认证 Handler，验证所有必需依赖（userRepo、tokenService、sessionService、
-// emailService、captchaService、userCache）后初始化。emailWhitelistRepo 为可选参数。
+// emailService、captchaService、userCache）后初始化。emailWhitelistRepo、userConsentRepo 为可选参数。
 func NewAuthHandler(
 	cfg *config.Config,
 	userRepo models.UserStore,
 	userLogRepo models.UserLogStore,
+	userConsentRepo models.UserConsentStore,
 	tokenService services.TokenManager,
 	sessionService services.SessionManager,
 	emailService services.EmailSender,
@@ -91,6 +94,7 @@ func NewAuthHandler(
 	return &AuthHandler{
 		userRepo:           userRepo,
 		userLogRepo:        userLogRepo,
+		userConsentRepo:    userConsentRepo,
 		tokenService:       tokenService,
 		sessionService:     sessionService,
 		emailService:       emailService,
@@ -257,6 +261,26 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogRegister(ctx, user.UID); err != nil {
 			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userUID=%s", user.UID))
+		}
+	}
+
+	// 写入政策同意记录（注册即同意当前生效的隐私政策和服务条款）
+	if h.userConsentRepo != nil {
+		manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+		manifest, err := services.LoadPolicyManifest(manifestPath)
+		if err != nil {
+			utils.LogWarn("AUTH", "Failed to load policy manifest for consent", fmt.Sprintf("userUID=%s, err=%v", user.UID, err))
+		} else {
+			for _, policyType := range []string{models.PolicyTypePrivacy, models.PolicyTypeTerms} {
+				version := manifest.GetLatestEffectiveVersion(policyType)
+				if version == "" {
+					utils.LogWarn("AUTH", "No effective policy version found for consent", fmt.Sprintf("userUID=%s, type=%s", user.UID, policyType))
+					continue
+				}
+				if err := h.userConsentRepo.LogConsent(ctx, user.UID, policyType, version); err != nil {
+					utils.LogWarn("AUTH", "Failed to log consent", fmt.Sprintf("userUID=%s, type=%s, version=%s", user.UID, policyType, version))
+				}
+			}
 		}
 	}
 
