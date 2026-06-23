@@ -131,6 +131,7 @@ type Repos struct {
 	Pool               *pgxpool.Pool
 	UserRepo           models.UserStore
 	UserLogRepo        models.UserLogStore
+	UserConsentRepo    models.UserConsentStore
 	QRLoginRepo        models.QRLoginStore
 	AdminLogRepo       models.AdminLogStore
 	EmailWhitelistRepo models.EmailWhitelistStore
@@ -158,6 +159,7 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 
 	repos.UserRepo = models.NewUserRepository(pool, cfg.DefaultAvatarURL)
 	repos.UserLogRepo = models.NewUserLogRepository(pool)
+	repos.UserConsentRepo = models.NewUserConsentRepository(pool)
 	repos.QRLoginRepo = models.NewQRLoginRepository(pool)
 	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
 	repos.AdminLogRepo = models.NewAdminLogRepository(pool)
@@ -250,7 +252,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	var err error
 
 	hdlrs.authHandler, err = auth.NewAuthHandler(
-		cfg, repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
+		cfg, repos.UserRepo, repos.UserLogRepo, repos.UserConsentRepo, svcs.TokenService,
 		svcs.SessionService, svcs.EmailService, svcs.CaptchaService,
 		svcs.UserCache, repos.EmailWhitelistRepo, svcs.LimiterMgr,
 	)

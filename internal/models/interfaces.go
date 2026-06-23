@@ -45,6 +45,14 @@ type UserLogStore interface {
 	DeleteExpiredLogs(ctx context.Context) (int64, error)
 }
 
+// UserConsentStore 用户政策同意记录数据访问接口
+type UserConsentStore interface {
+	Create(ctx context.Context, consent *UserConsent) error
+	LogConsent(ctx context.Context, userUID, policyType, policyVersion string) error
+	FindByUserUID(ctx context.Context, userUID string) ([]*UserConsent, error)
+	DeleteByUserUID(ctx context.Context, userUID string) error
+}
+
 // QRLoginStore 扫码登录数据访问接口
 type QRLoginStore interface {
 	Create(ctx context.Context, qrToken *QRLoginToken) error
