@@ -479,3 +479,43 @@
 .req-item.is-valid {
   color: var(--success);
 }
+
+/* ==================== 提示横幅（可关闭变体） ==================== */
+/* 全站公示期通知条，基础样式见 shared/css/general.css 的 .notice-banner */
+
+.notice-banner.is-closable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notice-banner__content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.notice-banner__close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--mid);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.notice-banner__close:hover {
+  color: var(--fg);
+}
+
+@media (max-width: 600px) {
+  .notice-banner.is-closable {
+    padding: 10px 20px;
+  }
+}

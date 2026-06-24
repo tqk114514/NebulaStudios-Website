@@ -11,8 +11,8 @@
 
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
-import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
-import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
+import { initPublicNoticeBanner } from './lib/policy/public-notice.ts';
+import { checkPolicyConsent } from './lib/policy/policy-consent.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';

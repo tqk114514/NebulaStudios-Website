@@ -381,61 +381,23 @@ html, body {
   display: none;
 }
 
-/* ==================== 公示期横幅 ==================== */
+/* ==================== 提示横幅 ==================== */
 
-.public-notice-banner {
+.notice-banner {
+  padding: 16px;
+  margin-bottom: 24px;
   background: var(--dim);
-  border-bottom: 1px solid var(--line);
-  padding: 10px 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: var(--text-base);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  letter-spacing: 0.12em;
+  color: var(--fg);
 }
 
-.public-notice-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  color: var(--mid);
-  letter-spacing: 0.08em;
-}
-
-.public-notice-link {
+.notice-banner a {
   color: var(--fg);
   text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.public-notice-link:hover {
-  color: var(--fg-hover);
-}
-
-.public-notice-close {
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  color: var(--mid);
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s;
-}
-
-.public-notice-close:hover {
-  color: var(--fg);
-}
-
-@media (max-width: 600px) {
-  .public-notice-banner {
-    padding: 10px 20px;
-  }
+  text-underline-offset: 3px;
 }
 
 /* ==================== 政策强制同意弹窗 ==================== */
