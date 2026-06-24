@@ -149,6 +149,7 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	policyAPI := r.Group("/api/policy")
 	{
 		policyAPI.GET("/versions", hdlrs.staticHandler.GetPolicyVersions)
+		policyAPI.GET("/public-notice", hdlrs.staticHandler.GetPublicNoticePolicies)
 	}
 }
 

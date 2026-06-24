@@ -4,5 +4,10 @@
   "policy.cookiePolicy": "Cookie Policy",
   "policy.versionFallback": "{policy} [{version}] is not available in {lang}. Current version: {displayLang}",
   "policy.historyNotice": "You are viewing a historical version",
-  "policy.historyLatest": "View latest version"
+  "policy.historyLatest": "View latest version",
+  "policy.publicNoticePeriod": "You are viewing a public notice period version",
+  "policy.publicNotice.prefix": "New",
+  "policy.publicNotice.suffix": "in public notice period",
+  "policy.publicNotice.separator": ", ",
+  "policy.publicNotice.close": "Close"
 }

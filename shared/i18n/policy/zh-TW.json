@@ -4,5 +4,10 @@
   "policy.cookiePolicy": "Cookie 政策",
   "policy.versionFallback": "{policy}[{version}] 暫未提供 {lang} 版本。當前版本為：{displayLang}",
   "policy.historyNotice": "您正在查看歷史版本",
-  "policy.historyLatest": "查看最新版本"
+  "policy.historyLatest": "查看最新版本",
+  "policy.publicNoticePeriod": "您正在查看公示期版本",
+  "policy.publicNotice.prefix": "有新的",
+  "policy.publicNotice.suffix": "在公示期",
+  "policy.publicNotice.separator": "、",
+  "policy.publicNotice.close": "關閉"
 }

@@ -106,6 +106,21 @@ func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
 	utils.RespondSuccessWithData(c, manifest)
 }
 
+// GetPublicNoticePolicies 返回当前在公示期的政策版本
+// GET /api/policy/public-notice
+func (h *StaticHandler) GetPublicNoticePolicies(c *gin.Context) {
+	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+
+	policies, err := services.GetPublicNoticePolicies(manifestPath)
+	if err != nil {
+		utils.LogError("STATIC", "GetPublicNoticePolicies", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		return
+	}
+
+	utils.RespondSuccessWithData(c, policies)
+}
+
 // GetVersion 获取服务端与代码库版本（repo commit 缓存 10 分钟）
 // GET /api/version
 func (h *StaticHandler) GetVersion(c *gin.Context) {
