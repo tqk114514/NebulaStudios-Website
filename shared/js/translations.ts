@@ -58,7 +58,7 @@ let currentLanguage: string = 'zh-CN';
 
 // ==================== Cookie 操作 ====================
 // 内联实现（此文件单独构建为 ESModule 且未启用 bundling，无法 import shared/js/utils/cookie.ts）
-// 重复实现 hasCookieConsent / setCookie / getCookie 是有意为之，详见 shared/js/utils/cookie.ts 中的完整版本
+// 重复实现 hasCookieConsent / setCookie 是有意为之，详见 shared/js/utils/cookie.ts 中的完整版本
 
 /**
  * 检查用户是否同意使用 Cookie
@@ -86,27 +86,9 @@ function setCookie(name: string, value: string, seconds: number): void {
   if (!hasCookieConsent()) {
     return;
   }
-
-  const date = new Date();
-  date.setTime(date.getTime() + (seconds * 1000));
-  const expires = 'expires=' + date.toUTCString();
-  document.cookie = name + '=' + value + ';' + expires + ';path=/';
-}
-
-/**
- * 获取 Cookie
- * @param name - Cookie 名称
- * @returns Cookie 值
- */
-function getCookie(name: string): string | null {
-  const nameEQ = name + '=';
-  const ca = document.cookie.split(';');
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i];
-    while (c.charAt(0) === ' ') {c = c.substring(1, c.length);}
-    if (c.indexOf(nameEQ) === 0) {return c.substring(nameEQ.length, c.length);}
-  }
-  return null;
+  const expires = new Date();
+  expires.setTime(expires.getTime() + seconds * 1000);
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
 }
 
 // ==================== 语言初始化（立即执行） ====================

@@ -33,10 +33,20 @@ func NewPolicyHandler(pool *pgxpool.Pool) (*PolicyHandler, error) {
 	return &PolicyHandler{pool: pool}, nil
 }
 
+// PolicyVersionResponse /api/policy/versions 响应中的单个版本条目
+// 在 manifest 原始字段基础上附加 status，由服务器端基于当前时间计算
+type PolicyVersionResponse struct {
+	UpdateDate    string   `json:"update_date"`
+	EffectiveDate string   `json:"effective_date"`
+	Languages     []string `json:"languages"`
+	// status 取值：effective（已生效）/ public_notice（公示期）/ scheduled（未进入公示期）
+	Status string `json:"status"`
+}
+
 // GetPolicyVersions 获取政策版本清单
-// 读取 dist/shared/i18n/policy/manifest.json 并原样返回其嵌套结构：
-// { policyType: { lang: { filename: { update_date, effective_date } } } }
-// 后端仅做读取与格式校验，不对结构做扁平化或排序
+// 读取 dist/shared/i18n/policy/manifest.json，基于服务器时间给每个版本标记 status，
+// 返回扁平结构：{ policyType: { filename: { update_date, effective_date, languages, status } } }
+// 前端直接用 status 字段判断生效/公示状态，无需自己计算时间
 // GET /api/policy/versions
 func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
@@ -48,7 +58,30 @@ func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 		return
 	}
 
-	utils.RespondSuccessWithData(c, manifest)
+	// 基于服务器时间给每个版本标记状态
+	now := time.Now().Format("2006-01-02")
+	result := make(map[string]map[string]PolicyVersionResponse)
+	for policyType, versions := range manifest {
+		result[policyType] = make(map[string]PolicyVersionResponse)
+		for filename, meta := range versions {
+			status := "effective"
+			if meta.EffectiveDate > now {
+				if meta.UpdateDate <= now {
+					status = "public_notice"
+				} else {
+					status = "scheduled"
+				}
+			}
+			result[policyType][filename] = PolicyVersionResponse{
+				UpdateDate:    meta.UpdateDate,
+				EffectiveDate: meta.EffectiveDate,
+				Languages:     meta.Languages,
+				Status:        status,
+			}
+		}
+	}
+
+	utils.RespondSuccessWithData(c, result)
 }
 
 // GetPublicNoticePolicies 返回当前在公示期的政策版本
@@ -204,15 +237,13 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 
 // getPolicyEffectiveDate 从 manifest 获取指定政策类型的版本生效日期
 func (h *PolicyHandler) getPolicyEffectiveDate(manifest models.PolicyManifest, policyType, version string) string {
-	langs, ok := manifest[policyType]
+	versions, ok := manifest[policyType]
 	if !ok {
 		return ""
 	}
 	filename := version + ".md"
-	for _, files := range langs {
-		if meta, exists := files[filename]; exists {
-			return meta.EffectiveDate
-		}
+	if meta, exists := versions[filename]; exists {
+		return meta.EffectiveDate
 	}
 	return ""
 }

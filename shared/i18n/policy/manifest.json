@@ -1,57 +1,43 @@
 {
   "privacy": {
-    "zh-CN": {
-      "2025-12-18.md": { "update_date": "2025-12-11", "effective_date": "2025-12-18" },
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" },
-      "2026-07-02.md": { "update_date": "2026-06-25", "effective_date": "2026-07-02" }
+    "2025-12-18.md": {
+      "update_date": "2025-12-11",
+      "effective_date": "2025-12-18",
+      "languages": ["zh-CN"]
     },
-    "zh-TW": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2026-03-24.md": {
+      "update_date": "2026-03-17",
+      "effective_date": "2026-03-24",
+      "languages": ["zh-CN", "zh-TW", "en", "ja", "ko"]
     },
-    "en": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ja": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ko": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2026-07-02.md": {
+      "update_date": "2026-06-25",
+      "effective_date": "2026-07-02",
+      "languages": ["zh-CN"]
     }
   },
   "terms": {
-    "zh-CN": {
-      "2025-12-18.md": { "update_date": "2025-12-11", "effective_date": "2025-12-18" },
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2025-12-18.md": {
+      "update_date": "2025-12-11",
+      "effective_date": "2025-12-18",
+      "languages": ["zh-CN"]
     },
-    "zh-TW": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "en": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ja": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ko": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2026-03-24.md": {
+      "update_date": "2026-03-17",
+      "effective_date": "2026-03-24",
+      "languages": ["zh-CN", "zh-TW", "en", "ja", "ko"]
     }
   },
   "cookies": {
-    "zh-CN": {
-      "2025-12-18.md": { "update_date": "2025-12-11", "effective_date": "2025-12-18" },
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2025-12-18.md": {
+      "update_date": "2025-12-11",
+      "effective_date": "2025-12-18",
+      "languages": ["zh-CN"]
     },
-    "zh-TW": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "en": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ja": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
-    },
-    "ko": {
-      "2026-03-24.md": { "update_date": "2026-03-17", "effective_date": "2026-03-24" }
+    "2026-03-24.md": {
+      "update_date": "2026-03-17",
+      "effective_date": "2026-03-24",
+      "languages": ["zh-CN", "zh-TW", "en", "ja", "ko"]
     }
   }
 }
