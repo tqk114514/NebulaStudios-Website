@@ -10,6 +10,7 @@
  */
 
 import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
+import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
 import { marked } from '../../../../shared/js/lib/markedjs-marked@18.0.5/src/marked.ts';
 import DOMPurify from '../../../../shared/js/lib/cure53-DOMPurify@3.4.11/src/purify.ts';
 
@@ -372,10 +373,44 @@ function createVersionElement(info: VersionInfo): string {
   </div>`;
 }
 
+// ==================== 公示期政策 ====================
+
+// 公示期政策信息（与后端 PublicNoticePolicy 对应）
+interface PublicNoticePolicy {
+  policy_type: string;
+  version: string;
+  update_date: string;
+  effective_date: string;
+}
+
+// 公示期政策缓存（页面级，避免重复请求）
+let publicNoticeCache: PublicNoticePolicy[] | null = null;
+
+// 获取所有公示期政策（带缓存）
+async function fetchPublicNoticePolicies(): Promise<PublicNoticePolicy[]> {
+  if (publicNoticeCache) return publicNoticeCache;
+  try {
+    const response = await fetch('/api/policy/public-notice');
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!data.success || !Array.isArray(data.data)) return [];
+    publicNoticeCache = data.data;
+    return publicNoticeCache;
+  } catch {
+    return [];
+  }
+}
+
+// 获取指定政策类型的公示期版本
+async function getPublicNoticeVersion(type: PolicyType): Promise<PublicNoticePolicy | null> {
+  const policies = await fetchPublicNoticePolicies();
+  return policies.find(p => p.policy_type === type) || null;
+}
+
 // ==================== 路由管理 ====================
 
 // 解析 hash 路由：{policy}[/{version}]
-// 例：#privacy → 最新生效版；#privacy/2025-12-18 → 指定历史版本
+// 例：#privacy → 最新生效版；#privacy/2025-12-18 → 指定历史版本；#privacy/public-notice-period → 公示期版本
 function parseHashRoute(): { policy: PolicyType; version: string | null } {
   const hash = window.location.hash.slice(1); // 去掉 #
   if (!hash) return { policy: 'privacy', version: null };
@@ -401,7 +436,11 @@ function updateNavActive(policy: PolicyType): void {
 
 // ==================== 内容渲染 ====================
 
-async function renderPolicy(type: PolicyType, specifiedVersion?: string | null): Promise<void> {
+async function renderPolicy(
+  type: PolicyType,
+  specifiedVersion?: string | null,
+  publicNotice?: PublicNoticePolicy | null
+): Promise<void> {
   const container = document.querySelector('.policy-container');
   const loadingEl = container?.querySelector('.policy-loading');
   const contentEl = container?.querySelector('.policy-content');
@@ -452,11 +491,15 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
     }
   }
 
-  // 历史版本提示横幅（后加，显示在上方）
-  const latestVersion = getLatestVersion(type);
-  if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion) {
-    const t = (window as any).t;
-    if (t) {
+  // 顶部提示横幅（后加，显示在上方）
+  // 公示期版本：显示公示期提示；历史版本：显示历史版本提示；最新生效版：无提示
+  const t = (window as any).t;
+  if (publicNotice && t) {
+    const noticeHtml = `<div class="policy-public-notice">${t('policy.publicNoticePeriod')}（${publicNotice.version}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+    html = noticeHtml + html;
+  } else {
+    const latestVersion = getLatestVersion(type);
+    if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion && t) {
       const noticeHtml = `<div class="policy-history-notice">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
       html = noticeHtml + html;
     }
@@ -468,7 +511,8 @@ async function renderPolicy(type: PolicyType, specifiedVersion?: string | null):
   contentEl.classList.add('fade-in');
   contentEl.innerHTML = html;
 
-  // 仅最新版本的隐私政策显示服务器/代码库版本信息（占位符，异步加载不阻塞政策显示）
+  // 仅最新生效版的隐私政策显示服务器/代码库版本信息（占位符，异步加载不阻塞政策显示）
+  // 公示期版本和历史版本不显示
   if (type === 'privacy' && !specifiedVersion) {
     contentEl.innerHTML += '<div class="version-info-loading"><div class="loader-spinner"></div></div>';
   }
@@ -499,6 +543,20 @@ let currentRouteKey = '';
 async function handleRouteChange(): Promise<void> {
   let { policy, version } = parseHashRoute();
 
+  // 公示期路由：#privacy/public-notice-period
+  // 解析为实际的公示期版本号，传给 renderPolicy 显示公示期提示
+  let publicNotice: PublicNoticePolicy | null = null;
+  if (version === 'public-notice-period') {
+    publicNotice = await getPublicNoticeVersion(policy);
+    if (publicNotice) {
+      version = publicNotice.version;
+    } else {
+      // 当前无公示期版本，回退到最新生效版
+      version = null;
+      history.replaceState(null, '', `#${policy}`);
+    }
+  }
+
   // 如果指定版本等于最新生效版本，清除版本号
   // #privacy 就代表最新生效版，无需冗余带版本号
   if (version) {
@@ -509,9 +567,9 @@ async function handleRouteChange(): Promise<void> {
     }
   }
 
-  // 避免重复渲染（包含语言，确保切换语言时重新渲染）
+  // 避免重复渲染（包含语言和公示期标记，确保切换语言或进入公示期时重新渲染）
   const currentLang = getCurrentLanguage();
-  const routeKey = `${policy}:${version || 'latest'}:${currentLang}`;
+  const routeKey = `${policy}:${version || 'latest'}:${currentLang}:${publicNotice ? 'notice' : 'normal'}`;
   if (routeKey === currentRouteKey && document.querySelector('.policy-content.is-visible')) return;
   currentRouteKey = routeKey;
 
@@ -525,7 +583,7 @@ async function handleRouteChange(): Promise<void> {
   // 更新版本切换器
   updateVersionSwitcher(policy, displayVersion);
 
-  await renderPolicy(policy, version);
+  await renderPolicy(policy, version, publicNotice);
 
   // 滚动到顶部
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -541,6 +599,12 @@ async function init(): Promise<void> {
 
     // 加载政策版本列表
     await loadPolicyVersions();
+
+    // 初始化公示期横幅（插入到 .policy-container 之前）
+    const policyContainer = document.querySelector('.policy-container');
+    if (policyContainer) {
+      initPublicNoticeBanner(policyContainer as HTMLElement, 'beforebegin');
+    }
 
     // 初始化版本切换器开关交互
     initVersionSwitcherToggle();

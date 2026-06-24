@@ -4,5 +4,10 @@
   "policy.cookiePolicy": "쿠키 정책",
   "policy.versionFallback": "{policy} [{version}]는 {lang} 버전이 제공되지 않습니다. 현재 버전: {displayLang}",
   "policy.historyNotice": "과거 버전을 보고 있습니다",
-  "policy.historyLatest": "최신 버전 보기"
+  "policy.historyLatest": "최신 버전 보기",
+  "policy.publicNoticePeriod": "공시 기간 중인 버전을 보고 있습니다",
+  "policy.publicNotice.prefix": "새로운",
+  "policy.publicNotice.suffix": "공시 기간 중입니다",
+  "policy.publicNotice.separator": ", ",
+  "policy.publicNotice.close": "닫기"
 }

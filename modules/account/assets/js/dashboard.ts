@@ -13,6 +13,7 @@
 
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
 import { verifySession, logout } from './lib/api/auth.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
@@ -340,6 +341,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 隐藏页面加载遮罩
     hidePageLoader();
+
+    // 初始化公示期横幅
+    const mainEl = document.querySelector('.dashboard-main');
+    if (mainEl) {
+      initPublicNoticeBanner(mainEl as HTMLElement);
+    }
 
     const user = sessionResult.data;
 

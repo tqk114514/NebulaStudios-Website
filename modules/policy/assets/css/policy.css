@@ -56,9 +56,10 @@
   display: none;
 }
 
-/* --- 历史版本提示横幅 --- */
+/* --- 提示横幅（历史版本 / 语言回退 / 公示期） --- */
 .policy-history-notice,
-.policy-fallback-warning {
+.policy-fallback-warning,
+.policy-public-notice {
   padding: 16px;
   margin-bottom: 24px;
   background: var(--dim);
@@ -70,7 +71,8 @@
 }
 
 .policy-history-notice a,
-.policy-fallback-warning a {
+.policy-fallback-warning a,
+.policy-public-notice a {
   color: var(--fg);
   text-decoration: underline;
   text-underline-offset: 3px;

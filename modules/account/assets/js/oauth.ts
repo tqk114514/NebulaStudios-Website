@@ -11,6 +11,7 @@
 
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, applyTranslations, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
@@ -193,6 +194,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 获取卡片元素
     const card = document.querySelector('.card') as HTMLElement | null;
+
+    // 初始化公示期横幅（插入到 .card 之前）
+    if (card) {
+      initPublicNoticeBanner(card, 'beforebegin');
+    }
 
     // 初始化语言切换器
     initLanguageSwitcher(() => {

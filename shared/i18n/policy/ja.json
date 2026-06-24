@@ -4,5 +4,10 @@
   "policy.cookiePolicy": "Cookie ポリシー",
   "policy.versionFallback": "{policy} [{version}] は {lang} 版が提供されていません。現在のバージョン：{displayLang}",
   "policy.historyNotice": "過去のバージョンを表示中",
-  "policy.historyLatest": "最新バージョンを表示"
+  "policy.historyLatest": "最新バージョンを表示",
+  "policy.publicNoticePeriod": "公示期間中のバージョンを表示中",
+  "policy.publicNotice.prefix": "新しい",
+  "policy.publicNotice.suffix": "が公示期間中です",
+  "policy.publicNotice.separator": "、",
+  "policy.publicNotice.close": "閉じる"
 }

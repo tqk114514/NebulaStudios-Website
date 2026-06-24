@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"os"
+	"time"
 
 	"auth-system/internal/models"
 )
@@ -18,4 +19,18 @@ func LoadPolicyManifest(path string) (models.PolicyManifest, error) {
 		return nil, err
 	}
 	return manifest, nil
+}
+
+// GetPublicNoticePolicies 获取当前在公示期的政策版本列表
+func GetPublicNoticePolicies(manifestPath string) ([]models.PublicNoticePolicy, error) {
+	manifest, err := LoadPolicyManifest(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Format("2006-01-02")
+	result := manifest.GetPublicNoticeVersions(now)
+	if result == nil {
+		result = []models.PublicNoticePolicy{}
+	}
+	return result, nil
 }
