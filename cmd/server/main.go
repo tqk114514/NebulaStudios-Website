@@ -242,6 +242,7 @@ type Handlers struct {
 	oauthProviderHandler *oauth.OAuthProviderHandler
 	qrLoginHandler       *qrlogin.QRLoginHandler
 	staticHandler        *handlers.StaticHandler
+	policyHandler        *handlers.PolicyHandler
 	adminHandler         *admin.AdminHandler
 }
 
@@ -307,12 +308,17 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 
 	hdlrs.staticHandler, err = handlers.NewStaticHandler(
 		cfg, svcs.UserCache, svcs.WSService, svcs.CaptchaService,
-		repos.Pool,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("StaticHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
+
+	hdlrs.policyHandler, err = handlers.NewPolicyHandler(repos.Pool)
+	if err != nil {
+		return nil, fmt.Errorf("PolicyHandler: %w", err)
+	}
+	utils.LogInfo("HANDLERS", "PolicyHandler initialized")
 
 	hdlrs.adminHandler, err = admin.NewAdminHandler(
 		repos.UserRepo, svcs.UserCache, repos.AdminLogRepo,

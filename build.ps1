@@ -31,8 +31,19 @@ if ($Backend) {
 }
 
 if ($Frontend) {
+    Write-Host "=== Type-checking frontend (tsc --noEmit) ===" -ForegroundColor Cyan
+    npx tsc --noEmit
+    if ($LASTEXITCODE -ne 0) { throw "TypeScript type-check failed" }
+    Write-Host "Type-check OK" -ForegroundColor Green
+
     Write-Host "=== Building frontend ===" -ForegroundColor Cyan
+    # go run 的 log.Printf 输出到 stderr，PowerShell 的 Stop 策略会误判为终止错误，
+    # 临时放宽策略，通过 LASTEXITCODE 判断真实结果
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     go run ./cmd/build
-    if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+    $buildExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($buildExit -ne 0) { throw "Frontend build failed" }
     Write-Host "Frontend build OK" -ForegroundColor Green
 }

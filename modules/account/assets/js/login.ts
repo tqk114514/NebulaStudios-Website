@@ -15,6 +15,7 @@ import { login, errorCodeMap } from './lib/api/auth.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { initQrLogin } from './lib/qr.ts';
+import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
 
 // ==================== 类型定义 ====================
 
@@ -108,6 +109,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const result = await login(email, password, token || '');
 
         if (result.success) {
+          // 检查政策同意状态（拒绝则阻断，弹窗内已登出并跳转）
+          const consented = await checkPolicyConsent(t);
+          if (!consented) {
+            return;
+          }
+
           // token 已通过 httpOnly cookie 存储，跳转
           const urlParams = new URLSearchParams(window.location.search);
           const returnUrl = urlParams.get('return');

@@ -291,5 +291,14 @@
   "dashboard.oauthRevokeConfirm": "Are you sure you want to revoke access for \"{name}\"? This app will no longer be able to access your account.",
   "dashboard.oauthRevokeSuccess": "Access revoked",
   "dashboard.oauthRevokeFailed": "Failed to revoke access, please try again",
-  "dashboard.logAction.oauth_revoke": "Revoked third-party app access"
+  "dashboard.logAction.oauth_revoke": "Revoked third-party app access",
+
+  "policy.consent.title": "Policy Update",
+  "policy.consent.message": "The following policies have been updated and are now in effect. Please read and agree to continue:",
+  "policy.consent.agree": "I have read and agree to the above policies",
+  "policy.consent.accept": "Agree and Continue",
+  "policy.consent.decline": "Decline",
+  "policy.consent.submitting": "Submitting...",
+  "policy.consent.failed": "Failed to record consent, please try again",
+  "policy.consent.effectiveDate": "Effective"
 }

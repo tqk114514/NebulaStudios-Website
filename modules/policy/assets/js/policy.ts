@@ -394,8 +394,9 @@ async function fetchPublicNoticePolicies(): Promise<PublicNoticePolicy[]> {
     if (!response.ok) return [];
     const data = await response.json();
     if (!data.success || !Array.isArray(data.data)) return [];
-    publicNoticeCache = data.data;
-    return publicNoticeCache;
+    const policies = data.data as PublicNoticePolicy[];
+    publicNoticeCache = policies;
+    return policies;
   } catch {
     return [];
   }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { TrustedTypePolicy } from 'trusted-types/lib/index.js';
 
 /**

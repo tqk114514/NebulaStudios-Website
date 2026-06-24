@@ -291,5 +291,14 @@
   "dashboard.oauthRevokeConfirm": "確定要撤銷「{name}」的授權嗎？撤銷後該應用程式將無法存取您的帳戶資訊。",
   "dashboard.oauthRevokeSuccess": "已撤銷授權",
   "dashboard.oauthRevokeFailed": "撤銷失敗，請稍後重試",
-  "dashboard.logAction.oauth_revoke": "撤銷第三方應用程式授權"
+  "dashboard.logAction.oauth_revoke": "撤銷第三方應用程式授權",
+
+  "policy.consent.title": "政策更新",
+  "policy.consent.message": "以下政策已更新並生效，請閱讀並同意後繼續：",
+  "policy.consent.agree": "我已閱讀並同意上述政策",
+  "policy.consent.accept": "同意並繼續",
+  "policy.consent.decline": "拒絕",
+  "policy.consent.submitting": "提交中...",
+  "policy.consent.failed": "同意記錄失敗，請稍後重試",
+  "policy.consent.effectiveDate": "生效於"
 }

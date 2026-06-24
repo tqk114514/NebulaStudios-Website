@@ -16,7 +16,6 @@ import (
 	"auth-system/internal/version"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -41,11 +40,10 @@ type StaticHandler struct {
 	userCache      services.UserCacheStore
 	wsService      services.WebSocketManager
 	captchaService services.CaptchaVerifier
-	pool           *pgxpool.Pool
 }
 
 // NewStaticHandler 创建静态文件 Handler，验证所有必需依赖后初始化
-func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsService services.WebSocketManager, captchaService services.CaptchaVerifier, pool *pgxpool.Pool) (*StaticHandler, error) {
+func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsService services.WebSocketManager, captchaService services.CaptchaVerifier) (*StaticHandler, error) {
 	if cfg == nil {
 		return nil, errors.New("cfg is required")
 	}
@@ -66,7 +64,6 @@ func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsS
 		userCache:      userCache,
 		wsService:      wsService,
 		captchaService: captchaService,
-		pool:           pool,
 	}, nil
 }
 
@@ -86,39 +83,6 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	utils.RespondSuccessWithData(c, gin.H{
 		"siteKey": siteKey,
 	})
-}
-
-// GetPolicyVersions 获取政策版本清单
-// 读取 dist/shared/i18n/policy/manifest.json 并原样返回其嵌套结构：
-// { policyType: { lang: { filename: { update_date, effective_date } } } }
-// 后端仅做读取与格式校验，不对结构做扁平化或排序
-// GET /api/policy/versions
-func (h *StaticHandler) GetPolicyVersions(c *gin.Context) {
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
-
-	manifest, err := services.LoadPolicyManifest(manifestPath)
-	if err != nil {
-		utils.LogError("STATIC", "GetPolicyVersions", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
-		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
-		return
-	}
-
-	utils.RespondSuccessWithData(c, manifest)
-}
-
-// GetPublicNoticePolicies 返回当前在公示期的政策版本
-// GET /api/policy/public-notice
-func (h *StaticHandler) GetPublicNoticePolicies(c *gin.Context) {
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
-
-	policies, err := services.GetPublicNoticePolicies(manifestPath)
-	if err != nil {
-		utils.LogError("STATIC", "GetPublicNoticePolicies", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
-		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
-		return
-	}
-
-	utils.RespondSuccessWithData(c, policies)
 }
 
 // GetVersion 获取服务端与代码库版本（repo commit 缓存 10 分钟）

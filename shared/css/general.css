@@ -438,6 +438,88 @@ html, body {
   }
 }
 
+/* ==================== 政策强制同意弹窗 ==================== */
+
+.policy-consent-overlay {
+  z-index: 2200;
+}
+
+.policy-consent-message {
+  margin-bottom: 20px;
+}
+
+.policy-consent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.policy-consent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--dim);
+  border: 1px solid var(--line);
+}
+
+.policy-consent-link {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: var(--text-base);
+  letter-spacing: 0.08em;
+  transition: color 0.2s;
+}
+
+.policy-consent-link:hover {
+  color: var(--fg-hover);
+}
+
+.policy-consent-date {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+  white-space: nowrap;
+}
+
+.policy-consent-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.policy-consent-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--fg);
+  cursor: pointer;
+}
+
+.policy-consent-checkbox span {
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--mid);
+}
+
+.policy-consent-error {
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+  color: var(--error);
+  margin-bottom: 16px;
+}
+
+.modal-footer-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ==================== 页面底部 ==================== */
 
 .page-footer {
