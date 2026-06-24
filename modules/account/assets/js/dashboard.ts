@@ -14,6 +14,7 @@
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
+import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
 import { verifySession, logout } from './lib/api/auth.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
@@ -336,6 +337,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!sessionResult.success) {
       console.warn('[DASHBOARD] WARN: Session invalid:', sessionResult.errorCode);
       window.location.href = '/account/login';
+      return;
+    }
+
+    // 检查政策同意状态（拒绝则阻断，弹窗内已登出并跳转登录页）
+    const consented = await checkPolicyConsent(t);
+    if (!consented) {
       return;
     }
 

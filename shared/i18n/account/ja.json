@@ -291,5 +291,14 @@
   "dashboard.oauthRevokeConfirm": "「{name}」の認可を取り消しますか？このアプリはアカウントにアクセスできなくなります。",
   "dashboard.oauthRevokeSuccess": "認可を取り消しました",
   "dashboard.oauthRevokeFailed": "取り消しに失敗しました。後でもう一度お試しください",
-  "dashboard.logAction.oauth_revoke": "サードパーティアプリの認可を取り消し"
+  "dashboard.logAction.oauth_revoke": "サードパーティアプリの認可を取り消し",
+
+  "policy.consent.title": "ポリシー更新",
+  "policy.consent.message": "以下のポリシーが更新され、有効になりました。確認して同意してください：",
+  "policy.consent.agree": "上記のポリシーを読み、同意しました",
+  "policy.consent.accept": "同意して続行",
+  "policy.consent.decline": "拒否",
+  "policy.consent.submitting": "送信中...",
+  "policy.consent.failed": "同意の記録に失敗しました。後でもう一度お試しください",
+  "policy.consent.effectiveDate": "発効日"
 }

@@ -12,6 +12,7 @@
 // ==================== 模块导入 ====================
 import { initLanguageSwitcher, applyTranslations, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
+import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
@@ -220,6 +221,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (urlError) {
       hidePageLoader();
       showError(urlError);
+      return;
+    }
+
+    // 检查政策同意状态（拒绝则阻断，弹窗内已登出并跳转登录页）
+    const consented = await checkPolicyConsent(t);
+    if (!consented) {
       return;
     }
 

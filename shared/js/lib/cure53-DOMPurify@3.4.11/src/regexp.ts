@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { seal } from './utils.js';
 
 export const MUSTACHE_EXPR = seal(/{{[\w\W]*|^[\w\W]*}}/g);

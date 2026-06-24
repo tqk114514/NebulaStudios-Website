@@ -127,6 +127,8 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services
 
 	setupConfigAPI(apiGroup, hdlrs)
 
+	setupPolicyAPI(apiGroup, hdlrs, svcs)
+
 	setupAuthAPI(apiGroup, hdlrs, repos, svcs)
 
 	setupUserAPI(apiGroup, hdlrs, repos, svcs)
@@ -145,11 +147,22 @@ func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	{
 		configAPI.GET("/captcha", hdlrs.staticHandler.GetCaptchaConfig)
 	}
+}
 
+// setupPolicyAPI 注册政策版本查询与用户同意记录 API
+// 公开路由：versions / public-notice；认证路由：pending-consent / consent
+func setupPolicyAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 	policyAPI := r.Group("/api/policy")
 	{
-		policyAPI.GET("/versions", hdlrs.staticHandler.GetPolicyVersions)
-		policyAPI.GET("/public-notice", hdlrs.staticHandler.GetPublicNoticePolicies)
+		policyAPI.GET("/versions", hdlrs.policyHandler.GetPolicyVersions)
+		policyAPI.GET("/public-notice", hdlrs.policyHandler.GetPublicNoticePolicies)
+
+		consentAPI := policyAPI.Group("")
+		consentAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
+		{
+			consentAPI.GET("/pending-consent", hdlrs.policyHandler.GetPendingConsent)
+			consentAPI.POST("/consent", hdlrs.policyHandler.RecordConsent)
+		}
 	}
 }
 

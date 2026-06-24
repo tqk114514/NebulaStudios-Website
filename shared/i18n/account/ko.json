@@ -291,5 +291,14 @@
   "dashboard.oauthRevokeConfirm": "\"{name}\"의 접근 권한을 취소하시겠습니까? 이 앱은 더 이상 계정에 접근할 수 없습니다.",
   "dashboard.oauthRevokeSuccess": "접근 권한이 취소되었습니다",
   "dashboard.oauthRevokeFailed": "취소에 실패했습니다. 나중에 다시 시도하세요",
-  "dashboard.logAction.oauth_revoke": "타사 앱 접근 권한 취소"
+  "dashboard.logAction.oauth_revoke": "타사 앱 접근 권한 취소",
+
+  "policy.consent.title": "정책 업데이트",
+  "policy.consent.message": "다음 정책이 업데이트되어 발효되었습니다. 확인 후 동의해 주세요:",
+  "policy.consent.agree": "위 정책을 읽고 동의합니다",
+  "policy.consent.accept": "동의하고 계속",
+  "policy.consent.decline": "거부",
+  "policy.consent.submitting": "제출 중...",
+  "policy.consent.failed": "동의 기록에 실패했습니다. 나중에 다시 시도하세요",
+  "policy.consent.effectiveDate": "발효일"
 }

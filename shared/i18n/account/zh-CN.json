@@ -291,5 +291,14 @@
   "dashboard.oauthRevokeConfirm": "确定要撤销「{name}」的授权吗？撤销后该应用将无法访问您的账户信息。",
   "dashboard.oauthRevokeSuccess": "已撤销授权",
   "dashboard.oauthRevokeFailed": "撤销失败，请稍后重试",
-  "dashboard.logAction.oauth_revoke": "撤销第三方应用授权"
+  "dashboard.logAction.oauth_revoke": "撤销第三方应用授权",
+
+  "policy.consent.title": "政策更新",
+  "policy.consent.message": "以下政策已更新并生效，请阅读并同意后继续：",
+  "policy.consent.agree": "我已阅读并同意上述政策",
+  "policy.consent.accept": "同意并继续",
+  "policy.consent.decline": "拒绝",
+  "policy.consent.submitting": "提交中...",
+  "policy.consent.failed": "同意记录失败，请稍后重试",
+  "policy.consent.effectiveDate": "生效于"
 }

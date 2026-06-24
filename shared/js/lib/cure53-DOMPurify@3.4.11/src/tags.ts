@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { freeze } from './utils.js';
 
 export const html = freeze([
