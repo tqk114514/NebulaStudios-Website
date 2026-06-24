@@ -49,9 +49,6 @@ const SDK_URL = '{{TURNSTILE_SDK_URL}}';
 /** 站点密钥（全局共享） */
 let siteKey: string = '';
 
-/** SDK 是否已加载 */
-let sdkLoaded = false;
-
 // ==================== 实例状态（按容器 ID 隔离） ====================
 
 /** 各容器的验证码实例状态 */
@@ -118,7 +115,6 @@ function loadSDK(): Promise<void> {
     script.defer = true;
     script.onload = (): void => {
       script.dataset.loaded = 'true';
-      sdkLoaded = true;
       resolve();
     };
     script.onerror = (): void => {

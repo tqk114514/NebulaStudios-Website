@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { _defaults } from './defaults.ts';
 import {
   cleanUrl,

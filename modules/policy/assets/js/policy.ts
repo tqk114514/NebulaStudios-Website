@@ -21,10 +21,14 @@ type PolicyType = 'privacy' | 'terms' | 'cookies' | string;
 
 // ==================== 类型定义 ====================
 
-// 政策版本元数据（与 manifest.json 中每个文件条目对应）
+// 政策版本元数据（与 /api/policy/versions 响应中每个文件条目对应）
+// status 由服务器端基于当前时间计算，前端不自行判断时间
 interface PolicyVersionMeta {
   update_date: string;
   effective_date: string;
+  languages: string[];
+  // effective（已生效）/ public_notice（公示期）/ scheduled（未进入公示期）
+  status: 'effective' | 'public_notice' | 'scheduled';
 }
 
 interface LoadPolicyResult {
@@ -36,9 +40,8 @@ interface LoadPolicyResult {
 
 // ==================== 状态管理 ====================
 
-let currentPolicy: PolicyType = 'privacy';
-// 政策版本结构（与 manifest.json 镜像）：{ policyType: { lang: { filename: { update_date, effective_date } } } }
-let policyVersions: Record<string, Record<string, Record<string, PolicyVersionMeta>>> = {};
+// 政策版本结构（与 /api/policy/versions 响应镜像）：{ policyType: { filename: { update_date, effective_date, languages, status } } }
+let policyVersions: Record<string, Record<string, PolicyVersionMeta>> = {};
 // 缓存键：{policyType}:{lang}
 let policyCache: Record<string, LoadPolicyResult> = {};
 
@@ -59,24 +62,14 @@ function getPolicyDisplayName(type: PolicyType): string {
   return t(key) || type;
 }
 
-// 获取政策的所有版本（跨语言并集，按 effective_date 降序）
+// 获取政策的所有版本（按 effective_date 降序）
 // 用于版本切换器选项填充
 function getAllVersions(type: PolicyType): { version: string; meta: PolicyVersionMeta }[] {
-  if (!policyVersions[type]) return [];
+  const versions = policyVersions[type];
+  if (!versions) return [];
 
-  const versionMap = new Map<string, PolicyVersionMeta>();
-  for (const lang in policyVersions[type]) {
-    const files = policyVersions[type][lang];
-    for (const filename in files) {
-      const version = filenameToVersion(filename);
-      if (!versionMap.has(version)) {
-        versionMap.set(version, files[filename]);
-      }
-    }
-  }
-
-  return Array.from(versionMap.entries())
-    .map(([version, meta]) => ({ version, meta }))
+  return Object.entries(versions)
+    .map(([filename, meta]) => ({ version: filenameToVersion(filename), meta }))
     .sort((a, b) => b.meta.effective_date.localeCompare(a.meta.effective_date));
 }
 
@@ -179,18 +172,19 @@ function filenameToVersion(filename: string): string {
 }
 
 // 获取指定语言下 effective_date 最大的已生效版本条目
-// 仅返回 effective_date <= today 的版本；返回 { version, meta } 或 null（语言不存在或无文件时）
+// 仅返回 status === 'effective' 且 languages 包含指定语言的版本
+// 返回 { version, meta } 或 null（无文件或无该语言翻译时）
 function getLatestEntryForLang(type: PolicyType, lang: string): { version: string; meta: PolicyVersionMeta } | null {
-  const files = policyVersions[type]?.[lang];
-  if (!files) return null;
+  const versions = policyVersions[type];
+  if (!versions) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
   let latestVersion = '';
   let latestMeta: PolicyVersionMeta | null = null;
-  for (const filename in files) {
-    const meta = files[filename];
-    // 仅考虑已生效的版本（effective_date <= today）
-    if (meta.effective_date > today) continue;
+  for (const filename in versions) {
+    const meta = versions[filename];
+    // 仅考虑已生效且包含指定语言翻译的版本
+    if (meta.status !== 'effective') continue;
+    if (!meta.languages.includes(lang)) continue;
     if (!latestMeta || meta.effective_date > latestMeta.effective_date) {
       latestMeta = meta;
       latestVersion = filenameToVersion(filename);
@@ -199,17 +193,19 @@ function getLatestEntryForLang(type: PolicyType, lang: string): { version: strin
   return latestMeta ? { version: latestVersion, meta: latestMeta } : null;
 }
 
-// 获取政策的最新版本号（所有语言中 effective_date 最大的版本）
+// 获取政策的最新版本号（所有已生效版本中 effective_date 最大的，不限语言）
 function getLatestVersion(type: PolicyType): string {
-  if (!policyVersions[type]) return '';
+  const versions = policyVersions[type];
+  if (!versions) return '';
 
   let latestVersion = '';
   let latestEffectiveDate = '';
-  for (const lang in policyVersions[type]) {
-    const entry = getLatestEntryForLang(type, lang);
-    if (entry && entry.meta.effective_date > latestEffectiveDate) {
-      latestEffectiveDate = entry.meta.effective_date;
-      latestVersion = entry.version;
+  for (const filename in versions) {
+    const meta = versions[filename];
+    if (meta.status !== 'effective') continue;
+    if (meta.effective_date > latestEffectiveDate) {
+      latestEffectiveDate = meta.effective_date;
+      latestVersion = filenameToVersion(filename);
     }
   }
   return latestVersion;
@@ -243,29 +239,33 @@ async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | 
   // 指定版本：直接按回退顺序加载该版本
   if (specifiedVersion) {
     const filename = `${specifiedVersion}.md`;
+    const meta = policyVersions[type][filename];
+    if (!meta) {
+      return { markdown: null, isFallback: false, displayLang: '', displayVersion: '' };
+    }
+
     let result: LoadPolicyResult | null = null;
 
-    // 规则1：当前语言有该版本（先查 manifest 避免无效 404）
-    if (policyVersions[type][currentLang]?.[filename]) {
+    // 规则1：当前语言有该版本的翻译
+    if (meta.languages.includes(currentLang)) {
       const markdown = await tryLoad(currentLang, specifiedVersion);
       if (markdown) {
         result = { markdown, isFallback: false, displayLang: currentLang, displayVersion: specifiedVersion };
       }
     }
 
-    // 规则2：zh-CN 有该版本
-    if (!result && policyVersions[type]['zh-CN']?.[filename]) {
+    // 规则2：zh-CN 有该版本的翻译
+    if (!result && meta.languages.includes('zh-CN')) {
       const markdown = await tryLoad('zh-CN', specifiedVersion);
       if (markdown) {
         result = { markdown, isFallback: true, displayLang: 'zh-CN', displayVersion: specifiedVersion };
       }
     }
 
-    // 规则3：任意有该版本的语言
+    // 规则3：该版本的其他语言翻译
     if (!result) {
-      for (const lang in policyVersions[type]) {
+      for (const lang of meta.languages) {
         if (lang === currentLang || lang === 'zh-CN') continue;
-        if (!policyVersions[type][lang]?.[filename]) continue;
         const markdown = await tryLoad(lang, specifiedVersion);
         if (markdown) {
           result = { markdown, isFallback: true, displayLang: lang, displayVersion: specifiedVersion };
@@ -316,13 +316,15 @@ async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | 
     }
   }
 
-  // 规则3：如果规则2也失败，尝试找到有最新版本的任意语言
+  // 规则3：如果规则2也失败，尝试最新版本的任意语言翻译
   if (!markdown) {
-    for (const lang in policyVersions[type]) {
-      const entry = getLatestEntryForLang(type, lang);
-      if (entry && entry.version === latestVersion) {
-        markdown = await tryLoad(lang, latestVersion);
-        if (markdown) {
+    const meta = policyVersions[type][`${latestVersion}.md`];
+    if (meta) {
+      for (const lang of meta.languages) {
+        if (lang === currentLang || lang === 'zh-CN') continue;
+        const md = await tryLoad(lang, latestVersion);
+        if (md) {
+          markdown = md;
           isFallback = true;
           displayLang = lang;
           displayVersion = latestVersion;
@@ -378,37 +380,24 @@ function createVersionElement(info: VersionInfo): string {
 
 // ==================== 公示期政策 ====================
 
-// 公示期政策信息（与后端 PublicNoticePolicy 对应）
-interface PublicNoticePolicy {
-  policy_type: string;
+// 公示期版本信息（从 policyVersions 的 status 字段派生，无需额外 API 调用）
+interface PublicNoticeEntry {
   version: string;
-  update_date: string;
-  effective_date: string;
+  meta: PolicyVersionMeta;
 }
 
-// 公示期政策缓存（页面级，避免重复请求）
-let publicNoticeCache: PublicNoticePolicy[] | null = null;
-
-// 获取所有公示期政策（带缓存）
-async function fetchPublicNoticePolicies(): Promise<PublicNoticePolicy[]> {
-  if (publicNoticeCache) return publicNoticeCache;
-  try {
-    const response = await fetch('/api/policy/public-notice');
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (!data.success || !Array.isArray(data.data)) return [];
-    const policies = data.data as PublicNoticePolicy[];
-    publicNoticeCache = policies;
-    return policies;
-  } catch {
-    return [];
+// 获取指定政策类型的公示期版本（从 policyVersions 的 status 字段判断）
+// 服务器端已在 /api/policy/versions 响应中标记 status，前端直接读取
+function getPublicNoticeVersion(type: PolicyType): PublicNoticeEntry | null {
+  const versions = policyVersions[type];
+  if (!versions) return null;
+  for (const filename in versions) {
+    const meta = versions[filename];
+    if (meta.status === 'public_notice') {
+      return { version: filenameToVersion(filename), meta };
+    }
   }
-}
-
-// 获取指定政策类型的公示期版本
-async function getPublicNoticeVersion(type: PolicyType): Promise<PublicNoticePolicy | null> {
-  const policies = await fetchPublicNoticePolicies();
-  return policies.find(p => p.policy_type === type) || null;
+  return null;
 }
 
 // ==================== 路由管理 ====================
@@ -443,7 +432,7 @@ function updateNavActive(policy: PolicyType): void {
 async function renderPolicy(
   type: PolicyType,
   specifiedVersion?: string | null,
-  publicNotice?: PublicNoticePolicy | null
+  publicNotice?: PublicNoticeEntry | null
 ): Promise<void> {
   const container = document.querySelector('.policy-container');
   const loadingEl = container?.querySelector('.policy-loading');
@@ -549,9 +538,9 @@ async function handleRouteChange(): Promise<void> {
 
   // 公示期路由：#privacy/public-notice-period
   // 解析为实际的公示期版本号，传给 renderPolicy 显示公示期提示
-  let publicNotice: PublicNoticePolicy | null = null;
+  let publicNotice: PublicNoticeEntry | null = null;
   if (version === 'public-notice-period') {
-    publicNotice = await getPublicNoticeVersion(policy);
+    publicNotice = getPublicNoticeVersion(policy);
     if (publicNotice) {
       version = publicNotice.version;
     } else {
@@ -577,7 +566,6 @@ async function handleRouteChange(): Promise<void> {
   if (routeKey === currentRouteKey && document.querySelector('.policy-content.is-visible')) return;
   currentRouteKey = routeKey;
 
-  currentPolicy = policy;
   updateNavActive(policy);
 
   // 确定要显示的版本（用于版本切换器高亮）

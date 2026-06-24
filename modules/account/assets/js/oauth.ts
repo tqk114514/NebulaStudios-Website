@@ -10,7 +10,7 @@
  */
 
 // ==================== 模块导入 ====================
-import { initLanguageSwitcher, applyTranslations, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
+import { initLanguageSwitcher, updatePageTitle, hidePageLoader, waitForTranslations } from '../../../../shared/js/utils/language-switcher.ts';
 import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
 import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
 import { showAlert as showAlertBase } from './lib/ui/feedback.ts';

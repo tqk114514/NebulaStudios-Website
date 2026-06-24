@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const changeUsernameItem = document.getElementById('change-username-item');
     if (changeUsernameItem) {
       changeUsernameItem.addEventListener('click', () => {
-        showChangeUsernameModal(user, async (newUsername) => {
+        showChangeUsernameModal(user, async () => {
           const freshSession = await verifySession();
           if (freshSession.success) {
             Object.assign(user, freshSession.data);
@@ -1933,18 +1933,6 @@ function showOAuthGrantsModal(): void {
   listEl.innerHTML = '';
   loadingEl.classList.remove('is-hidden');
   emptyEl.classList.add('is-hidden');
-
-  /**
-   * 格式化授权时间
-   */
-  function formatAuthorizedTime(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(document.documentElement.lang || 'zh-CN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  }
 
   /**
    * 格式化权限范围显示
