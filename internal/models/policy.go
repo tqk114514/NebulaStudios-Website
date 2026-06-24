@@ -23,9 +23,10 @@ type PublicNoticePolicy struct {
 	EffectiveDate string `json:"effective_date"`
 }
 
-// GetLatestEffectiveVersion 获取指定政策类型的最新生效版本（跨所有语言）
+// GetLatestEffectiveVersion 获取指定政策类型在指定日期已生效的最新版本（跨所有语言）
+// now 格式为 YYYY-MM-DD；只返回 effective_date <= now 的版本中 effective_date 最大的
 // 返回版本号（如 "2026-03-24"），如果找不到返回空字符串
-func (m PolicyManifest) GetLatestEffectiveVersion(policyType string) string {
+func (m PolicyManifest) GetLatestEffectiveVersion(policyType, now string) string {
 	langs, ok := m[policyType]
 	if !ok {
 		return ""
@@ -34,7 +35,8 @@ func (m PolicyManifest) GetLatestEffectiveVersion(policyType string) string {
 	latestDate := ""
 	for _, files := range langs {
 		for filename, meta := range files {
-			if meta.EffectiveDate > latestDate {
+			// 仅考虑已生效的版本（effective_date <= now）
+			if meta.EffectiveDate <= now && meta.EffectiveDate > latestDate {
 				latestDate = meta.EffectiveDate
 				latestVersion = strings.TrimSuffix(filename, ".md")
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -114,8 +115,9 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	}
 
 	var pending []PendingConsentPolicy
+	now := time.Now().Format("2006-01-02")
 	for _, policyType := range []string{models.PolicyTypePrivacy, models.PolicyTypeTerms} {
-		latestEffective := manifest.GetLatestEffectiveVersion(policyType)
+		latestEffective := manifest.GetLatestEffectiveVersion(policyType, now)
 		if latestEffective == "" {
 			continue
 		}
@@ -172,13 +174,14 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	}
 
 	// 验证每个条目：policy_type 必须是 privacy/terms，policy_version 必须是当前最新生效版本
+	now := time.Now().Format("2006-01-02")
 	validTypes := map[string]bool{models.PolicyTypePrivacy: true, models.PolicyTypeTerms: true}
 	for _, p := range req.Policies {
 		if !validTypes[p.PolicyType] {
 			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "INVALID_POLICY_TYPE", fmt.Sprintf("Invalid policy type: %s", p.PolicyType))
 			return
 		}
-		latestEffective := manifest.GetLatestEffectiveVersion(p.PolicyType)
+		latestEffective := manifest.GetLatestEffectiveVersion(p.PolicyType, now)
 		if latestEffective == "" || p.PolicyVersion != latestEffective {
 			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "INVALID_POLICY_VERSION", fmt.Sprintf("Policy version mismatch: type=%s, requested=%s, latest=%s", p.PolicyType, p.PolicyVersion, latestEffective))
 			return
