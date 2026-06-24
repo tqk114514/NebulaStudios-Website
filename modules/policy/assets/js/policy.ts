@@ -10,7 +10,6 @@
  */
 
 import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
-import { initPublicNoticeBanner } from '../../../../shared/js/utils/public-notice.ts';
 import { marked } from '../../../../shared/js/lib/markedjs-marked@18.0.5/src/marked.ts';
 import DOMPurify from '../../../../shared/js/lib/cure53-DOMPurify@3.4.11/src/purify.ts';
 
@@ -63,12 +62,13 @@ function getPolicyDisplayName(type: PolicyType): string {
 }
 
 // 获取政策的所有版本（按 effective_date 降序）
-// 用于版本切换器选项填充
+// 用于版本切换器选项填充，仅包含已生效版本（公示期版本不列入）
 function getAllVersions(type: PolicyType): { version: string; meta: PolicyVersionMeta }[] {
   const versions = policyVersions[type];
   if (!versions) return [];
 
   return Object.entries(versions)
+    .filter(([, meta]) => meta.status === 'effective')
     .map(([filename, meta]) => ({ version: filenameToVersion(filename), meta }))
     .sort((a, b) => b.meta.effective_date.localeCompare(a.meta.effective_date));
 }
@@ -429,6 +429,90 @@ function updateNavActive(policy: PolicyType): void {
 
 // ==================== 内容渲染 ====================
 
+// 显示公示期横幅（与正文一同出现，初始隐藏状态在 init 中设置）
+function showNoticeBanner(): void {
+  const noticeBanner = document.querySelector('.notice-banner');
+  if (noticeBanner) {
+    noticeBanner.classList.remove('is-hidden');
+  }
+}
+
+// 隐藏公示期横幅（加载动画显示期间隐藏）
+function hideNoticeBanner(): void {
+  const noticeBanner = document.querySelector('.notice-banner');
+  if (noticeBanner) {
+    noticeBanner.classList.add('is-hidden');
+  }
+}
+
+// 政策类型 → i18n 键映射（用于公示期横幅）
+const policyNameKeys: Record<string, string> = {
+  privacy: 'policy.privacyPolicy',
+  terms: 'policy.termsOfService',
+  cookies: 'policy.cookiePolicy',
+};
+
+// 创建公示期横幅（初始隐藏，内容为空，由 updateNoticeBanner 填充）
+function createNoticeBanner(): HTMLElement {
+  const banner = document.createElement('div');
+  banner.className = 'notice-banner is-hidden';
+
+  const content = document.createElement('div');
+  content.className = 'notice-banner__content';
+  banner.appendChild(content);
+
+  return banner;
+}
+
+// 按当前政策类型更新横幅内容
+// - 正在查看公示期版本时隐藏横幅（已在看，无需再提示）
+// - 当前政策类型无公示期版本时隐藏横幅（display: none）
+// - 有公示期版本时填充内容并恢复 display
+// - 实际可见性由 is-hidden 类控制（加载动画期间隐藏）
+function updateNoticeBanner(policyType: PolicyType, isViewingPublicNotice: boolean = false): void {
+  const noticeBanner = document.querySelector('.notice-banner') as HTMLElement | null;
+  if (!noticeBanner) return;
+
+  // 正在查看公示期版本时不显示横幅
+  if (isViewingPublicNotice) {
+    noticeBanner.style.display = 'none';
+    return;
+  }
+
+  const content = noticeBanner.querySelector('.notice-banner__content');
+  if (!content) return;
+
+  // 检查当前政策类型是否有公示期版本
+  const publicNotice = getPublicNoticeVersion(policyType);
+  if (!publicNotice) {
+    noticeBanner.style.display = 'none';
+    return;
+  }
+
+  // 填充内容
+  content.innerHTML = '';
+  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+
+  const prefix = document.createElement('span');
+  prefix.setAttribute('data-i18n', 'policy.publicNotice.prefix');
+  prefix.textContent = t('policy.publicNotice.prefix');
+  content.appendChild(prefix);
+
+  const link = document.createElement('a');
+  const nameKey = policyNameKeys[policyType] || policyType;
+  link.setAttribute('data-i18n', nameKey);
+  link.textContent = t(nameKey);
+  link.href = `/policy#${policyType}/public-notice-period`;
+  content.appendChild(link);
+
+  const suffix = document.createElement('span');
+  suffix.setAttribute('data-i18n', 'policy.publicNotice.suffix');
+  suffix.textContent = t('policy.publicNotice.suffix');
+  content.appendChild(suffix);
+
+  noticeBanner.style.display = '';
+}
+
 async function renderPolicy(
   type: PolicyType,
   specifiedVersion?: string | null,
@@ -447,6 +531,8 @@ async function renderPolicy(
   if (!hasCache) {
     loadingEl.classList.remove('is-hidden');
     contentEl.classList.remove('is-visible');
+    // 隐藏公示期横幅（加载动画显示期间不可见）
+    hideNoticeBanner();
   }
 
   const result = await loadPolicyMarkdown(type, specifiedVersion);
@@ -456,6 +542,8 @@ async function renderPolicy(
     contentEl.classList.remove('is-visible');
     contentEl.innerHTML = `<div class="policy-not-found"><h1>404</h1></div>`;
     contentEl.classList.add('is-visible');
+    // 显示公示期横幅（与正文一同出现）
+    showNoticeBanner();
     return;
   }
 
@@ -479,7 +567,7 @@ async function renderPolicy(
         .replace('{lang}', langName)
         .replace('{displayLang}', displayLangName);
 
-      const warningDiv = `<div class="policy-fallback-warning">${formattedMessage}</div>`;
+      const warningDiv = `<div class="notice-banner">${formattedMessage}</div>`;
       html = warningDiv + html;
     }
   }
@@ -488,12 +576,12 @@ async function renderPolicy(
   // 公示期版本：显示公示期提示；历史版本：显示历史版本提示；最新生效版：无提示
   const t = (window as any).t;
   if (publicNotice && t) {
-    const noticeHtml = `<div class="policy-public-notice">${t('policy.publicNoticePeriod')}（${publicNotice.version}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+    const noticeHtml = `<div class="notice-banner">${t('policy.publicNoticePeriod')}（${publicNotice.version}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
     html = noticeHtml + html;
   } else {
     const latestVersion = getLatestVersion(type);
     if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion && t) {
-      const noticeHtml = `<div class="policy-history-notice">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+      const noticeHtml = `<div class="notice-banner">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
       html = noticeHtml + html;
     }
   }
@@ -513,6 +601,8 @@ async function renderPolicy(
   // 隐藏加载动画，显示内容
   loadingEl.classList.add('is-hidden');
   contentEl.classList.add('is-visible');
+  // 显示公示期横幅（与正文一同出现）
+  showNoticeBanner();
 
   // 异步加载版本信息，替换占位符
   if (type === 'privacy' && !specifiedVersion) {
@@ -568,6 +658,10 @@ async function handleRouteChange(): Promise<void> {
 
   updateNavActive(policy);
 
+  // 按当前政策类型更新公示期横幅内容
+  // 正在查看公示期版本时隐藏横幅；cookies 页无公示期政策会自动隐藏
+  updateNoticeBanner(policy, !!publicNotice);
+
   // 确定要显示的版本（用于版本切换器高亮）
   const allVersions = getAllVersions(policy);
   const displayVersion = version || (allVersions.length > 0 ? allVersions[0].version : '');
@@ -592,10 +686,11 @@ async function init(): Promise<void> {
     // 加载政策版本列表
     await loadPolicyVersions();
 
-    // 初始化公示期横幅（插入到 .policy-container 之前）
-    const policyContainer = document.querySelector('.policy-container');
-    if (policyContainer) {
-      initPublicNoticeBanner(policyContainer as HTMLElement, 'beforebegin');
+    // 创建公示期横幅（插入到加载动画下方，初始隐藏）
+    const policyLoading = document.querySelector('.policy-loading');
+    if (policyLoading) {
+      const banner = createNoticeBanner();
+      policyLoading.insertAdjacentElement('afterend', banner);
     }
 
     // 初始化版本切换器开关交互

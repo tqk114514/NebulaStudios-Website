@@ -15,7 +15,7 @@ import { login, errorCodeMap } from './lib/api/auth.ts';
 import { initLanguageSwitcher, waitForTranslations, updatePageTitle, hidePageLoader } from '../../../../shared/js/utils/language-switcher.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { initQrLogin } from './lib/qr.ts';
-import { checkPolicyConsent } from '../../../../shared/js/utils/policy-consent.ts';
+import { checkPolicyConsent } from './lib/policy/policy-consent.ts';
 
 // ==================== 类型定义 ====================
 

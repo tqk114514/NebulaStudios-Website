@@ -56,28 +56,6 @@
   display: none;
 }
 
-/* --- 提示横幅（历史版本 / 语言回退 / 公示期） --- */
-.policy-history-notice,
-.policy-fallback-warning,
-.policy-public-notice {
-  padding: 16px;
-  margin-bottom: 24px;
-  background: var(--dim);
-  border: 1px solid var(--line);
-  font-family: var(--font-mono);
-  font-size: var(--text-md);
-  letter-spacing: 0.12em;
-  color: var(--fg);
-}
-
-.policy-history-notice a,
-.policy-fallback-warning a,
-.policy-public-notice a {
-  color: var(--fg);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 /* --- 文档容器 --- */
 .policy-container {
   width: 100%;

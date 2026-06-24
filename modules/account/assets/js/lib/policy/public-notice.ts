@@ -1,5 +1,5 @@
 /**
- * 公示期横幅组件
+ * 公示期横幅组件（account 模块专用）
  *
  * 功能：
  * - 调用 API 获取当前公示期政策
@@ -8,7 +8,7 @@
  * - 关闭按钮写入 cookie（公示期结束后自动过期）
  */
 
-import { setCookie, getCookie } from './cookie.ts';
+import { setCookie, getCookie } from '../../../../../../shared/js/utils/cookie.ts';
 
 interface PublicNoticePolicy {
   policy_type: string;
@@ -46,15 +46,8 @@ function calculateCookieSeconds(effectiveDate: string): number {
   return Math.max(1, Math.floor((target.getTime() - now.getTime()) / 1000));
 }
 
-/**
- * 获取翻译文本（带回退）
- */
-function translate(key: string, fallback: string): string {
-  const t = (window as any).t;
-  if (!t) return fallback;
-  const result = t(key);
-  return result === key ? fallback : result;
-}
+// 模块级状态
+let allNotices: PublicNoticePolicy[] = [];
 
 /**
  * 初始化公示期横幅
@@ -72,66 +65,40 @@ export async function initPublicNoticeBanner(
     if (!data.success || !data.data || !Array.isArray(data.data)) return;
 
     // 过滤已关闭的政策（cookie 存在则跳过）
-    const notices = (data.data as PublicNoticePolicy[]).filter(p => {
+    allNotices = (data.data as PublicNoticePolicy[]).filter(p => {
       const cookieName = buildCookieName(p.policy_type, p.update_date);
       return !getCookie(cookieName);
     });
 
-    if (notices.length === 0) return;
+    if (allNotices.length === 0) return;
 
-    // 创建横幅并插入
-    const banner = createBanner(notices);
+    const banner = createBanner();
     target.insertAdjacentElement(position, banner);
+    fillBannerContent(banner, allNotices);
   } catch (error) {
     console.error('[PublicNotice] Failed to load:', error);
   }
 }
 
 /**
- * 创建横幅 DOM 元素
+ * 创建横幅（含关闭按钮）
  */
-function createBanner(notices: PublicNoticePolicy[]): HTMLElement {
+function createBanner(): HTMLElement {
+  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+
   const banner = document.createElement('div');
-  banner.className = 'public-notice-banner';
+  banner.className = 'notice-banner is-closable';
 
   const content = document.createElement('div');
-  content.className = 'public-notice-content';
-
-  // 前缀
-  const prefix = document.createElement('span');
-  prefix.textContent = translate('policy.publicNotice.prefix', '有新的');
-  content.appendChild(prefix);
-
-  // 政策链接
-  notices.forEach((notice, index) => {
-    if (index > 0) {
-      const separator = document.createElement('span');
-      separator.textContent = translate('policy.publicNotice.separator', '、');
-      content.appendChild(separator);
-    }
-    const link = document.createElement('a');
-    link.className = 'public-notice-link';
-    const nameKey = policyNameKeys[notice.policy_type] || notice.policy_type;
-    link.textContent = translate(nameKey, notice.policy_type);
-    link.href = `/policy#${notice.policy_type}/public-notice-period`;
-    content.appendChild(link);
-  });
-
-  // 后缀
-  const suffix = document.createElement('span');
-  suffix.textContent = translate('policy.publicNotice.suffix', '在公示期');
-  content.appendChild(suffix);
-
+  content.className = 'notice-banner__content';
   banner.appendChild(content);
 
-  // 关闭按钮
   const closeBtn = document.createElement('button');
-  closeBtn.className = 'public-notice-close';
-  closeBtn.setAttribute('aria-label', translate('policy.publicNotice.close', '关闭'));
-  closeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  closeBtn.className = 'notice-banner__close';
+  closeBtn.setAttribute('aria-label', t('policy.publicNotice.close'));
+  closeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
   closeBtn.addEventListener('click', () => {
-    // 为每个公示期政策写入 cookie
-    notices.forEach(notice => {
+    allNotices.forEach(notice => {
       const cookieName = buildCookieName(notice.policy_type, notice.update_date);
       const seconds = calculateCookieSeconds(notice.effective_date);
       setCookie(cookieName, 'dismissed', seconds, true);
@@ -141,4 +108,43 @@ function createBanner(notices: PublicNoticePolicy[]): HTMLElement {
   banner.appendChild(closeBtn);
 
   return banner;
+}
+
+/**
+ * 填充横幅内容（前缀 + 政策链接 + 后缀）
+ */
+function fillBannerContent(banner: HTMLElement, notices: PublicNoticePolicy[]): void {
+  const content = banner.querySelector('.notice-banner__content');
+  if (!content) return;
+
+  content.innerHTML = '';
+  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+
+  // 前缀
+  const prefix = document.createElement('span');
+  prefix.setAttribute('data-i18n', 'policy.publicNotice.prefix');
+  prefix.textContent = t('policy.publicNotice.prefix');
+  content.appendChild(prefix);
+
+  // 政策链接
+  notices.forEach((notice, index) => {
+    if (index > 0) {
+      const separator = document.createElement('span');
+      separator.setAttribute('data-i18n', 'policy.publicNotice.separator');
+      separator.textContent = t('policy.publicNotice.separator');
+      content.appendChild(separator);
+    }
+    const link = document.createElement('a');
+    const nameKey = policyNameKeys[notice.policy_type] || notice.policy_type;
+    link.setAttribute('data-i18n', nameKey);
+    link.textContent = t(nameKey);
+    link.href = `/policy#${notice.policy_type}/public-notice-period`;
+    content.appendChild(link);
+  });
+
+  // 后缀
+  const suffix = document.createElement('span');
+  suffix.setAttribute('data-i18n', 'policy.publicNotice.suffix');
+  suffix.textContent = t('policy.publicNotice.suffix');
+  content.appendChild(suffix);
 }
