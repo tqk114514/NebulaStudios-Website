@@ -271,8 +271,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		if err != nil {
 			utils.LogWarn("AUTH", "Failed to load policy manifest for consent", fmt.Sprintf("userUID=%s, err=%v", user.UID, err))
 		} else {
+			now := time.Now().Format("2006-01-02")
 			for _, policyType := range []string{models.PolicyTypePrivacy, models.PolicyTypeTerms} {
-				version := manifest.GetLatestEffectiveVersion(policyType)
+				version := manifest.GetLatestEffectiveVersion(policyType, now)
 				if version == "" {
 					utils.LogWarn("AUTH", "No effective policy version found for consent", fmt.Sprintf("userUID=%s, type=%s", user.UID, policyType))
 					continue

@@ -178,16 +178,19 @@ function filenameToVersion(filename: string): string {
   return filename.replace(/\.md$/, '');
 }
 
-// 获取指定语言下 effective_date 最大的版本条目
-// 返回 { version, meta } 或 null（语言不存在或无文件时）
+// 获取指定语言下 effective_date 最大的已生效版本条目
+// 仅返回 effective_date <= today 的版本；返回 { version, meta } 或 null（语言不存在或无文件时）
 function getLatestEntryForLang(type: PolicyType, lang: string): { version: string; meta: PolicyVersionMeta } | null {
   const files = policyVersions[type]?.[lang];
   if (!files) return null;
 
+  const today = new Date().toISOString().slice(0, 10);
   let latestVersion = '';
   let latestMeta: PolicyVersionMeta | null = null;
   for (const filename in files) {
     const meta = files[filename];
+    // 仅考虑已生效的版本（effective_date <= today）
+    if (meta.effective_date > today) continue;
     if (!latestMeta || meta.effective_date > latestMeta.effective_date) {
       latestMeta = meta;
       latestVersion = filenameToVersion(filename);
