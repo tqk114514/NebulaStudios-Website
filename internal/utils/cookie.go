@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,10 +24,10 @@ const (
 const (
 	DefaultCookieMaxAge = int(60 * 24 * time.Hour / time.Second)
 	DefaultCookiePath   = "/"
-	DefaultCookieDomain = "www.nebulastudios.top"
 )
 
 var secureFlag bool
+var cookieDomain string
 
 // InitSecure 初始化 Cookie Secure 标志
 // 应在应用启动时调用一次，根据 BaseURL 判断是否为 HTTPS 环境
@@ -38,13 +40,26 @@ func IsSecure() bool {
 	return secureFlag
 }
 
+// InitCookieDomain 从 BaseURL 解析 Cookie Domain。
+// localhost 或 IP 地址时留空（浏览器默认使用当前 host）。
+func InitCookieDomain(baseURL string) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return
+	}
+	host := u.Hostname()
+	if host != "localhost" && net.ParseIP(host) == nil {
+		cookieDomain = host
+	}
+}
+
 // SetTokenCookie 设置认证 Token Cookie
 func SetTokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     TokenCookieName,
 		Value:    token,
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   DefaultCookieMaxAge,
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -59,7 +74,7 @@ func ClearTokenCookie(w http.ResponseWriter) {
 		Name:     TokenCookieName,
 		Value:    "",
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -73,7 +88,7 @@ func SetLanguageCookie(w http.ResponseWriter, language string) {
 		Name:     LanguageCookieName,
 		Value:    language,
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   int(365 * 24 * time.Hour / time.Second),
 		Secure:   IsSecure(),
 		HttpOnly: false,
@@ -87,7 +102,7 @@ func ClearLanguageCookie(w http.ResponseWriter) {
 		Name:     LanguageCookieName,
 		Value:    "",
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		Secure:   IsSecure(),
 		HttpOnly: false,
@@ -123,7 +138,7 @@ func SetRefreshTokenCookie(w http.ResponseWriter, token string) {
 		Name:     RefreshTokenCookieName,
 		Value:    token,
 		Path:     "/api/auth/refresh",
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   30 * 24 * 60 * 60,
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -137,7 +152,7 @@ func ClearRefreshTokenCookie(w http.ResponseWriter) {
 		Name:     RefreshTokenCookieName,
 		Value:    "",
 		Path:     "/api/auth/refresh",
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -171,7 +186,7 @@ func SetLinkTokenCookie(w http.ResponseWriter, token string) {
 		Name:     LinkTokenCookieName,
 		Value:    token,
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   int(StateExpiryDuration.Seconds()),
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -185,7 +200,7 @@ func ClearLinkTokenCookie(w http.ResponseWriter) {
 		Name:     LinkTokenCookieName,
 		Value:    "",
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		Secure:   IsSecure(),
 		HttpOnly: true,
@@ -219,7 +234,7 @@ func SetCSRFCookie(w http.ResponseWriter, token string) {
 		Name:     CSRFTokenName,
 		Value:    token,
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   CSRFTokenMaxAge,
 		Secure:   IsSecure(),
 		HttpOnly: false,
@@ -233,7 +248,7 @@ func ClearCSRFCookie(w http.ResponseWriter) {
 		Name:     CSRFTokenName,
 		Value:    "",
 		Path:     DefaultCookiePath,
-		Domain:   DefaultCookieDomain,
+		Domain:   cookieDomain,
 		MaxAge:   -1,
 		Secure:   IsSecure(),
 		HttpOnly: false,
