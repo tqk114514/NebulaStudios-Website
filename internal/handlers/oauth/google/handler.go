@@ -297,7 +297,7 @@ func (h *GoogleHandler) Callback(c *gin.Context) {
 		avatarURL = pic
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	if action == oauth.ActionLink && currentUserUID != "" {
 		h.handleLinkAction(c, ctx, currentUserUID, googleID, displayName, avatarURL)
@@ -321,7 +321,7 @@ func (h *GoogleHandler) Unlink(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
@@ -409,7 +409,7 @@ func (h *GoogleHandler) GetPendingLinkInfo(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := h.userRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
@@ -466,7 +466,7 @@ func (h *GoogleHandler) ConfirmLink(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	existingGoogleUser, err := h.userRepo.FindByGoogleID(ctx, pendingData.ProviderID)
 	if err != nil {
