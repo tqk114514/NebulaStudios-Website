@@ -61,6 +61,7 @@ func run() error {
 	}
 
 	utils.InitSecure(strings.HasPrefix(cfg.BaseURL, "https"))
+	utils.InitCookieDomain(cfg.BaseURL)
 
 	gin.SetMode(gin.ReleaseMode)
 
