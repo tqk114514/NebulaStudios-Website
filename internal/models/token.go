@@ -279,15 +279,15 @@ func (r *CodeRepository) FindByCode(ctx context.Context, codeStr string) (*Code,
 	return code, nil
 }
 
-// UpdateVerification 更新验证状态
-func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string, attempts int, verifiedAt int64) error {
+// UpdateVerification 更新验证状态（原子递增 attempts 防止并发丢失）
+func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string, verifiedAt int64) error {
 	if r.pool == nil {
 		return errors.New("database not ready")
 	}
 
 	_, err := r.pool.Exec(ctx, `
-		UPDATE codes SET attempts = $1, verified = 1, verified_at = $2 WHERE code = $3
-	`, attempts, verifiedAt, codeStr)
+		UPDATE codes SET attempts = attempts + 1, verified = 1, verified_at = $1 WHERE code = $2
+	`, verifiedAt, codeStr)
 
 	if err != nil {
 		utils.LogWarn("TOKEN", "Failed to update code verification status", err)
