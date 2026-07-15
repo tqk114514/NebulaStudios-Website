@@ -235,7 +235,9 @@ func SafeReturnURL(returnURL, baseURL, fallback string) string {
 	}
 
 	// 相对路径：禁止协议相对 URL（"//evil.com"）
-	if strings.HasPrefix(returnURL, "//") {
+	// 浏览器按 WHATWG 规范会将 "\" 规范化为 "/"，故 "/\evil.com" 会变成 "//evil.com"，
+	// 必须一并拦截反斜杠形式，防止开放重定向绕过。
+	if strings.HasPrefix(returnURL, "//") || strings.HasPrefix(returnURL, "/\\") {
 		return fallback
 	}
 
