@@ -210,6 +210,12 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 	}
 
 	if markErr := s.sessionTokenRepo.MarkUsed(ctx, existing.ID); markErr != nil {
+		if errors.Is(markErr, models.ErrSessionTokenReused) {
+			s.sessionTokenRepo.RevokeFamily(ctx, existing.FamilyID)
+			utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked",
+				fmt.Sprintf("user_uid=%s, family_id=%s", existing.UserUID, existing.FamilyID))
+			return "", "", ErrRefreshTokenReused
+		}
 		return "", "", fmt.Errorf("failed to mark refresh token as used: %w", markErr)
 	}
 

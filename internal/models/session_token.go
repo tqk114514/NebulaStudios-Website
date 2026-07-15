@@ -101,18 +101,23 @@ func (r *SessionTokenRepository) FindByHash(ctx context.Context, tokenHash strin
 	return token, nil
 }
 
-// MarkUsed 标记为已使用
+// MarkUsed 标记为已使用（使用乐观锁防止并发重放）
+// 如果已经被使用过，返回 ErrSessionTokenReused
 func (r *SessionTokenRepository) MarkUsed(ctx context.Context, id int64) error {
 	if err := r.checkDB(); err != nil {
 		return err
 	}
 
-	_, err := r.pool.Exec(ctx, `
-		UPDATE session_tokens SET used = TRUE, used_at = NOW() WHERE id = $1
+	result, err := r.pool.Exec(ctx, `
+		UPDATE session_tokens SET used = TRUE, used_at = NOW() WHERE id = $1 AND used = FALSE
 	`, id)
 
 	if err != nil {
 		return utils.LogError("SESSION_TOKEN", "MarkUsed", err, fmt.Sprintf("id=%d", id))
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrSessionTokenReused
 	}
 
 	return nil
