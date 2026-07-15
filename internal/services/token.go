@@ -143,7 +143,9 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 			return nil, utils.LogError("TOKEN", "GenerateCode", err)
 		}
 
-		s.tokenRepo.UpdateCode(ctx, tokenHash, codeStr)
+		if err := s.tokenRepo.UpdateCode(ctx, tokenHash, codeStr); err != nil {
+			return nil, utils.LogError("TOKEN", "UpdateCode", err)
+		}
 
 		code := &models.Code{
 			Code:       codeStr,
@@ -152,7 +154,9 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 			CreatedAt:  now,
 			ExpireTime: now + int64(tokenExpiry.Milliseconds()),
 		}
-		s.codeRepo.Create(ctx, code)
+		if err := s.codeRepo.Create(ctx, code); err != nil {
+			return nil, utils.LogError("TOKEN", "CreateCode", err)
+		}
 	} else {
 		codeStr = *token.Code
 	}
@@ -213,7 +217,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 	}
 
 	now := time.Now().UnixMilli()
-	s.codeRepo.UpdateVerification(ctx, codeStr, newAttempts, now)
+	s.codeRepo.UpdateVerification(ctx, codeStr, now)
 
 	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, code.Type, newAttempts))
 

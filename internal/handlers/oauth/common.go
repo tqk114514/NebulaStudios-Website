@@ -314,7 +314,7 @@ func fifoEvictLocked(dataMap any, indexMap map[string]int64, count int) {
 	}
 }
 
-// findOldestKeys 找出序号最小的 N 个 key
+// findOldestKeys 找出序号最小的 N 个 key（使用 max-heap）
 func findOldestKeys(indexMap map[string]int64, count int) []string {
 	if len(indexMap) <= count {
 		keys := make([]string, 0, len(indexMap))
@@ -330,11 +330,11 @@ func findOldestKeys(indexMap map[string]int64, count int) []string {
 		if len(heap) < count {
 			heap = append(heap, fifoKv{k, v})
 			if len(heap) == count {
-				buildFifoMinHeap(heap)
+				buildFifoMaxHeap(heap)
 			}
 		} else if v < heap[0].value {
 			heap[0] = fifoKv{k, v}
-			fifoHeapify(heap, 0)
+			fifoMaxHeapify(heap, 0)
 		}
 	}
 
@@ -350,24 +350,24 @@ type fifoKv struct {
 	value int64
 }
 
-func buildFifoMinHeap(h []fifoKv) {
+func buildFifoMaxHeap(h []fifoKv) {
 	for i := len(h)/2 - 1; i >= 0; i-- {
-		fifoHeapify(h, i)
+		fifoMaxHeapify(h, i)
 	}
 }
 
-func fifoHeapify(h []fifoKv, i int) {
-	min := i
+func fifoMaxHeapify(h []fifoKv, i int) {
+	max := i
 	left := 2*i + 1
 	right := 2*i + 2
-	if left < len(h) && h[left].value < h[min].value {
-		min = left
+	if left < len(h) && h[left].value > h[max].value {
+		max = left
 	}
-	if right < len(h) && h[right].value < h[min].value {
-		min = right
+	if right < len(h) && h[right].value > h[max].value {
+		max = right
 	}
-	if min != i {
-		h[i], h[min] = h[min], h[i]
-		fifoHeapify(h, min)
+	if max != i {
+		h[i], h[max] = h[max], h[i]
+		fifoMaxHeapify(h, max)
 	}
 }

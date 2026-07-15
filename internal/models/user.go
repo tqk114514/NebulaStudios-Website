@@ -537,8 +537,8 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, uid, plainPassword 
 	if plainPassword == "" {
 		return errors.New("password is empty")
 	}
-	if len(plainPassword) < 8 {
-		return errors.New("password must be at least 8 characters")
+	if len(plainPassword) < 16 {
+		return errors.New("password must be at least 16 characters")
 	}
 
 	if r.pool == nil {
