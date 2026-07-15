@@ -19,14 +19,12 @@ var (
 	ErrCodeExpired     = errors.New("CODE_EXPIRED")
 	ErrEmailMismatch   = errors.New("EMAIL_MISMATCH")
 	ErrTypeMismatch    = errors.New("TYPE_MISMATCH")
-	ErrTooManyAttempts = errors.New("TOO_MANY_ATTEMPTS")
 	ErrCodeNotVerified = errors.New("CODE_NOT_VERIFIED")
 )
 
 const (
-	maxCodeAttempts = 5
-	tokenUsed       = 1
-	codeVerified    = 1
+	tokenUsed    = 1
+	codeVerified = 1
 )
 
 // Token 验证 Token

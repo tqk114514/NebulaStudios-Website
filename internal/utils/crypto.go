@@ -436,11 +436,14 @@ func ValidateCodeChallenge(codeChallenge, codeChallengeMethod string) bool {
 		return false
 	}
 
+	allowPlainChars := codeChallengeMethod == "plain"
+
 	for _, c := range codeChallenge {
 		if !((c >= 'A' && c <= 'Z') ||
 			(c >= 'a' && c <= 'z') ||
 			(c >= '0' && c <= '9') ||
-			c == '-' || c == '_') {
+			c == '-' || c == '_' ||
+			(allowPlainChars && (c == '.' || c == '~'))) {
 			return false
 		}
 	}

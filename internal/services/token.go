@@ -22,7 +22,6 @@ var (
 	ErrCodeExpired     = models.ErrCodeExpired
 	ErrEmailMismatch   = models.ErrEmailMismatch
 	ErrTypeMismatch    = models.ErrTypeMismatch
-	ErrTooManyAttempts = models.ErrTooManyAttempts
 	ErrCodeNotVerified = models.ErrCodeNotVerified
 )
 
@@ -32,10 +31,7 @@ const (
 	TokenTypeChangePassword = "change_password"
 	TokenTypeDeleteAccount  = "delete_account"
 
-	tokenExpiry     = 5 * time.Minute
-	maxCodeAttempts = 5
-	tokenUsed       = 1
-	codeVerified    = 1
+	tokenExpiry = 5 * time.Minute
 )
 
 // TokenResult Token 验证结果
@@ -209,17 +205,12 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 		return &CodeResult{Type: code.Type, AlreadyVerified: true}, nil
 	}
 
-	newAttempts := code.Attempts + 1
-	if newAttempts > maxCodeAttempts {
-		s.codeRepo.DeleteByCode(ctx, codeStr)
-		utils.LogWarn("TOKEN", fmt.Sprintf("Too many attempts for code: email=%s", normalizedEmail))
-		return nil, models.ErrTooManyAttempts
+	now := time.Now().UnixMilli()
+	if err := s.codeRepo.UpdateVerification(ctx, codeStr, now); err != nil {
+		return nil, fmt.Errorf("failed to update verification: %w", err)
 	}
 
-	now := time.Now().UnixMilli()
-	s.codeRepo.UpdateVerification(ctx, codeStr, now)
-
-	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s, attempts=%d", normalizedEmail, code.Type, newAttempts))
+	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s", normalizedEmail, code.Type))
 
 	return &CodeResult{Type: code.Type}, nil
 }
