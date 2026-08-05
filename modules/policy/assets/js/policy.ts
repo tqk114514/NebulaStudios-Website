@@ -10,6 +10,7 @@
  */
 
 import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
+import { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
 import { marked } from '../../../../shared/js/lib/markedjs-marked@18.0.5/src/marked.ts';
 import DOMPurify from '../../../../shared/js/lib/cure53-DOMPurify@3.4.11/src/purify.ts';
 
@@ -55,7 +56,7 @@ const LANG_NAMES: Record<string, string> = {
 
 // 政策显示名称映射（从翻译获取）
 function getPolicyDisplayName(type: PolicyType): string {
-  const t = (window as any).t;
+  const t = window.t;
   if (!t) return type;
   const key = `policy.${type === 'privacy' ? 'privacyPolicy' : type === 'terms' ? 'termsOfService' : 'cookiePolicy'}`;
   return t(key) || type;
@@ -122,14 +123,17 @@ function updateVersionSwitcher(type: PolicyType, currentVersion: string): void {
   switcher.classList.remove('is-hidden');
 
   // 填充选项（复用 .language-option 类名以套用 general.css 样式）
-  dropdown.innerHTML = allVersions.map(({ version }) => `
-    <button class="language-option ${version === currentVersion ? 'active' : ''}" data-version="${version}" role="option" aria-selected="${version === currentVersion}">
-      <span>${version}</span>
+  dropdown.innerHTML = allVersions.map(({ version }) => {
+    const escapedVersion = escapeHtml(version);
+    return `
+    <button class="language-option ${version === currentVersion ? 'active' : ''}" data-version="${escapedVersion}" role="option" aria-selected="${version === currentVersion}">
+      <span>${escapedVersion}</span>
       <svg class="check-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M2.5 7L5.5 10L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
-  `).join('');
+  `;
+  }).join('');
 
   // 更新当前显示文本
   textEl.textContent = currentVersion;
@@ -368,10 +372,10 @@ async function fetchVersionInfo(): Promise<VersionInfo | null> {
 }
 
 function createVersionElement(info: VersionInfo): string {
-  const t = (window as any).t || ((k: string) => k);
+  const t = window.t || ((k: string) => k);
 
   return `<div class="version-info">
-    <p>${t('policy.versionServer')}：${info.serverCommit}</p>
+    <p>${t('policy.versionServer')}：${escapeHtml(info.serverCommit)}</p>
   </div>`;
 }
 
@@ -399,14 +403,18 @@ function getPublicNoticeVersion(type: PolicyType): PublicNoticeEntry | null {
 
 // ==================== 路由管理 ====================
 
+// 支持的政策类型（路由白名单，防止非法 hash 值注入页面）
+const VALID_POLICY_TYPES: PolicyType[] = ['privacy', 'terms', 'cookies'];
+
 // 解析 hash 路由：{policy}[/{version}]
 // 例：#privacy → 最新生效版；#privacy/2025-12-18 → 指定历史版本；#privacy/public-notice-period → 公示期版本
+// policy 不在白名单内时回退到 'privacy'
 function parseHashRoute(): { policy: PolicyType; version: string | null } {
   const hash = window.location.hash.slice(1); // 去掉 #
   if (!hash) return { policy: 'privacy', version: null };
 
   const parts = hash.split('/');
-  const policy = parts[0] as PolicyType;
+  const policy = (VALID_POLICY_TYPES.includes(parts[0] as PolicyType) ? parts[0] : 'privacy') as PolicyType;
   const version = parts[1] || null;
   return { policy, version };
 }
@@ -488,7 +496,7 @@ function updateNoticeBanner(policyType: PolicyType, isViewingPublicNotice: boole
 
   // 填充内容
   content.innerHTML = '';
-  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+  const t: (key: string) => string = window.t ?? ((k: string): string => k);
 
   const prefix = document.createElement('span');
   prefix.setAttribute('data-i18n', 'policy.publicNotice.prefix');
@@ -552,17 +560,17 @@ async function renderPolicy(
 
   // 语言回退提示（先加，显示在下方）
   if (result.isFallback) {
-    const t = (window as any).t;
+    const t = window.t;
     if (t) {
       const policyName = getPolicyDisplayName(type);
       const langName = LANG_NAMES[currentLang] || currentLang;
       const displayLangName = LANG_NAMES[result.displayLang] || result.displayLang;
       const fallbackMessage = t('policy.versionFallback');
       const formattedMessage = fallbackMessage
-        .replace('{policy}', policyName)
-        .replace('{version}', result.displayVersion)
-        .replace('{lang}', langName)
-        .replace('{displayLang}', displayLangName);
+        .replace('{policy}', escapeHtml(policyName))
+        .replace('{version}', escapeHtml(result.displayVersion))
+        .replace('{lang}', escapeHtml(langName))
+        .replace('{displayLang}', escapeHtml(displayLangName));
 
       const warningDiv = `<div class="notice-banner">${formattedMessage}</div>`;
       html = warningDiv + html;
@@ -571,14 +579,14 @@ async function renderPolicy(
 
   // 顶部提示横幅（后加，显示在上方）
   // 公示期版本：显示公示期提示；历史版本：显示历史版本提示；最新生效版：无提示
-  const t = (window as any).t;
+  const t = window.t;
   if (publicNotice && t) {
-    const noticeHtml = `<div class="notice-banner">${t('policy.publicNoticePeriod')}（${publicNotice.version}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+    const noticeHtml = `<div class="notice-banner">${t('policy.publicNoticePeriod')}（${escapeHtml(publicNotice.version)}）<a href="#${escapeHtml(type)}">${t('policy.historyLatest')}</a></div>`;
     html = noticeHtml + html;
   } else {
     const latestVersion = getLatestVersion(type);
     if (specifiedVersion && latestVersion && specifiedVersion !== latestVersion && t) {
-      const noticeHtml = `<div class="notice-banner">${t('policy.historyNotice')}（${specifiedVersion}）<a href="#${type}">${t('policy.historyLatest')}</a></div>`;
+      const noticeHtml = `<div class="notice-banner">${t('policy.historyNotice')}（${escapeHtml(specifiedVersion)}）<a href="#${escapeHtml(type)}">${t('policy.historyLatest')}</a></div>`;
       html = noticeHtml + html;
     }
   }

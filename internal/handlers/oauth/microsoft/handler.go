@@ -30,7 +30,7 @@ type MicrosoftHandler struct {
 	userLogRepo      models.UserLogStore
 	sessionService   services.SessionManager
 	userCache        services.UserCacheStore
-	storageService        services.StorageService
+	storageService   services.StorageService
 	clientID         string
 	clientSecret     string
 	redirectURI      string
@@ -76,7 +76,7 @@ func NewMicrosoftHandler(
 		userLogRepo:      userLogRepo,
 		sessionService:   sessionService,
 		userCache:        userCache,
-		storageService:        storageService,
+		storageService:   storageService,
 		clientID:         clientID,
 		clientSecret:     clientSecret,
 		redirectURI:      redirectURI,

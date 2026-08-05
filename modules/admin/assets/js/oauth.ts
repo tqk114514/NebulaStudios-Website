@@ -232,8 +232,6 @@ async function removeClientRow(clientId: number): Promise<void> {
  * 加载客户端列表
  */
 export async function loadOAuthClients(): Promise<void> {
-  console.log('[ADMIN][OAUTH] loadOAuthClients called');
-
   if (!oauthTableBody) {
     console.error('[ADMIN][OAUTH] oauthTableBody element not found');
     return;
@@ -392,8 +390,6 @@ function bindClientDetailEvents(client: OAuthClient, modal: HTMLElement): void {
 }
 
 function showClientDetail(clientId: number): void {
-  console.log('[ADMIN][OAUTH] showClientDetail called');
-
   if (oauthModalTitle) {
     oauthModalTitle.textContent = '应用详情';
   }
@@ -416,8 +412,6 @@ function showClientDetail(clientId: number): void {
 // ==================== 创建/编辑表单 ====================
 
 function showForm(client?: OAuthClient): void {
-  console.log('[ADMIN][OAUTH] showForm called');
-
   if (!oauthFormTitle || !oauthFormSubmit || !oauthForm || !oauthFormModal) {
     console.error('[ADMIN][OAUTH] Form elements not found for showForm');
     return;
@@ -442,8 +436,6 @@ function showForm(client?: OAuthClient): void {
  * 处理表单提交
  */
 async function handleFormSubmit(): Promise<void> {
-  console.log('[ADMIN][OAUTH] handleFormSubmit called');
-  
   const localOauthNameInput = oauthNameInput;
   const localOauthDescInput = oauthDescInput;
   const localOauthRedirectInput = oauthRedirectInput;
@@ -518,8 +510,6 @@ async function handleFormSubmit(): Promise<void> {
  * 显示密钥弹窗
  */
 function showSecretModal(secret: string): void {
-  console.log('[ADMIN][OAUTH] showSecretModal called');
-  
   const localOauthSecretValue = oauthSecretValue;
   const localOauthSecretModal = oauthSecretModal;
   
@@ -551,8 +541,6 @@ async function copySecret(): Promise<void> {
  * 初始化 OAuth 管理页面
  */
 export function initOAuthPage(): void {
-  console.log('[ADMIN][OAUTH] initOAuthPage called');
-
   if (oauthSearchBtn && oauthSearch) {
     initSearch(oauthSearch, oauthSearchBtn, (query) => {
       currentSearch = query;

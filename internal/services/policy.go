@@ -8,7 +8,6 @@ import (
 	"auth-system/internal/models"
 )
 
-
 // PolicyNow 返回政策计算使用的当前日期（北京时间，YYYY-MM-DD）。
 // 政策日期均以北京时间为准，而服务器容器时区可能为 UTC，故固定使用东八区计算。
 func PolicyNow() string {

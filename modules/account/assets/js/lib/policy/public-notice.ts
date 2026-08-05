@@ -84,7 +84,7 @@ export async function initPublicNoticeBanner(
  * 创建横幅（含关闭按钮）
  */
 function createBanner(): HTMLElement {
-  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+  const t: (key: string) => string = window.t ?? ((k: string): string => k);
 
   const banner = document.createElement('div');
   banner.className = 'notice-banner is-closable';
@@ -118,7 +118,7 @@ function fillBannerContent(banner: HTMLElement, notices: PublicNoticePolicy[]): 
   if (!content) return;
 
   content.innerHTML = '';
-  const t: (key: string) => string = (window as any).t ?? ((k: string): string => k);
+  const t: (key: string) => string = window.t ?? ((k: string): string => k);
 
   // 前缀
   const prefix = document.createElement('span');

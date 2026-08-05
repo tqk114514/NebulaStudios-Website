@@ -26,15 +26,11 @@ async function getStats(): Promise<StatsResponse | null> {
 // ==================== 公开函数 ====================
 
 export async function loadStats(): Promise<void> {
-  console.log('[ADMIN][STATS] loadStats called');
-  
   const stats = await getStats();
   if (!stats) {
     console.warn('[ADMIN][STATS] Stats data is null');
     return;
   }
-  
-  console.log('[ADMIN][STATS] Stats data:', stats);
 
   const mappings: [HTMLElement | null, number][] = [
     [statTotalUsers, stats.totalUsers],

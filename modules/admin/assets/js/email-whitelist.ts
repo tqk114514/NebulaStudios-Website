@@ -176,8 +176,6 @@ function removeWhitelistRow(entryId: number): void {
 }
 
 async function loadWhitelist(): Promise<void> {
-  console.log('[ADMIN][WHITELIST] loadWhitelist called');
-
   if (!whitelistTableBody) {
     console.error('[ADMIN][WHITELIST] whitelistTableBody element not found');
     return;
@@ -323,8 +321,6 @@ function bindWhitelistDetailEvents(entry: EmailWhitelistEntry, modal: HTMLElemen
 }
 
 function showWhitelistDetail(entryId: number): void {
-  console.log('[ADMIN][WHITELIST] showWhitelistDetail called');
-
   showDetailWithCache<EmailWhitelistEntry>({
     modal: whitelistModal,
     modalBody: whitelistModalBody,

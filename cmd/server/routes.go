@@ -68,7 +68,6 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 	utils.LogInfo("STATIC", fmt.Sprintf("Serving avatars from %s", cfg.AvatarDir))
 }
 
-
 func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	r.GET("/", handlers.ServeHomePage)
 

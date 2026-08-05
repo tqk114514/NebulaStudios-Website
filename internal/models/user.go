@@ -81,24 +81,24 @@ type User struct {
 
 // UserPublic 公开的用户信息（不含敏感数据）
 type UserPublic struct {
-	ID                 int64      `json:"id"`
-	UID                string     `json:"uid"`
-	Username           string     `json:"username"`
-	Email              string     `json:"email"`
-	AvatarURL          string     `json:"avatar_url"`
-	Role               int        `json:"role"`
-	MicrosoftID        *string    `json:"microsoft_id,omitempty"`
-	MicrosoftName      *string    `json:"microsoft_name,omitempty"`
-	MicrosoftAvatarURL *string    `json:"microsoft_avatar_url,omitempty"`
-	GoogleID           *string    `json:"google_id,omitempty"`
-	GoogleName         *string    `json:"google_name,omitempty"`
-	GoogleAvatarURL    *string    `json:"google_avatar_url,omitempty"`
-	MicrosoftAvatarSync bool      `json:"microsoft_avatar_sync"`
-	IsBanned           bool       `json:"is_banned"`
-	BanReason          *string    `json:"ban_reason,omitempty"`
-	BannedAt           *time.Time `json:"banned_at,omitempty"`
-	UnbanAt            *time.Time `json:"unban_at,omitempty"` // NULL 表示永封
-	CreatedAt          time.Time  `json:"created_at"`
+	ID                  int64      `json:"id"`
+	UID                 string     `json:"uid"`
+	Username            string     `json:"username"`
+	Email               string     `json:"email"`
+	AvatarURL           string     `json:"avatar_url"`
+	Role                int        `json:"role"`
+	MicrosoftID         *string    `json:"microsoft_id,omitempty"`
+	MicrosoftName       *string    `json:"microsoft_name,omitempty"`
+	MicrosoftAvatarURL  *string    `json:"microsoft_avatar_url,omitempty"`
+	GoogleID            *string    `json:"google_id,omitempty"`
+	GoogleName          *string    `json:"google_name,omitempty"`
+	GoogleAvatarURL     *string    `json:"google_avatar_url,omitempty"`
+	MicrosoftAvatarSync bool       `json:"microsoft_avatar_sync"`
+	IsBanned            bool       `json:"is_banned"`
+	BanReason           *string    `json:"ban_reason,omitempty"`
+	BannedAt            *time.Time `json:"banned_at,omitempty"`
+	UnbanAt             *time.Time `json:"unban_at,omitempty"` // NULL 表示永封
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
 // userColumns 用户表全列 SELECT 字符串，所有查询方法统一引用
@@ -128,15 +128,15 @@ func (u *User) ToPublic() *UserPublic {
 	}
 
 	pub := &UserPublic{
-		ID:        u.ID,
-		UID:       u.UID,
-		Username:  u.Username,
-		Email:     u.Email,
-		AvatarURL: u.AvatarURL,
-		Role:                 u.Role,
-		IsBanned:             u.IsBanned,
-		CreatedAt:            u.CreatedAt,
-		MicrosoftAvatarSync:  u.MicrosoftAvatarSync,
+		ID:                  u.ID,
+		UID:                 u.UID,
+		Username:            u.Username,
+		Email:               u.Email,
+		AvatarURL:           u.AvatarURL,
+		Role:                u.Role,
+		IsBanned:            u.IsBanned,
+		CreatedAt:           u.CreatedAt,
+		MicrosoftAvatarSync: u.MicrosoftAvatarSync,
 	}
 
 	if u.MicrosoftID.Valid {

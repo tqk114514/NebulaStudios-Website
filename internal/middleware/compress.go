@@ -19,10 +19,10 @@ var (
 )
 
 const (
-	contentEncodingBrotli  = "br"
-	brotliExtension        = ".br"
-	cacheControlImmutable  = "public, max-age=31536000, immutable"
-	cacheControlNoCache    = "no-cache"
+	contentEncodingBrotli = "br"
+	brotliExtension       = ".br"
+	cacheControlImmutable = "public, max-age=31536000, immutable"
+	cacheControlNoCache   = "no-cache"
 )
 
 var contentTypeMap = map[string]string{

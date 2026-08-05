@@ -17,6 +17,7 @@ import { initPublicNoticeBanner } from './lib/policy/public-notice.ts';
 import { checkPolicyConsent } from './lib/policy/policy-consent.ts';
 import { verifySession, logout } from './lib/api/auth.ts';
 import { fetchApi } from './lib/api/fetch.ts';
+import { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
 import { loadCaptchaConfig, getCaptchaSiteKey, initCaptcha, clearCaptcha, getCaptchaToken } from './lib/captcha.ts';
 import { showAlert as showAlertBase, showConfirm as showConfirmBase, createModalController } from './lib/ui/feedback.ts';
 import { validateAvatarUrl, validatePassword } from './lib/validators.ts';
@@ -30,14 +31,6 @@ const t = (key: string): string => window.t ? window.t(key) : key;
 
 // ==================== 工具函数 ====================
 
-/**
- * 转义 HTML 字符，防止 XSS
- */
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
 
 /**
  * 重置验证码状态
@@ -2055,7 +2048,8 @@ function showOAuthGrantsModal(): void {
     revokeBtn.textContent = t('dashboard.oauthRevoke');
     revokeBtn.addEventListener('click', async () => {
       const confirmed = await showConfirm(
-        t('dashboard.oauthRevokeConfirm').replace('{name}', escapeHtml(grant.client_name)),
+        // showConfirm 通过 textContent 渲染，天然安全，无需 escapeHtml
+        t('dashboard.oauthRevokeConfirm').replace('{name}', grant.client_name),
         t('dashboard.oauthRevoke')
       );
       if (!confirmed) { return; }

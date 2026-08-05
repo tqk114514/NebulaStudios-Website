@@ -40,8 +40,6 @@ const navData = document.getElementById('nav-data') as HTMLAnchorElement | null;
 // ==================== 页面路由 ====================
 
 function navigateTo(page: string): void {
-  console.log('[ADMIN] navigateTo called for page:', page);
-  
   // 更新导航状态
   navItems.forEach(item => {
     item.classList.toggle('active', item.dataset.page === page);
@@ -84,10 +82,7 @@ function navigateTo(page: string): void {
 // ==================== 初始化 ====================
 
 async function init(): Promise<void> {
-  console.log('[ADMIN] Initializing admin page...');
-  
   // 验证必需的 DOM 元素
-  console.log('[ADMIN] Checking DOM elements...');
   const requiredElements = {
     pageLoader,
     sidebar,
@@ -103,22 +98,15 @@ async function init(): Promise<void> {
   for (const [name, el] of Object.entries(requiredElements)) {
     if (!el) {
       console.error(`[ADMIN] Required element ${name} not found`);
-    } else {
-      console.log(`[ADMIN] Element ${name} found`);
     }
   }
   
   // 获取当前用户信息
-  console.log('[ADMIN] Getting current user...');
   const user = await getCurrentUser();
   if (!user) {
-    console.log('[ADMIN] No user found, redirecting to login');
     window.location.href = '/account/login';
     return;
   }
-  
-  console.log('[ADMIN] Current user:', user);
-
   setCurrentUserRole(user.role);
 
   // 显示日志导航（所有管理员可见）
@@ -157,8 +145,6 @@ async function init(): Promise<void> {
     pageLoader.classList.add('is-hidden');
   }
 
-  console.log('[ADMIN] Initializing routes...');
-  
   // 初始化路由
   const hash = window.location.hash.slice(1) || 'dashboard';
   navigateTo(hash);
@@ -192,11 +178,9 @@ async function init(): Promise<void> {
     }
   });
 
-  console.log('[ADMIN] Initializing users page...');
   // 初始化用户管理页面
   initUsersPage();
 
-  console.log('[ADMIN] Initializing OAuth page...');
   // 初始化 OAuth 管理页面
   initOAuthPage();
 
@@ -227,8 +211,6 @@ async function init(): Promise<void> {
     const hash = window.location.hash.slice(1) || 'dashboard';
     navigateTo(hash);
   });
-  
-  console.log('[ADMIN] Initialization complete');
 }
 
 // 启动

@@ -12,19 +12,19 @@ import (
 )
 
 const (
-	UserActionRegister          = "register"
-	UserActionChangePassword    = "change_password"
-	UserActionChangeUsername    = "change_username"
-	UserActionChangeAvatar      = "change_avatar"
-	UserActionLinkMicrosoft     = "link_microsoft"
-	UserActionUnlinkMicrosoft   = "unlink_microsoft"
-	UserActionLinkGoogle        = "link_google"
-	UserActionUnlinkGoogle      = "unlink_google"
-	UserActionDeleteAccount     = "delete_account"
-	UserActionBanned            = "banned"
-	UserActionUnbanned          = "unbanned"
-	UserActionOAuthAuthorize    = "oauth_authorize"
-	UserActionOAuthRevoke       = "oauth_revoke"
+	UserActionRegister        = "register"
+	UserActionChangePassword  = "change_password"
+	UserActionChangeUsername  = "change_username"
+	UserActionChangeAvatar    = "change_avatar"
+	UserActionLinkMicrosoft   = "link_microsoft"
+	UserActionUnlinkMicrosoft = "unlink_microsoft"
+	UserActionLinkGoogle      = "link_google"
+	UserActionUnlinkGoogle    = "unlink_google"
+	UserActionDeleteAccount   = "delete_account"
+	UserActionBanned          = "banned"
+	UserActionUnbanned        = "unbanned"
+	UserActionOAuthAuthorize  = "oauth_authorize"
+	UserActionOAuthRevoke     = "oauth_revoke"
 )
 
 // UserLog 用户操作日志
