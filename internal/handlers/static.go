@@ -240,6 +240,45 @@ func ServeAdminPage(c *gin.Context) {
 	serveHTML(c, DistAdminPages, "index.html")
 }
 
+// ServeAvatar 服务本地头像文件，支持 Brotli 压缩协商（与 dist 静态资源一致）
+// GET /avatars/*filepath
+func (h *StaticHandler) ServeAvatar(c *gin.Context) {
+	if h == nil || h.cfg == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	dir := h.cfg.AvatarDir
+	name := filepath.Base(c.Param("filepath"))
+	if name == "" || name == "." || name == "/" {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	path := filepath.Join(dir, name)
+
+	// 浏览器支持 Brotli 且有压缩副本时提供 .br（WebP 本身已压缩，.br 收益有限但保持一致）
+	if middleware.AcceptsBrotli(c) {
+		if _, err := os.Stat(path + ".br"); err == nil {
+			c.Header("Content-Encoding", ContentEncodingBrotli)
+			c.Header("Content-Type", "image/webp")
+			c.Header("Cache-Control", "public, max-age=86400")
+			c.Header("Vary", "Accept-Encoding")
+			c.File(path + ".br")
+			return
+		}
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		c.Header("Content-Type", "image/webp")
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Header("Vary", "Accept-Encoding")
+		c.File(path)
+		return
+	}
+
+	c.Status(http.StatusNotFound)
+}
+
 // NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面
 func NotFoundHandler(c *gin.Context) {
 	// 记录 404 请求（仅记录非静态资源请求）

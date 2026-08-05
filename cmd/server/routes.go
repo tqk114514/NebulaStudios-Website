@@ -27,7 +27,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 
 	setupMiddleware(r, cfg)
 
-	setupStaticFiles(r, cfg)
+	setupStaticFiles(r, cfg, hdlrs)
 
 	setupPageRoutes(r, repos, svcs)
 
@@ -55,7 +55,7 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 	utils.LogInfo("MIDDLEWARE", "Base middleware configured")
 }
 
-func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
+func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
@@ -64,9 +64,10 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
 	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
 
 	// 本地头像存储目录
-	r.Static("/avatars", cfg.AvatarDir)
+	r.GET("/avatars/*filepath", hdlrs.staticHandler.ServeAvatar)
 	utils.LogInfo("STATIC", fmt.Sprintf("Serving avatars from %s", cfg.AvatarDir))
 }
+
 
 func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	r.GET("/", handlers.ServeHomePage)
