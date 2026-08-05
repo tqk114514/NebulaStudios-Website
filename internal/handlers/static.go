@@ -85,12 +85,11 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	})
 }
 
-// GetVersion 获取服务端与代码库版本（repo commit 缓存 10 分钟）
+// GetVersion 获取服务端版本
 // GET /api/version
 func (h *StaticHandler) GetVersion(c *gin.Context) {
 	utils.RespondSuccessWithData(c, gin.H{
 		"serverCommit": version.ServerCommit,
-		"repoCommit":   version.GetRepoCommit(),
 	})
 }
 

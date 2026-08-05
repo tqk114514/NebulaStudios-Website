@@ -143,7 +143,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 ### 健康检查与版本
 
 - `GET /health`：返回服务状态（ok/degraded）、数据库连接池统计、缓存命中率、WebSocket 连接数
-- `GET /api/version`：返回编译时注入的 Git commit 和 GitHub 仓库最新 commit（缓存 10 分钟）
+- `GET /api/version`：返回编译时注入的 Git commit
 
 ### 后台任务
 
