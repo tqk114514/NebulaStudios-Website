@@ -256,27 +256,43 @@ func (h *StaticHandler) ServeAvatar(c *gin.Context) {
 	}
 	path := filepath.Join(dir, name)
 
+	if _, err := os.Stat(path); err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	// 被动生成：原文件存在但缺少 .br 压缩副本时即时生成（失败不影响服务，仅记录日志）
+	brPath := path + ".br"
+	if _, err := os.Stat(brPath); os.IsNotExist(err) {
+		if data, rerr := os.ReadFile(path); rerr == nil {
+			if brData, cerr := services.CompressBrotli(data); cerr == nil {
+				if werr := os.WriteFile(brPath, brData, 0o644); werr != nil {
+					utils.LogWarn("STATIC", "Failed to write brotli avatar", fmt.Sprintf("path=%s: %v", brPath, werr))
+				}
+			} else {
+				utils.LogWarn("STATIC", "Failed to compress avatar", fmt.Sprintf("path=%s: %v", path, cerr))
+			}
+		} else {
+			utils.LogWarn("STATIC", "Failed to read avatar for brotli", fmt.Sprintf("path=%s: %v", path, rerr))
+		}
+	}
+
 	// 浏览器支持 Brotli 且有压缩副本时提供 .br（WebP 本身已压缩，.br 收益有限但保持一致）
 	if middleware.AcceptsBrotli(c) {
-		if _, err := os.Stat(path + ".br"); err == nil {
+		if _, err := os.Stat(brPath); err == nil {
 			c.Header("Content-Encoding", ContentEncodingBrotli)
 			c.Header("Content-Type", "image/webp")
 			c.Header("Cache-Control", "public, max-age=86400")
 			c.Header("Vary", "Accept-Encoding")
-			c.File(path + ".br")
+			c.File(brPath)
 			return
 		}
 	}
 
-	if _, err := os.Stat(path); err == nil {
-		c.Header("Content-Type", "image/webp")
-		c.Header("Cache-Control", "public, max-age=86400")
-		c.Header("Vary", "Accept-Encoding")
-		c.File(path)
-		return
-	}
-
-	c.Status(http.StatusNotFound)
+	c.Header("Content-Type", "image/webp")
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Header("Vary", "Accept-Encoding")
+	c.File(path)
 }
 
 // NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面
