@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"time"
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -59,7 +58,7 @@ func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 	}
 
 	// 基于服务器时间给每个版本标记状态
-	now := time.Now().Format("2006-01-02")
+	now := services.PolicyNow()
 	result := make(map[string]map[string]PolicyVersionResponse)
 	for policyType, versions := range manifest {
 		result[policyType] = make(map[string]PolicyVersionResponse)
@@ -148,7 +147,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	}
 
 	var pending []PendingConsentPolicy
-	now := time.Now().Format("2006-01-02")
+	now := services.PolicyNow()
 	for _, policyType := range []string{models.PolicyTypePrivacy, models.PolicyTypeTerms} {
 		latestEffective := manifest.GetLatestEffectiveVersion(policyType, now)
 		if latestEffective == "" {
@@ -207,7 +206,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	}
 
 	// 验证每个条目：policy_type 必须是 privacy/terms，policy_version 必须是当前最新生效版本
-	now := time.Now().Format("2006-01-02")
+	now := services.PolicyNow()
 	validTypes := map[string]bool{models.PolicyTypePrivacy: true, models.PolicyTypeTerms: true}
 	for _, p := range req.Policies {
 		if !validTypes[p.PolicyType] {
