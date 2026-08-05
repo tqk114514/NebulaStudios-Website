@@ -117,8 +117,6 @@ function renderLogRow(log: AdminLog): string {
  * 加载日志列表
  */
 export async function loadLogs(): Promise<void> {
-  console.log('[ADMIN][LOGS] loadLogs called');
-
   if (!logsTableBody) {
     console.error('[ADMIN][LOGS] logsTableBody element not found');
     return;

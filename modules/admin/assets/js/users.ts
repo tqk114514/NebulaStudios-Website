@@ -183,8 +183,6 @@ function removeUserRow(userUid: string): void {
 }
 
 export async function loadUsers(): Promise<void> {
-  console.log('[ADMIN][USERS] loadUsers called');
-
   if (!usersTableBody) {
     console.error('[ADMIN][USERS] usersTableBody element not found');
     return;
@@ -408,8 +406,6 @@ let currentBanUser: UserPublic | null = null;
  * 显示封禁用户弹窗
  */
 function showBanModal(user: UserPublic): void {
-  console.log('[ADMIN][USERS] showBanModal called');
-  
   const localBanReason = banReason;
   const localBanDuration = banDuration;
   const localBanConfirm = banConfirm;
@@ -433,8 +429,6 @@ function showBanModal(user: UserPublic): void {
  * 初始化封禁弹窗事件
  */
 function initBanModal(): void {
-  console.log('[ADMIN][USERS] initBanModal called');
-  
   const localBanReason = banReason;
   const localBanConfirm = banConfirm;
   const localBanCancel = banCancel;
@@ -493,8 +487,6 @@ function initBanModal(): void {
 }
 
 function showUserDetail(userUid: string): void {
-  console.log('[ADMIN][USERS] showUserDetail called');
-
   showDetailWithCache<UserPublic>({
     modal: userModal,
     modalBody: userModalBody,
@@ -516,8 +508,6 @@ export function setCurrentUserRole(role: number): void {
 }
 
 export function initUsersPage(): void {
-  console.log('[ADMIN][USERS] initUsersPage called');
-  
   if (searchBtn && userSearch) {
     initSearch(userSearch, searchBtn, (query) => {
       currentSearch = query;

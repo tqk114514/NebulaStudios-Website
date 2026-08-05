@@ -17,15 +17,10 @@ import { showAlert as showAlertBase } from './lib/ui/feedback.ts';
 import { fetchApi } from './lib/api/fetch.ts';
 import { adjustCardHeight, delayedExecution, enableCardAutoResize } from './lib/ui/card.ts';
 import { getUrlParameter } from './lib/utils/url.ts';
+import { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
 
 // 翻译函数（动态获取，确保 translations.js 加载后也能正确翻译）
 const t = (key: string): string => window.t ? window.t(key) : key;
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
 
 // ==================== 类型定义 ====================
 

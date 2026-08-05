@@ -1,56 +1,12 @@
 /**
  * Account 模块 API 请求工具
  *
- * 功能：
- * - 统一 fetch 请求封装
- * - 安全的 JSON 解析（处理非 JSON 响应）
- * - 区分网络错误与服务端错误
- * - 自动携带凭证
+ * 原实现已合并至 shared/js/utils/api.ts（account / admin 共用），此处仅 re-export，
+ * 以保持各调用方 import 路径不变。
  */
 
-import type { ApiErrorResponse } from '../../../../../../shared/js/types/auth.ts';
-
-export type FetchResult<T = Record<string, unknown>> =
-  | (T & { success: true; message?: string; errorCode?: undefined })
-  | ApiErrorResponse;
-
-export interface FetchOptions extends RequestInit {
-  skipAuthRedirect?: boolean;
-}
-
-export async function fetchApi<T = Record<string, unknown>>(url: string, options?: FetchOptions): Promise<FetchResult<T>> {
-  try {
-    const { skipAuthRedirect, ...fetchOptions } = options || {};
-
-    const response = await fetch(url, {
-      credentials: 'include',
-      ...fetchOptions,
-      headers: {
-        'Content-Type': 'application/json',
-        ...fetchOptions.headers,
-      },
-    });
-
-    if (response.status === 401) {
-      if (!skipAuthRedirect) {
-        window.location.href = '/account/login';
-      }
-      return { success: false, errorCode: 'SESSION_EXPIRED' } as FetchResult<T>;
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      console.error('[ACCOUNT] Server returned non-JSON response:', response.status, contentType);
-      return { success: false, errorCode: 'SERVER_ERROR' } as FetchResult<T>;
-    }
-
-    const data = await response.json();
-    return data as FetchResult<T>;
-  } catch (error) {
-    if (error instanceof TypeError) {
-      return { success: false, errorCode: 'NETWORK_ERROR' } as FetchResult<T>;
-    }
-    console.error('[ACCOUNT] API Error:', error);
-    return { success: false, errorCode: 'SERVER_ERROR' } as FetchResult<T>;
-  }
-}
+export {
+  fetchApi,
+  type FetchResult,
+  type FetchOptions,
+} from '../../../../../../shared/js/utils/api.ts';

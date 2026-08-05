@@ -57,7 +57,7 @@ type Config struct {
 	DefaultAvatarURL string
 	DataExportSalt   string
 
-	CDNURL           string
+	CDNURL string
 
 	ImageProcessorSocket  string
 	EmailWhitelistDomains string

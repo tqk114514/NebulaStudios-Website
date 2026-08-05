@@ -17,8 +17,8 @@ import (
 	"auth-system/internal/handlers/admin"
 	"auth-system/internal/handlers/auth"
 	"auth-system/internal/handlers/oauth"
-	msauth "auth-system/internal/handlers/oauth/microsoft"
 	googleauth "auth-system/internal/handlers/oauth/google"
+	msauth "auth-system/internal/handlers/oauth/microsoft"
 	"auth-system/internal/handlers/qrlogin"
 	userhandler "auth-system/internal/handlers/user"
 	"auth-system/internal/middleware"
@@ -147,7 +147,7 @@ type Services struct {
 	WSService          services.WebSocketManager
 	EmailService       services.EmailSender
 	UserCache          services.UserCacheStore
-	StorageService          services.StorageService
+	StorageService     services.StorageService
 	ImgProcessor       services.ImageProcessor
 	OAuthService       services.OAuthClientManager
 	ExportService      services.ExportManager
@@ -239,7 +239,7 @@ type Handlers struct {
 	authHandler          *auth.AuthHandler
 	userHandler          *userhandler.UserHandler
 	microsoftHandler     *msauth.MicrosoftHandler
-	googleHandler         *googleauth.GoogleHandler
+	googleHandler        *googleauth.GoogleHandler
 	oauthProviderHandler *oauth.OAuthProviderHandler
 	qrLoginHandler       *qrlogin.QRLoginHandler
 	staticHandler        *handlers.StaticHandler

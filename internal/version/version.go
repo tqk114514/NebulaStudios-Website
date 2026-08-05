@@ -3,4 +3,3 @@ package version
 
 // ServerCommit 编译时通过 ldflags 注入的 Git commit hash，未注入时默认 "unknown"
 var ServerCommit = "unknown"
-

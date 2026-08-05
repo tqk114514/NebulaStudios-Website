@@ -9,6 +9,10 @@
  * - UI 工具函数（Toast、Modal、格式化）
  */
 
+import { fetchApiData } from '../../../../shared/js/utils/api.ts';
+
+export { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
+
 // ==================== 类型定义 ====================
 
 export interface UserPublic {
@@ -135,42 +139,9 @@ export const banModalClose = document.getElementById('ban-modal-close') as HTMLB
 
 // ==================== API 函数 ====================
 
-export async function fetchApi<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
-  try {
-    const response = await fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers
-      }
-    });
-
-    if (response.status === 401) {
-      window.location.href = '/account/login';
-      return { success: false, errorCode: 'UNAUTHORIZED' };
-    }
-
-    if (response.status === 403) {
-      return { success: false, errorCode: 'FORBIDDEN' };
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      console.error('[ADMIN] Server returned non-JSON response:', response.status, contentType);
-      return { success: false, errorCode: 'SERVER_ERROR' };
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      return { success: false, errorCode: 'NETWORK_ERROR' };
-    }
-    console.error('[ADMIN] API Error:', error);
-    return { success: false, errorCode: 'SERVER_ERROR' };
-  }
-}
+// data 包裹式响应封装（{ success, data }），与 admin 后端接口格式一致；
+// 核心请求逻辑（401/403/JSON/错误分类）见 shared/js/utils/api.ts
+export const fetchApi = fetchApiData;
 
 export async function getCurrentUser(): Promise<UserPublic | null> {
   const result = await fetchApi<UserPublic>('/api/auth/me');
@@ -185,8 +156,6 @@ export async function logout(): Promise<void> {
 // ==================== UI 函数 ====================
 
 export function showToast(message: string, type: 'success' | 'error' | 'warning' = 'success'): void {
-  console.log('[ADMIN][COMMON] showToast called:', { message, type });
-  
   if (!toastContainer) {
     console.error('[ADMIN][COMMON] toastContainer not found');
     return;
@@ -204,8 +173,6 @@ export function showToast(message: string, type: 'success' | 'error' | 'warning'
 }
 
 export function showModal(modal: HTMLElement | null): void {
-  console.log('[ADMIN][COMMON] showModal called');
-  
   if (!modal) {
     console.error('[ADMIN][COMMON] showModal: modal is null');
     return;
@@ -214,8 +181,6 @@ export function showModal(modal: HTMLElement | null): void {
 }
 
 export function hideModal(modal: HTMLElement | null): void {
-  console.log('[ADMIN][COMMON] hideModal called');
-  
   if (!modal) {
     console.error('[ADMIN][COMMON] hideModal: modal is null');
     return;
@@ -224,8 +189,6 @@ export function hideModal(modal: HTMLElement | null): void {
 }
 
 export function showConfirm(title: string, message: string, onConfirm: () => void): void {
-  console.log('[ADMIN][COMMON] showConfirm called');
-  
   const localConfirmTitle = confirmTitle;
   const localConfirmMessage = confirmMessage;
   const localConfirmModal = confirmModal;
@@ -281,11 +244,7 @@ export function formatRelativeTime(timestamp: number): string {
   return '超过1小时前';
 }
 
-export function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+// escapeHtml 实现见 shared/js/utils/escape-html.ts（顶部 re-export）
 
 // ==================== 分页控件 ====================
 
