@@ -112,13 +112,59 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
+
+	// 移除头像：清空 avatar_url、删除本地文件、关闭微软头像自动同步、清除微软头像哈希（确保恢复同步时重新拉取）
+	if req.AvatarURL == "" {
+		currentUser, err := h.userRepo.FindByUID(ctx, userUID)
+		if err != nil {
+			utils.HTTPDatabaseError(c, "USER", err)
+			return
+		}
+		oldAvatarURL := currentUser.AvatarURL
+
+		// 删除本地存储的头像文件（幂等，文件不存在时忽略）
+		if h.storageService != nil && h.storageService.IsConfigured() {
+			_ = h.storageService.DeleteAvatar(ctx, userUID)
+		}
+
+		// 仅当当前使用微软头像时改为默认头像 URL；使用自定义头像时保留原 URL
+		updates := map[string]any{
+			"microsoft_avatar_sync": false,
+			"microsoft_avatar_hash": nil,
+		}
+		if currentUser.AvatarURL == "microsoft" {
+			updates["avatar_url"] = h.defaultAvatarURL
+		}
+
+		if err := h.userRepo.Update(ctx, userUID, updates); err != nil {
+			utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to remove avatar: userUID=%s", userUID))
+			return
+		}
+
+		h.invalidateUserCache(userUID)
+
+		if h.userLogRepo != nil {
+			if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, ""); err != nil {
+				utils.LogWarn("USER", "Failed to log avatar removal", fmt.Sprintf("userUID=%s", userUID))
+			}
+		}
+
+		// 响应当前生效的头像 URL：微软头像→默认头像；自定义头像→保持原样
+		resultAvatarURL := currentUser.AvatarURL
+		if currentUser.AvatarURL == "microsoft" {
+			resultAvatarURL = h.defaultAvatarURL
+		}
+		utils.LogInfo("USER", fmt.Sprintf("Avatar removed: userUID=%s", userUID))
+		utils.RespondSuccess(c, gin.H{"avatar_url": resultAvatarURL})
+		return
+	}
+
 	urlResult := utils.ValidateAvatarURL(req.AvatarURL)
 	if !urlResult.Valid {
 		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, urlResult.ErrorCode, fmt.Sprintf("Avatar URL validation failed: userUID=%s", userUID))
 		return
 	}
-
-	ctx := c.Request.Context()
 
 	currentUser, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
@@ -127,7 +173,13 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	}
 	oldAvatarURL := currentUser.AvatarURL
 
-	if err := h.userRepo.Update(ctx, userUID, map[string]any{"avatar_url": urlResult.Value}); err != nil {
+	updates := map[string]any{"avatar_url": urlResult.Value}
+	// 使用微软头像时重新开启自动同步
+	if urlResult.Value == "microsoft" {
+		updates["microsoft_avatar_sync"] = true
+	}
+
+	if err := h.userRepo.Update(ctx, userUID, updates); err != nil {
 		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to update avatar: userUID=%s", userUID))
 		return
 	}

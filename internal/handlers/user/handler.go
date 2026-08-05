@@ -33,6 +33,7 @@ type UserHandler struct {
 	limiterMgr         middleware.RateLimiterManager
 	exportTokenService services.ExportTokenManager
 	baseURL            string
+	defaultAvatarURL   string
 }
 
 // NewUserHandler 创建用户管理 Handler，验证所有必需依赖后初始化。
@@ -49,6 +50,7 @@ func NewUserHandler(
 	limiterMgr middleware.RateLimiterManager,
 	exportTokenService services.ExportTokenManager,
 	baseURL string,
+	defaultAvatarURL string,
 ) (*UserHandler, error) {
 	if userRepo == nil {
 		return nil, ErrUserHandlerNilUserRepo
@@ -83,6 +85,7 @@ func NewUserHandler(
 		limiterMgr:         limiterMgr,
 		exportTokenService: exportTokenService,
 		baseURL:            baseURL,
+		defaultAvatarURL:   defaultAvatarURL,
 	}, nil
 }
 

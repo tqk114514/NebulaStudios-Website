@@ -5,7 +5,7 @@
   "login.passwordPlaceholder": "密碼",
   "login.submitButton": "登 入",
   "login.forgotPassword": "忘記密碼",
-  "login.createAccount": "創建賬戶",
+  "login.createAccount": "創建帳戶",
   "login.invalidCredentials": "用戶名或密碼錯誤",
   "login.rateLimitExceeded": "登入嘗試過於頻繁，請稍後再試",
   "login.humanVerifyFailed": "人機驗證失敗，請重試",
@@ -29,8 +29,7 @@
   "login.qrCodeGenerateFailed": "二維碼生成失敗，請稍後重試",
   "login.oauthError": "第三方登入失敗，請重試",
   "login.noLinkedAccount": "該第三方帳戶未綁定任何帳號，請先註冊並綁定",
-
-  "register.title": "創建賬戶",
+  "register.title": "創建帳戶",
   "register.subtitle": "只需幾步，即可加入我們",
   "register.usernamePlaceholder": "用戶名",
   "register.usernameLength": "用戶名長度必須為1-15個字元",
@@ -73,7 +72,6 @@
   "register.reqNumber": "數字",
   "register.reqSpecial": "特殊字符",
   "register.reqCase": "大小寫字母",
-
   "forgotPassword.title": "重置密碼",
   "forgotPassword.subtitle": "輸入您的郵箱地址，我們將發送驗證碼",
   "forgotPassword.emailPlaceholder": "郵箱地址",
@@ -95,7 +93,6 @@
   "forgotPassword.resetSuccess": "密碼重置成功，即將跳轉到登入頁",
   "forgotPassword.resetFailed": "重置失敗，請稍後重試",
   "forgotPassword.samePassword": "新密碼不能與舊密碼相同",
-
   "verify.loading": "正在獲取驗證碼...",
   "verify.title": "您的驗證碼",
   "verify.subtitle": "請將此驗證碼複製到對應頁面完成驗證（區分大小寫）",
@@ -109,7 +106,6 @@
   "verify.errorNoToken": "缺少驗證參數",
   "verify.errorNetwork": "網路連接失敗，請稍後重試",
   "verify.errorDefault": "獲取驗證碼失敗，請重試",
-
   "dashboard.title": "個人中心",
   "dashboard.logout": "登出",
   "dashboard.confirmLogout": "確定要登出嗎？",
@@ -180,6 +176,8 @@
   "dashboard.avatarUrlPlaceholder": "圖片 URL",
   "dashboard.useMicrosoftAvatar": "使用 Microsoft 帳戶頭像",
   "dashboard.useGoogleAvatar": "使用 Google 帳戶頭像",
+  "dashboard.removeAvatar": "刪除頭像檔案",
+  "dashboard.removeAvatarConfirm": "將刪除伺服器上儲存的頭像檔案，並停止 Microsoft 帳戶頭像的自動同步。移除後顯示預設頭像，之後可隨時重新設定。",
   "dashboard.invalidUrl": "請輸入有效的 URL 地址",
   "dashboard.invalidImageUrl": "URL 必須以圖片後綴結尾（如 .jpg, .png, .webp）",
   "dashboard.avatarLoadFailed": "無法載入頭像，請檢查 URL 是否正確",
@@ -233,7 +231,6 @@
   "dashboard.dataExportSuccess": "資料匯出成功",
   "dashboard.dataExportFailed": "資料匯出失敗，請稍後重試",
   "dashboard.dataExportRateLimit": "24小時內只能匯出一次，請稍後再試",
-
   "dashboard.banned": "已封禁",
   "dashboard.bannedReason": "封禁原因",
   "dashboard.bannedAt": "封禁時間",
@@ -244,7 +241,6 @@
   "dashboard.banReason.abuse": "濫用服務",
   "dashboard.banReason.malicious": "惡意行為",
   "dashboard.banReason.spam": "垃圾訊息",
-
   "linkConfirm.title": "確認綁定帳戶",
   "linkConfirm.subtitle": "偵測到您的第三方帳戶郵箱與已有帳戶相同",
   "linkConfirm.microsoftAccount": "第三方帳戶",
@@ -256,9 +252,7 @@
   "linkConfirm.linkExpired": "綁定連結已過期，請重新操作",
   "linkConfirm.linkFailed": "綁定失敗，請稍後重試",
   "linkConfirm.userBanned": "該帳戶已被封禁，無法綁定",
-
   "error.userBanned": "您的帳戶已被封禁，無法執行此操作",
-
   "oauth.authorize.title": "授權請求",
   "oauth.authorize.subtitle": "應用程式請求存取您的帳戶",
   "oauth.authorize.loginAs": "登入身份：",
@@ -281,7 +275,6 @@
   "oauth.error.unauthorized": "請先登入",
   "oauth.error.unknown": "發生未知錯誤",
   "dashboard.logAction.oauth_authorize": "授權第三方應用程式",
-
   "dashboard.oauthGrants": "已授權應用",
   "dashboard.oauthGrantsLabel": "已授權應用",
   "dashboard.oauthGrantsHint": "管理已授權存取您帳戶的第三方應用程式",
@@ -292,7 +285,6 @@
   "dashboard.oauthRevokeSuccess": "已撤銷授權",
   "dashboard.oauthRevokeFailed": "撤銷失敗，請稍後重試",
   "dashboard.logAction.oauth_revoke": "撤銷第三方應用程式授權",
-
   "policy.consent.title": "政策更新",
   "policy.consent.message": "以下政策已更新並生效，請閱讀並同意後繼續：",
   "policy.consent.agree": "我已閱讀並同意上述政策",
@@ -300,5 +292,8 @@
   "policy.consent.decline": "拒絕",
   "policy.consent.submitting": "提交中...",
   "policy.consent.failed": "同意記錄失敗，請稍後重試",
-  "policy.consent.effectiveDate": "生效於"
+  "policy.consent.effectiveDate": "生效於",
+  "dashboard.restoreAvatarSync": "恢復頭像同步",
+  "dashboard.restoreAvatarSyncConfirm": "將重新啟用 Microsoft 帳戶頭像的自動同步，並重新擷取您的 Microsoft 頭像。確定繼續嗎？",
+  "dashboard.restoreAvatarSyncPending": "同步已開啟，正在重新擷取頭像…"
 }

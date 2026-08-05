@@ -333,6 +333,12 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// 用户已关闭微软头像自动同步（移除头像场景）时跳过，不再下载/存储/更新
+	if user, err := h.userRepo.FindByUID(ctx, userUID); err == nil && !user.MicrosoftAvatarSync {
+		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar sync disabled, skipping: userUID=%s", userUID))
+		return
+	}
+
 	newAvatarHash := h.calculateAvatarHash(avatarData)
 
 	if newAvatarHash != "" && newAvatarHash != oldAvatarHash {
