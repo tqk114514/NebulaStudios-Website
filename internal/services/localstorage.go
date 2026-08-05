@@ -69,7 +69,7 @@ func (s *LocalStorageService) UploadAvatar(_ context.Context, userUID string, im
 	utils.LogInfo("STORAGE", fmt.Sprintf("Avatar saved: userUID=%s, url=%s, size=%d bytes", userUID, avatarURL, len(webpData)))
 
 	// 生成 Brotli 压缩副本（失败不影响主文件，与 dist 静态资源一致）
-	if brData, err := compressBrotli(webpData); err == nil {
+	if brData, err := CompressBrotli(webpData); err == nil {
 		if werr := os.WriteFile(path+".br", brData, 0o644); werr != nil {
 			utils.LogWarn("STORAGE", "Failed to write brotli avatar", fmt.Sprintf("userUID=%s", userUID))
 		}
@@ -80,8 +80,8 @@ func (s *LocalStorageService) UploadAvatar(_ context.Context, userUID string, im
 	return avatarURL, nil
 }
 
-// compressBrotli 使用 Brotli 压缩数据
-func compressBrotli(data []byte) ([]byte, error) {
+// CompressBrotli 使用 Brotli 压缩数据
+func CompressBrotli(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w := brotli.NewWriter(&buf)
 	if _, err := w.Write(data); err != nil {
