@@ -346,7 +346,6 @@ async function loadPolicyMarkdown(type: PolicyType, specifiedVersion?: string | 
 
 interface VersionInfo {
   serverCommit: string;
-  repoCommit: string;
 }
 
 let cachedVersionInfo: VersionInfo | null = null;
@@ -370,11 +369,9 @@ async function fetchVersionInfo(): Promise<VersionInfo | null> {
 
 function createVersionElement(info: VersionInfo): string {
   const t = (window as any).t || ((k: string) => k);
-  const same = info.serverCommit === info.repoCommit;
-  const pendingHint = same ? '' : `，${t('policy.versionPending')}`;
 
   return `<div class="version-info">
-    <p>${t('policy.versionServer')}：${info.serverCommit}，${t('policy.versionRepo')}：${info.repoCommit}${pendingHint}，${t('policy.versionLag')}</p>
+    <p>${t('policy.versionServer')}：${info.serverCommit}</p>
   </div>`;
 }
 
