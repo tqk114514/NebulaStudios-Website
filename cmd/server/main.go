@@ -147,7 +147,7 @@ type Services struct {
 	WSService          services.WebSocketManager
 	EmailService       services.EmailSender
 	UserCache          services.UserCacheStore
-	R2Service          services.StorageService
+	StorageService          services.StorageService
 	ImgProcessor       services.ImageProcessor
 	OAuthService       services.OAuthClientManager
 	ExportService      services.ExportManager
@@ -222,12 +222,12 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 		}
 	}
 
-	svcs.R2Service, err = services.NewR2Service(cfg)
+	svcs.StorageService, err = services.NewLocalStorageService(cfg)
 	if err != nil {
-		utils.LogWarn("SERVICES", fmt.Sprintf("R2 service unavailable: %v", err))
-	} else if svcs.R2Service != nil {
-		svcs.ImgProcessor = svcs.R2Service.GetImgProcessor()
-		utils.LogInfo("SERVICES", "R2Service initialized")
+		utils.LogWarn("SERVICES", fmt.Sprintf("Storage service unavailable: %v", err))
+	} else if svcs.StorageService != nil {
+		svcs.ImgProcessor = svcs.StorageService.GetImgProcessor()
+		utils.LogInfo("SERVICES", "LocalStorageService initialized")
 	}
 
 	utils.LogInfo("SERVICES", "All services initialized")
@@ -266,7 +266,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
 		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
 		svcs.EmailService, svcs.CaptchaService, svcs.UserCache,
-		svcs.R2Service, svcs.OAuthService, svcs.LimiterMgr,
+		svcs.StorageService, svcs.OAuthService, svcs.LimiterMgr,
 		svcs.ExportTokenService, cfg.BaseURL,
 	)
 	if err != nil {
@@ -276,7 +276,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 
 	hdlrs.microsoftHandler, err = msauth.NewMicrosoftHandler(
 		cfg, repos.UserRepo, repos.UserLogRepo, svcs.SessionService,
-		svcs.UserCache, svcs.R2Service,
+		svcs.UserCache, svcs.StorageService,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("MicrosoftHandler: %w", err)

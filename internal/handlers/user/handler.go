@@ -28,7 +28,7 @@ type UserHandler struct {
 	emailService       services.EmailSender
 	captchaService     services.CaptchaVerifier
 	userCache          services.UserCacheStore
-	r2Service          services.StorageService
+	storageService     services.StorageService
 	oauthService       services.OAuthClientManager
 	limiterMgr         middleware.RateLimiterManager
 	exportTokenService services.ExportTokenManager
@@ -36,7 +36,7 @@ type UserHandler struct {
 }
 
 // NewUserHandler 创建用户管理 Handler，验证所有必需依赖后初始化。
-// r2Service 和 oauthService 为可选参数。
+// storageService 和 oauthService 为可选参数。
 func NewUserHandler(
 	userRepo models.UserStore,
 	userLogRepo models.UserLogStore,
@@ -44,7 +44,7 @@ func NewUserHandler(
 	emailService services.EmailSender,
 	captchaService services.CaptchaVerifier,
 	userCache services.UserCacheStore,
-	r2Service services.StorageService,
+	storageService services.StorageService,
 	oauthService services.OAuthClientManager,
 	limiterMgr middleware.RateLimiterManager,
 	exportTokenService services.ExportTokenManager,
@@ -78,7 +78,7 @@ func NewUserHandler(
 		emailService:       emailService,
 		captchaService:     captchaService,
 		userCache:          userCache,
-		r2Service:          r2Service,
+		storageService:     storageService,
 		oauthService:       oauthService,
 		limiterMgr:         limiterMgr,
 		exportTokenService: exportTokenService,
