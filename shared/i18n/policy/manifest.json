@@ -31,6 +31,11 @@
       "update_date": "2026-03-17",
       "effective_date": "2026-03-24",
       "languages": ["zh-CN", "zh-TW", "en", "ja", "ko"]
+    },
+    "2026-08-13.md": {
+      "update_date": "2026-08-06",
+      "effective_date": "2026-08-13",
+      "languages": ["zh-CN"]
     }
   },
   "cookies": {
@@ -43,6 +48,11 @@
       "update_date": "2026-03-17",
       "effective_date": "2026-03-24",
       "languages": ["zh-CN", "zh-TW", "en", "ja", "ko"]
+    },
+    "2026-08-13.md": {
+      "update_date": "2026-08-06",
+      "effective_date": "2026-08-13",
+      "languages": ["zh-CN"]
     }
   }
 }
