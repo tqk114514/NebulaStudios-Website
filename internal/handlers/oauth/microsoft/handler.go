@@ -30,7 +30,7 @@ type MicrosoftHandler struct {
 	userLogRepo      models.UserLogStore
 	sessionService   services.SessionManager
 	userCache        services.UserCacheStore
-	r2Service        services.StorageService
+	storageService        services.StorageService
 	clientID         string
 	clientSecret     string
 	redirectURI      string
@@ -39,14 +39,14 @@ type MicrosoftHandler struct {
 }
 
 // NewMicrosoftHandler 创建 Microsoft OAuth Handler，验证必需依赖（userRepo、sessionService、userCache）后初始化。
-// r2Service 和 userLogRepo 为可选参数。
+// storageService 和 userLogRepo 为可选参数。
 func NewMicrosoftHandler(
 	cfg *config.Config,
 	userRepo models.UserStore,
 	userLogRepo models.UserLogStore,
 	sessionService services.SessionManager,
 	userCache services.UserCacheStore,
-	r2Service services.StorageService,
+	storageService services.StorageService,
 ) (*MicrosoftHandler, error) {
 	if userRepo == nil {
 		return nil, fmt.Errorf("userRepo is required")
@@ -76,7 +76,7 @@ func NewMicrosoftHandler(
 		userLogRepo:      userLogRepo,
 		sessionService:   sessionService,
 		userCache:        userCache,
-		r2Service:        r2Service,
+		storageService:        storageService,
 		clientID:         clientID,
 		clientSecret:     clientSecret,
 		redirectURI:      redirectURI,
@@ -372,10 +372,10 @@ func (h *MicrosoftHandler) Unlink(c *gin.Context) {
 
 	if oldAvatarURL != "" && !strings.HasPrefix(oldAvatarURL, "data:") {
 		go func(uid string) {
-			if h.r2Service != nil && h.r2Service.IsConfigured() {
+			if h.storageService != nil && h.storageService.IsConfigured() {
 				deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				if err := h.r2Service.DeleteAvatar(deleteCtx, uid); err != nil {
+				if err := h.storageService.DeleteAvatar(deleteCtx, uid); err != nil {
 					utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", fmt.Sprintf("userUID=%s", uid))
 				} else {
 					utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar deleted from R2: userUID=%s", uid))

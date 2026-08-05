@@ -302,8 +302,8 @@ func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string,
 		return ""
 	}
 
-	if h.r2Service != nil && h.r2Service.IsConfigured() {
-		avatarURL, err := h.r2Service.UploadAvatar(ctx, userUID, imageData)
+	if h.storageService != nil && h.storageService.IsConfigured() {
+		avatarURL, err := h.storageService.UploadAvatar(ctx, userUID, imageData)
 		if err != nil {
 			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to R2, falling back to base64", fmt.Sprintf("userUID=%s", userUID))
 		} else {

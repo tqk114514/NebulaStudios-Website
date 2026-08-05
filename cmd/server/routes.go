@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"auth-system/internal/config"
@@ -49,18 +50,21 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 
 	r.Use(middleware.CORS(cfg))
 
-	r.Use(middleware.SecurityHeaders(cfg.R2URL))
+	r.Use(middleware.SecurityHeaders(""))
 
 	utils.LogInfo("MIDDLEWARE", "Base middleware configured")
 }
 
-func setupStaticFiles(r *gin.Engine, _ *config.Config) {
+func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
 	r.Use(middleware.PreCompressedStatic("./dist"))
 	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
+
+	// 鏈湴澶村儚瀛樺偍鐩綍锛堟浛浠?R2锛?	r.Static("/avatars", cfg.AvatarDir)
+	utils.LogInfo("STATIC", fmt.Sprintf("Serving avatars from %s", cfg.AvatarDir))
 }
 
 func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {

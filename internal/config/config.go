@@ -53,12 +53,7 @@ type Config struct {
 	QREncryptionKey     string
 	QRKeyDerivationSalt string
 
-	R2URL       string
-	R2AccessKey string
-	R2SecretKey string
-	R2Endpoint  string
-	R2Bucket    string
-
+	AvatarDir        string
 	DefaultAvatarURL string
 	DataExportSalt   string
 
@@ -127,13 +122,9 @@ func Load() (*Config, error) {
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")
 
-	newCfg.R2URL = getEnv("R2_URL", "")
-	newCfg.R2AccessKey = getEnv("R2_ACCESS_KEY", "")
-	newCfg.R2SecretKey = getEnv("R2_SECRET_KEY", "")
-	newCfg.R2Endpoint = getEnv("R2_ENDPOINT", "")
-	newCfg.R2Bucket = getEnv("R2_BUCKET", "")
+	newCfg.AvatarDir = getEnv("AVATAR_DIR", "./data/avatars")
 
-	newCfg.DefaultAvatarURL = newCfg.R2URL + "/images/default-avatar.svg"
+	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "")
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
 	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "")
 	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")

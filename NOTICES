@@ -7,44 +7,6 @@ Their respective licenses are listed below.
 ------------------------------------------------------------
 License: Apache-2.0
 ------------------------------------------------------------
-  github.com/aws/aws-sdk-go-v2
-    https://github.com/aws/aws-sdk-go-v2/blob/v1.42.1/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream
-    https://github.com/aws/aws-sdk-go-v2/blob/aws/protocol/eventstream/v1.7.14/aws/protocol/eventstream/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/config
-    https://github.com/aws/aws-sdk-go-v2/blob/config/v1.32.30/config/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/credentials
-    https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.29/credentials/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/feature/ec2/imds
-    https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.18.30/feature/ec2/imds/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/internal/configsources
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.4.30/internal/configsources/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.7.30/internal/endpoints/v2/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/internal/ini
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/ini/v1.8.6/internal/ini/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/internal/v4a
-    https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.4.31/internal/v4a/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.13/service/internal/accept-encoding/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/internal/checksum
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.23/service/internal/checksum/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.13.30/service/internal/presigned-url/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/internal/s3shared
-    https://github.com/aws/aws-sdk-go-v2/blob/service/internal/s3shared/v1.19.31/service/internal/s3shared/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/s3
-    https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.105.1/service/s3/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/signin
-    https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.4.1/service/signin/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/sso
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.32.1/service/sso/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/ssooidc
-    https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.37.1/service/ssooidc/LICENSE.txt
-  github.com/aws/aws-sdk-go-v2/service/sts
-    https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.44.1/service/sts/LICENSE.txt
-  github.com/aws/smithy-go
-    https://github.com/aws/smithy-go/blob/v1.27.3/LICENSE
   go.mongodb.org/mongo-driver/v2
     https://github.com/mongodb/mongo-go-driver/blob/v2.8.0/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
@@ -75,10 +37,6 @@ License: BSD-2-Clause
 ------------------------------------------------------------
 License: BSD-3-Clause
 ------------------------------------------------------------
-  github.com/aws/aws-sdk-go-v2/internal/sync/singleflight
-    https://github.com/aws/aws-sdk-go-v2/blob/v1.41.4/internal/sync/singleflight/LICENSE
-  github.com/aws/smithy-go/internal/sync/singleflight
-    https://github.com/aws/smithy-go/blob/v1.24.2/internal/sync/singleflight/LICENSE
   github.com/hashicorp/golang-lru/v2/simplelru
     https://github.com/hashicorp/golang-lru/blob/v2.0.7/simplelru/LICENSE_list
   github.com/wneessen/go-mail/smtp
