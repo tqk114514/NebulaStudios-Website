@@ -267,7 +267,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
 		svcs.EmailService, svcs.CaptchaService, svcs.UserCache,
 		svcs.StorageService, svcs.OAuthService, svcs.LimiterMgr,
-		svcs.ExportTokenService, cfg.BaseURL,
+		svcs.ExportTokenService, cfg.BaseURL, cfg.DefaultAvatarURL,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("UserHandler: %w", err)

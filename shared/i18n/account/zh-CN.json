@@ -29,7 +29,6 @@
   "login.qrCodeGenerateFailed": "二维码生成失败，请稍后重试",
   "login.oauthError": "第三方登录失败，请重试",
   "login.noLinkedAccount": "该第三方账户未绑定任何账号，请先注册并绑定",
-
   "register.title": "创建账户",
   "register.subtitle": "只需几步，即可加入我们",
   "register.usernamePlaceholder": "用户名",
@@ -73,7 +72,6 @@
   "register.reqNumber": "数字",
   "register.reqSpecial": "特殊字符",
   "register.reqCase": "大小写字母",
-
   "forgotPassword.title": "重置密码",
   "forgotPassword.subtitle": "输入您的邮箱地址，我们将发送验证码",
   "forgotPassword.emailPlaceholder": "邮箱地址",
@@ -95,7 +93,6 @@
   "forgotPassword.resetSuccess": "密码重置成功，即将跳转到登录页",
   "forgotPassword.resetFailed": "重置失败，请稍后重试",
   "forgotPassword.samePassword": "新密码不能与旧密码相同",
-
   "verify.loading": "正在获取验证码...",
   "verify.title": "您的验证码",
   "verify.subtitle": "请将此验证码复制到对应页面完成验证（区分大小写）",
@@ -109,7 +106,6 @@
   "verify.errorNoToken": "缺少验证参数",
   "verify.errorNetwork": "网络连接失败，请稍后重试",
   "verify.errorDefault": "获取验证码失败，请重试",
-
   "dashboard.title": "个人中心",
   "dashboard.logout": "退出登录",
   "dashboard.confirmLogout": "确定要退出登录吗？",
@@ -180,6 +176,8 @@
   "dashboard.avatarUrlPlaceholder": "图片 URL",
   "dashboard.useMicrosoftAvatar": "使用 Microsoft 账户头像",
   "dashboard.useGoogleAvatar": "使用 Google 账户头像",
+  "dashboard.removeAvatar": "删除头像文件",
+  "dashboard.removeAvatarConfirm": "将删除服务器上存储的头像文件，并停止Microsoft 账户头像的自动同步。移除后显示默认头像，之后可随时重新设置。",
   "dashboard.invalidUrl": "请输入有效的 URL 地址",
   "dashboard.invalidImageUrl": "URL 必须以图片后缀结尾（如 .jpg, .png, .webp）",
   "dashboard.avatarLoadFailed": "无法加载头像，请检查 URL 是否正确",
@@ -233,7 +231,6 @@
   "dashboard.dataExportSuccess": "数据导出成功",
   "dashboard.dataExportFailed": "数据导出失败，请稍后重试",
   "dashboard.dataExportRateLimit": "24小时内只能导出一次，请稍后再试",
-
   "dashboard.banned": "已封禁",
   "dashboard.bannedReason": "封禁原因",
   "dashboard.bannedAt": "封禁时间",
@@ -244,7 +241,6 @@
   "dashboard.banReason.abuse": "滥用服务",
   "dashboard.banReason.malicious": "恶意行为",
   "dashboard.banReason.spam": "垃圾信息",
-
   "linkConfirm.title": "确认绑定账户",
   "linkConfirm.subtitle": "检测到您的第三方账户邮箱与已有账户相同",
   "linkConfirm.microsoftAccount": "第三方账户",
@@ -256,9 +252,7 @@
   "linkConfirm.linkExpired": "绑定链接已过期，请重新操作",
   "linkConfirm.linkFailed": "绑定失败，请稍后重试",
   "linkConfirm.userBanned": "该账户已被封禁，无法绑定",
-
   "error.userBanned": "您的账户已被封禁，无法执行此操作",
-
   "oauth.authorize.title": "授权请求",
   "oauth.authorize.subtitle": "应用请求访问您的账户",
   "oauth.authorize.loginAs": "登录身份：",
@@ -281,7 +275,6 @@
   "oauth.error.unauthorized": "请先登录",
   "oauth.error.unknown": "发生未知错误",
   "dashboard.logAction.oauth_authorize": "授权第三方应用",
-
   "dashboard.oauthGrants": "已授权应用",
   "dashboard.oauthGrantsLabel": "已授权应用",
   "dashboard.oauthGrantsHint": "管理已授权访问您账户的第三方应用",
@@ -292,7 +285,6 @@
   "dashboard.oauthRevokeSuccess": "已撤销授权",
   "dashboard.oauthRevokeFailed": "撤销失败，请稍后重试",
   "dashboard.logAction.oauth_revoke": "撤销第三方应用授权",
-
   "policy.consent.title": "政策更新",
   "policy.consent.message": "以下政策已更新并生效，请阅读并同意后继续：",
   "policy.consent.agree": "我已阅读并同意上述政策",
@@ -300,5 +292,8 @@
   "policy.consent.decline": "拒绝",
   "policy.consent.submitting": "提交中...",
   "policy.consent.failed": "同意记录失败，请稍后重试",
-  "policy.consent.effectiveDate": "生效于"
+  "policy.consent.effectiveDate": "生效于",
+  "dashboard.restoreAvatarSync": "恢复头像同步",
+  "dashboard.restoreAvatarSyncConfirm": "将重新启用Microsoft 账户头像的自动同步，并重新拉取您的Microsoft 头像。确定继续吗？",
+  "dashboard.restoreAvatarSyncPending": "同步已开启，正在重新拉取头像…"
 }

@@ -55,6 +55,7 @@ func getTableSchemas() []TableSchema {
 				{Name: "google_id", Type: "VARCHAR(255)", Nullable: true, IsUnique: true},
 				{Name: "google_name", Type: "VARCHAR(255)", Nullable: true},
 				{Name: "google_avatar_url", Type: "TEXT", Nullable: true},
+				{Name: "microsoft_avatar_sync", Type: "BOOLEAN", Nullable: false, Default: "TRUE"},
 				{Name: "is_banned", Type: "BOOLEAN", Nullable: false, Default: "FALSE"},
 				{Name: "ban_reason", Type: "TEXT", Nullable: true},
 				{Name: "banned_at", Type: "TIMESTAMPTZ", Nullable: true},

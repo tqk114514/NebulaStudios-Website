@@ -48,6 +48,7 @@ export interface User {
   google_id?: string | null;
   google_name?: string | null;
   google_avatar_url?: string | null;
+  microsoft_avatar_sync?: boolean;
   is_banned?: boolean;
   ban_reason?: string | null;
   banned_at?: string | null;

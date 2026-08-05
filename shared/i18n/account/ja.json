@@ -29,7 +29,6 @@
   "login.qrCodeGenerateFailed": "QRコードの生成に失敗しました。後でもう一度お試しください",
   "login.oauthError": "サードパーティログインに失敗しました。再試行してください",
   "login.noLinkedAccount": "このアカウントは連携されていません。先に登録して連携してください",
-
   "register.title": "アカウント作成",
   "register.subtitle": "数ステップで参加できます",
   "register.usernamePlaceholder": "ユーザー名",
@@ -73,7 +72,6 @@
   "register.reqNumber": "数字",
   "register.reqSpecial": "特殊文字",
   "register.reqCase": "大文字と小文字",
-
   "forgotPassword.title": "パスワードリセット",
   "forgotPassword.subtitle": "メールアドレスを入力すると、認証コードを送信します",
   "forgotPassword.emailPlaceholder": "メールアドレス",
@@ -95,7 +93,6 @@
   "forgotPassword.resetSuccess": "パスワードがリセットされました。ログインページにリダイレクト中",
   "forgotPassword.resetFailed": "リセットに失敗しました。後でもう一度お試しください",
   "forgotPassword.samePassword": "新しいパスワードは以前のパスワードと同じにできません",
-
   "verify.loading": "認証コードを取得中...",
   "verify.title": "認証コード",
   "verify.subtitle": "このコードをコピーして認証を完了してください（大文字小文字を区別）",
@@ -109,7 +106,6 @@
   "verify.errorNoToken": "認証パラメータがありません",
   "verify.errorNetwork": "ネットワーク接続に失敗しました。後でもう一度お試しください",
   "verify.errorDefault": "認証コードの取得に失敗しました。再試行してください",
-
   "dashboard.title": "マイページ",
   "dashboard.logout": "ログアウト",
   "dashboard.confirmLogout": "ログアウトしますか？",
@@ -180,6 +176,8 @@
   "dashboard.avatarUrlPlaceholder": "画像URL",
   "dashboard.useMicrosoftAvatar": "Microsoftアカウントのアバターを使用",
   "dashboard.useGoogleAvatar": "Googleアカウントのアバターを使用",
+  "dashboard.removeAvatar": "アバターファイルを削除",
+  "dashboard.removeAvatarConfirm": "サーバーに保存されたアバターファイルを削除し、Microsoftアカウントのアバター自動同期を停止します。削除後はデフォルトのアバターが表示され、いつでも再設定できます。",
   "dashboard.invalidUrl": "有効なURLを入力してください",
   "dashboard.invalidImageUrl": "URLは画像拡張子で終わる必要があります（.jpg, .png, .webpなど）",
   "dashboard.avatarLoadFailed": "アバターを読み込めません。URLを確認してください",
@@ -233,7 +231,6 @@
   "dashboard.dataExportSuccess": "データのエクスポートが完了しました",
   "dashboard.dataExportFailed": "データのエクスポートに失敗しました。後でもう一度お試しください",
   "dashboard.dataExportRateLimit": "24時間に1回のみエクスポートできます。後でもう一度お試しください",
-
   "dashboard.banned": "利用停止",
   "dashboard.bannedReason": "停止理由",
   "dashboard.bannedAt": "停止日時",
@@ -244,7 +241,6 @@
   "dashboard.banReason.abuse": "サービス乱用",
   "dashboard.banReason.malicious": "悪質な行動",
   "dashboard.banReason.spam": "スパム",
-
   "linkConfirm.title": "アカウント連携確認",
   "linkConfirm.subtitle": "同じメールアドレスのアカウントが見つかりました",
   "linkConfirm.microsoftAccount": "連携アカウント",
@@ -256,9 +252,7 @@
   "linkConfirm.linkExpired": "連携リンクの有効期限が切れました。再度操作してください",
   "linkConfirm.linkFailed": "連携に失敗しました。後でもう一度お試しください",
   "linkConfirm.userBanned": "このアカウントは停止されているため、連携できません",
-
   "error.userBanned": "アカウントが停止されているため、この操作を実行できません",
-
   "oauth.authorize.title": "認可リクエスト",
   "oauth.authorize.subtitle": "アプリケーションがアカウントへのアクセスを要求しています",
   "oauth.authorize.loginAs": "ログイン中：",
@@ -281,7 +275,6 @@
   "oauth.error.unauthorized": "先にログインしてください",
   "oauth.error.unknown": "不明なエラーが発生しました",
   "dashboard.logAction.oauth_authorize": "サードパーティアプリを認可",
-
   "dashboard.oauthGrants": "認可済みアプリ",
   "dashboard.oauthGrantsLabel": "認可済みアプリ",
   "dashboard.oauthGrantsHint": "アカウントにアクセスできるサードパーティアプリを管理",
@@ -292,7 +285,6 @@
   "dashboard.oauthRevokeSuccess": "認可を取り消しました",
   "dashboard.oauthRevokeFailed": "取り消しに失敗しました。後でもう一度お試しください",
   "dashboard.logAction.oauth_revoke": "サードパーティアプリの認可を取り消し",
-
   "policy.consent.title": "ポリシー更新",
   "policy.consent.message": "以下のポリシーが更新され、有効になりました。確認して同意してください：",
   "policy.consent.agree": "上記のポリシーを読み、同意しました",
@@ -300,5 +292,8 @@
   "policy.consent.decline": "拒否",
   "policy.consent.submitting": "送信中...",
   "policy.consent.failed": "同意の記録に失敗しました。後でもう一度お試しください",
-  "policy.consent.effectiveDate": "発効日"
+  "policy.consent.effectiveDate": "発効日",
+  "dashboard.restoreAvatarSync": "アバター同期を再開",
+  "dashboard.restoreAvatarSyncConfirm": "Microsoftアカウントのアバター自動同期を再開し、アバターを再取得します。続行しますか？",
+  "dashboard.restoreAvatarSyncPending": "同期を有効化しました。アバターを再取得中…"
 }

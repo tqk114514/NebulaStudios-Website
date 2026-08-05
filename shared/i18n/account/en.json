@@ -29,7 +29,6 @@
   "login.qrCodeGenerateFailed": "QR code generation failed, please try again",
   "login.oauthError": "Third-party login failed, please try again",
   "login.noLinkedAccount": "This account is not linked to any user. Please register first",
-
   "register.title": "Create Account",
   "register.subtitle": "Join us in just a few steps",
   "register.usernamePlaceholder": "Username",
@@ -73,7 +72,6 @@
   "register.reqNumber": "Numbers",
   "register.reqSpecial": "Special chars",
   "register.reqCase": "Upper & Lower case",
-
   "forgotPassword.title": "Reset Password",
   "forgotPassword.subtitle": "Enter your email address and we'll send you a verification code",
   "forgotPassword.emailPlaceholder": "Email Address",
@@ -95,7 +93,6 @@
   "forgotPassword.resetSuccess": "Password reset successful, redirecting to sign in",
   "forgotPassword.resetFailed": "Reset failed, please try again later",
   "forgotPassword.samePassword": "New password cannot be the same as old password",
-
   "verify.loading": "Loading verification code...",
   "verify.title": "Your Verification Code",
   "verify.subtitle": "Please copy this code to complete verification (case-sensitive)",
@@ -109,7 +106,6 @@
   "verify.errorNoToken": "Missing verification parameters",
   "verify.errorNetwork": "Network connection failed, please try again",
   "verify.errorDefault": "Failed to get code, please try again",
-
   "dashboard.title": "Dashboard",
   "dashboard.logout": "Sign Out",
   "dashboard.confirmLogout": "Are you sure you want to sign out?",
@@ -180,6 +176,8 @@
   "dashboard.avatarUrlPlaceholder": "Image URL",
   "dashboard.useMicrosoftAvatar": "Use Microsoft account avatar",
   "dashboard.useGoogleAvatar": "Use Google account avatar",
+  "dashboard.removeAvatar": "Delete Avatar File",
+  "dashboard.removeAvatarConfirm": "This will delete the avatar file stored on the server and stop auto-syncing your Microsoft account avatar. The default avatar will be shown; you can set a new one anytime.",
   "dashboard.invalidUrl": "Please enter a valid URL",
   "dashboard.invalidImageUrl": "URL must end with image extension (e.g. .jpg, .png, .webp)",
   "dashboard.avatarLoadFailed": "Failed to load avatar, please check the URL",
@@ -233,7 +231,6 @@
   "dashboard.dataExportSuccess": "Data exported successfully",
   "dashboard.dataExportFailed": "Failed to export data, please try again",
   "dashboard.dataExportRateLimit": "You can only export once every 24 hours, please try again later",
-
   "dashboard.banned": "BANNED",
   "dashboard.bannedReason": "Reason",
   "dashboard.bannedAt": "Banned At",
@@ -244,9 +241,8 @@
   "dashboard.banReason.abuse": "Service Abuse",
   "dashboard.banReason.malicious": "Malicious Behavior",
   "dashboard.banReason.spam": "Spam",
-
   "linkConfirm.title": "Confirm Account Link",
-"linkConfirm.subtitle": "A third-party account with the same email was detected",
+  "linkConfirm.subtitle": "A third-party account with the same email was detected",
   "linkConfirm.microsoftAccount": "Third-party Account",
   "linkConfirm.existingAccount": "Existing Account",
   "linkConfirm.warning": "After linking, you can use this account to sign in directly",
@@ -256,9 +252,7 @@
   "linkConfirm.linkExpired": "Link expired, please try again",
   "linkConfirm.linkFailed": "Link failed, please try again later",
   "linkConfirm.userBanned": "This account has been banned and cannot be linked",
-
   "error.userBanned": "Your account has been banned and cannot perform this action",
-
   "oauth.authorize.title": "Authorization Request",
   "oauth.authorize.subtitle": "An application is requesting access to your account",
   "oauth.authorize.loginAs": "Logged in as:",
@@ -281,7 +275,6 @@
   "oauth.error.unauthorized": "Please sign in first",
   "oauth.error.unknown": "An unknown error occurred",
   "dashboard.logAction.oauth_authorize": "Authorized third-party app",
-
   "dashboard.oauthGrants": "Authorized Apps",
   "dashboard.oauthGrantsLabel": "Authorized Apps",
   "dashboard.oauthGrantsHint": "Manage third-party apps that have access to your account",
@@ -292,7 +285,6 @@
   "dashboard.oauthRevokeSuccess": "Access revoked",
   "dashboard.oauthRevokeFailed": "Failed to revoke access, please try again",
   "dashboard.logAction.oauth_revoke": "Revoked third-party app access",
-
   "policy.consent.title": "Policy Update",
   "policy.consent.message": "The following policies have been updated and are now in effect. Please read and agree to continue:",
   "policy.consent.agree": "I have read and agree to the above policies",
@@ -300,5 +292,8 @@
   "policy.consent.decline": "Decline",
   "policy.consent.submitting": "Submitting...",
   "policy.consent.failed": "Failed to record consent, please try again",
-  "policy.consent.effectiveDate": "Effective"
+  "policy.consent.effectiveDate": "Effective",
+  "dashboard.restoreAvatarSync": "Resume Avatar Sync",
+  "dashboard.restoreAvatarSyncConfirm": "This will re-enable Microsoft avatar auto-sync and re-fetch your Microsoft avatar. Continue?",
+  "dashboard.restoreAvatarSyncPending": "Sync enabled, re-fetching your avatar…"
 }

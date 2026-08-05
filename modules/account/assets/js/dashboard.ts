@@ -102,6 +102,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
   const errorEl = document.getElementById('avatar-error');
   const microsoftBtn = document.getElementById('use-microsoft-avatar-btn');
   const googleBtn = document.getElementById('use-google-avatar-btn');
+  const removeAvatarBtn = document.getElementById('remove-avatar-btn');
   const confirmBtn = document.getElementById('avatar-confirm-btn') as HTMLButtonElement | null;
 
   if (!urlInput || !confirmBtn || !currentPreview || !newPreview || !errorEl) { return; }
@@ -118,6 +119,7 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
       urlInput.removeEventListener('focus', handleFocus);
       microsoftBtn?.removeEventListener('click', handleMicrosoftClick);
       googleBtn?.removeEventListener('click', handleGoogleClick);
+      removeAvatarBtn?.removeEventListener('click', handleRemoveClick);
     }
   });
 
@@ -310,11 +312,62 @@ function showAvatarModal(user: User, onSuccess: (newAvatarUrl: string) => void):
     }
   });
 
+  // 微软头像同步状态：已关闭时禁用"使用微软头像"，删除按钮变为"恢复头像同步"
+  const msSyncEnabled = user.microsoft_avatar_sync !== false;
+  if (!msSyncEnabled) {
+    if (microsoftBtn) { (microsoftBtn as HTMLButtonElement).disabled = true; }
+    if (removeAvatarBtn) { removeAvatarBtn.textContent = t('dashboard.restoreAvatarSync'); }
+  }
+
+  // 删除头像 / 恢复头像同步
+  const handleRemoveClick = async (): Promise<void> => {
+    if (controller.isCleanedUp()) { return; }
+
+    if (!msSyncEnabled) {
+      // 恢复同步：开启开关 → 跳转微软授权重新拉取头像（已绑定则直接登录同步）
+      const confirmed = await showConfirm(t('dashboard.restoreAvatarSyncConfirm'), t('dashboard.restoreAvatarSync'));
+      if (!confirmed) { return; }
+
+      const result = await fetchApi<{ avatar_url: string }>('/api/user/avatar', {
+        method: 'PATCH',
+        body: JSON.stringify({ avatar_url: 'microsoft' })
+      });
+      if (!result.success) {
+        errorEl!.textContent = t('dashboard.avatarUpdateFailed');
+        errorEl!.classList.remove('is-hidden');
+        return;
+      }
+      showAlert(t('dashboard.restoreAvatarSyncPending'));
+      sessionStorage.setItem('avatar-dialog-pending', '1');
+      window.location.href = '/api/auth/microsoft?action=login&return=' + encodeURIComponent('/account/dashboard');
+      return;
+    }
+
+    // 删除头像
+    const confirmed = await showConfirm(t('dashboard.removeAvatarConfirm'), t('dashboard.removeAvatar'));
+    if (!confirmed) { return; }
+
+    const result = await fetchApi<{ avatar_url: string }>('/api/user/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar_url: '' })
+    });
+
+    if (result.success) {
+      controller.close();
+      onSuccess(result.avatar_url);
+      showAlert(t('dashboard.avatarUpdateSuccess'));
+    } else {
+      errorEl!.textContent = t('dashboard.avatarUpdateFailed');
+      errorEl!.classList.remove('is-hidden');
+    }
+  };
+
   // 绑定额外事件
   urlInput.addEventListener('blur', handleBlur);
   urlInput.addEventListener('focus', handleFocus);
   microsoftBtn?.addEventListener('click', handleMicrosoftClick);
   googleBtn?.addEventListener('click', handleGoogleClick);
+  removeAvatarBtn?.addEventListener('click', handleRemoveClick);
 
   // 显示弹窗并聚焦输入框
   controller.open();
@@ -661,20 +714,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       changePasswordItem.addEventListener('click', showChangePasswordModal);
     }
 
+    // 头像更新成功后的统一刷新
+    const handleAvatarUpdated = async (newAvatarUrl: string) => {
+      const freshSession = await verifySession();
+      if (freshSession.success) {
+        Object.assign(user, freshSession.data);
+      }
+      const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url :
+        newAvatarUrl === 'google' ? user.google_avatar_url : newAvatarUrl;
+      updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
+    };
+
     // 更改头像
     const changeAvatarItem = document.getElementById('change-avatar-item');
     if (changeAvatarItem) {
       changeAvatarItem.addEventListener('click', () => {
-        showAvatarModal(user, async (newAvatarUrl) => {
-          const freshSession = await verifySession();
-          if (freshSession.success) {
-            Object.assign(user, freshSession.data);
-          }
-          const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url :
-            newAvatarUrl === 'google' ? user.google_avatar_url : newAvatarUrl;
-          updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
-        });
+        showAvatarModal(user, handleAvatarUpdated);
       });
+    }
+
+    // 从微软授权回跳后自动拉起头像弹窗（恢复头像同步场景，让用户看到同步结果）
+    if (sessionStorage.getItem('avatar-dialog-pending') === '1') {
+      sessionStorage.removeItem('avatar-dialog-pending');
+      showAvatarModal(user, handleAvatarUpdated);
     }
 
     // 修改用户名

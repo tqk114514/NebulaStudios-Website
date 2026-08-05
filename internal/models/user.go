@@ -49,6 +49,7 @@ var allowedUpdateFields = map[string]bool{
 	"google_id":             true,
 	"google_name":           true,
 	"google_avatar_url":     true,
+	"microsoft_avatar_sync": true,
 	"role":                  true,
 }
 
@@ -68,6 +69,7 @@ type User struct {
 	GoogleID            sql.NullString `json:"google_id"`
 	GoogleName          sql.NullString `json:"google_name"`
 	GoogleAvatarURL     sql.NullString `json:"google_avatar_url"`
+	MicrosoftAvatarSync bool           `json:"microsoft_avatar_sync"`
 	IsBanned            bool           `json:"is_banned"`  // 是否被封禁
 	BanReason           sql.NullString `json:"ban_reason"` // 封禁原因
 	BannedAt            sql.NullTime   `json:"banned_at"`  // 封禁时间
@@ -91,6 +93,7 @@ type UserPublic struct {
 	GoogleID           *string    `json:"google_id,omitempty"`
 	GoogleName         *string    `json:"google_name,omitempty"`
 	GoogleAvatarURL    *string    `json:"google_avatar_url,omitempty"`
+	MicrosoftAvatarSync bool      `json:"microsoft_avatar_sync"`
 	IsBanned           bool       `json:"is_banned"`
 	BanReason          *string    `json:"ban_reason,omitempty"`
 	BannedAt           *time.Time `json:"banned_at,omitempty"`
@@ -101,7 +104,7 @@ type UserPublic struct {
 // userColumns 用户表全列 SELECT 字符串，所有查询方法统一引用
 const userColumns = `id, uid, username, email, password, avatar_url, role,
        microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
-       google_id, google_name, google_avatar_url,
+       google_id, google_name, google_avatar_url, microsoft_avatar_sync,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
        created_at, updated_at`
 
@@ -130,9 +133,10 @@ func (u *User) ToPublic() *UserPublic {
 		Username:  u.Username,
 		Email:     u.Email,
 		AvatarURL: u.AvatarURL,
-		Role:      u.Role,
-		IsBanned:  u.IsBanned,
-		CreatedAt: u.CreatedAt,
+		Role:                 u.Role,
+		IsBanned:             u.IsBanned,
+		CreatedAt:            u.CreatedAt,
+		MicrosoftAvatarSync:  u.MicrosoftAvatarSync,
 	}
 
 	if u.MicrosoftID.Valid {
@@ -231,7 +235,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) 
 		FROM users WHERE id = $1`, id).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -259,7 +263,7 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 		FROM users WHERE uid = $1`, uid).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -290,7 +294,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 	`, identifier).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -318,7 +322,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 		FROM users WHERE email = $1`, email).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -346,7 +350,7 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 		FROM users WHERE LOWER(username) = LOWER($1)`, username).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -374,7 +378,7 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 		FROM users WHERE microsoft_id = $1`, msID).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -402,7 +406,7 @@ func (r *UserRepository) FindByGoogleID(ctx context.Context, googleID string) (*
 		FROM users WHERE google_id = $1`, googleID).Scan(
 		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
+		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
