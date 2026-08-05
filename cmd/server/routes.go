@@ -63,7 +63,8 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.PreCompressedStatic("./dist"))
 	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
 
-	// 鏈湴澶村儚瀛樺偍鐩綍锛堟浛浠?R2锛?	r.Static("/avatars", cfg.AvatarDir)
+	// 本地头像存储目录
+	r.Static("/avatars", cfg.AvatarDir)
 	utils.LogInfo("STATIC", fmt.Sprintf("Serving avatars from %s", cfg.AvatarDir))
 }
 
