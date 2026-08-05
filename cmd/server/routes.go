@@ -50,7 +50,7 @@ func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 
 	r.Use(middleware.CORS(cfg))
 
-	r.Use(middleware.SecurityHeaders(""))
+	r.Use(middleware.SecurityHeaders(cfg.CDNURL))
 
 	utils.LogInfo("MIDDLEWARE", "Base middleware configured")
 }
