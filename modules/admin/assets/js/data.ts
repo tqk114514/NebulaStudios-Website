@@ -5,7 +5,7 @@
  * 权限：仅限超级管理员（role >= 2）
  */
 
-import { showModal, hideModal, showToast } from './common';
+import { showModal, hideModal, showToast, fetchApi, fetchWithAuthRetry } from './common';
 
 let exportRequestId = '';
 let exportTimer: ReturnType<typeof setInterval> | null = null;
@@ -57,20 +57,17 @@ function bindEvents(): void {
     if (exportBtn instanceof HTMLButtonElement) exportBtn.disabled = true;
 
     try {
-      const resp = await fetch('/admin/api/data/export/request', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
+      const resp = await fetchApi<{ requestId: string; expiresIn: number }>('/admin/api/data/export/request', {
+        method: 'POST'
       });
 
-      const data = await resp.json();
-      if (!data.success) {
+      if (!resp.success) {
         showToast('导出请求失败', 'error');
         return;
       }
 
-      exportRequestId = data.requestId;
-      exportExpiresAt = Date.now() + data.expiresIn * 1000;
+      exportRequestId = resp.data.requestId;
+      exportExpiresAt = Date.now() + resp.data.expiresIn * 1000;
 
       showExportAuthModal();
     } catch {
@@ -172,13 +169,13 @@ function bindExportAuthEvents(): void {
   closeBtn?.addEventListener('click', () => {
     stopTimer();
     hideModal(modal!);
-    fetch('/admin/api/data/one-time-access-code', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    fetchApi('/admin/api/data/one-time-access-code', { method: 'DELETE' }).catch(() => {});
   });
 
   cancelBtn?.addEventListener('click', () => {
     stopTimer();
     hideModal(modal!);
-    fetch('/admin/api/data/one-time-access-code', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    fetchApi('/admin/api/data/one-time-access-code', { method: 'DELETE' }).catch(() => {});
   });
 
   downloadBtn?.addEventListener('click', async () => {
@@ -188,7 +185,7 @@ function bindExportAuthEvents(): void {
     if (downloadBtn instanceof HTMLButtonElement) downloadBtn.disabled = true;
 
     try {
-      const resp = await fetch(`/admin/api/data/export/${encodeURIComponent(exportRequestId)}/download?otac=${encodeURIComponent(otac)}`, {
+      const resp = await fetchWithAuthRetry(`/admin/api/data/export/${encodeURIComponent(exportRequestId)}/download?otac=${encodeURIComponent(otac)}`, {
         credentials: 'include'
       });
 
@@ -245,27 +242,24 @@ async function handleImportPreview(file: File): Promise<void> {
   formData.append('file', file);
 
   try {
-    const resp = await fetch('/admin/api/data/import/preview', {
+    const resp = await fetchApi<{ fileToken: string; usersCount: number; logsCount: number; exportedAt: string }>('/admin/api/data/import/preview', {
       method: 'POST',
-      credentials: 'include',
       body: formData
     });
-
-    const data = await resp.json();
-    if (!data.success) {
+    if (!resp.success) {
       showToast('文件格式不正确', 'error');
       return;
     }
 
-    importFileToken = data.fileToken;
+    importFileToken = resp.data.fileToken;
 
     const usersEl = document.getElementById('import-preview-users');
     const logsEl = document.getElementById('import-preview-logs');
     const timeEl = document.getElementById('import-preview-time');
 
-    if (usersEl) usersEl.textContent = String(data.usersCount);
-    if (logsEl) logsEl.textContent = String(data.logsCount);
-    if (timeEl) timeEl.textContent = data.exportedAt;
+    if (usersEl) usersEl.textContent = String(resp.data.usersCount);
+    if (logsEl) logsEl.textContent = String(resp.data.logsCount);
+    if (timeEl) timeEl.textContent = resp.data.exportedAt;
 
     showModal(document.getElementById('import-preview-modal')!);
   } catch {
@@ -289,29 +283,25 @@ function bindImportPreviewEvents(): void {
       const strategyRadio = document.querySelector<HTMLInputElement>('input[name="import-strategy"]:checked');
       const strategy = strategyRadio?.value || 'merge';
 
-      const resp = await fetch('/admin/api/data/import/execute', {
+      const resp = await fetchApi<{ usersImported: number; logsImported: number; usersPasswordSkipped: number; usersRoleDowngraded: number }>('/admin/api/data/import/execute', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileToken: importFileToken, strategy })
       });
-
-      const data = await resp.json();
-      if (!data.success) {
+      if (!resp.success) {
         showToast('导入失败: 文件已损坏或被篡改', 'error');
         hideModal(modal!);
         return;
       }
 
-      const passwordSkipped = Number(data.usersPasswordSkipped) || 0;
-      const roleDowngraded = Number(data.usersRoleDowngraded) || 0;
+      const passwordSkipped = Number(resp.data.usersPasswordSkipped) || 0;
+      const roleDowngraded = Number(resp.data.usersRoleDowngraded) || 0;
       if (passwordSkipped > 0 || roleDowngraded > 0) {
         const anomalies: string[] = [];
         if (passwordSkipped > 0) anomalies.push(`${passwordSkipped} 个用户因密码哈希不合法被跳过`);
         if (roleDowngraded > 0) anomalies.push(`${roleDowngraded} 个用户因 role 非法被降级为普通用户`);
-        showToast(`导入完成: 用户 ${data.usersImported} 条, 日志 ${data.logsImported} 条；${anomalies.join('，')}（疑似备份篡改）`, 'warning');
+        showToast(`导入完成: 用户 ${resp.data.usersImported} 条, 日志 ${resp.data.logsImported} 条；${anomalies.join('，')}（疑似备份篡改）`, 'warning');
       } else {
-        showToast(`导入成功: 用户 ${data.usersImported} 条, 日志 ${data.logsImported} 条`, 'success');
+        showToast(`导入成功: 用户 ${resp.data.usersImported} 条, 日志 ${resp.data.logsImported} 条`, 'success');
       }
       hideModal(modal!);
     } catch {

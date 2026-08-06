@@ -12,6 +12,7 @@
 import { fetchApiData } from '../../../../shared/js/utils/api.ts';
 
 export { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
+export { fetchWithAuthRetry } from '../../../../shared/js/utils/api.ts';
 
 // ==================== 类型定义 ====================
 

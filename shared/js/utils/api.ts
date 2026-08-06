@@ -15,6 +15,7 @@
  */
 
 import type { ApiErrorResponse } from '../types/auth.ts';
+import { isRefreshEndpoint, refreshSession } from './session-refresh.ts';
 
 /** 展开式响应（account API：{ success, ...fields }） */
 export type FetchResult<T = Record<string, unknown>> =
@@ -42,7 +43,8 @@ async function requestJson(url: string, options?: RequestInit): Promise<JsonResp
     credentials: 'include',
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      // FormData 上传时由浏览器自动设置 multipart boundary，不能覆盖 Content-Type
+      ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers,
     },
   });
@@ -55,6 +57,35 @@ async function requestJson(url: string, options?: RequestInit): Promise<JsonResp
   return { status: response.status, data: await response.json() };
 }
 
+/** 请求 + 401 自动续期重放（刷新端点自身不重试，避免死循环） */
+async function requestWithAuthRetry(url: string, options?: RequestInit): Promise<JsonResponse> {
+  const result = await requestJson(url, options);
+  if (result.status !== 401 || isRefreshEndpoint(url)) {
+    return result;
+  }
+  const outcome = await refreshSession();
+  if (outcome === 'fail') {
+    return result;
+  }
+  // 'ok'（本次刷新成功）或 'retry'（其他 tab 已刷新）：新 token 已由 Set-Cookie 写入，重放原请求
+  return requestJson(url, options);
+}
+
+/**
+ * 供 blob 下载等非 JSON 请求使用：401 时静默续期并重试一次。
+ * （fetchApi/fetchApiData 已内置此逻辑，但下载需要原始 Response 才能取 blob）
+ */
+export async function fetchWithAuthRetry(url: string, options?: RequestInit): Promise<Response> {
+  let resp = await fetch(url, { credentials: 'include', ...options });
+  if (resp.status === 401 && !isRefreshEndpoint(url)) {
+    const outcome = await refreshSession();
+    if (outcome !== 'fail') {
+      resp = await fetch(url, { credentials: 'include', ...options });
+    }
+  }
+  return resp;
+}
+
 /**
  * 展开式响应 fetch 封装（account 模块 API：{ success, ...fields }）
  */
@@ -62,8 +93,9 @@ export async function fetchApi<T = Record<string, unknown>>(url: string, options
   try {
     const { skipAuthRedirect, ...fetchOptions } = options || {};
 
-    const result = await requestJson(url, fetchOptions);
+    const result = await requestWithAuthRetry(url, fetchOptions);
 
+    // 走到这里仍是 401 = 静默续期失败（refresh_token 已失效），才跳登录
     if (result.status === 401) {
       if (!skipAuthRedirect) {
         window.location.href = '/account/login';
@@ -92,8 +124,9 @@ export async function fetchApi<T = Record<string, unknown>>(url: string, options
  */
 export async function fetchApiData<T = Record<string, unknown>>(url: string, options?: RequestInit): Promise<FetchDataResult<T>> {
   try {
-    const result = await requestJson(url, options);
+    const result = await requestWithAuthRetry(url, options);
 
+    // 走到这里仍是 401 = 静默续期失败，才跳登录
     if (result.status === 401) {
       window.location.href = '/account/login';
       return { success: false, errorCode: 'SESSION_EXPIRED' } as FetchDataResult<T>;
