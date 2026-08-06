@@ -139,15 +139,22 @@ func (f *FakeUserRepo) Unban(_ context.Context, userUID string) error {
 
 // FakeTokenManager 验证码管理器 fake，成功与否由 VerifyCodeErr 开关控制，其余参数不参与判定
 type FakeTokenManager struct {
-	VerifyCodeErr error
-	Invalidated   []string
+	VerifyCodeErr  error
+	Invalidated    []string
+	UseTokenResult *services.TokenResult
+	UseTokenErr    error
+	CodeExpired    bool
+	CodeExpireTime int64
 }
 
 func (f *FakeTokenManager) CreateToken(context.Context, string, string) (string, int64, error) {
 	return "token", time.Now().Add(time.Hour).UnixMilli(), nil
 }
 func (f *FakeTokenManager) ValidateAndUseToken(context.Context, string) (*services.TokenResult, error) {
-	return nil, nil
+	if f.UseTokenErr != nil {
+		return nil, f.UseTokenErr
+	}
+	return f.UseTokenResult, nil
 }
 func (f *FakeTokenManager) VerifyCode(_ context.Context, code, _, _ string) (*services.CodeResult, error) {
 	if f.VerifyCodeErr != nil {
@@ -167,7 +174,11 @@ func (f *FakeTokenManager) GetCodeExpiry(context.Context, string, string) (int64
 	return time.Now().Add(time.Hour).UnixMilli(), nil
 }
 func (f *FakeTokenManager) GetCodeExpiryByEmail(context.Context, string) (bool, int64, error) {
-	return false, 0, nil
+	// 零值镜像真实语义：未显式设置字段时视为"查不到验证码 = 已过期"（与 services/token.go 一致）
+	if f.CodeExpireTime == 0 && !f.CodeExpired {
+		return true, 0, nil
+	}
+	return f.CodeExpired, f.CodeExpireTime, nil
 }
 func (f *FakeTokenManager) CleanupExpired(context.Context) {}
 func (f *FakeTokenManager) GetTokenExpiry() time.Duration  { return time.Hour }

@@ -77,6 +77,15 @@ func postJSON(h gin.HandlerFunc, body string) *httptest.ResponseRecorder {
 	return w
 }
 
+// getQuery 以 GET 方式调用 handler，用于 query 参数类端点
+func getQuery(h gin.HandlerFunc, url string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, url, nil)
+	h(c)
+	return w
+}
+
 func validRegisterBody() string {
 	return `{"username":"alice","email":"alice@example.com","password":"Abcdef1!@#ghijklmn","verificationCode":"A1b2C3"}`
 }
