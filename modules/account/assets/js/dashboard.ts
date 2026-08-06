@@ -1741,13 +1741,6 @@ function formatLogDetails(action: string, details?: UserLogItem['details']): str
         return escapeHtml(details.google_name);
       }
       break;
-    case 'enable_avatar_sync':
-    case 'disable_avatar_sync':
-      // 隐私事件详情：同步的 provider（如 Microsoft）
-      if (details.provider) {
-        return escapeHtml(details.provider.charAt(0).toUpperCase() + details.provider.slice(1));
-      }
-      break;
   }
   return '';
 }
