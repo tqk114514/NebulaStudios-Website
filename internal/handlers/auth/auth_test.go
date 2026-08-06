@@ -10,6 +10,7 @@ import (
 
 	"auth-system/internal/config"
 	"auth-system/internal/models"
+	"auth-system/internal/testutil"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -17,11 +18,11 @@ import (
 
 // testDeps 测试依赖集合
 type testDeps struct {
-	userRepo   *fakeUserRepo
-	tokenMgr   *fakeTokenManager
-	sessionMgr *fakeSessionManager
-	captcha    *fakeCaptcha
-	whitelist  *fakeEmailWhitelist
+	userRepo   *testutil.FakeUserRepo
+	tokenMgr   *testutil.FakeTokenManager
+	sessionMgr *testutil.FakeSessionManager
+	captcha    *testutil.FakeCaptcha
+	whitelist  *testutil.FakeEmailWhitelist
 }
 
 func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDeps) {
@@ -29,15 +30,15 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 	gin.SetMode(gin.TestMode)
 
 	deps := &testDeps{
-		userRepo:   newFakeUserRepo(),
-		tokenMgr:   &fakeTokenManager{},
-		sessionMgr: &fakeSessionManager{},
-		captcha:    &fakeCaptcha{},
+		userRepo:   testutil.NewFakeUserRepo(),
+		tokenMgr:   &testutil.FakeTokenManager{},
+		sessionMgr: &testutil.FakeSessionManager{},
+		captcha:    &testutil.FakeCaptcha{},
 	}
 
 	var whitelist models.EmailWhitelistStore
 	if useWhitelist {
-		deps.whitelist = &fakeEmailWhitelist{allowed: true}
+		deps.whitelist = &testutil.FakeEmailWhitelist{Allowed: true}
 		whitelist = deps.whitelist
 	}
 
@@ -45,15 +46,15 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 	h, err := NewAuthHandler(
 		cfg,
 		deps.userRepo,
-		&fakeUserLogStore{},
-		&fakeUserConsentStore{},
+		&testutil.FakeUserLogStore{},
+		&testutil.FakeUserConsentStore{},
 		deps.tokenMgr,
 		deps.sessionMgr,
-		&fakeEmailSender{},
+		&testutil.FakeEmailSender{},
 		deps.captcha,
-		&fakeUserCache{},
+		&testutil.FakeUserCache{},
 		whitelist,
-		&fakeLimiter{},
+		&testutil.FakeLimiter{},
 	)
 	if err != nil {
 		t.Fatalf("NewAuthHandler() error = %v", err)
@@ -83,10 +84,10 @@ func TestRegisterSuccess(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body=%s)", w.Code, w.Body.String())
 	}
-	if len(deps.userRepo.createdUsers) != 1 {
-		t.Fatalf("created users = %d, want 1", len(deps.userRepo.createdUsers))
+	if len(deps.userRepo.CreatedUsers) != 1 {
+		t.Fatalf("created users = %d, want 1", len(deps.userRepo.CreatedUsers))
 	}
-	created := deps.userRepo.createdUsers[0]
+	created := deps.userRepo.CreatedUsers[0]
 	if created.Username != "alice" || created.Email != "alice@example.com" {
 		t.Errorf("created user = %+v", created)
 	}
@@ -98,8 +99,8 @@ func TestRegisterSuccess(t *testing.T) {
 		t.Error("hashed password should verify")
 	}
 	// 验证码应被消费
-	if len(deps.tokenMgr.invalidated) != 1 || deps.tokenMgr.invalidated[0] != "alice@example.com" {
-		t.Errorf("verification code should be invalidated once, got %v", deps.tokenMgr.invalidated)
+	if len(deps.tokenMgr.Invalidated) != 1 || deps.tokenMgr.Invalidated[0] != "alice@example.com" {
+		t.Errorf("verification code should be invalidated once, got %v", deps.tokenMgr.Invalidated)
 	}
 }
 
@@ -145,48 +146,48 @@ func TestRegisterEmptyCode(t *testing.T) {
 
 func TestRegisterInvalidVerificationCode(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.verifyCodeErr = errors.New("INVALID_CODE")
+	deps.tokenMgr.VerifyCodeErr = errors.New("INVALID_CODE")
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "INVALID_CODE") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
 	}
-	if len(deps.userRepo.createdUsers) != 0 {
+	if len(deps.userRepo.CreatedUsers) != 0 {
 		t.Error("user must not be created when code is invalid")
 	}
 }
 
 func TestRegisterWhitelistDenied(t *testing.T) {
 	h, deps := newTestAuthHandler(t, true)
-	deps.whitelist.allowed = false
+	deps.whitelist.Allowed = false
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "EMAIL_DOMAIN_NOT_ALLOWED") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
 	}
-	if len(deps.userRepo.createdUsers) != 0 {
+	if len(deps.userRepo.CreatedUsers) != 0 {
 		t.Error("user must not be created when domain is not allowed")
 	}
 }
 
 func TestRegisterEmailExists(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.userRepo.seed(&models.User{Username: "bob", Email: "alice@example.com", UID: "uid-bob"})
+	deps.userRepo.Seed(&models.User{Username: "bob", Email: "alice@example.com", UID: "uid-bob"})
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "EMAIL_ALREADY_EXISTS") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
 	}
-	if len(deps.userRepo.createdUsers) != 0 {
+	if len(deps.userRepo.CreatedUsers) != 0 {
 		t.Error("user must not be created when email exists")
 	}
 }
 
 func TestRegisterUsernameExists(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.userRepo.seed(&models.User{Username: "alice", Email: "bob@example.com", UID: "uid-bob"})
+	deps.userRepo.Seed(&models.User{Username: "alice", Email: "bob@example.com", UID: "uid-bob"})
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "USERNAME_ALREADY_EXISTS") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
 	}
-	if len(deps.userRepo.createdUsers) != 0 {
+	if len(deps.userRepo.CreatedUsers) != 0 {
 		t.Error("user must not be created when username exists")
 	}
 }
@@ -194,7 +195,7 @@ func TestRegisterUsernameExists(t *testing.T) {
 func TestRegisterCreateConflict(t *testing.T) {
 	// Create 权威冲突检查：预检查通过但 Create 返回 ErrEmailExists（并发窗口）
 	h, deps := newTestAuthHandler(t, false)
-	deps.userRepo.createErr = models.ErrEmailExists
+	deps.userRepo.CreateErr = models.ErrEmailExists
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "EMAIL_ALREADY_EXISTS") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
@@ -204,7 +205,7 @@ func TestRegisterCreateConflict(t *testing.T) {
 func TestLoginSuccess(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
 	hash, _ := utils.HashPassword("Abcdef1!@#ghijklmn")
-	deps.userRepo.seed(&models.User{Username: "alice", Email: "alice@example.com", UID: "uid-1", Password: hash})
+	deps.userRepo.Seed(&models.User{Username: "alice", Email: "alice@example.com", UID: "uid-1", Password: hash})
 
 	w := postJSON(h.Login, `{"email":"alice@example.com","password":"Abcdef1!@#ghijklmn"}`)
 	if w.Code != http.StatusOK {
@@ -223,7 +224,7 @@ func TestLoginSuccess(t *testing.T) {
 func TestLoginWrongPassword(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
 	hash, _ := utils.HashPassword("Abcdef1!@#ghijklmn")
-	deps.userRepo.seed(&models.User{Username: "alice", Email: "alice@example.com", UID: "uid-1", Password: hash})
+	deps.userRepo.Seed(&models.User{Username: "alice", Email: "alice@example.com", UID: "uid-1", Password: hash})
 
 	w := postJSON(h.Login, `{"email":"alice@example.com","password":"Wrong1!@#password"}`)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "INVALID_CREDENTIALS") {
@@ -242,7 +243,7 @@ func TestLoginUserNotFound(t *testing.T) {
 
 func TestLoginCaptchaFailed(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.captcha.verifyErr = errors.New("captcha invalid")
+	deps.captcha.VerifyErr = errors.New("captcha invalid")
 	w := postJSON(h.Login, `{"email":"alice@example.com","password":"Abcdef1!@#ghijklmn"}`)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "CAPTCHA_FAILED") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
