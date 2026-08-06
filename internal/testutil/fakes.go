@@ -20,14 +20,15 @@ import (
 
 // FakeUserRepo 内存版用户仓库，支持 seed 预置数据与错误注入
 type FakeUserRepo struct {
-	Emails         map[string]*models.User
-	Usernames      map[string]*models.User
-	UIDs           map[string]*models.User
-	CreatedUsers   []*models.User
-	CreateErr      error
-	FindByEmailErr error
-	BanCalls       []BannedUsers
-	UnbanCalls     []string
+	Emails          map[string]*models.User
+	Usernames       map[string]*models.User
+	UIDs            map[string]*models.User
+	CreatedUsers    []*models.User
+	CreateErr       error
+	FindByEmailErr  error
+	BanCalls        []BannedUsers
+	UnbanCalls      []string
+	PasswordUpdates []string
 }
 
 // NewFakeUserRepo 创建空的内存用户仓库
@@ -57,7 +58,11 @@ func (f *FakeUserRepo) FindByEmail(_ context.Context, email string) (*models.Use
 	if f.FindByEmailErr != nil {
 		return nil, f.FindByEmailErr
 	}
-	return f.Emails[email], nil
+	if u := f.Emails[email]; u != nil {
+		return u, nil
+	}
+	// 与真实仓库一致：未找到返回 DatabaseError{NotFound}（HTTPDatabaseError 据此映射 404）
+	return nil, &utils.DatabaseError{Operation: "FindByEmail", NotFound: true}
 }
 func (f *FakeUserRepo) FindByEmailOrUsername(_ context.Context, identifier string) (*models.User, error) {
 	if u := f.Emails[identifier]; u != nil {
@@ -84,8 +89,11 @@ func (f *FakeUserRepo) Create(_ context.Context, user *models.User) error {
 	return nil
 }
 func (f *FakeUserRepo) Update(context.Context, string, map[string]any) error { return nil }
-func (f *FakeUserRepo) UpdatePassword(context.Context, string, string) error { return nil }
-func (f *FakeUserRepo) Delete(context.Context, string) error                 { return nil }
+func (f *FakeUserRepo) UpdatePassword(_ context.Context, uid, plainPassword string) error {
+	f.PasswordUpdates = append(f.PasswordUpdates, uid)
+	return nil
+}
+func (f *FakeUserRepo) Delete(context.Context, string) error { return nil }
 
 // ---- UserAdminStore（管理后台用，FakeUserRepo 同时满足 models.UserStore） ----
 
@@ -311,7 +319,10 @@ func (f *FakeEmailWhitelist) InitDefaultWhitelist(context.Context, string) error
 
 // ---------- FakeLimiter: middleware.RateLimiterManager ----------
 
-type FakeLimiter struct{}
+type FakeLimiter struct {
+	EmailAllowed bool
+	EmailWait    int
+}
 
 func noopHandler(c *gin.Context)                               { c.Next() }
 func (f *FakeLimiter) LoginRateLimit() gin.HandlerFunc         { return noopHandler }
@@ -320,8 +331,8 @@ func (f *FakeLimiter) ResetPasswordRateLimit() gin.HandlerFunc { return noopHand
 func (f *FakeLimiter) OAuthTokenRateLimit() gin.HandlerFunc    { return noopHandler }
 func (f *FakeLimiter) VerifyCodeRateLimit() gin.HandlerFunc    { return noopHandler }
 func (f *FakeLimiter) QRLoginRateLimit() gin.HandlerFunc       { return noopHandler }
-func (f *FakeLimiter) EmailAllow(string) bool                  { return true }
-func (f *FakeLimiter) EmailWaitTime(string) int                { return 0 }
+func (f *FakeLimiter) EmailAllow(string) bool                  { return f.EmailAllowed }
+func (f *FakeLimiter) EmailWaitTime(string) int                { return f.EmailWait }
 func (f *FakeLimiter) DataExportAllow(string) bool             { return true }
 func (f *FakeLimiter) DataExportWaitTime(string) int           { return 0 }
 func (f *FakeLimiter) StopAll()                                {}

@@ -18,11 +18,13 @@ import (
 
 // testDeps 测试依赖集合
 type testDeps struct {
-	userRepo   *testutil.FakeUserRepo
-	tokenMgr   *testutil.FakeTokenManager
-	sessionMgr *testutil.FakeSessionManager
-	captcha    *testutil.FakeCaptcha
-	whitelist  *testutil.FakeEmailWhitelist
+	userRepo    *testutil.FakeUserRepo
+	tokenMgr    *testutil.FakeTokenManager
+	sessionMgr  *testutil.FakeSessionManager
+	captcha     *testutil.FakeCaptcha
+	whitelist   *testutil.FakeEmailWhitelist
+	limiter     *testutil.FakeLimiter
+	emailSender *testutil.FakeEmailSender
 }
 
 func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDeps) {
@@ -30,10 +32,12 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 	gin.SetMode(gin.TestMode)
 
 	deps := &testDeps{
-		userRepo:   testutil.NewFakeUserRepo(),
-		tokenMgr:   &testutil.FakeTokenManager{},
-		sessionMgr: &testutil.FakeSessionManager{},
-		captcha:    &testutil.FakeCaptcha{},
+		userRepo:    testutil.NewFakeUserRepo(),
+		tokenMgr:    &testutil.FakeTokenManager{},
+		sessionMgr:  &testutil.FakeSessionManager{},
+		captcha:     &testutil.FakeCaptcha{},
+		limiter:     &testutil.FakeLimiter{EmailAllowed: true},
+		emailSender: &testutil.FakeEmailSender{},
 	}
 
 	var whitelist models.EmailWhitelistStore
@@ -50,11 +54,11 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 		&testutil.FakeUserConsentStore{},
 		deps.tokenMgr,
 		deps.sessionMgr,
-		&testutil.FakeEmailSender{},
+		deps.emailSender,
 		deps.captcha,
 		&testutil.FakeUserCache{},
 		whitelist,
-		&testutil.FakeLimiter{},
+		deps.limiter,
 	)
 	if err != nil {
 		t.Fatalf("NewAuthHandler() error = %v", err)
