@@ -295,5 +295,8 @@
   "policy.consent.effectiveDate": "Effective",
   "dashboard.restoreAvatarSync": "Resume Avatar Sync",
   "dashboard.restoreAvatarSyncConfirm": "This will re-enable Microsoft avatar auto-sync and re-fetch your Microsoft avatar. Continue?",
-  "dashboard.restoreAvatarSyncPending": "Sync enabled, re-fetching your avatar…"
+  "dashboard.restoreAvatarSyncPending": "Sync enabled, re-fetching your avatar…",
+  "dashboard.logDetails.microsoftAvatar": "Microsoft avatar",
+  "dashboard.logDetails.removed": "Removed",
+  "dashboard.logDetails.setTo": "Set to"
 }

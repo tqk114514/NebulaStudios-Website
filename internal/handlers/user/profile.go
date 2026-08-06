@@ -137,7 +137,8 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		h.invalidateUserCache(userUID)
 
 		if h.userLogRepo != nil {
-			if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, ""); err != nil {
+			syncDisabled := false
+			if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, "", &syncDisabled); err != nil {
 				utils.LogWarn("USER", "Failed to log avatar removal", fmt.Sprintf("userUID=%s", userUID))
 			}
 		}
@@ -179,7 +180,13 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	h.invalidateUserCache(userUID)
 
 	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, urlResult.Value); err != nil {
+		// 使用微软头像时 sync 置 true，其他 URL 不涉及同步变化（传 nil）
+		var syncEnabled *bool
+		if urlResult.Value == "microsoft" {
+			v := true
+			syncEnabled = &v
+		}
+		if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, urlResult.Value, syncEnabled); err != nil {
 			utils.LogWarn("USER", "Failed to log avatar change", fmt.Sprintf("userUID=%s", userUID))
 		}
 	}

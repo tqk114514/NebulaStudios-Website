@@ -295,5 +295,8 @@
   "policy.consent.effectiveDate": "発効日",
   "dashboard.restoreAvatarSync": "アバター同期を再開",
   "dashboard.restoreAvatarSyncConfirm": "Microsoftアカウントのアバター自動同期を再開し、アバターを再取得します。続行しますか？",
-  "dashboard.restoreAvatarSyncPending": "同期を有効化しました。アバターを再取得中…"
+  "dashboard.restoreAvatarSyncPending": "同期を有効化しました。アバターを再取得中…",
+  "dashboard.logDetails.microsoftAvatar": "Microsoft アバター",
+  "dashboard.logDetails.removed": "削除",
+  "dashboard.logDetails.setTo": "設定"
 }

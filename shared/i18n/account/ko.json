@@ -295,5 +295,8 @@
   "policy.consent.effectiveDate": "발효일",
   "dashboard.restoreAvatarSync": "아바타 동기화 재개",
   "dashboard.restoreAvatarSyncConfirm": "Microsoft 계정 아바타 자동 동기화를 다시 활성화하고 아바타를 다시 가져옵니다. 계속할까요?",
-  "dashboard.restoreAvatarSyncPending": "동기화가 활성화되었습니다. 아바타를 다시 가져오는 중…"
+  "dashboard.restoreAvatarSyncPending": "동기화가 활성화되었습니다. 아바타를 다시 가져오는 중…",
+  "dashboard.logDetails.microsoftAvatar": "Microsoft 아바타",
+  "dashboard.logDetails.removed": "제거됨",
+  "dashboard.logDetails.setTo": "설정"
 }

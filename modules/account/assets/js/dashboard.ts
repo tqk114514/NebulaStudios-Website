@@ -1649,6 +1649,7 @@ interface UserLogItem {
     new_username?: string;
     old_avatar_url?: string;
     new_avatar_url?: string;
+    microsoft_avatar_sync?: boolean;
     microsoft_id?: string;
     microsoft_name?: string;
     google_id?: string;
@@ -1732,6 +1733,28 @@ function formatLogDetails(action: string, details?: UserLogItem['details']): str
         return escapeHtml(details.google_name);
       }
       break;
+    case 'change_avatar': {
+      // 凭 microsoft_avatar_sync 字段独立判断，不猜 URL（解除微软授权是单独的 unlink_microsoft 条目）
+      const formatUrl = (v?: string): string => {
+        if (!v) { return ''; }
+        return v === 'microsoft' ? t('dashboard.logDetails.microsoftAvatar') : escapeHtml(v);
+      };
+      if (details.microsoft_avatar_sync === false) {
+        // 关闭同步：移除头像 / 取消微软头像同步
+        return `${t('dashboard.logDetails.removed')}: ${formatUrl(details.old_avatar_url)}`;
+      }
+      if (details.microsoft_avatar_sync === true) {
+        // 开启同步：重新使用微软头像
+        const oldUrl = formatUrl(details.old_avatar_url);
+        const newUrl = formatUrl(details.new_avatar_url);
+        if (oldUrl && newUrl) {
+          return `${oldUrl} → ${newUrl}`;
+        }
+        return `${t('dashboard.logDetails.setTo')}: ${newUrl || t('dashboard.logDetails.microsoftAvatar')}`;
+      }
+      // 其他头像操作（未涉及同步变化）：维持原样，不显示详情
+      break;
+    }
   }
   return '';
 }

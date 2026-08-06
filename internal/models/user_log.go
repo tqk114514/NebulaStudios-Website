@@ -46,6 +46,8 @@ type ChangeUsernameDetails struct {
 type ChangeAvatarDetails struct {
 	OldAvatarURL string `json:"old_avatar_url,omitempty"`
 	NewAvatarURL string `json:"new_avatar_url,omitempty"`
+	// MicrosoftAvatarSync 微软头像自动同步状态（nil=未变化/不涉及，false=关闭，true=开启）
+	MicrosoftAvatarSync *bool `json:"microsoft_avatar_sync,omitempty"`
 }
 
 // LinkMicrosoftDetails 绑定微软账户详情
@@ -169,10 +171,12 @@ func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userUID strin
 }
 
 // LogChangeAvatar 记录修改头像操作
-func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string) error {
+// microsoftAvatarSync：nil=未涉及同步变化，false=关闭微软头像同步，true=开启微软头像同步
+func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string, microsoftAvatarSync *bool) error {
 	details := ChangeAvatarDetails{
-		OldAvatarURL: oldURL,
-		NewAvatarURL: newURL,
+		OldAvatarURL:        oldURL,
+		NewAvatarURL:        newURL,
+		MicrosoftAvatarSync: microsoftAvatarSync,
 	}
 	detailsJSON, err := json.Marshal(details)
 	if err != nil {
