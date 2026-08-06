@@ -8,7 +8,10 @@ let cachedParser: UAParserConstructor | null = null;
 
 function getParser(): UAParserConstructor {
   if (!cachedParser) {
-    cachedParser = new UAParser() as unknown as UAParserConstructor;
+    // ua-parser.js 位于 tsconfig exclude 的 shared/js/lib，TS7 无法为其推断构造签名，
+    // 先将构造器类型化再 new（运行时行为不变）
+    const ParserCtor = UAParser as unknown as UAParserConstructor;
+    cachedParser = new ParserCtor();
   }
   return cachedParser;
 }
