@@ -64,9 +64,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.16.0
+      # mlugg/setup-zig 未适配 Zig 0.16 的命名变更（zig-<arch>-<os> 且稳定版在 /download/<ver>/），
+      # 改用官方 URL 手动安装
+      - name: Install Zig 0.16.0
+        run: |
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          /opt/zig/zig version
+          echo "/opt/zig" >> "$GITHUB_PATH"
 
       - name: zig build test
         working-directory: img-processor
