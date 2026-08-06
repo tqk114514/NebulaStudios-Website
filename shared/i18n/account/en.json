@@ -217,6 +217,8 @@
   "dashboard.logAction.change_password": "Password Changed",
   "dashboard.logAction.change_username": "Username Changed",
   "dashboard.logAction.change_avatar": "Avatar Changed",
+  "dashboard.logAction.enable_avatar_sync": "Enable Microsoft avatar sync",
+  "dashboard.logAction.disable_avatar_sync": "Disable Microsoft avatar sync",
   "dashboard.logAction.link_microsoft": "Microsoft Account Linked",
   "dashboard.logAction.unlink_microsoft": "Microsoft Account Unlinked",
   "dashboard.logAction.link_google": "Google Account Linked",

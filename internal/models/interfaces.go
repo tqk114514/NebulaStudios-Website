@@ -50,7 +50,9 @@ type UserLogStore interface {
 	LogChangePassword(ctx context.Context, userUID string) error
 	LogRegister(ctx context.Context, userUID string) error
 	LogChangeUsername(ctx context.Context, userUID string, oldUsername, newUsername string) error
-	LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string, microsoftAvatarSync *bool) error
+	LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string) error
+	LogEnableAvatarSync(ctx context.Context, userUID, provider string) error
+	LogDisableAvatarSync(ctx context.Context, userUID, provider string) error
 	LogLinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error
 	LogUnlinkMicrosoft(ctx context.Context, userUID string, microsoftID, microsoftName string) error
 	LogLinkGoogle(ctx context.Context, userUID string, googleID, googleName string) error
