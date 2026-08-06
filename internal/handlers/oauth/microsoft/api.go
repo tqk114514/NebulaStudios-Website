@@ -25,10 +25,10 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 	tokenURL := "https://login.microsoftonline.com/" + MicrosoftTenant + "/oauth2/v2.0/token"
 
 	data := url.Values{}
-	data.Set("client_id", h.clientID)
-	data.Set("client_secret", h.clientSecret)
+	data.Set("client_id", h.ClientID)
+	data.Set("client_secret", h.ClientSecret)
 	data.Set("code", code)
-	data.Set("redirect_uri", h.redirectURI)
+	data.Set("redirect_uri", h.RedirectURI)
 	data.Set("grant_type", "authorization_code")
 	data.Set("code_verifier", codeVerifier)
 

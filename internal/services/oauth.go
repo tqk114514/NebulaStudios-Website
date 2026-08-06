@@ -438,19 +438,33 @@ func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
 }
 
 // RevokeUserClientTokens 撤销用户对某客户端的所有授权
+// 撤销是尽力而为：删除失败仅记录日志，不中断调用方（Token 本身已不可用）
 func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userUID string, clientID string) error {
-	_, _ = s.accessTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID)
-	_, _ = s.refreshTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID)
-	_ = s.grantRepo.Delete(ctx, userUID, clientID)
+	if _, err := s.accessTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete access tokens", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+	}
+	if _, err := s.refreshTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete refresh tokens", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+	}
+	if err := s.grantRepo.Delete(ctx, userUID, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete grant", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+	}
 	utils.LogInfo("OAUTH", fmt.Sprintf("User-client tokens revoked: user_uid=%s, client_id=%s", userUID, clientID))
 	return nil
 }
 
 // RevokeUserTokens 撤销用户的所有 OAuth Token（用于封禁）
+// 尽力而为：删除失败仅记录日志，Token 哈希无法再被换取新 Token
 func (s *OAuthService) RevokeUserTokens(ctx context.Context, userUID string) error {
-	_, _ = s.accessTokenRepo.DeleteByUser(ctx, userUID)
-	_, _ = s.refreshTokenRepo.DeleteByUser(ctx, userUID)
-	_, _ = s.grantRepo.DeleteByUser(ctx, userUID)
+	if _, err := s.accessTokenRepo.DeleteByUser(ctx, userUID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete user access tokens", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+	}
+	if _, err := s.refreshTokenRepo.DeleteByUser(ctx, userUID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete user refresh tokens", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+	}
+	if _, err := s.grantRepo.DeleteByUser(ctx, userUID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete user grants", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+	}
 	utils.LogInfo("OAUTH", fmt.Sprintf("All user tokens revoked: user_uid=%s", userUID))
 	return nil
 }
@@ -467,10 +481,17 @@ func (s *OAuthService) FindUserGrant(ctx context.Context, userUID, clientID stri
 }
 
 // RevokeClientTokens 撤销某客户端的所有 Token（用于禁用/删除客户端）
+// 尽力而为：删除失败仅记录日志
 func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) error {
-	_, _ = s.accessTokenRepo.DeleteByClient(ctx, clientID)
-	_, _ = s.refreshTokenRepo.DeleteByClient(ctx, clientID)
-	_, _ = s.grantRepo.DeleteByClient(ctx, clientID)
+	if _, err := s.accessTokenRepo.DeleteByClient(ctx, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete client access tokens", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+	}
+	if _, err := s.refreshTokenRepo.DeleteByClient(ctx, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete client refresh tokens", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+	}
+	if _, err := s.grantRepo.DeleteByClient(ctx, clientID); err != nil {
+		utils.LogWarn("OAUTH", "Failed to delete client grants", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+	}
 	utils.LogInfo("OAUTH", fmt.Sprintf("All client tokens revoked: client_id=%s", clientID))
 	return nil
 }

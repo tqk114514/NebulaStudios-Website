@@ -235,12 +235,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Password: hashedPassword,
 	}
 
-	if existingUser, _ := h.userRepo.FindByEmail(ctx, emailResult.Value); existingUser != nil {
+	if existingUser, err := h.userRepo.FindByEmail(ctx, emailResult.Value); err != nil {
+		// 预检查失败不阻断注册：唯一性由下方 Create 的 ErrEmailExists 权威校验，DB 故障仅记日志
+		utils.LogWarn("AUTH", "Failed to check email existence", fmt.Sprintf("email=%s, error=%v", emailResult.Value, err))
+	} else if existingUser != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
 		return
 	}
 
-	if existingUser, _ := h.userRepo.FindByUsername(ctx, usernameResult.Value); existingUser != nil {
+	if existingUser, err := h.userRepo.FindByUsername(ctx, usernameResult.Value); err != nil {
+		utils.LogWarn("AUTH", "Failed to check username existence", fmt.Sprintf("username=%s, error=%v", usernameResult.Value, err))
+	} else if existingUser != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
 		return
 	}

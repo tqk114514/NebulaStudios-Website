@@ -28,8 +28,3 @@ func BindJSON(c *gin.Context, obj interface{}) error {
 	}
 	return err
 }
-
-// IsBodyTooLarge 判断错误是否为请求体过大
-func IsBodyTooLarge(err error) bool {
-	return errors.Is(err, ErrBodyTooLarge)
-}
