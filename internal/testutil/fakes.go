@@ -5,6 +5,7 @@ package testutil
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"auth-system/internal/cache"
@@ -25,6 +26,8 @@ type FakeUserRepo struct {
 	CreatedUsers   []*models.User
 	CreateErr      error
 	FindByEmailErr error
+	BanCalls       []BannedUsers
+	UnbanCalls     []string
 }
 
 // NewFakeUserRepo 创建空的内存用户仓库
@@ -44,7 +47,11 @@ func (f *FakeUserRepo) Seed(user *models.User) {
 }
 
 func (f *FakeUserRepo) FindByUID(_ context.Context, uid string) (*models.User, error) {
-	return f.UIDs[uid], nil
+	if u := f.UIDs[uid]; u != nil {
+		return u, nil
+	}
+	// 与真实仓库一致：未找到返回 sql.ErrNoRows（BanUser 等 handler 用 errors.Is 检查）
+	return nil, sql.ErrNoRows
 }
 func (f *FakeUserRepo) FindByEmail(_ context.Context, email string) (*models.User, error) {
 	if f.FindByEmailErr != nil {
@@ -79,6 +86,46 @@ func (f *FakeUserRepo) Create(_ context.Context, user *models.User) error {
 func (f *FakeUserRepo) Update(context.Context, string, map[string]any) error { return nil }
 func (f *FakeUserRepo) UpdatePassword(context.Context, string, string) error { return nil }
 func (f *FakeUserRepo) Delete(context.Context, string) error                 { return nil }
+
+// ---- UserAdminStore（管理后台用，FakeUserRepo 同时满足 models.UserStore） ----
+
+// BannedUsers 记录 Ban/Unban 调用，供断言
+type BannedUsers struct {
+	UserUID  string
+	AdminUID string
+	Reason   string
+	UnbanAt  *time.Time
+}
+
+var _ models.UserAdminStore = (*FakeUserRepo)(nil)
+
+func (f *FakeUserRepo) FindAll(context.Context, int, int, string) ([]*models.User, int64, error) {
+	users := make([]*models.User, 0, len(f.UIDs))
+	for _, u := range f.UIDs {
+		users = append(users, u)
+	}
+	return users, int64(len(users)), nil
+}
+func (f *FakeUserRepo) GetStats(context.Context) (*models.UserStats, error) {
+	return &models.UserStats{TotalUsers: int64(len(f.UIDs))}, nil
+}
+func (f *FakeUserRepo) Ban(_ context.Context, userUID, adminUID string, reason string, unbanAt *time.Time) error {
+	f.BanCalls = append(f.BanCalls, BannedUsers{UserUID: userUID, AdminUID: adminUID, Reason: reason, UnbanAt: unbanAt})
+	if u := f.UIDs[userUID]; u != nil {
+		u.IsBanned = true
+		if unbanAt != nil {
+			u.UnbanAt = sql.NullTime{Valid: true, Time: *unbanAt}
+		}
+	}
+	return nil
+}
+func (f *FakeUserRepo) Unban(_ context.Context, userUID string) error {
+	f.UnbanCalls = append(f.UnbanCalls, userUID)
+	if u := f.UIDs[userUID]; u != nil {
+		u.IsBanned = false
+	}
+	return nil
+}
 
 // ---------- FakeTokenManager: services.TokenManager ----------
 
@@ -332,3 +379,177 @@ type FakeExportToken struct{}
 func (f *FakeExportToken) Generate(string) (string, error)          { return "export-token", nil }
 func (f *FakeExportToken) ValidateAndConsume(string) (string, bool) { return "uid", true }
 func (f *FakeExportToken) Stop()                                    {}
+
+// ---------- FakeAdminLogStore: models.AdminLogStore ----------
+
+type FakeAdminLogStore struct{}
+
+func (f *FakeAdminLogStore) Create(context.Context, *models.AdminLog) error { return nil }
+func (f *FakeAdminLogStore) LogSetRole(context.Context, string, string, string, int, int) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogDeleteUser(context.Context, string, string, string, string) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogBanUser(context.Context, string, string, string, string, *time.Time) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogUnbanUser(context.Context, string, string, string) error { return nil }
+func (f *FakeAdminLogStore) LogOAuthClientCreate(context.Context, string, int64, string, string) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogOAuthClientUpdate(context.Context, string, int64, string, string) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogOAuthClientDelete(context.Context, string, int64, string, string) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogOAuthClientRegenerateSecret(context.Context, string, int64, string, string) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogOAuthClientToggle(context.Context, string, int64, string, string, bool) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogEmailWhitelistCreate(context.Context, string, *models.EmailWhitelist) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogEmailWhitelistUpdate(context.Context, string, *models.EmailWhitelist) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogEmailWhitelistDelete(context.Context, string, int64) error { return nil }
+func (f *FakeAdminLogStore) LogDataExport(context.Context, string, int, int) error        { return nil }
+func (f *FakeAdminLogStore) LogDataImport(context.Context, string, int, int) error        { return nil }
+func (f *FakeAdminLogStore) FindAll(context.Context, int, int) ([]*models.AdminLogPublic, int64, error) {
+	return nil, 0, nil
+}
+
+// ---------- FakeExportManager: services.ExportManager（OTA 文件导出） ----------
+
+type FakeExportManager struct{}
+
+func (f *FakeExportManager) GenerateOTAC(string) (string, string, time.Time) {
+	return "req", "code", time.Now()
+}
+func (f *FakeExportManager) ValidateOTAC(string, string, string) error   { return nil }
+func (f *FakeExportManager) RevokeOTAC()                                 {}
+func (f *FakeExportManager) StoreFile([]byte, string) string             { return "file-token" }
+func (f *FakeExportManager) RetrieveFile(string) ([]byte, string, error) { return nil, "", nil }
+
+// ---------- FakeDataExportRepo: models.DataExportImportStore ----------
+
+type FakeDataExportRepo struct{}
+
+func (f *FakeDataExportRepo) QueryAllUsers(context.Context) ([]map[string]any, error) {
+	return nil, nil
+}
+func (f *FakeDataExportRepo) QueryAllUserLogs(context.Context) ([]map[string]any, error) {
+	return nil, nil
+}
+func (f *FakeDataExportRepo) ImportUsers(context.Context, []map[string]any) (models.ImportUsersResult, error) {
+	return models.ImportUsersResult{}, nil
+}
+func (f *FakeDataExportRepo) ImportUserLogs(context.Context, []map[string]any) (int, error) {
+	return 0, nil
+}
+func (f *FakeDataExportRepo) DeleteAllUsers(context.Context) error    { return nil }
+func (f *FakeDataExportRepo) DeleteAllUserLogs(context.Context) error { return nil }
+
+// ---------- FakeOAuthAdmin: services.OAuthAdminManager ----------
+
+// OAuthToggleCall 记录一次 ToggleClient 调用
+type OAuthToggleCall struct {
+	ID      int64
+	Enabled bool
+}
+
+// FakeOAuthAdmin OAuth 客户端管理 fake，记录创建/删除/切换调用
+type FakeOAuthAdmin struct {
+	Created []string
+	Deleted []int64
+	Toggled []OAuthToggleCall
+	Client  *models.OAuthClient
+}
+
+func (f *FakeOAuthAdmin) GetClients(context.Context, int, int, string) ([]*models.OAuthClient, int64, error) {
+	return nil, 0, nil
+}
+func (f *FakeOAuthAdmin) GetClient(context.Context, int64) (*models.OAuthClient, error) {
+	if f.Client != nil {
+		return f.Client, nil
+	}
+	return nil, &utils.DatabaseError{Operation: "GetClient", NotFound: true}
+}
+func (f *FakeOAuthAdmin) CreateClient(_ context.Context, name, _, _ string) (*models.OAuthClient, string, error) {
+	f.Created = append(f.Created, name)
+	return &models.OAuthClient{ID: 1, Name: name}, "generated-secret", nil
+}
+func (f *FakeOAuthAdmin) UpdateClient(context.Context, int64, string, *string, string) error {
+	return nil
+}
+func (f *FakeOAuthAdmin) DeleteClient(_ context.Context, id int64) error {
+	f.Deleted = append(f.Deleted, id)
+	return nil
+}
+func (f *FakeOAuthAdmin) RegenerateSecret(context.Context, int64) (string, error) {
+	return "new-secret", nil
+}
+func (f *FakeOAuthAdmin) ToggleClient(_ context.Context, id int64, enabled bool) error {
+	f.Toggled = append(f.Toggled, OAuthToggleCall{ID: id, Enabled: enabled})
+	return nil
+}
+
+// ---------- FakeOAuthProvider: services.OAuthProviderStore ----------
+
+// FakeOAuthProvider OAuth 授权服务器 fake，支持成功/失败注入
+type FakeOAuthProvider struct {
+	Client          *models.OAuthClient
+	ValidateErr     error
+	ExchangeResp    *services.OAuthTokenResponse
+	ExchangeUserUID string
+	ExchangeErr     error
+	RefreshResp     *services.OAuthTokenResponse
+	RefreshUserUID  string
+	RefreshErr      error
+	AccessToken     *models.OAuthAccessToken
+	AccessTokenErr  error
+	Revoked         []string
+}
+
+func (f *FakeOAuthProvider) ValidateClientID(context.Context, string) (*models.OAuthClient, error) {
+	if f.ValidateErr != nil {
+		return nil, f.ValidateErr
+	}
+	return f.Client, nil
+}
+func (f *FakeOAuthProvider) ValidateRedirectURI(*models.OAuthClient, string) bool { return true }
+func (f *FakeOAuthProvider) CreateAuthorizationCode(context.Context, string, string, string, string, string, string) (string, error) {
+	return "auth-code", nil
+}
+func (f *FakeOAuthProvider) ValidateClient(context.Context, string, string) (*models.OAuthClient, error) {
+	if f.ValidateErr != nil {
+		return nil, f.ValidateErr
+	}
+	return f.Client, nil
+}
+func (f *FakeOAuthProvider) ExchangeAuthorizationCode(context.Context, string, string, string, string) (*services.OAuthTokenResponse, string, error) {
+	if f.ExchangeErr != nil {
+		return nil, "", f.ExchangeErr
+	}
+	return f.ExchangeResp, f.ExchangeUserUID, nil
+}
+func (f *FakeOAuthProvider) RefreshAccessToken(context.Context, string, string) (*services.OAuthTokenResponse, string, error) {
+	if f.RefreshErr != nil {
+		return nil, "", f.RefreshErr
+	}
+	return f.RefreshResp, f.RefreshUserUID, nil
+}
+func (f *FakeOAuthProvider) ValidateAccessToken(context.Context, string) (*models.OAuthAccessToken, error) {
+	if f.AccessTokenErr != nil {
+		return nil, f.AccessTokenErr
+	}
+	return f.AccessToken, nil
+}
+func (f *FakeOAuthProvider) RevokeToken(_ context.Context, token string) error {
+	f.Revoked = append(f.Revoked, token)
+	return nil
+}
