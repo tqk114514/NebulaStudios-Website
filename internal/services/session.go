@@ -61,7 +61,7 @@ type SessionService struct {
 	refreshTokenExpiry time.Duration
 	jwtIssuer          string
 	jwtAudience        string
-	sessionTokenRepo   *models.SessionTokenRepository
+	sessionTokenRepo   models.SessionTokenStore
 }
 
 // NewSessionService 创建 Session 服务（带配置验证）

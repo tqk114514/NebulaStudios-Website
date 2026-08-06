@@ -49,8 +49,8 @@ type CodeResult struct {
 
 // TokenService Token 服务
 type TokenService struct {
-	tokenRepo        *models.TokenRepository
-	codeRepo         *models.CodeRepository
+	tokenRepo        models.TokenStore
+	codeRepo         models.CodeStore
 	sessionTokenRepo *models.SessionTokenRepository
 	pool             *pgxpool.Pool
 }

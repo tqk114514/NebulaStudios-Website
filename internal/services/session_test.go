@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"auth-system/internal/config"
+	"auth-system/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -234,4 +236,164 @@ func signHS256(uid string) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte("test-secret"))
+}
+
+// ---------- RefreshTokens（mock SessionTokenStore） ----------
+
+// fakeSessionTokenStore 本地 refresh token 仓库 fake（services 测试不能 import testutil：会循环依赖）
+type fakeSessionTokenStore struct {
+	findResult      *models.SessionToken
+	findErr         error
+	markUsedErr     error
+	markUsedCalls   []int64
+	created         []*models.SessionToken
+	revokedFamilies []string
+	revokedUsers    []string
+}
+
+func (f *fakeSessionTokenStore) Create(_ context.Context, t *models.SessionToken) error {
+	f.created = append(f.created, t)
+	return nil
+}
+func (f *fakeSessionTokenStore) FindByHash(context.Context, string) (*models.SessionToken, error) {
+	return f.findResult, f.findErr
+}
+func (f *fakeSessionTokenStore) MarkUsed(_ context.Context, id int64) error {
+	f.markUsedCalls = append(f.markUsedCalls, id)
+	return f.markUsedErr
+}
+func (f *fakeSessionTokenStore) RevokeFamily(_ context.Context, familyID string) (int64, error) {
+	f.revokedFamilies = append(f.revokedFamilies, familyID)
+	return 0, nil
+}
+func (f *fakeSessionTokenStore) RevokeUser(_ context.Context, userUID string) (int64, error) {
+	f.revokedUsers = append(f.revokedUsers, userUID)
+	return 0, nil
+}
+func (f *fakeSessionTokenStore) DeleteExpired(context.Context) (int64, error) { return 0, nil }
+
+// newSessionWithFakeRepo 构造注入 fake repo 的 SessionService
+func newSessionWithFakeRepo(t *testing.T) (*SessionService, *fakeSessionTokenStore) {
+	t.Helper()
+	s := testSessionService(t, time.Hour)
+	repo := &fakeSessionTokenStore{}
+	s.sessionTokenRepo = repo
+	return s, repo
+}
+
+func unexpiredSessionToken() *models.SessionToken {
+	return &models.SessionToken{
+		ID:        1,
+		TokenHash: "hash",
+		UserUID:   "u1",
+		FamilyID:  "fam-1",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+}
+
+func TestRefreshTokensSuccess(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	repo.findResult = unexpiredSessionToken()
+
+	access, refresh, err := s.RefreshTokens(context.Background(), "refresh-token-str")
+	if err != nil {
+		t.Fatalf("RefreshTokens() error = %v", err)
+	}
+	if access == "" || refresh == "" {
+		t.Error("RefreshTokens() returned empty tokens")
+	}
+	// 旧 token 已标记使用
+	if len(repo.markUsedCalls) != 1 || repo.markUsedCalls[0] != 1 {
+		t.Errorf("MarkUsed calls = %v, want [1]", repo.markUsedCalls)
+	}
+	// 新 refresh token 已写入
+	if len(repo.created) != 1 {
+		t.Fatalf("new refresh token not created, got %d", len(repo.created))
+	}
+	if repo.created[0].UserUID != "u1" || repo.created[0].FamilyID == "" {
+		t.Errorf("new token = %+v, want user u1 with new family", repo.created[0])
+	}
+}
+
+func TestRefreshTokensEmptyToken(t *testing.T) {
+	s, _ := newSessionWithFakeRepo(t)
+	if _, _, err := s.RefreshTokens(context.Background(), ""); !errors.Is(err, ErrRefreshTokenInvalid) {
+		t.Fatalf("RefreshTokens(empty) error = %v, want ErrRefreshTokenInvalid", err)
+	}
+}
+
+func TestRefreshTokensNotFound(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	repo.findErr = models.ErrSessionTokenNotFound
+
+	if _, _, err := s.RefreshTokens(context.Background(), "refresh-token-str"); !errors.Is(err, ErrRefreshTokenInvalid) {
+		t.Fatalf("RefreshTokens() error = %v, want ErrRefreshTokenInvalid (未找到)", err)
+	}
+}
+
+func TestRefreshTokensExpired(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	tok := unexpiredSessionToken()
+	tok.ExpiresAt = time.Now().Add(-time.Minute)
+	repo.findResult = tok
+
+	if _, _, err := s.RefreshTokens(context.Background(), "refresh-token-str"); !errors.Is(err, ErrRefreshTokenExpired) {
+		t.Fatalf("RefreshTokens() error = %v, want ErrRefreshTokenExpired", err)
+	}
+}
+
+func TestRefreshTokensReuseRevokesFamily(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	tok := unexpiredSessionToken()
+	tok.Used = true
+	repo.findResult = tok
+
+	_, _, err := s.RefreshTokens(context.Background(), "refresh-token-str")
+	if !errors.Is(err, ErrRefreshTokenReused) {
+		t.Fatalf("RefreshTokens() error = %v, want ErrRefreshTokenReused", err)
+	}
+	// 检测到重放必须撤销整个家族
+	if len(repo.revokedFamilies) != 1 || repo.revokedFamilies[0] != "fam-1" {
+		t.Errorf("RevokeFamily calls = %v, want [fam-1]", repo.revokedFamilies)
+	}
+}
+
+func TestRefreshTokensMarkUsedRace(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	repo.findResult = unexpiredSessionToken()
+	repo.markUsedErr = models.ErrSessionTokenReused // 并发竞争：MarkUsed 时报已使用
+
+	_, _, err := s.RefreshTokens(context.Background(), "refresh-token-str")
+	if !errors.Is(err, ErrRefreshTokenReused) {
+		t.Fatalf("RefreshTokens() error = %v, want ErrRefreshTokenReused", err)
+	}
+	if len(repo.revokedFamilies) != 1 {
+		t.Errorf("RevokeFamily should be called on mark-used race, got %v", repo.revokedFamilies)
+	}
+}
+
+func TestRevokeUserTokens(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	if err := s.RevokeUserTokens(context.Background(), "u1"); err != nil {
+		t.Fatalf("RevokeUserTokens() error = %v", err)
+	}
+	if len(repo.revokedUsers) != 1 || repo.revokedUsers[0] != "u1" {
+		t.Errorf("RevokeUser calls = %v, want [u1]", repo.revokedUsers)
+	}
+	if err := s.RevokeUserTokens(context.Background(), ""); !errors.Is(err, ErrInvalidUser) {
+		t.Errorf("RevokeUserTokens(empty) error = %v, want ErrInvalidUser", err)
+	}
+}
+
+func TestRevokeTokenFamily(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	if err := s.RevokeTokenFamily(context.Background(), "u1", "fam-1"); err != nil {
+		t.Fatalf("RevokeTokenFamily() error = %v", err)
+	}
+	if len(repo.revokedFamilies) != 1 || repo.revokedFamilies[0] != "fam-1" {
+		t.Errorf("RevokeFamily calls = %v, want [fam-1]", repo.revokedFamilies)
+	}
+	if err := s.RevokeTokenFamily(context.Background(), "", ""); err == nil {
+		t.Error("RevokeTokenFamily(empty) should error")
+	}
 }
