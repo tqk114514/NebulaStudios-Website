@@ -11,16 +11,12 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"auth-system/internal/handlers/oauth"
-	"auth-system/internal/paths"
 	"auth-system/internal/utils"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -249,17 +245,17 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 	audValid := false
 	switch aud := claims["aud"].(type) {
 	case string:
-		audValid = aud == h.clientID
+		audValid = aud == h.ClientID
 	case []any:
 		for _, a := range aud {
-			if s, ok := a.(string); ok && s == h.clientID {
+			if s, ok := a.(string); ok && s == h.ClientID {
 				audValid = true
 				break
 			}
 		}
 	}
 	if !audValid {
-		utils.LogWarn("OAUTH-MS", "ID token audience mismatch", fmt.Sprintf("clientID=%s", h.clientID))
+		utils.LogWarn("OAUTH-MS", "ID token audience mismatch", fmt.Sprintf("clientID=%s", h.ClientID))
 		return ""
 	}
 
@@ -302,8 +298,8 @@ func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string,
 		return ""
 	}
 
-	if h.storageService != nil && h.storageService.IsConfigured() {
-		avatarURL, err := h.storageService.UploadAvatar(ctx, userUID, imageData)
+	if h.StorageService != nil && h.StorageService.IsConfigured() {
+		avatarURL, err := h.StorageService.UploadAvatar(ctx, userUID, imageData)
 		if err != nil {
 			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to R2, falling back to base64", fmt.Sprintf("userUID=%s", userUID))
 		} else {
@@ -334,7 +330,7 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	defer cancel()
 
 	// 用户已关闭微软头像自动同步（移除头像场景）时跳过，不再下载/存储/更新
-	if user, err := h.userRepo.FindByUID(ctx, userUID); err == nil && !user.MicrosoftAvatarSync {
+	if user, err := h.UserRepo.FindByUID(ctx, userUID); err == nil && !user.MicrosoftAvatarSync {
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar sync disabled, skipping: userUID=%s", userUID))
 		return
 	}
@@ -344,7 +340,7 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	if newAvatarHash != "" && newAvatarHash != oldAvatarHash {
 		microsoftAvatarURL := h.uploadAvatarToR2(ctx, userUID, avatarData, avatarContentType)
 
-		err := h.userRepo.Update(ctx, userUID, map[string]any{
+		err := h.UserRepo.Update(ctx, userUID, map[string]any{
 			"microsoft_avatar_url":  microsoftAvatarURL,
 			"microsoft_avatar_hash": newAvatarHash,
 		})
@@ -353,11 +349,11 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 			return
 		}
 
-		h.userCache.Invalidate(userUID)
+		h.UserCache.Invalidate(userUID)
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar updated async: userUID=%s", userUID))
 
 	} else if newAvatarHash == "" && oldAvatarHash != "" {
-		err := h.userRepo.Update(ctx, userUID, map[string]any{
+		err := h.UserRepo.Update(ctx, userUID, map[string]any{
 			"microsoft_avatar_url":  nil,
 			"microsoft_avatar_hash": nil,
 		})
@@ -366,142 +362,10 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 			return
 		}
 
-		h.userCache.Invalidate(userUID)
+		h.UserCache.Invalidate(userUID)
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar cleared async: userUID=%s", userUID))
 
 	} else {
 		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar unchanged, skipping: userUID=%s", userUID))
-	}
-}
-
-// handleLinkAction 处理绑定操作：检查是否已被绑定、更新数据库、异步处理头像
-func (h *MicrosoftHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserUID string, microsoftID, displayName string, avatarData []byte, avatarContentType string) {
-	existingUser, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
-	if err != nil {
-		utils.LogDebug("OAUTH-MS", "FindByMicrosoftID error in handleLinkAction")
-	}
-
-	if existingUser != nil && existingUser.UID != currentUserUID {
-		utils.LogWarn("OAUTH-MS", "Microsoft account already linked to another user", fmt.Sprintf("msID=%s, existingUserUID=%s, currentUserUID=%s", microsoftID, existingUser.UID, currentUserUID))
-		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "microsoft_already_linked")
-		return
-	}
-
-	err = h.userRepo.Update(ctx, currentUserUID, map[string]any{
-		"microsoft_id":   microsoftID,
-		"microsoft_name": displayName,
-	})
-	if err != nil {
-		utils.LogError("OAUTH-MS", "handleLinkAction", err, fmt.Sprintf("Failed to update user with Microsoft info: userUID=%s", currentUserUID))
-		oauth.RedirectWithError(c, h.baseURL, paths.PathAccountDashboard, "link_failed")
-		return
-	}
-
-	if h.userLogRepo != nil {
-		if err := h.userLogRepo.LogLinkMicrosoft(ctx, currentUserUID, microsoftID, displayName); err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to log link microsoft", fmt.Sprintf("userUID=%s", currentUserUID))
-		}
-	}
-
-	h.userCache.Invalidate(currentUserUID)
-
-	go h.processAvatarAsync(currentUserUID, "", avatarData, avatarContentType)
-
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft account linked: userUID=%s, msID=%s", currentUserUID, microsoftID))
-	oauth.RedirectWithSuccess(c, h.baseURL, paths.PathAccountDashboard, "microsoft_linked")
-}
-
-// handleLoginAction 处理登录操作：查找已绑定账户、处理同邮箱待绑定、生成 JWT 并重定向
-func (h *MicrosoftHandler) handleLoginAction(c *gin.Context, ctx context.Context, microsoftID, email, displayName string, avatarData []byte, avatarContentType string, returnURL string) {
-	user, err := h.userRepo.FindByMicrosoftID(ctx, microsoftID)
-	if err != nil {
-		utils.LogDebug("OAUTH-MS", "FindByMicrosoftID error in handleLoginAction")
-	}
-
-	if user != nil {
-		oldAvatarHash := ""
-		if user.MicrosoftAvatarHash.Valid {
-			oldAvatarHash = user.MicrosoftAvatarHash.String
-		}
-
-		err = h.userRepo.Update(ctx, user.UID, map[string]any{
-			"microsoft_name": displayName,
-		})
-		if err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to update Microsoft name", fmt.Sprintf("userUID=%s", user.UID))
-		}
-		h.userCache.Invalidate(user.UID)
-
-		go h.processAvatarAsync(user.UID, oldAvatarHash, avatarData, avatarContentType)
-	}
-
-	if user == nil && email != "" {
-		existingUser, err := h.userRepo.FindByEmail(ctx, email)
-		if err != nil {
-			utils.LogDebug("OAUTH-MS", "FindByEmail error in handleLoginAction")
-		}
-
-		if existingUser != nil && !existingUser.MicrosoftID.Valid {
-			linkToken, err := oauth.GenerateLinkToken()
-			if err != nil {
-				utils.LogError("OAUTH-MS", "handleLoginAction", err, "Failed to generate link token")
-				if returnURL != "" {
-					oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "oauth_error")
-				} else {
-					oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "oauth_error")
-				}
-				return
-			}
-
-			var providerAvatarURL string
-			if len(avatarData) > 0 {
-				providerAvatarURL = "data:" + avatarContentType + ";base64," + base64.StdEncoding.EncodeToString(avatarData)
-			}
-
-			oauth.SavePendingLink(linkToken, &oauth.PendingLink{
-				UserUID:           existingUser.UID,
-				ProviderID:        microsoftID,
-				DisplayName:       displayName,
-				ProviderAvatarURL: providerAvatarURL,
-				Email:             email,
-				Timestamp:         time.Now().UnixMilli(),
-			})
-
-			utils.LogInfo("OAUTH-MS", fmt.Sprintf("Found existing user with same email, redirecting to confirm: email=%s, userUID=%s", email, existingUser.UID))
-			utils.SetLinkTokenCookieGin(c, linkToken)
-			c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountLink)
-			return
-		}
-	}
-
-	if user == nil {
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("No linked account found for Microsoft ID: %s", microsoftID))
-		if returnURL != "" {
-			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "no_linked_account")
-		} else {
-			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "no_linked_account")
-		}
-		return
-	}
-
-	accessToken, refreshToken, err := h.sessionService.GenerateTokens(c.Request.Context(), user.UID, false)
-	if err != nil {
-		utils.LogError("OAUTH-MS", "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
-		if returnURL != "" {
-			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "token_error")
-		} else {
-			oauth.RedirectWithError(c, h.baseURL, paths.PathAccountLogin, "token_error")
-		}
-		return
-	}
-
-	oauth.SetAuthCookie(c, accessToken)
-	utils.SetRefreshTokenCookieGin(c, refreshToken)
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("Microsoft login successful: username=%s, userUID=%s", user.Username, user.UID))
-	safeReturn := oauth.SafeReturnURL(returnURL, h.baseURL, "")
-	if safeReturn != "" {
-		c.Redirect(http.StatusFound, safeReturn)
-	} else {
-		c.Redirect(http.StatusFound, h.baseURL+paths.PathAccountDashboard)
 	}
 }

@@ -195,13 +195,22 @@ func SetAuthCookie(c *gin.Context, token string) {
 }
 
 // RedirectWithError 重定向并附带错误参数
+// path 已含 query（如带 return 参数）时使用 & 拼接，避免 error 被吞进 return 值
 func RedirectWithError(c *gin.Context, baseURL, path, errorCode string) {
-	c.Redirect(http.StatusFound, baseURL+path+"?error="+errorCode)
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	c.Redirect(http.StatusFound, baseURL+path+sep+"error="+errorCode)
 }
 
 // RedirectWithSuccess 重定向并附带成功参数
 func RedirectWithSuccess(c *gin.Context, baseURL, path, successCode string) {
-	c.Redirect(http.StatusFound, baseURL+path+"?success="+successCode)
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	c.Redirect(http.StatusFound, baseURL+path+sep+"success="+successCode)
 }
 
 // SafeReturnURL 校验登录后的 return URL，防止开放重定向攻击。
