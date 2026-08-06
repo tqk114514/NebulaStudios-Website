@@ -188,11 +188,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		LogoURL   string `json:"logo_url"`
 	}
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
 		return
 	}
 	domain := strings.TrimSpace(req.Domain)
@@ -265,11 +261,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		IsEnabled *bool   `json:"is_enabled"`
 	}
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
 		return
 	}
 

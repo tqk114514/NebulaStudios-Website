@@ -184,11 +184,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	var req struct {
 		Policies []consentRequestPolicy `json:"policies"`
 	}
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body for RecordConsent")
+	if !utils.BindJSONOrError(c, "POLICY", &req, "INVALID_REQUEST") {
 		return
 	}
 

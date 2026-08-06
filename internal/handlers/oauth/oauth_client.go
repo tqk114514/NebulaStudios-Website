@@ -67,7 +67,7 @@ type ProviderSpec struct {
 
 // ExternalProviderHandler 外部 OAuth 登录处理器基类（Google / Microsoft 共用）
 type ExternalProviderHandler struct {
-	UserRepo         models.UserStore
+	UserRepo         models.UserReadWriter
 	UserLogRepo      models.UserLogStore
 	SessionService   services.SessionManager
 	UserCache        services.UserCacheStore
@@ -83,7 +83,7 @@ type ExternalProviderHandler struct {
 // NewExternalProviderHandler 创建基类，验证必需依赖
 func NewExternalProviderHandler(
 	cfg *config.Config,
-	userRepo models.UserStore,
+	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
 	sessionService services.SessionManager,
 	userCache services.UserCacheStore,

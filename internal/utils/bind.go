@@ -28,3 +28,20 @@ func BindJSON(c *gin.Context, obj interface{}) error {
 	}
 	return err
 }
+
+// BindJSONOrError 绑定 JSON，失败时自动响应（body 过大返回 413，其他返回 400）并返回 false。
+// 统一 BindJSON 错误处理样板：
+//
+//	if !utils.BindJSONOrError(c, "MODULE", &req, "INVALID_REQUEST") {
+//	    return
+//	}
+func BindJSONOrError(c *gin.Context, module string, obj interface{}, errorCode string) bool {
+	if err := BindJSON(c, obj); err != nil {
+		if errors.Is(err, ErrBodyTooLarge) {
+			return false // 413 已由 BindJSON 自动响应
+		}
+		HTTPErrorResponse(c, module, http.StatusBadRequest, errorCode, err.Error())
+		return false
+	}
+	return true
+}

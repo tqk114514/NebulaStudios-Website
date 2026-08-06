@@ -37,11 +37,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	}
 
 	var req sendDeleteCodeRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
 		return
 	}
 	ctx := c.Request.Context()
@@ -91,11 +87,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	var req deleteAccountRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
 		return
 	}
 

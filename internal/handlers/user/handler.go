@@ -22,14 +22,14 @@ var (
 
 // UserHandler 用户管理 Handler
 type UserHandler struct {
-	userRepo           models.UserStore
+	userRepo           models.UserReadWriter
 	userLogRepo        models.UserLogStore
 	tokenService       services.TokenManager
 	emailService       services.EmailSender
 	captchaService     services.CaptchaVerifier
 	userCache          services.UserCacheStore
 	storageService     services.StorageService
-	oauthService       services.OAuthClientManager
+	oauthService       services.OAuthGrantManager
 	limiterMgr         middleware.RateLimiterManager
 	exportTokenService services.ExportTokenManager
 	baseURL            string
@@ -39,14 +39,14 @@ type UserHandler struct {
 // NewUserHandler 创建用户管理 Handler，验证所有必需依赖后初始化。
 // storageService 和 oauthService 为可选参数。
 func NewUserHandler(
-	userRepo models.UserStore,
+	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
 	tokenService services.TokenManager,
 	emailService services.EmailSender,
 	captchaService services.CaptchaVerifier,
 	userCache services.UserCacheStore,
 	storageService services.StorageService,
-	oauthService services.OAuthClientManager,
+	oauthService services.OAuthGrantManager,
 	limiterMgr middleware.RateLimiterManager,
 	exportTokenService services.ExportTokenManager,
 	baseURL string,

@@ -52,8 +52,8 @@ func authorizeErrorStatus(errorCode string) int {
 
 // OAuthProviderHandler OAuth Provider Handler
 type OAuthProviderHandler struct {
-	oauthService   services.OAuthClientManager
-	userRepo       models.UserStore
+	oauthService   services.OAuthProviderStore
+	userRepo       models.UserReader
 	userLogRepo    models.UserLogStore
 	userCache      services.UserCacheStore
 	sessionService services.SessionManager
@@ -62,8 +62,8 @@ type OAuthProviderHandler struct {
 
 // NewOAuthProviderHandler 创建 OAuth Provider Handler
 func NewOAuthProviderHandler(
-	oauthService services.OAuthClientManager,
-	userRepo models.UserStore,
+	oauthService services.OAuthProviderStore,
+	userRepo models.UserReader,
 	userLogRepo models.UserLogStore,
 	userCache services.UserCacheStore,
 	sessionService services.SessionManager,

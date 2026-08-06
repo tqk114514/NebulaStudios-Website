@@ -30,7 +30,7 @@ type MicrosoftHandler struct {
 // storageService 和 userLogRepo 为可选参数。
 func NewMicrosoftHandler(
 	cfg *config.Config,
-	userRepo models.UserStore,
+	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
 	sessionService services.SessionManager,
 	userCache services.UserCacheStore,
