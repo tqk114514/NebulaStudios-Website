@@ -22,7 +22,7 @@ const (
 )
 
 // AdminMiddleware 管理员权限中间件（role >= 1），直接查数据库确保权限实时生效，必须在 AuthMiddleware 之后使用
-func AdminMiddleware(userRepo models.UserStore) gin.HandlerFunc {
+func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 	if userRepo == nil {
 		utils.LogError("ADMIN-MW", "AdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
 		return func(c *gin.Context) {
@@ -72,7 +72,7 @@ func AdminMiddleware(userRepo models.UserStore) gin.HandlerFunc {
 }
 
 // SuperAdminMiddleware 超级管理员权限中间件（role >= 2），直接查数据库确保权限实时生效，必须在 AuthMiddleware 之后使用
-func SuperAdminMiddleware(userRepo models.UserStore) gin.HandlerFunc {
+func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 	if userRepo == nil {
 		utils.LogError("ADMIN-MW", "SuperAdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
 		return func(c *gin.Context) {
@@ -159,7 +159,7 @@ func respondForbidden(c *gin.Context, errorCode string) {
 }
 
 // AdminPageMiddleware 管理员页面权限中间件，用于保护后台页面，失败时伪装成 404（隐藏后台入口）
-func AdminPageMiddleware(userRepo models.UserStore, sessionService services.SessionManager) gin.HandlerFunc {
+func AdminPageMiddleware(userRepo models.UserReader, sessionService services.SessionManager) gin.HandlerFunc {
 	if userRepo == nil || sessionService == nil {
 		utils.LogError("ADMIN-MW", "AdminPageMiddleware", fmt.Errorf("UserRepository or SessionService is nil"), "")
 		return func(c *gin.Context) {

@@ -27,7 +27,11 @@ func WaitAutoUnban() {
 }
 
 // BanCheckMiddleware 封禁检查中间件，独立工作不依赖 AuthMiddleware 执行顺序
-func BanCheckMiddleware(userCache services.UserCacheStore, userRepo models.UserStore, sessionService services.SessionManager) gin.HandlerFunc {
+// 需要 FindByUID（查询封禁状态）与 Unban（自动解封），故依赖 Reader + AdminStore 组合
+func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
+	models.UserReader
+	models.UserAdminStore
+}, sessionService services.SessionManager) gin.HandlerFunc {
 	if userCache == nil || userRepo == nil {
 		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"), "")
 		return func(c *gin.Context) {

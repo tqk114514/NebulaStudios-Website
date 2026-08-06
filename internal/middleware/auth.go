@@ -176,7 +176,7 @@ func errorMiddleware(err error) gin.HandlerFunc {
 
 // GuestOnlyMiddleware 仅限未登录用户访问（登录/注册页面），已登录用户重定向到 dashboard
 // 当 JWT 有效但用户在数据库中不存在时（如数据库重置），清除 Cookie 并放行，防止重定向循环
-func GuestOnlyMiddleware(sessionService services.SessionManager, userCache services.UserCacheStore, userRepo models.UserStore) gin.HandlerFunc {
+func GuestOnlyMiddleware(sessionService services.SessionManager, userCache services.UserCacheStore, userRepo models.UserReader) gin.HandlerFunc {
 	if sessionService == nil {
 		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check", "")
 		return func(c *gin.Context) {

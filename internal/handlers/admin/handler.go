@@ -29,7 +29,7 @@ type AdminHandler struct {
 	userCache          services.UserCacheStore
 	logRepo            models.AdminLogStore
 	userLogRepo        models.UserLogStore
-	oauthService       services.OAuthClientManager
+	oauthService       services.OAuthAdminManager
 	emailWhitelistRepo models.EmailWhitelistStore
 	exportService      services.ExportManager
 	dataExportSalt     string
@@ -38,7 +38,7 @@ type AdminHandler struct {
 
 // NewAdminHandler 创建管理后台 Handler，验证必需依赖（userRepo、userCache、logRepo）后初始化。
 // oauthService 和 emailWhitelistRepo 为可选参数。
-func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthClientManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, dataExportRepo models.DataExportImportStore) (*AdminHandler, error) {
+func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthAdminManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, dataExportRepo models.DataExportImportStore) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}

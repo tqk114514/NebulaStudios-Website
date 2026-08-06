@@ -5,23 +5,43 @@ import (
 	"time"
 )
 
-// UserStore 用户数据访问接口
-type UserStore interface {
-	FindByID(ctx context.Context, id int64) (*User, error)
+// UserReader 用户查询接口
+type UserReader interface {
 	FindByUID(ctx context.Context, uid string) (*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	FindByEmailOrUsername(ctx context.Context, identifier string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	FindByMicrosoftID(ctx context.Context, msID string) (*User, error)
 	FindByGoogleID(ctx context.Context, googleID string) (*User, error)
+}
+
+// UserWriter 用户写接口
+type UserWriter interface {
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, uid string, updates map[string]any) error
 	UpdatePassword(ctx context.Context, uid, plainPassword string) error
 	Delete(ctx context.Context, uid string) error
+}
+
+// UserAdminStore 用户管理接口（管理后台专用）
+type UserAdminStore interface {
 	FindAll(ctx context.Context, page, pageSize int, search string) ([]*User, int64, error)
 	GetStats(ctx context.Context) (*UserStats, error)
 	Ban(ctx context.Context, userUID, adminUID string, reason string, unbanAt *time.Time) error
 	Unban(ctx context.Context, userUID string) error
+}
+
+// UserReadWriter 用户读写接口（业务侧常用组合：Auth / User / OAuth Handler）
+type UserReadWriter interface {
+	UserReader
+	UserWriter
+}
+
+// UserStore 用户数据访问接口（全量组合：管理后台 / 依赖装配使用）
+type UserStore interface {
+	UserReader
+	UserWriter
+	UserAdminStore
 }
 
 // UserLogStore 用户日志数据访问接口

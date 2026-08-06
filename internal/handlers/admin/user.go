@@ -128,11 +128,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	}
 
 	var req setRoleRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
 		return
 	}
 
@@ -267,11 +263,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	}
 
 	var req banUserRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
 		return
 	}
 

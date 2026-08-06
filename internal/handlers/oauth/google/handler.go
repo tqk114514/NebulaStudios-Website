@@ -24,7 +24,7 @@ type GoogleHandler struct {
 // NewGoogleHandler 创建 Google OAuth Handler，验证必需依赖后初始化。
 func NewGoogleHandler(
 	cfg *config.Config,
-	userRepo models.UserStore,
+	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
 	sessionService services.SessionManager,
 	userCache services.UserCacheStore,

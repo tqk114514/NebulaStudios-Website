@@ -219,34 +219,6 @@ func NewUserRepository(pool *pgxpool.Pool, defaultAvatarURL string) *UserReposit
 	return &UserRepository{pool: pool, defaultAvatarURL: defaultAvatarURL}
 }
 
-// FindByID 根据 ID 查找用户
-func (r *UserRepository) FindByID(ctx context.Context, id int64) (*User, error) {
-	if id <= 0 {
-		return nil, errors.New("invalid user ID")
-	}
-
-	if r.pool == nil {
-		return nil, errors.New("database not ready")
-	}
-
-	user := &User{}
-	err := r.pool.QueryRow(ctx, `
-		SELECT `+userColumns+`
-		FROM users WHERE id = $1`, id).Scan(
-		&user.ID, &user.UID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.Role,
-		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
-		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
-		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-
-	if err != nil {
-		return nil, utils.HandleDatabaseError("USER", "FindByID", err, id)
-	}
-
-	return user, nil
-}
-
 // FindByUID 根据 UID 查找用户
 func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, error) {
 	if uid == "" {

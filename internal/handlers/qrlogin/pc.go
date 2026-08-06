@@ -2,7 +2,6 @@ package qrlogin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -116,11 +115,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		SessionToken string `json:"sessionToken"`
 	}
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "MISSING_TOKEN", "Invalid request body for SetSession")
+	if !utils.BindJSONOrError(c, "QR-LOGIN", &req, "MISSING_TOKEN") {
 		return
 	}
 

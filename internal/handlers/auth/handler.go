@@ -33,7 +33,7 @@ const (
 
 // AuthHandler 认证 Handler，处理所有认证相关的 HTTP 请求
 type AuthHandler struct {
-	userRepo           models.UserStore
+	userRepo           models.UserReadWriter
 	userLogRepo        models.UserLogStore
 	userConsentRepo    models.UserConsentStore
 	tokenService       services.TokenManager
@@ -51,7 +51,7 @@ type AuthHandler struct {
 // emailService、captchaService、userCache）后初始化。emailWhitelistRepo、userConsentRepo 为可选参数。
 func NewAuthHandler(
 	cfg *config.Config,
-	userRepo models.UserStore,
+	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
 	userConsentRepo models.UserConsentStore,
 	tokenService services.TokenManager,
@@ -166,11 +166,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		VerificationCode string `json:"verificationCode"`
 	}
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body for Register")
+	if !utils.BindJSONOrError(c, "AUTH", &req, "INVALID_REQUEST") {
 		return
 	}
 
@@ -303,11 +299,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		CaptchaToken string `json:"captchaToken"`
 	}
 
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Invalid request body for Login")
+	if !utils.BindJSONOrError(c, "AUTH", &req, "MISSING_PARAMETERS") {
 		return
 	}
 

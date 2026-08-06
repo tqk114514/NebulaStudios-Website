@@ -32,11 +32,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	}
 
 	var req updateUsernameRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
 		return
 	}
 
@@ -104,11 +100,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	}
 
 	var req updateAvatarRequest
-	if err := utils.BindJSON(c, &req); err != nil {
-		if errors.Is(err, utils.ErrBodyTooLarge) {
-			return
-		}
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
 		return
 	}
 

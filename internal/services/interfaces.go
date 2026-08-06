@@ -50,29 +50,43 @@ type EmailSender interface {
 	Close()
 }
 
-// OAuthClientManager OAuth 客户端管理接口
-type OAuthClientManager interface {
-	CreateClient(ctx context.Context, name, description, redirectURI string) (*models.OAuthClient, string, error)
-	ValidateClient(ctx context.Context, clientID, clientSecret string) (*models.OAuthClient, error)
+// OAuthProviderStore OAuth 授权服务器接口（OAuth Provider Handler 使用）
+type OAuthProviderStore interface {
 	ValidateClientID(ctx context.Context, clientID string) (*models.OAuthClient, error)
 	ValidateRedirectURI(client *models.OAuthClient, redirectURI string) bool
-	RegenerateSecret(ctx context.Context, id int64) (string, error)
-	GetClient(ctx context.Context, id int64) (*models.OAuthClient, error)
-	GetClientByClientID(ctx context.Context, clientID string) (*models.OAuthClient, error)
-	GetClients(ctx context.Context, page, pageSize int, search string) ([]*models.OAuthClient, int64, error)
-	UpdateClient(ctx context.Context, id int64, name string, description *string, redirectURI string) error
-	ToggleClient(ctx context.Context, id int64, enabled bool) error
-	DeleteClient(ctx context.Context, id int64) error
 	CreateAuthorizationCode(ctx context.Context, clientID string, userUID string, redirectURI, scope, codeChallenge, codeChallengeMethod string) (string, error)
+	ValidateClient(ctx context.Context, clientID, clientSecret string) (*models.OAuthClient, error)
 	ExchangeAuthorizationCode(ctx context.Context, code, clientID, redirectURI, codeVerifier string) (*OAuthTokenResponse, string, error)
 	RefreshAccessToken(ctx context.Context, refreshToken, clientID string) (*OAuthTokenResponse, string, error)
 	ValidateAccessToken(ctx context.Context, accessToken string) (*models.OAuthAccessToken, error)
 	RevokeToken(ctx context.Context, token string) error
+}
+
+// OAuthAdminManager OAuth 客户端管理接口（管理后台使用）
+type OAuthAdminManager interface {
+	GetClients(ctx context.Context, page, pageSize int, search string) ([]*models.OAuthClient, int64, error)
+	GetClient(ctx context.Context, id int64) (*models.OAuthClient, error)
+	CreateClient(ctx context.Context, name, description, redirectURI string) (*models.OAuthClient, string, error)
+	UpdateClient(ctx context.Context, id int64, name string, description *string, redirectURI string) error
+	DeleteClient(ctx context.Context, id int64) error
+	RegenerateSecret(ctx context.Context, id int64) (string, error)
+	ToggleClient(ctx context.Context, id int64, enabled bool) error
+}
+
+// OAuthGrantManager OAuth 授权管理接口（用户中心使用）
+type OAuthGrantManager interface {
+	GetUserGrants(ctx context.Context, userUID string) ([]*models.OAuthGrantWithClient, error)
+	GetClientByClientID(ctx context.Context, clientID string) (*models.OAuthClient, error)
+	FindUserGrant(ctx context.Context, userUID, clientID string) (*models.OAuthGrant, error)
 	RevokeUserClientTokens(ctx context.Context, userUID string, clientID string) error
 	RevokeUserTokens(ctx context.Context, userUID string) error
-	GetUserGrants(ctx context.Context, userUID string) ([]*models.OAuthGrantWithClient, error)
-	FindUserGrant(ctx context.Context, userUID, clientID string) (*models.OAuthGrant, error)
-	RevokeClientTokens(ctx context.Context, clientID string) error
+}
+
+// OAuthClientManager OAuth 客户端管理接口（全量组合：依赖装配使用）
+type OAuthClientManager interface {
+	OAuthProviderStore
+	OAuthAdminManager
+	OAuthGrantManager
 }
 
 // WebSocketManager WebSocket 服务接口
