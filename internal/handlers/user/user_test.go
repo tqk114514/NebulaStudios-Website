@@ -48,7 +48,7 @@ func newTestUserHandler(t *testing.T) (*UserHandler, *userTestDeps) {
 		&testutil.FakeUserCache{},
 		deps.storage,
 		deps.oauthGrants,
-		&testutil.FakeLimiter{},
+		&testutil.FakeLimiter{EmailAllowed: true},
 		&testutil.FakeExportToken{},
 		"https://test.local",
 		"https://test.local/default.png",
