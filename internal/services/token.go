@@ -51,7 +51,7 @@ type CodeResult struct {
 type TokenService struct {
 	tokenRepo        models.TokenStore
 	codeRepo         models.CodeStore
-	sessionTokenRepo *models.SessionTokenRepository
+	sessionTokenRepo models.SessionTokenStore
 	pool             *pgxpool.Pool
 }
 
