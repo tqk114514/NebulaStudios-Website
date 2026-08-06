@@ -1649,7 +1649,7 @@ interface UserLogItem {
     new_username?: string;
     old_avatar_url?: string;
     new_avatar_url?: string;
-    microsoft_avatar_sync?: boolean;
+    provider?: string;
     microsoft_id?: string;
     microsoft_name?: string;
     google_id?: string;
@@ -1695,6 +1695,14 @@ function getLogActionIcon(action: string): { svg: string; type: 'normal' | 'dang
       svg: '<img src="{{CDN_URL}}/images/logo/google/Symbol.svg" alt="Google" width="20" height="20">',
       type: 'danger'
     },
+    enable_avatar_sync: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>',
+      type: 'success'
+    },
+    disable_avatar_sync: {
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>',
+      type: 'danger'
+    },
     delete_account: {
       svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
       type: 'danger'
@@ -1733,28 +1741,13 @@ function formatLogDetails(action: string, details?: UserLogItem['details']): str
         return escapeHtml(details.google_name);
       }
       break;
-    case 'change_avatar': {
-      // 凭 microsoft_avatar_sync 字段独立判断，不猜 URL（解除微软授权是单独的 unlink_microsoft 条目）
-      const formatUrl = (v?: string): string => {
-        if (!v) { return ''; }
-        return v === 'microsoft' ? t('dashboard.logDetails.microsoftAvatar') : escapeHtml(v);
-      };
-      if (details.microsoft_avatar_sync === false) {
-        // 关闭同步：移除头像 / 取消微软头像同步
-        return `${t('dashboard.logDetails.removed')}: ${formatUrl(details.old_avatar_url)}`;
+    case 'enable_avatar_sync':
+    case 'disable_avatar_sync':
+      // 隐私事件详情：同步的 provider（如 Microsoft）
+      if (details.provider) {
+        return escapeHtml(details.provider.charAt(0).toUpperCase() + details.provider.slice(1));
       }
-      if (details.microsoft_avatar_sync === true) {
-        // 开启同步：重新使用微软头像
-        const oldUrl = formatUrl(details.old_avatar_url);
-        const newUrl = formatUrl(details.new_avatar_url);
-        if (oldUrl && newUrl) {
-          return `${oldUrl} → ${newUrl}`;
-        }
-        return `${t('dashboard.logDetails.setTo')}: ${newUrl || t('dashboard.logDetails.microsoftAvatar')}`;
-      }
-      // 其他头像操作（未涉及同步变化）：维持原样，不显示详情
       break;
-    }
   }
   return '';
 }

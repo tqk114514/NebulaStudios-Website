@@ -165,10 +165,18 @@ func (h *MicrosoftHandler) getLinkedInfo(user *models.User) (id, name string) {
 }
 
 func (h *MicrosoftHandler) logLink(ctx context.Context, userUID, id, displayName string) error {
+	// 绑定即开启头像同步（隐私事件：服务器开始持续存储微软头像）
+	if err := h.UserLogRepo.LogEnableAvatarSync(ctx, userUID, "microsoft"); err != nil {
+		utils.LogWarn("OAUTH-MS", "Failed to log avatar sync enable on link", fmt.Sprintf("userUID=%s", userUID))
+	}
 	return h.UserLogRepo.LogLinkMicrosoft(ctx, userUID, id, displayName)
 }
 
 func (h *MicrosoftHandler) logUnlink(ctx context.Context, userUID, id, displayName string) error {
+	// 解绑即停止头像同步（隐私事件：服务器停止存储微软头像）
+	if err := h.UserLogRepo.LogDisableAvatarSync(ctx, userUID, "microsoft"); err != nil {
+		utils.LogWarn("OAUTH-MS", "Failed to log avatar sync disable on unlink", fmt.Sprintf("userUID=%s", userUID))
+	}
 	return h.UserLogRepo.LogUnlinkMicrosoft(ctx, userUID, id, displayName)
 }
 
@@ -193,6 +201,7 @@ func (h *MicrosoftHandler) unlinkFields(user *models.User) map[string]any {
 		"microsoft_name":        nil,
 		"microsoft_avatar_url":  nil,
 		"microsoft_avatar_hash": nil,
+		"microsoft_avatar_sync": false, // 解绑后同步终止，状态置 false 保持一致
 	}
 	if user.AvatarURL == h.Spec.AvatarStateValue {
 		fields["avatar_url"] = h.DefaultAvatarURL

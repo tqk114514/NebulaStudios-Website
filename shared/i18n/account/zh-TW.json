@@ -217,6 +217,8 @@
   "dashboard.logAction.change_password": "修改密碼",
   "dashboard.logAction.change_username": "修改用戶名",
   "dashboard.logAction.change_avatar": "修改頭像",
+  "dashboard.logAction.enable_avatar_sync": "開啟微軟頭像同步",
+  "dashboard.logAction.disable_avatar_sync": "關閉微軟頭像同步",
   "dashboard.logAction.link_microsoft": "綁定 Microsoft 帳戶",
   "dashboard.logAction.unlink_microsoft": "解綁 Microsoft 帳戶",
   "dashboard.logAction.link_google": "綁定 Google 帳戶",

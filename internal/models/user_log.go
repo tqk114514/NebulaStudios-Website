@@ -25,6 +25,9 @@ const (
 	UserActionUnbanned        = "unbanned"
 	UserActionOAuthAuthorize  = "oauth_authorize"
 	UserActionOAuthRevoke     = "oauth_revoke"
+	// 头像同步开关（隐私层面：服务器是否持续存储第三方头像）
+	UserActionEnableAvatarSync  = "enable_avatar_sync"
+	UserActionDisableAvatarSync = "disable_avatar_sync"
 )
 
 // UserLog 用户操作日志
@@ -42,12 +45,15 @@ type ChangeUsernameDetails struct {
 	NewUsername string `json:"new_username"`
 }
 
-// ChangeAvatarDetails 修改头像详情
+// ChangeAvatarDetails 修改头像详情（仅记录显示头像变化；同步开关是独立日志）
 type ChangeAvatarDetails struct {
 	OldAvatarURL string `json:"old_avatar_url,omitempty"`
 	NewAvatarURL string `json:"new_avatar_url,omitempty"`
-	// MicrosoftAvatarSync 微软头像自动同步状态（nil=未变化/不涉及，false=关闭，true=开启）
-	MicrosoftAvatarSync *bool `json:"microsoft_avatar_sync,omitempty"`
+}
+
+// AvatarSyncDetails 头像同步开关详情（隐私事件）
+type AvatarSyncDetails struct {
+	Provider string `json:"provider,omitempty"` // 如 "microsoft"
 }
 
 // LinkMicrosoftDetails 绑定微软账户详情
@@ -171,12 +177,10 @@ func (r *UserLogRepository) LogChangeUsername(ctx context.Context, userUID strin
 }
 
 // LogChangeAvatar 记录修改头像操作
-// microsoftAvatarSync：nil=未涉及同步变化，false=关闭微软头像同步，true=开启微软头像同步
-func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string, microsoftAvatarSync *bool) error {
+func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string, oldURL, newURL string) error {
 	details := ChangeAvatarDetails{
-		OldAvatarURL:        oldURL,
-		NewAvatarURL:        newURL,
-		MicrosoftAvatarSync: microsoftAvatarSync,
+		OldAvatarURL: oldURL,
+		NewAvatarURL: newURL,
 	}
 	detailsJSON, err := json.Marshal(details)
 	if err != nil {
@@ -186,6 +190,34 @@ func (r *UserLogRepository) LogChangeAvatar(ctx context.Context, userUID string,
 	log := &UserLog{
 		UserUID: userUID,
 		Action:  UserActionChangeAvatar,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogEnableAvatarSync 记录开启头像自动同步（隐私事件：服务器开始持续存储第三方头像）
+func (r *UserLogRepository) LogEnableAvatarSync(ctx context.Context, userUID, provider string) error {
+	detailsJSON, err := json.Marshal(AvatarSyncDetails{Provider: provider})
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionEnableAvatarSync,
+		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogDisableAvatarSync 记录关闭头像自动同步（隐私事件：服务器停止存储第三方头像）
+func (r *UserLogRepository) LogDisableAvatarSync(ctx context.Context, userUID, provider string) error {
+	detailsJSON, err := json.Marshal(AvatarSyncDetails{Provider: provider})
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionDisableAvatarSync,
 		Details: detailsJSON,
 	}
 	return r.Create(ctx, log)
