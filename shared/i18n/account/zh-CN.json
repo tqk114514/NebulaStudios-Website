@@ -295,5 +295,8 @@
   "policy.consent.effectiveDate": "生效于",
   "dashboard.restoreAvatarSync": "恢复头像同步",
   "dashboard.restoreAvatarSyncConfirm": "将重新启用Microsoft 账户头像的自动同步，并重新拉取您的Microsoft 头像。确定继续吗？",
-  "dashboard.restoreAvatarSyncPending": "同步已开启，正在重新拉取头像…"
+  "dashboard.restoreAvatarSyncPending": "同步已开启，正在重新拉取头像…",
+  "dashboard.logDetails.microsoftAvatar": "Microsoft 头像",
+  "dashboard.logDetails.removed": "移除",
+  "dashboard.logDetails.setTo": "设为"
 }

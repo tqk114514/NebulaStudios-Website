@@ -255,7 +255,9 @@ func (f *FakeUserLogStore) LogRegister(context.Context, string) error       { re
 func (f *FakeUserLogStore) LogChangeUsername(context.Context, string, string, string) error {
 	return nil
 }
-func (f *FakeUserLogStore) LogChangeAvatar(context.Context, string, string, string) error { return nil }
+func (f *FakeUserLogStore) LogChangeAvatar(context.Context, string, string, string, *bool) error {
+	return nil
+}
 func (f *FakeUserLogStore) LogLinkMicrosoft(context.Context, string, string, string) error {
 	return nil
 }
