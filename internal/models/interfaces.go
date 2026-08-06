@@ -128,3 +128,35 @@ type DataExportImportStore interface {
 	DeleteAllUsers(ctx context.Context) error
 	DeleteAllUserLogs(ctx context.Context) error
 }
+
+// SessionTokenStore 会话令牌（refresh token）数据访问接口
+type SessionTokenStore interface {
+	Create(ctx context.Context, token *SessionToken) error
+	FindByHash(ctx context.Context, tokenHash string) (*SessionToken, error)
+	MarkUsed(ctx context.Context, id int64) error
+	RevokeFamily(ctx context.Context, familyID string) (int64, error)
+	RevokeUser(ctx context.Context, userUID string) (int64, error)
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+// TokenStore 验证令牌数据访问接口
+type TokenStore interface {
+	Create(ctx context.Context, token *Token) error
+	FindByToken(ctx context.Context, tokenHash string) (*Token, error)
+	UpdateCode(ctx context.Context, tokenHash, code string) error
+	MarkUsed(ctx context.Context, tokenHash string) error
+	MarkUsedAndGet(ctx context.Context, tokenHash string, now int64) (*Token, error)
+	DeleteExpired(ctx context.Context, now int64) (int64, error)
+	DeleteByToken(ctx context.Context, tokenHash string) error
+}
+
+// CodeStore 验证码数据访问接口
+type CodeStore interface {
+	Create(ctx context.Context, code *Code) error
+	FindByCode(ctx context.Context, codeStr string) (*Code, error)
+	UpdateVerification(ctx context.Context, codeStr string, verifiedAt int64) error
+	DeleteByCode(ctx context.Context, codeStr string) error
+	DeleteByEmail(ctx context.Context, email string, tokenType *string) error
+	GetLatestExpiryByEmail(ctx context.Context, email string, now int64) (int64, error)
+	DeleteExpired(ctx context.Context, now int64) (int64, error)
+}
