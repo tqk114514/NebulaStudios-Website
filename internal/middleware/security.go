@@ -316,8 +316,16 @@ func buildCSPWithNonce(nonce, cdnURL string) string {
 }
 
 // BodySizeLimit 请求体大小限制中间件，超过限制返回 413，同时限制 MaxBytesReader 防止 Content-Length 欺骗
-func BodySizeLimit(maxSize int64) gin.HandlerFunc {
+// exemptPaths 为拥有独立 body size 限制的路由前缀，这些路由将豁免此全局限制（如上传接口使用自己的 5MB 限制）
+func BodySizeLimit(maxSize int64, exemptPaths ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		for _, prefix := range exemptPaths {
+			if strings.HasPrefix(c.Request.URL.Path, prefix) {
+				c.Next()
+				return
+			}
+		}
+
 		if c.Request.Method == http.MethodPost ||
 			c.Request.Method == http.MethodPut ||
 			c.Request.Method == http.MethodPatch {

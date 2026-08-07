@@ -9,6 +9,7 @@ import (
 	"auth-system/internal/utils"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,6 +21,12 @@ type DataExportImportRepository struct {
 // NewDataExportImportRepository 创建数据导入导出仓库
 func NewDataExportImportRepository(pool *pgxpool.Pool) *DataExportImportRepository {
 	return &DataExportImportRepository{pool: pool}
+}
+
+// pgxConn 是 *pgxpool.Pool 和 pgx.Tx 的共同接口，用于统一批量操作逻辑
+type pgxConn interface {
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }
 
 // QueryAllUsers 导出所有用户数据（包含密码哈希等完整字段）
@@ -181,6 +188,48 @@ type ImportUsersResult struct {
 // ImportUsers 批量导入用户（ON CONFLICT upsert），使用 pgx.Batch 减少数据库往返
 // 安全校验：role 必须为合法枚举值，password 必须为 Argon2id 哈希格式，防止篡改备份提权
 func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []map[string]any) (ImportUsersResult, error) {
+	return importUsersBatch(ctx, r.pool, users)
+}
+
+// ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
+func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
+	return importUserLogsBatch(ctx, r.pool, logs)
+}
+
+// ImportAllInTransaction 在事务中执行覆盖导入（delete + import），失败自动回滚
+func (r *DataExportImportRepository) ImportAllInTransaction(ctx context.Context, users []map[string]any, logs []map[string]any) (ImportUsersResult, int, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return ImportUsersResult{}, 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM user_logs`); err != nil {
+		return ImportUsersResult{}, 0, fmt.Errorf("failed to clear user logs: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM users`); err != nil {
+		return ImportUsersResult{}, 0, fmt.Errorf("failed to clear users: %w", err)
+	}
+
+	usersResult, err := importUsersBatch(ctx, tx, users)
+	if err != nil {
+		return usersResult, 0, err
+	}
+
+	logsImported, err := importUserLogsBatch(ctx, tx, logs)
+	if err != nil {
+		return usersResult, 0, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return usersResult, 0, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return usersResult, logsImported, nil
+}
+
+// importUsersBatch 批量导入用户，conn 可以是 pool 或 tx
+func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any) (ImportUsersResult, error) {
 	batch := &pgx.Batch{}
 	uids := make([]string, 0, len(users))
 	result := ImportUsersResult{}
@@ -191,7 +240,6 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 			continue
 		}
 
-		// 校验 role：仅允许合法枚举值，非法值降级为普通用户并计数
 		role, _ := toInt(user["role"])
 		switch role {
 		case RoleUser, RoleAdmin, RoleSuperAdmin:
@@ -201,7 +249,6 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 			result.RoleDowngraded++
 		}
 
-		// 校验 password：必须是 Argon2id 哈希格式，防止篡改备份重置他人密码
 		password := toString(user["password"])
 		if !strings.HasPrefix(password, "$argon2") {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Skip importing user %s: invalid password hash format", uid))
@@ -238,22 +285,32 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 		return result, nil
 	}
 
-	br := r.pool.SendBatch(ctx, batch)
+	br := conn.SendBatch(ctx, batch)
 	defer br.Close()
 
+	var hasError bool
 	for _, uid := range uids {
 		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user %s: %v", uid, err))
+			hasError = true
 		} else {
 			result.Imported++
 		}
 	}
 
+	if err := br.Close(); err != nil {
+		return result, fmt.Errorf("failed to close batch result: %w", err)
+	}
+
+	if hasError && result.Imported == 0 {
+		return result, fmt.Errorf("all %d user imports failed", len(uids))
+	}
+
 	return result, nil
 }
 
-// ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
-func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
+// importUserLogsBatch 批量导入用户日志，conn 可以是 pool 或 tx
+func importUserLogsBatch(ctx context.Context, conn pgxConn, logs []map[string]any) (int, error) {
 	batch := &pgx.Batch{}
 	ids := make([]int64, 0, len(logs))
 
@@ -281,16 +338,26 @@ func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []
 		return 0, nil
 	}
 
-	br := r.pool.SendBatch(ctx, batch)
+	br := conn.SendBatch(ctx, batch)
 	defer br.Close()
 
 	imported := 0
+	var hasError bool
 	for _, id := range ids {
 		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user log %d: %v", id, err))
+			hasError = true
 		} else {
 			imported++
 		}
+	}
+
+	if err := br.Close(); err != nil {
+		return imported, fmt.Errorf("failed to close batch result: %w", err)
+	}
+
+	if hasError && imported == 0 {
+		return imported, fmt.Errorf("all %d user log imports failed", len(ids))
 	}
 
 	return imported, nil

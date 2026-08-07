@@ -44,7 +44,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 func setupMiddleware(r *gin.Engine, cfg *config.Config) {
 	r.Use(gin.Recovery())
 
-	r.Use(middleware.BodySizeLimit(defaultMaxBodySize))
+	r.Use(middleware.BodySizeLimit(defaultMaxBodySize, "/admin/api/data/import"))
 
 	r.Use(loggerMiddleware())
 

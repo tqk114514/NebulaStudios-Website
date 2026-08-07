@@ -379,14 +379,11 @@ export async function frontalCamera(player: HTMLVideoElement): Promise<TRet<QRCa
  * }
  * ```
  */
-export function frameLoop(cb: FrameRequestCallback): () => void {
+export function frameLoop(cb: FrameRequestCallback, shouldContinue?: () => boolean): () => void {
   let handle: number | undefined = undefined;
   function loop(ts: number) {
-    // HTML `AnimationFrameProvider` IDL defines `FrameRequestCallback` as
-    // `undefined (DOMHighResTimeStamp time)`. The returned canceller is for the
-    // scheduled handle between frames, not self-cancel from inside `cb`, because
-    // this loop requests the next frame only after `cb` returns.
     cb(ts);
+    if (shouldContinue && !shouldContinue()) return;
     handle = requestAnimationFrame(loop);
   }
   handle = requestAnimationFrame(loop);

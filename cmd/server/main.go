@@ -211,22 +211,24 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	}
 	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
 
-	svcs.EmailService, err = services.NewEmailService(cfg)
-	if err != nil {
+	emailSvc, err := services.NewEmailService(cfg)
+	if err != nil || emailSvc == nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("Email service unavailable: %v", err))
-	} else if svcs.EmailService != nil {
-		if err := svcs.EmailService.VerifyConnection(); err != nil {
+	} else {
+		if err := emailSvc.VerifyConnection(); err != nil {
 			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP verification failed: %v", err))
 		} else {
 			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
 		}
+		svcs.EmailService = emailSvc
 	}
 
-	svcs.StorageService, err = services.NewLocalStorageService(cfg)
-	if err != nil {
+	storageSvc, err := services.NewLocalStorageService(cfg)
+	if err != nil || storageSvc == nil {
 		utils.LogWarn("SERVICES", fmt.Sprintf("Storage service unavailable: %v", err))
-	} else if svcs.StorageService != nil {
-		svcs.ImgProcessor = svcs.StorageService.GetImgProcessor()
+	} else {
+		svcs.StorageService = storageSvc
+		svcs.ImgProcessor = storageSvc.GetImgProcessor()
 		utils.LogInfo("SERVICES", "LocalStorageService initialized")
 	}
 
