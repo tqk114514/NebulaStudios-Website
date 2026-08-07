@@ -401,7 +401,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       initPublicNoticeBanner(mainEl as HTMLElement);
     }
 
-    const user = sessionResult.data;
+    const user = { current: sessionResult.data };
 
     // 检查 URL 参数（处理绑定结果提示）
     const urlParams = new URLSearchParams(window.location.search);
@@ -436,9 +436,9 @@ document.addEventListener('DOMContentLoaded', async () => {
      * 检查用户是否被封禁（考虑解封时间）
      */
     function checkBanned(): boolean {
-      if (!user.is_banned) return false;
+      if (!user.current.is_banned) return false;
       // 如果有解封时间且已过期，则不再封禁
-      if (user.unban_at && new Date(user.unban_at) < new Date()) {
+      if (user.current.unban_at && new Date(user.current.unban_at) < new Date()) {
         return false;
       }
       return true;
@@ -480,13 +480,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (bannedStamp) bannedStamp.classList.remove('is-hidden');
       if (bannedInfo) bannedInfo.classList.remove('is-hidden');
       if (bannedReason) {
-        const reasonKey = user.ban_reason ? `dashboard.banReason.${user.ban_reason}` : '';
-        bannedReason.textContent = user.ban_reason ? (t(reasonKey) !== reasonKey ? t(reasonKey) : user.ban_reason) : '-';
+        const reasonKey = user.current.ban_reason ? `dashboard.banReason.${user.current.ban_reason}` : '';
+        bannedReason.textContent = user.current.ban_reason ? (t(reasonKey) !== reasonKey ? t(reasonKey) : user.current.ban_reason) : '-';
       }
-      if (bannedAt) bannedAt.textContent = formatDateTime(user.banned_at);
+      if (bannedAt) bannedAt.textContent = formatDateTime(user.current.banned_at);
       if (unbanAt) {
-        if (user.unban_at) {
-          unbanAt.textContent = formatDateTime(user.unban_at);
+        if (user.current.unban_at) {
+          unbanAt.textContent = formatDateTime(user.current.unban_at);
           unbanAt.classList.remove('is-permanent');
         } else {
           unbanAt.textContent = t('dashboard.permanentBan');
@@ -500,29 +500,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 显示用户名
     if (usernameEl) {
-      usernameEl.textContent = user.username;
+      usernameEl.textContent = user.current.username;
       usernameEl.removeAttribute('data-i18n');
     }
 
     // 显示邮箱
     if (emailEl) {
-      emailEl.textContent = user.email;
+      emailEl.textContent = user.current.email;
       emailEl.removeAttribute('data-i18n');
     }
 
     // 显示头像
     if (avatarEl) {
-      const displayUrl = user.avatar_url === 'microsoft' ? user.microsoft_avatar_url :
-        user.avatar_url === 'google' ? user.google_avatar_url : user.avatar_url;
+      const displayUrl = user.current.avatar_url === 'microsoft' ? user.current.microsoft_avatar_url :
+        user.current.avatar_url === 'google' ? user.current.google_avatar_url : user.current.avatar_url;
       if (displayUrl) {
         const img = document.createElement('img');
         img.src = displayUrl;
-        img.alt = user.username;
+        img.alt = user.current.username;
         img.className = 'avatar-img';
         avatarEl.textContent = '';
         avatarEl.appendChild(img);
-      } else if (user.username) {
-        avatarEl.textContent = user.username.charAt(0).toUpperCase();
+      } else if (user.current.username) {
+        avatarEl.textContent = user.current.username.charAt(0).toUpperCase();
       }
     }
 
@@ -533,8 +533,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const infoMicrosoft = document.getElementById('info-microsoft');
     const infoGoogle = document.getElementById('info-google');
 
-    if (infoUsername) { infoUsername.textContent = user.username; }
-    if (infoEmail) { infoEmail.textContent = user.email; }
+    if (infoUsername) { infoUsername.textContent = user.current.username; }
+    if (infoEmail) { infoEmail.textContent = user.current.email; }
 
     const microsoftLinkItem = document.getElementById('microsoft-link-item');
     const googleLinkItem = document.getElementById('google-link-item');
@@ -566,7 +566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 初始化微软账户状态
-    updateMicrosoftStatus(!!user.microsoft_id, user.microsoft_name || null);
+    updateMicrosoftStatus(!!user.current.microsoft_id, user.current.microsoft_name || null);
 
     /**
      * 更新 Google 账户绑定状态显示
@@ -592,13 +592,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 初始化 Google 账户状态
-    updateGoogleStatus(!!user.google_id, user.google_name || null);
+    updateGoogleStatus(!!user.current.google_id, user.current.google_name || null);
 
     // ==================== 微软账户绑定/解绑 ====================
 
     if (microsoftLinkItem) {
       microsoftLinkItem.addEventListener('click', async () => {
-        if (user.microsoft_id) {
+        if (user.current.microsoft_id) {
           // 解绑流程
           const confirmed = await showConfirm(t('dashboard.confirmUnlink'), t('dashboard.unlinkThirdParty'));
           if (!confirmed) { return; }
@@ -610,7 +610,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (result.success) {
             const freshSession = await verifySession();
             if (freshSession.success) {
-              Object.assign(user, freshSession.data);
+              user.current = freshSession.data;
             }
             updateMicrosoftStatus(false, null);
             showAlert(t('dashboard.unlinkSuccess'));
@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (googleLinkItem) {
       googleLinkItem.addEventListener('click', async () => {
-        if (user.google_id) {
+        if (user.current.google_id) {
           // 解绑流程
           const confirmed = await showConfirm(t('dashboard.confirmUnlinkGoogle'), t('dashboard.unlinkThirdParty'));
           if (!confirmed) { return; }
@@ -642,7 +642,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (result.success) {
             const freshSession = await verifySession();
             if (freshSession.success) {
-              Object.assign(user, freshSession.data);
+              user.current = freshSession.data;
             }
             updateGoogleStatus(false, null);
             showAlert(t('dashboard.unlinkSuccessGoogle'));
@@ -682,8 +682,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     initLanguageSwitcher(() => {
       updatePageTitle();
       // 语言切换后重新应用微软账户状态和按钮文本
-      updateMicrosoftStatus(!!user.microsoft_id, user.microsoft_name || null);
-      updateGoogleStatus(!!user.google_id, user.google_name || null);
+      updateMicrosoftStatus(!!user.current.microsoft_id, user.current.microsoft_name || null);
+      updateGoogleStatus(!!user.current.google_id, user.current.google_name || null);
       // 语言切换后重新应用封禁状态
       updateBannedDisplay();
       // 触发高度过渡动画
@@ -711,40 +711,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     const handleAvatarUpdated = async (newAvatarUrl: string) => {
       const freshSession = await verifySession();
       if (freshSession.success) {
-        Object.assign(user, freshSession.data);
+        user.current = freshSession.data;
       }
-      const displayUrl = newAvatarUrl === 'microsoft' ? user.microsoft_avatar_url :
-        newAvatarUrl === 'google' ? user.google_avatar_url : newAvatarUrl;
-      updateAvatarDisplay(avatarEl, displayUrl || null, user.username);
+      const displayUrl = newAvatarUrl === 'microsoft' ? user.current.microsoft_avatar_url :
+        newAvatarUrl === 'google' ? user.current.google_avatar_url : newAvatarUrl;
+      updateAvatarDisplay(avatarEl, displayUrl || null, user.current.username);
     };
 
     // 更改头像
     const changeAvatarItem = document.getElementById('change-avatar-item');
     if (changeAvatarItem) {
       changeAvatarItem.addEventListener('click', () => {
-        showAvatarModal(user, handleAvatarUpdated);
+        showAvatarModal(user.current, handleAvatarUpdated);
       });
     }
 
     // 从微软授权回跳后自动拉起头像弹窗（恢复头像同步场景，让用户看到同步结果）
     if (sessionStorage.getItem('avatar-dialog-pending') === '1') {
       sessionStorage.removeItem('avatar-dialog-pending');
-      showAvatarModal(user, handleAvatarUpdated);
+      showAvatarModal(user.current, handleAvatarUpdated);
     }
 
     // 修改用户名
     const changeUsernameItem = document.getElementById('change-username-item');
     if (changeUsernameItem) {
       changeUsernameItem.addEventListener('click', () => {
-        showChangeUsernameModal(user, async () => {
+        showChangeUsernameModal(user.current, async () => {
           const freshSession = await verifySession();
           if (freshSession.success) {
-            Object.assign(user, freshSession.data);
+            user.current = freshSession.data;
           }
-          if (usernameEl) { usernameEl.textContent = user.username; }
-          if (infoUsername) { infoUsername.textContent = user.username; }
-          if (!user.avatar_url && avatarEl) {
-            avatarEl.textContent = user.username.charAt(0).toUpperCase();
+          if (usernameEl) { usernameEl.textContent = user.current.username; }
+          if (infoUsername) { infoUsername.textContent = user.current.username; }
+          if (!user.current.avatar_url && avatarEl) {
+            avatarEl.textContent = user.current.username.charAt(0).toUpperCase();
           }
         });
       });
@@ -1541,26 +1541,33 @@ async function showQrScanModal(onClose: () => void): Promise<void> {
       audio: false
     });
 
+    // 如果用户在 getUserMedia 等待期间关闭了弹窗，立即停止摄像头流
+    if (controller.isCleanedUp()) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+
     camera = new QRCamera(stream, video);
     console.log('[QR-SCAN] Camera started successfully, resolution:', video.videoWidth, 'x', video.videoHeight);
 
     updateStatus('dashboard.scanQrHint');
 
     // 开始逐帧扫描
+    let scanStopped = false;
     cancelFrameLoop = frameLoop(() => {
-      if (controller.isCleanedUp() || !camera) { return; }
+      if (controller.isCleanedUp() || !camera || scanStopped) { return; }
 
       try {
         const result = camera.readFrame(canvas);
         if (result) {
-          console.log('[QR-SCAN] QR detected:', result.substring(0, 50) + '...');
-          handleQrCodeScanned(result);
-          stopScanning();
+          console.log('[QR-SCAN] QR detected, length:', result.length);
+          scanStopped = true;
+          void handleQrCodeScanned(result);
         }
       } catch (e) {
         console.warn('[QR-SCAN] Frame error:', e instanceof Error ? e.message : e);
       }
-    });
+    }, () => !scanStopped);
 
   } catch (error) {
     console.error('[QR-SCAN] Camera error:', error);

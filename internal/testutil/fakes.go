@@ -484,6 +484,9 @@ func (f *FakeDataExportRepo) ImportUsers(context.Context, []map[string]any) (mod
 func (f *FakeDataExportRepo) ImportUserLogs(context.Context, []map[string]any) (int, error) {
 	return 0, nil
 }
+func (f *FakeDataExportRepo) ImportAllInTransaction(context.Context, []map[string]any, []map[string]any) (models.ImportUsersResult, int, error) {
+	return models.ImportUsersResult{}, 0, nil
+}
 func (f *FakeDataExportRepo) DeleteAllUsers(context.Context) error    { return nil }
 func (f *FakeDataExportRepo) DeleteAllUserLogs(context.Context) error { return nil }
 

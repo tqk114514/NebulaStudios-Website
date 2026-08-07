@@ -2,6 +2,7 @@ package admin
 
 import (
 	"auth-system/internal/middleware"
+	"auth-system/internal/models"
 	"auth-system/internal/utils"
 	"context"
 	"fmt"
@@ -203,31 +204,33 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout*3)
 	defer cancel()
 
+	var usersResult models.ImportUsersResult
+	var logsImported int
+
 	if req.Strategy == "overwrite" {
-		if err := h.dataExportRepo.DeleteAllUserLogs(ctx); err != nil {
-			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to clear user logs for overwrite")
+		txCtx, cancel := context.WithTimeout(context.Background(), adminTimeout*3)
+		defer cancel()
+
+		usersResult, logsImported, err = h.dataExportRepo.ImportAllInTransaction(txCtx, payload.Users, payload.UserLogs)
+		if err != nil {
+			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import data in transaction")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
 			return
 		}
-		if err := h.dataExportRepo.DeleteAllUsers(ctx); err != nil {
-			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to clear users for overwrite")
+	} else {
+		usersResult, err = h.dataExportRepo.ImportUsers(ctx, payload.Users)
+		if err != nil {
+			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
 			return
 		}
-	}
 
-	usersResult, err := h.dataExportRepo.ImportUsers(ctx, payload.Users)
-	if err != nil {
-		utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
-		utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
-		return
-	}
-
-	logsImported, err := h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
-	if err != nil {
-		utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
-		utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
-		return
+		logsImported, err = h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
+		if err != nil {
+			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
+			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			return
+		}
 	}
 
 	if err := h.logRepo.LogDataImport(ctx, operatorUID, usersResult.Imported, logsImported); err != nil {
