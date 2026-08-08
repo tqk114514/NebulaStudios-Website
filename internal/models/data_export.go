@@ -181,6 +181,7 @@ const importUserLogsSQL = `
 // ImportUsersResult 导入用户结果统计
 type ImportUsersResult struct {
 	Imported        int // 成功导入数
+	Failed          int // 因数据库错误导入失败的数量
 	PasswordSkipped int // 因 password 不合法被跳过的数量（疑似篡改）
 	RoleDowngraded  int // 因 role 不合法被降级为普通用户的数量（疑似篡改）
 }
@@ -192,40 +193,40 @@ func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []ma
 }
 
 // ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
-func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error) {
+func (r *DataExportImportRepository) ImportUserLogs(ctx context.Context, logs []map[string]any) (int, int, error) {
 	return importUserLogsBatch(ctx, r.pool, logs)
 }
 
 // ImportAllInTransaction 在事务中执行覆盖导入（delete + import），失败自动回滚
-func (r *DataExportImportRepository) ImportAllInTransaction(ctx context.Context, users []map[string]any, logs []map[string]any) (ImportUsersResult, int, error) {
+func (r *DataExportImportRepository) ImportAllInTransaction(ctx context.Context, users []map[string]any, logs []map[string]any) (ImportUsersResult, int, int, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return ImportUsersResult{}, 0, fmt.Errorf("failed to begin transaction: %w", err)
+		return ImportUsersResult{}, 0, 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx, `DELETE FROM user_logs`); err != nil {
-		return ImportUsersResult{}, 0, fmt.Errorf("failed to clear user logs: %w", err)
+		return ImportUsersResult{}, 0, 0, fmt.Errorf("failed to clear user logs: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM users`); err != nil {
-		return ImportUsersResult{}, 0, fmt.Errorf("failed to clear users: %w", err)
+		return ImportUsersResult{}, 0, 0, fmt.Errorf("failed to clear users: %w", err)
 	}
 
 	usersResult, err := importUsersBatch(ctx, tx, users)
 	if err != nil {
-		return usersResult, 0, err
+		return usersResult, 0, 0, err
 	}
 
-	logsImported, err := importUserLogsBatch(ctx, tx, logs)
+	logsImported, logsFailed, err := importUserLogsBatch(ctx, tx, logs)
 	if err != nil {
-		return usersResult, 0, err
+		return usersResult, logsImported, logsFailed, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return usersResult, 0, fmt.Errorf("failed to commit transaction: %w", err)
+		return usersResult, logsImported, logsFailed, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return usersResult, logsImported, nil
+	return usersResult, logsImported, logsFailed, nil
 }
 
 // importUsersBatch 批量导入用户，conn 可以是 pool 或 tx
@@ -293,6 +294,7 @@ func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any)
 		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user %s: %v", uid, err))
 			hasError = true
+			result.Failed++
 		} else {
 			result.Imported++
 		}
@@ -310,7 +312,7 @@ func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any)
 }
 
 // importUserLogsBatch 批量导入用户日志，conn 可以是 pool 或 tx
-func importUserLogsBatch(ctx context.Context, conn pgxConn, logs []map[string]any) (int, error) {
+func importUserLogsBatch(ctx context.Context, conn pgxConn, logs []map[string]any) (int, int, error) {
 	batch := &pgx.Batch{}
 	ids := make([]int64, 0, len(logs))
 
@@ -335,32 +337,34 @@ func importUserLogsBatch(ctx context.Context, conn pgxConn, logs []map[string]an
 	}
 
 	if len(ids) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 
 	br := conn.SendBatch(ctx, batch)
 	defer br.Close()
 
 	imported := 0
+	failed := 0
 	var hasError bool
 	for _, id := range ids {
 		if _, err := br.Exec(); err != nil {
 			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user log %d: %v", id, err))
 			hasError = true
+			failed++
 		} else {
 			imported++
 		}
 	}
 
 	if err := br.Close(); err != nil {
-		return imported, fmt.Errorf("failed to close batch result: %w", err)
+		return imported, failed, fmt.Errorf("failed to close batch result: %w", err)
 	}
 
 	if hasError && imported == 0 {
-		return imported, fmt.Errorf("all %d user log imports failed", len(ids))
+		return imported, failed, fmt.Errorf("all %d user log imports failed", len(ids))
 	}
 
-	return imported, nil
+	return imported, failed, nil
 }
 
 // DeleteAllUsers 删除所有用户（数据导入 overwrite 模式使用）

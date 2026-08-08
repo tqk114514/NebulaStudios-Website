@@ -126,8 +126,8 @@ type DataExportImportStore interface {
 	QueryAllUsers(ctx context.Context) ([]map[string]any, error)
 	QueryAllUserLogs(ctx context.Context) ([]map[string]any, error)
 	ImportUsers(ctx context.Context, users []map[string]any) (ImportUsersResult, error)
-	ImportUserLogs(ctx context.Context, logs []map[string]any) (int, error)
-	ImportAllInTransaction(ctx context.Context, users []map[string]any, logs []map[string]any) (ImportUsersResult, int, error)
+	ImportUserLogs(ctx context.Context, logs []map[string]any) (int, int, error)
+	ImportAllInTransaction(ctx context.Context, users []map[string]any, logs []map[string]any) (ImportUsersResult, int, int, error)
 	DeleteAllUsers(ctx context.Context) error
 	DeleteAllUserLogs(ctx context.Context) error
 }

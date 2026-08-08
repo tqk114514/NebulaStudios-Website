@@ -283,7 +283,7 @@ function bindImportPreviewEvents(): void {
       const strategyRadio = document.querySelector<HTMLInputElement>('input[name="import-strategy"]:checked');
       const strategy = strategyRadio?.value || 'merge';
 
-      const resp = await fetchApi<{ usersImported: number; logsImported: number; usersPasswordSkipped: number; usersRoleDowngraded: number }>('/admin/api/data/import/execute', {
+      const resp = await fetchApi<{ usersImported: number; logsImported: number; usersFailed: number; logsFailed: number; usersPasswordSkipped: number; usersRoleDowngraded: number }>('/admin/api/data/import/execute', {
         method: 'POST',
         body: JSON.stringify({ fileToken: importFileToken, strategy })
       });
@@ -295,11 +295,17 @@ function bindImportPreviewEvents(): void {
 
       const passwordSkipped = Number(resp.data.usersPasswordSkipped) || 0;
       const roleDowngraded = Number(resp.data.usersRoleDowngraded) || 0;
-      if (passwordSkipped > 0 || roleDowngraded > 0) {
-        const anomalies: string[] = [];
-        if (passwordSkipped > 0) anomalies.push(`${passwordSkipped} 个用户因密码哈希不合法被跳过`);
-        if (roleDowngraded > 0) anomalies.push(`${roleDowngraded} 个用户因 role 非法被降级为普通用户`);
-        showToast(`导入完成: 用户 ${resp.data.usersImported} 条, 日志 ${resp.data.logsImported} 条；${anomalies.join('，')}（疑似备份篡改）`, 'warning');
+      const usersFailed = Number(resp.data.usersFailed) || 0;
+      const logsFailed = Number(resp.data.logsFailed) || 0;
+
+      const anomalies: string[] = [];
+      if (usersFailed > 0) anomalies.push(`${usersFailed} 个用户导入失败`);
+      if (logsFailed > 0) anomalies.push(`${logsFailed} 条日志导入失败`);
+      if (passwordSkipped > 0) anomalies.push(`${passwordSkipped} 个用户因密码哈希不合法被跳过（疑似篡改）`);
+      if (roleDowngraded > 0) anomalies.push(`${roleDowngraded} 个用户因 role 非法被降级为普通用户（疑似篡改）`);
+
+      if (anomalies.length > 0) {
+        showToast(`导入完成: 用户 ${resp.data.usersImported} 条, 日志 ${resp.data.logsImported} 条；${anomalies.join('，')}`, 'warning');
       } else {
         showToast(`导入成功: 用户 ${resp.data.usersImported} 条, 日志 ${resp.data.logsImported} 条`, 'success');
       }

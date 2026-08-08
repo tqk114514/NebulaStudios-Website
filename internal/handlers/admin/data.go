@@ -205,13 +205,13 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 	defer cancel()
 
 	var usersResult models.ImportUsersResult
-	var logsImported int
+	var logsImported, logsFailed int
 
 	if req.Strategy == "overwrite" {
 		txCtx, cancel := context.WithTimeout(context.Background(), adminTimeout*3)
 		defer cancel()
 
-		usersResult, logsImported, err = h.dataExportRepo.ImportAllInTransaction(txCtx, payload.Users, payload.UserLogs)
+		usersResult, logsImported, logsFailed, err = h.dataExportRepo.ImportAllInTransaction(txCtx, payload.Users, payload.UserLogs)
 		if err != nil {
 			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import data in transaction")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
@@ -225,7 +225,7 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 			return
 		}
 
-		logsImported, err = h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
+		logsImported, logsFailed, err = h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
 		if err != nil {
 			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
@@ -239,9 +239,11 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 	utils.RespondSuccess(c, gin.H{
 		"usersImported":        usersResult.Imported,
+		"usersFailed":          usersResult.Failed,
 		"usersPasswordSkipped": usersResult.PasswordSkipped,
 		"usersRoleDowngraded":  usersResult.RoleDowngraded,
 		"logsImported":         logsImported,
+		"logsFailed":           logsFailed,
 	})
 }
 
