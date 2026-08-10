@@ -19,6 +19,7 @@ import (
 type GoogleHandler struct {
 	*oauth.ExternalProviderHandler
 	proxyURLs []string
+	verifier  *GoogleIDTokenVerifier // id_token 验签器
 }
 
 // NewGoogleHandler 创建 Google OAuth Handler，验证必需依赖后初始化。
@@ -44,6 +45,14 @@ func NewGoogleHandler(
 
 	if h.ClientID == "" || h.ClientSecret == "" || len(h.proxyURLs) == 0 {
 		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)", "")
+	} else {
+		// id_token 验签器：公钥来自 GOOGLE_JWKS_SHA256 预置的 JWKS（base64），运行时不拉取
+		verifier, verr := NewGoogleIDTokenVerifier(h.ClientID, cfg.GoogleJWKSSHA256)
+		if verr != nil {
+			return nil, utils.LogError("OAUTH-GOOGLE", "NewGoogleHandler", verr,
+				"Google OAuth configured but id_token verifier unavailable: check GOOGLE_JWKS_SHA256")
+		}
+		h.verifier = verifier
 	}
 
 	h.Spec = oauth.ProviderSpec{
@@ -113,28 +122,47 @@ func (h *GoogleHandler) exchangeAndFetch(code, codeVerifier string) (map[string]
 }
 
 func (h *GoogleHandler) parseIdentity(tokenData, userInfo map[string]any) oauth.ProviderIdentity {
-	googleID, _ := userInfo["id"].(string)
+	// 身份只从验签后的 id_token 提取：代理/userinfo 返回的任何字段均不作为身份依据
+	if h.verifier == nil {
+		utils.LogError("OAUTH-GOOGLE", "parseIdentity", ErrVerifierNotConfigured, "id_token verifier is nil")
+		return oauth.ProviderIdentity{}
+	}
 
-	// 仅信任已验证的邮箱：未验证邮箱不参与 pending link 绑定逻辑，防止攻击者用未验证邮箱劫持已存在账户
-	email, _ := userInfo["email"].(string)
-	if email != "" {
-		if verified, ok := userInfo["email_verified"].(bool); !ok || !verified {
-			utils.LogWarn("OAUTH-GOOGLE", "Google email not verified, ignoring for linking", fmt.Sprintf("googleID=%s, email=%s", googleID, email))
-			email = ""
+	idToken, _ := tokenData["id_token"].(string)
+	if idToken == "" {
+		utils.LogWarn("OAUTH-GOOGLE", "No id_token in token response, refusing to authenticate", "")
+		return oauth.ProviderIdentity{}
+	}
+
+	claims, err := h.verifier.Verify(context.Background(), idToken)
+	if err != nil {
+		utils.LogError("OAUTH-GOOGLE", "parseIdentity", err, "id_token verification failed, refusing to authenticate")
+		return oauth.ProviderIdentity{}
+	}
+
+	googleID := claims.Sub
+
+	// 仅信任 Google 已验证的邮箱（id_token 中的 email_verified 是 Google 签名的）
+	email := claims.Email
+	if !claims.EmailVerified {
+		email = ""
+	}
+
+	displayName := claims.Name
+	if displayName == "" {
+		if dn, ok := userInfo["name"].(string); ok {
+			displayName = dn
 		}
 	}
-	if email == "" {
-		utils.LogWarn("OAUTH-GOOGLE", "No verified email in Google user info", fmt.Sprintf("googleID=%s", googleID))
+	if displayName == "" {
+		displayName = "User"
 	}
 
-	displayName := "User"
-	if dn, ok := userInfo["name"].(string); ok && dn != "" {
-		displayName = dn
-	}
-
-	var avatarURL string
-	if pic, ok := userInfo["picture"].(string); ok && pic != "" {
-		avatarURL = pic
+	avatarURL := claims.Picture
+	if avatarURL == "" {
+		if pic, ok := userInfo["picture"].(string); ok {
+			avatarURL = pic
+		}
 	}
 
 	return oauth.ProviderIdentity{

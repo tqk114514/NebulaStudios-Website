@@ -45,3 +45,9 @@ index.js
 
 .zight/
 .reasonix/
+
+.tmp-poc/
+
+# Python
+__pycache__/
+*.pyc

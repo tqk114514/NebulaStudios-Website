@@ -54,12 +54,13 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - 管理员可在后台管理 OAuth 客户端（创建、编辑、启用/禁用、重新生成密钥、删除）
 - 禁用或删除客户端时自动撤销所有关联 Token
 
-**作为 Client（Microsoft 登录）：**
+**作为 Client（Microsoft / Google 登录）：**
 
 - 支持 Microsoft 账号登录和绑定
 - 已有账号绑定 Microsoft 时需邮件验证确认
 - 支持解绑 Microsoft 账号
 - PKCE 流程保护
+- **Google 登录安全模型**：身份只从验签后的 `id_token` 提取（RS256 签名 + `iss`/`aud`/`exp` 校验）。公钥为 `GOOGLE_JWKS_SHA256` 预置的 Google JWKS（base64，部署前自行获取），运行时无网络拉取——代理被攻破也无法伪造身份；未配置公钥时服务启动失败（fail-closed）
 
 ### 扫码登录
 
@@ -236,6 +237,14 @@ HCAPTCHA_SECRET_KEY="your-secret-key"
 MICROSOFT_CLIENT_ID="your-client-id"
 MICROSOFT_CLIENT_SECRET="your-client-secret"
 MICROSOFT_REDIRECT_URI="https://your-domain.com/api/auth/microsoft/callback"
+
+# Google OAuth 登录
+GOOGLE_CLIENT_ID="your-client-id"
+GOOGLE_CLIENT_SECRET="your-client-secret"
+GOOGLE_PROXY_URL="https://your-proxy.workers.dev"
+
+# Google id_token 验签
+GOOGLE_JWKS_SHA256="your-base64-jwks"
 
 # 扫码登录加密
 QR_ENCRYPTION_KEY="your-encryption-key"
