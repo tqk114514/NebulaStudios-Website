@@ -25,11 +25,19 @@ func buildBackendData() error {
 
 	var processedCount int
 	for _, src := range files {
+		// data 下的子目录（如运行时本地存储 data/avatars）不复制进 dist
+		info, err := os.Stat(src)
+		if err != nil {
+			return fmt.Errorf("failed to stat %s: %w", src, err)
+		}
+		if info.IsDir() {
+			continue
+		}
+
 		filename := filepath.Base(src)
 		dst := filepath.Join(distDir, dataDir, filename)
 		ext := strings.ToLower(filepath.Ext(src))
 
-		var err error
 		switch ext {
 		case ".json":
 			err = minifyJSONFile(src, dst)
