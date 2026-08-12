@@ -62,7 +62,6 @@ type Config struct {
 
 	CDNURL string
 
-	ImageProcessorSocket  string
 	EmailWhitelistDomains string
 }
 
@@ -133,7 +132,6 @@ func Load() (*Config, error) {
 
 	newCfg.DefaultAvatarURL = getEnv("DEFAULT_AVATAR_URL", "")
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
-	newCfg.ImageProcessorSocket = getEnv("IMG_PROCESSOR_SOCKET", "")
 	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")
 
 	if err := validateConfig(newCfg); err != nil {

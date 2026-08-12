@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -47,16 +48,15 @@ type ImgProcessor struct {
 	sem        chan struct{} // 并发限制信号量
 	cmd        *exec.Cmd     // 子进程
 	restarting bool          // 是否正在重启
-	socketPath string        // Unix Socket 路径
+	socketPath string        // Unix Socket 路径（位于私有临时目录内）
 	binaryPath string        // 已写入的二进制路径（每次启动随机生成）
 	tempDir    string        // 私有临时目录路径
 }
 
 // NewImgProcessor 创建图片处理服务
-func NewImgProcessor(socketPath string) *ImgProcessor {
+func NewImgProcessor() *ImgProcessor {
 	p := &ImgProcessor{
-		sem:        make(chan struct{}, MaxConcurrent),
-		socketPath: socketPath,
+		sem: make(chan struct{}, MaxConcurrent),
 	}
 	p.startProcessor()
 	return p
@@ -69,6 +69,10 @@ func (p *ImgProcessor) startProcessor() {
 		os.RemoveAll(p.tempDir)
 		p.tempDir = ""
 		p.binaryPath = ""
+		// 自动生成的 socket 路径随旧临时目录失效
+		p.mu.Lock()
+		p.socketPath = ""
+		p.mu.Unlock()
 	}
 
 	if len(imgProcessorBin) == 0 {
@@ -128,6 +132,12 @@ func (p *ImgProcessor) startProcessor() {
 	}
 	p.binaryPath = binaryPath
 
+	// socket 固定放在本私有临时目录内：0700 目录 + 随机名，其他本地用户无法访问，
+	// 与 Zig 端 0600 权限配合杜绝本地攻击面。
+	p.mu.Lock()
+	p.socketPath = filepath.Join(tempDir, "img-processor.sock")
+	p.mu.Unlock()
+
 	// 写入后校验哈希，确认内容完整（此时文件已安全写入，校验失败直接清理）
 	writtenData, err := os.ReadFile(binaryPath)
 	if err != nil {
@@ -147,6 +157,8 @@ func (p *ImgProcessor) startProcessor() {
 	os.Remove(p.socketPath)
 
 	p.cmd = exec.Command(binaryPath)
+	// 通过环境变量把实际 socket 路径传给 Zig 子进程（无论是否显式配置）
+	p.cmd.Env = append(os.Environ(), "IMG_PROCESSOR_SOCKET="+p.socketPath)
 	if err := p.cmd.Start(); err != nil {
 		utils.LogError("IMG", "start", err, "Failed to start processor")
 		os.RemoveAll(tempDir)
@@ -176,7 +188,10 @@ func (p *ImgProcessor) Shutdown(ctx context.Context) {
 			p.cmd.Wait()
 			utils.LogInfo("IMG", "Image processor stopped")
 		}
-		os.Remove(p.socketPath)
+		p.mu.Lock()
+		sockPath := p.socketPath
+		p.mu.Unlock()
+		os.Remove(sockPath)
 		// 清理私有临时目录及其中的二进制文件
 		if p.tempDir != "" {
 			os.RemoveAll(p.tempDir)
@@ -231,7 +246,11 @@ func (p *ImgProcessor) checkAndRestart() {
 		return
 	}
 
-	if _, err := os.Stat(p.socketPath); os.IsNotExist(err) {
+	p.mu.Lock()
+	sockPath := p.socketPath
+	p.mu.Unlock()
+
+	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
 		p.tryRestart()
 		return
 	}
@@ -249,7 +268,11 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	p.sem <- struct{}{}
 	defer func() { <-p.sem }()
 
-	conn, err := net.DialTimeout("unix", p.socketPath, ConnectTimeout)
+	p.mu.Lock()
+	sockPath := p.socketPath
+	p.mu.Unlock()
+
+	conn, err := net.DialTimeout("unix", sockPath, ConnectTimeout)
 	if err != nil {
 		p.available = false
 		p.checkAndRestart() // 连接失败时触发重启检查

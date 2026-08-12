@@ -321,7 +321,7 @@ HTML 页面由 `serveHTML` 函数处理，支持 CSP nonce 注入（模板中的
 
 ## 注意事项
 
-1. **图片处理依赖 Unix Socket**：默认路径 `/tmp/img-processor.sock`。目前仅支持 Linux 环境部署（路径硬编码），如需跨平台需修改 `img-processor/src/main.zig` 中的 `SOCKET_PATH` 和 Go 端 `imgprocessor.go` 中的 `SocketPath`。
+1. **图片处理依赖 Unix Socket**：socket 位于 Go 启动时创建的私有临时目录（权限 0700，仅运行用户可访问），Zig 端 socket 文件权限为 0600——其他本地用户无法连接。仅支持 Linux 环境部署。
 
 2. **内存存储限制**：OAuth state 和待绑定数据存储在内存 map 中，带容量上限和 FIFO 淘汰。服务重启会丢失所有进行中的 OAuth 流程。如果是多实例部署，需要改用 Redis 等共享存储。目前适用于单实例场景。
 

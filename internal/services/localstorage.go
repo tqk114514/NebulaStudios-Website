@@ -34,7 +34,7 @@ func NewLocalStorageService(cfg *config.Config) (*LocalStorageService, error) {
 		return nil, fmt.Errorf("failed to create avatar dir: %w", err)
 	}
 
-	imgProcessor := NewImgProcessor(cfg.ImageProcessorSocket)
+	imgProcessor := NewImgProcessor()
 
 	utils.LogInfo("STORAGE", fmt.Sprintf("Local storage initialized: dir=%s", dir))
 	return &LocalStorageService{

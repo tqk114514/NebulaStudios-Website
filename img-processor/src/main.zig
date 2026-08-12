@@ -6,27 +6,32 @@ const c = @cImport({
     @cInclude("src/webp/encode.h");
 });
 
-const SOCKET_PATH = "/tmp/img-processor.sock";
+const SOCKET_PATH_DEFAULT = "/tmp/img-processor.sock";
 const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
-    std.Io.Dir.deleteFileAbsolute(io, SOCKET_PATH) catch {};
+    // socket 路径由 Go 端通过环境变量 IMG_PROCESSOR_SOCKET 传入
+    // （未设置时回退默认路径，便于手动运行调试）
+    const socket_path = init.environ_map.get("IMG_PROCESSOR_SOCKET") orelse SOCKET_PATH_DEFAULT;
 
-    const unix_addr = try net.UnixAddress.init(SOCKET_PATH);
+    std.Io.Dir.deleteFileAbsolute(io, socket_path) catch {};
+
+    const unix_addr = try net.UnixAddress.init(socket_path);
     var server = try unix_addr.listen(io, .{ .kernel_backlog = 128 });
     defer server.deinit(io);
 
     if (@import("builtin").os.tag != .windows) {
-        const file = std.Io.Dir.openFileAbsolute(io, SOCKET_PATH, .{ .mode = .write_only }) catch null;
+        const file = std.Io.Dir.openFileAbsolute(io, socket_path, .{ .mode = .write_only }) catch null;
         if (file) |f| {
             defer f.close(io);
-            std.Io.File.setPermissions(f, io, .fromMode(0o666)) catch {};
+            // 0600：仅属主可访问，防止其他本地用户连接（配合 Go 端 0700 私有目录）
+            std.Io.File.setPermissions(f, io, .fromMode(0o600)) catch {};
         }
     }
 
-    std.debug.print("[img-processor] Listening on {s}\n", .{SOCKET_PATH});
+    std.debug.print("[img-processor] Listening on {s}\n", .{socket_path});
 
     while (true) {
         const client = server.accept(io) catch |err| {
