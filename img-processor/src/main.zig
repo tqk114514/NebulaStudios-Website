@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const net = std.Io.net;
 
 const c = @cImport({
@@ -8,6 +9,15 @@ const c = @cImport({
 
 const SOCKET_PATH_DEFAULT = "/tmp/img-processor.sock";
 const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
+/// 读取客户端数据的超时（秒），与 Go 端 ReadWriteTimeout 一致
+const READ_TIMEOUT_SECONDS: i64 = 30;
+/// 解码前限制的图像总像素数上限（4096x4096≈16.7M 像素，RGBA 约 67MB），防超大图内存 DoS
+const MAX_PIXELS: i64 = 4096 * 4096;
+
+/// 同时处理的图片请求上限。每连接一个线程，用信号量限制并发数：
+/// 防止连接洪泛导致线程无限增长（DoS），同时保证多请求真正并行处理。
+const MAX_CONCURRENT: usize = 2;
+var sem: std.Io.Semaphore = .{ .permits = MAX_CONCURRENT };
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -39,23 +49,47 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
-        handleConnection(client, io, init.gpa) catch |err| {
-            std.debug.print("[img-processor] Handle error: {}\n", .{err});
+        // 并发受限时在信号量上排队（连接保持在内核 backlog，不占用线程）
+        sem.wait(io) catch {
+            client.close(io);
+            continue;
         };
-        client.close(io);
+
+        const t = std.Thread.spawn(.{}, handleConnection, .{ client, io, init.gpa }) catch |err| {
+            std.debug.print("[img-processor] Spawn error: {}\n", .{err});
+            sem.post(io);
+            client.close(io);
+            continue;
+        };
+        t.detach();
     }
 }
 
-fn handleConnection(client: net.Stream, io: std.Io, allocator: std.mem.Allocator) !void {
-    var read_buf: [4096]u8 = undefined;
+// worker 线程：处理单个连接，结束后释放信号量与连接
+fn handleConnection(client: net.Stream, io: std.Io, allocator: std.mem.Allocator) void {
+    defer sem.post(io);
+    defer client.close(io);
+
+    handleConnectionImpl(client, io, allocator) catch |err| {
+        std.debug.print("[img-processor] Handle error: {}\n", .{err});
+    };
+}
+
+fn handleConnectionImpl(client: net.Stream, io: std.Io, allocator: std.mem.Allocator) !void {
     var write_buf: [4096]u8 = undefined;
-    var stream_reader = client.reader(io, &read_buf);
     var stream_writer = client.writer(io, &write_buf);
-    const reader = &stream_reader.interface;
     const writer = &stream_writer.interface;
 
+    // 与 Go 端 ReadWriteTimeout(30s) 一致：客户端不发送数据时释放 permit，防 slowloris 占满并发。
+    // 转成绝对 deadline：整体 30s 内必须发完数据，防止"每 29s 发 1 字节"无限续期。
+    const timeout: std.Io.Timeout = .{ .duration = .{
+        .raw = std.Io.Duration.fromSeconds(READ_TIMEOUT_SECONDS),
+        .clock = .awake,
+    } };
+    const deadline = timeout.toDeadline(io);
+
     var len_buf: [4]u8 = undefined;
-    try std.Io.Reader.readSliceAll(reader, &len_buf);
+    try readFullTimeout(&client.socket, io, &len_buf, deadline);
     const len = std.mem.readInt(u32, &len_buf, .big);
 
     if (len == 0 or len > MAX_IMAGE_SIZE) {
@@ -65,7 +99,7 @@ fn handleConnection(client: net.Stream, io: std.Io, allocator: std.mem.Allocator
 
     const data = try allocator.alloc(u8, len);
     defer allocator.free(data);
-    try std.Io.Reader.readSliceAll(reader, data);
+    try readFullTimeout(&client.socket, io, data, deadline);
 
     const result = processImage(data, allocator) catch |err| {
         try sendError(writer, @errorName(err));
@@ -76,10 +110,31 @@ fn handleConnection(client: net.Stream, io: std.Io, allocator: std.mem.Allocator
     try sendResponse(writer, result);
 }
 
+/// 带超时的完整读取（对 stream socket 用 recvmsg，超时返回 error.Timeout）
+fn readFullTimeout(socket: *const net.Socket, io: std.Io, buf: []u8, timeout: std.Io.Timeout) !void {
+    var off: usize = 0;
+    while (off < buf.len) {
+        const msg = try socket.receiveTimeout(io, buf[off..], timeout);
+        if (msg.data.len == 0) return error.EndOfStream;
+        off += msg.data.len;
+    }
+}
+
 fn processImage(data: []const u8, allocator: std.mem.Allocator) ![]u8 {
     var width: c_int = 0;
     var height: c_int = 0;
     var channels: c_int = 0;
+
+    // 解码前检查图像尺寸：超大图像（如巨大 BMP）解码出 RGBA 会耗尽内存，并发下放大 DoS。
+    // info 不支持的格式（如 ICO，stbi_info 无 ICO 分支但 load 支持）跳过预检，交给 load 决定。
+    var info_w: c_int = 0;
+    var info_h: c_int = 0;
+    var info_c: c_int = 0;
+    if (c.stbi_info_from_memory(data.ptr, @intCast(data.len), &info_w, &info_h, &info_c) != 0) {
+        if (@as(i64, info_w) * info_h > MAX_PIXELS) {
+            return error.ImageTooLarge;
+        }
+    }
 
     const rgba = c.stbi_load_from_memory(
         data.ptr,
@@ -195,6 +250,16 @@ test "processImage - truncated BMP returns DecodeError" {
     try std.testing.expectError(error.DecodeError, result);
 }
 
+test "processImage - oversized dimensions rejected before decode" {
+    var big_bmp = minimal_bmp;
+    // BMP 头：宽在 offset 18-21、高在 22-25（小端），改写成超大尺寸
+    std.mem.writeInt(u32, big_bmp[18..22], 5000, .little);
+    std.mem.writeInt(u32, big_bmp[22..26], 5000, .little);
+
+    const result = processImage(&big_bmp, std.testing.allocator);
+    try std.testing.expectError(error.ImageTooLarge, result);
+}
+
 test "processImage - WebP output size is reasonable" {
     const result = try processImage(&minimal_bmp, std.testing.allocator);
     defer std.testing.allocator.free(result);
@@ -255,4 +320,82 @@ test "protocol - length encoding uses big-endian (Go binary.BigEndian)" {
     try std.testing.expect(written[2] == 0);
     try std.testing.expect(written[3] == 0);
     try std.testing.expect(written[4] == 3);
+}
+
+test "semaphore limits concurrent workers to MAX_CONCURRENT" {
+    if (builtin.single_threaded) return error.SkipZigTest;
+    const io = std.testing.io;
+
+    const Context = struct {
+        sem: *std.Io.Semaphore,
+        active: *std.atomic.Value(usize),
+        max_active: *std.atomic.Value(usize),
+        fn worker(ctx: *@This()) void {
+            ctx.sem.wait(io) catch return;
+            defer ctx.sem.post(io);
+
+            const cur = ctx.active.fetchAdd(1, .monotonic) + 1;
+            var seen = ctx.max_active.load(.monotonic);
+            while (cur > seen) {
+                seen = ctx.max_active.cmpxchgWeak(seen, cur, .monotonic, .monotonic) orelse break;
+            }
+            // 模拟图片处理耗时，确保并发窗口有重叠
+            std.Io.Clock.Duration.sleep(.{
+                .raw = std.Io.Duration.fromMilliseconds(50),
+                .clock = .awake,
+            }, io) catch {};
+            _ = ctx.active.fetchSub(1, .monotonic);
+        }
+    };
+
+    var my_sem: std.Io.Semaphore = .{ .permits = MAX_CONCURRENT };
+    var active = std.atomic.Value(usize).init(0);
+    var max_active = std.atomic.Value(usize).init(0);
+
+    const num_threads = 4;
+    var threads: [num_threads]std.Thread = undefined;
+    var ctxs: [num_threads]Context = undefined;
+    for (0..num_threads) |i| {
+        ctxs[i] = .{ .sem = &my_sem, .active = &active, .max_active = &max_active };
+    }
+    for (0..num_threads) |i| {
+        threads[i] = try std.Thread.spawn(.{}, Context.worker, .{&ctxs[i]});
+    }
+    for (threads) |t| t.join();
+
+    // 并发峰值恰为 MAX_CONCURRENT，且结束后活跃数为 0（无信号量泄露）
+    try std.testing.expectEqual(MAX_CONCURRENT, max_active.load(.monotonic));
+    try std.testing.expectEqual(@as(usize, 0), active.load(.monotonic));
+}
+
+test "processImage - concurrent calls are safe" {
+    if (builtin.single_threaded) return error.SkipZigTest;
+
+    const num_threads = 4;
+    const Context = struct {
+        input: []const u8,
+        ok: *bool,
+        fn worker(ctx: *@This()) void {
+            const result = processImage(ctx.input, std.heap.page_allocator) catch {
+                ctx.ok.* = false;
+                return;
+            };
+            defer std.heap.page_allocator.free(result);
+            ctx.ok.* = result.len > 0;
+        }
+    };
+
+    var oks = [_]bool{false} ** num_threads;
+    var ctxs: [num_threads]Context = undefined;
+    for (0..num_threads) |i| {
+        ctxs[i] = .{ .input = &minimal_bmp, .ok = &oks[i] };
+    }
+
+    var threads: [num_threads]std.Thread = undefined;
+    for (0..num_threads) |i| {
+        threads[i] = try std.Thread.spawn(.{}, Context.worker, .{&ctxs[i]});
+    }
+    for (threads) |t| t.join();
+
+    for (oks) |ok| try std.testing.expect(ok);
 }
