@@ -8,7 +8,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 | 层面 | 技术 |
 |------|------|
-| 后端语言 | Go 1.26.4 |
+| 后端语言 | Go 1.26.5 |
 | Web 框架 | Gin |
 | 数据库 | PostgreSQL（pgx 驱动，连接池管理） |
 | 图片处理 | Zig 0.16.0（调用 libwebp + stb_image） |
@@ -60,7 +60,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - 已有账号绑定 Microsoft 时需邮件验证确认
 - 支持解绑 Microsoft 账号
 - PKCE 流程保护
-- **Google 登录安全模型**：身份只从验签后的 `id_token` 提取（RS256 签名 + `iss`/`aud`/`exp` 校验）。公钥为 `GOOGLE_JWKS_SHA256` 预置的 Google JWKS（base64，部署前自行获取），运行时无网络拉取——代理被攻破也无法伪造身份；未配置公钥时服务启动失败（fail-closed）
+- 支持 Google 账号登录和绑定（身份仅取自验签后的 `id_token`，公钥由 `GOOGLE_JWKS_SHA256` 预置）
 
 ### 扫码登录
 
@@ -172,7 +172,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 │   ├── config/            # 配置加载（环境变量、验证）
 │   ├── handlers/          # HTTP Handler（auth、user、admin、oauth、qrlogin、static）
 │   ├── middleware/        # Gin 中间件（auth、admin、ban、compress、cors、ratelimit、security）
-│   ├── models/            # 数据库模型（CRUD、自动迁移、Schema 定义）
+│   ├── models/            # 数据库模型（CRUD、Schema 定义、golang-migrate 版本化迁移）
 │   ├── paths/             # 路由路径常量
 │   ├── services/          # 业务服务（token、session、captcha、email、websocket、r2、imgprocessor、oauth）
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
@@ -196,7 +196,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 ### 环境要求
 
-- Go 1.26.4
+- Go 1.26.5
 - Zig 0.16.0（如果不需要图片处理可以不安装，但头像上传功能将不可用）
 - PostgreSQL 14+
 
@@ -311,7 +311,7 @@ go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=
 ./server
 ```
 
-服务启动时会自动初始化数据库表结构（CREATE TABLE IF NOT EXISTS），并执行自动迁移（检测缺失的列并添加）。索引也会自动创建。
+服务启动时通过 golang-migrate 执行数据库版本化迁移：首次启动会应用动态生成的版本 1（`CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`，幂等）。已应用过迁移的数据库不会重复执行。
 
 ### 静态文件服务
 
@@ -331,7 +331,7 @@ HTML 页面由 `serveHTML` 函数处理，支持 CSP nonce 注入（模板中的
 
 5. **i18n 构建**：前端翻译在构建时被打包进 `translations.js`（含所有语言），运行时根据用户选择的语言动态切换。这意味着翻译内容变更后需要重新执行前端构建。
 
-6. **数据库迁移**：自动迁移只会添加缺失的列（ALTER TABLE ADD COLUMN），不会删除列、修改类型或处理约束变更。如果需要对已有列做破坏性变更，需要手动执行 SQL。
+6. **数据库迁移**：由 golang-migrate 管理，迁移 SQL 由 `getTableSchemas()` / `getIndexDefinitions()` 动态生成并作为版本 1 应用，仅执行一次。**对已有表新增列不会自动应用**（`CREATE TABLE IF NOT EXISTS` 对已存在的表是空操作）——需要手动执行 `ALTER TABLE ... ADD COLUMN`，或在迁移中追加新版本。删除列、修改类型、约束变更同样需要手动 SQL。
 
 ## License
 
