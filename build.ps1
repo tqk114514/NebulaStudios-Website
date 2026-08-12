@@ -58,8 +58,17 @@ if ($Backend) {
 }
 
 if ($Frontend) {
+    # 确保依赖已安装（npm ci 需要 package-lock.json，与 CI 一致）。
+    # 不要依赖 npx 自动下载——本地没有 tsc 时 npx 会拉到抢注的废弃包 tsc@2.0.4。
+    if (-not (Test-Path "node_modules\.bin\tsc")) {
+        Write-Host "=== Installing frontend dependencies (npm ci) ===" -ForegroundColor Cyan
+        npm ci
+        if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+    }
+
     Write-Host "=== Type-checking frontend (tsc --noEmit) ===" -ForegroundColor Cyan
-    npx tsc --noEmit
+    # --no-install：npx 只使用本地已装的包，绝不联网下载
+    npx --no-install tsc --noEmit
     if ($LASTEXITCODE -ne 0) { throw "TypeScript type-check failed" }
     Write-Host "Type-check OK" -ForegroundColor Green
 
