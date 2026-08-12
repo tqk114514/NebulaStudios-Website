@@ -46,6 +46,9 @@ index.js
 
 .tmp-poc/
 
+# 构建时生成（build.ps1 / CI 编译 img-processor 后写入，//go:embed 使用）
+internal/services/img-processor-bin
+
 # Python
 __pycache__/
 *.pyc

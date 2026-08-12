@@ -16,6 +16,21 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # img-processor-bin 不再入库，由 CI 实时编译（//go:embed 硬依赖）
+      - name: Install Zig 0.16.0
+        run: |
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          /opt/zig/zig version
+          echo "/opt/zig" >> "$GITHUB_PATH"
+
+      - name: Build img-processor
+        run: |
+          cd img-processor
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/img-processor ../internal/services/img-processor-bin
+
       - name: Check gofmt
         run: |
           unformatted=$(gofmt -l cmd internal)

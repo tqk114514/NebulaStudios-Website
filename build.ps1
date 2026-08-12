@@ -11,12 +11,39 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Zig 编译 img-processor 并复制到 internal/services/img-processor-bin（供 //go:embed 使用）
+# 目标平台由 -Dtarget 指定；默认 x86_64-linux-gnu 与后端部署目标一致
+function Build-ImgProcessor {
+    $zig = Get-Command zig -ErrorAction SilentlyContinue
+    if (-not $zig) {
+        throw "zig 未安装（或在 PATH 中）。img-processor-bin 是后端编译的硬依赖（//go:embed），请先安装 Zig 0.16.0。"
+    }
+
+    $target = if ($env:IMG_PROCESSOR_TARGET) { $env:IMG_PROCESSOR_TARGET } else { "x86_64-linux-gnu" }
+
+    Write-Host "=== Building img-processor (target: $target) ===" -ForegroundColor Cyan
+    Push-Location img-processor
+    try {
+        zig build -Doptimize=ReleaseFast -Dtarget=$target
+        if ($LASTEXITCODE -ne 0) { throw "img-processor build failed" }
+    } finally {
+        Pop-Location
+    }
+
+    $src = Join-Path (Get-Location) "img-processor\zig-out\bin\img-processor"
+    $dst = Join-Path (Get-Location) "internal\services\img-processor-bin"
+    Copy-Item $src $dst -Force
+    Write-Host "img-processor OK -> $dst" -ForegroundColor Green
+}
+
 if (-not $Backend -and -not $Frontend) {
     $Backend = $true
     $Frontend = $true
 }
 
 if ($Backend) {
+    Build-ImgProcessor
+
     Write-Host "=== Building backend ===" -ForegroundColor Cyan
     $origGOOS = $env:GOOS
     $origGOARCH = $env:GOARCH
