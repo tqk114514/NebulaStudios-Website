@@ -1,4 +1,4 @@
-# Build script
+﻿# Build script
 # Usage:
 #   .\build.ps1              # Build backend + frontend
 #   .\build.ps1 -Backend     # Backend only
@@ -24,7 +24,7 @@ function Build-ImgProcessor {
     Write-Host "=== Building img-processor (target: $target) ===" -ForegroundColor Cyan
     Push-Location img-processor
     try {
-        zig build -Doptimize=ReleaseFast -Dtarget=$target
+        zig build -Doptimize=ReleaseFast "-Dtarget=$target"
         if ($LASTEXITCODE -ne 0) { throw "img-processor build failed" }
     } finally {
         Pop-Location
