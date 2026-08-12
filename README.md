@@ -102,7 +102,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - 接收任意格式图片（PNG、JPG、BMP 等，通过 stb_image 解码）
 - 转码为 WebP（libwebp，质量 85，压缩方法 6）
 - 头像上传流程：用户上传 -> Zig 转 WebP -> 上传到 Cloudflare R2
-- 二进制文件通过 `//go:embed` 嵌入 Go 编译产物，无需单独部署（构建时由 `build.ps1` / CI 自动编译生成）
+- 二进制文件通过 `//go:embed` 嵌入 Go 编译产物，无需单独部署
 - 支持自动重启（进程崩溃或 Socket 断开时）
 - 最大并发数 2，图片大小限制 10MB
 - Zig 端包含完整的单元测试（编解码、协议格式）
@@ -282,7 +282,7 @@ go run ./cmd/build/ -dev
 
 构建产物输出到 `dist/` 目录。生产模式下所有静态文件会额外生成 `.br`（Brotli）预压缩版本，服务端根据浏览器 `Accept-Encoding` 头决定返回压缩版还是原始文件。对于支持 Brotli 的现代浏览器，这会显著降低流量消耗，但某些老旧浏览器可能无法访问。
 
-**2. 编译图片处理服务（可选）**
+**2. 编译图片处理服务**
 
 ```bash
 cd img-processor
@@ -290,7 +290,7 @@ zig build -Doptimize=ReleaseFast
 # 产物在 zig-out/bin/img-processor
 ```
 
-编译后的二进制不再入库，由 `build.ps1`（本地）或 CI（GitHub Actions）在构建后端前自动编译：`zig build -Doptimize=ReleaseFast`（本地默认 `-Dtarget=x86_64-linux-gnu` 与部署目标一致，可通过 `IMG_PROCESSOR_TARGET` 覆盖），产物复制到 `internal/services/img-processor-bin` 供 `//go:embed` 嵌入。如果跳过这一步，后端将无法编译，头像上传功能也不可用。
+产物需放置到 `internal/services/img-processor-bin`，后端通过 `//go:embed` 将其嵌入编译产物。`build.ps1 -Backend` 和 CI 会在编译后端前自动完成本步骤（默认交叉编译 `x86_64-linux-gnu`，可用 `IMG_PROCESSOR_TARGET` 覆盖）。
 
 你也可以直接运行测试：
 
