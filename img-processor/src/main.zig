@@ -44,14 +44,15 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("[img-processor] Listening on {s}\n", .{socket_path});
 
     while (true) {
-        const client = server.accept(io) catch |err| {
-            std.debug.print("[img-processor] Accept error: {}\n", .{err});
+        // 先获取 permit 再 accept：限流发生在 accept 之前，超出的连接留在内核
+        // backlog（上限 128）排队，不占用用户态 fd（防本地连接洪泛耗尽 fd）。
+        sem.wait(io) catch {
             continue;
         };
 
-        // 并发受限时在信号量上排队（连接保持在内核 backlog，不占用线程）
-        sem.wait(io) catch {
-            client.close(io);
+        const client = server.accept(io) catch |err| {
+            sem.post(io); // accept 失败未获得连接，归还 permit
+            std.debug.print("[img-processor] Accept error: {}\n", .{err});
             continue;
         };
 
@@ -107,6 +108,10 @@ fn handleConnectionImpl(client: net.Stream, io: std.Io, allocator: std.mem.Alloc
     };
     defer allocator.free(result);
 
+    // 写侧无超时 API（Zig 0.16 Io 只有 receiveTimeout）。写永久阻塞需要"对端持连接永不读"：
+    // 客户端固定为 Go 进程（socket 0600 + 0700 目录已封死其他本地用户），Go 端 ToWebP 总是
+    // 读响应且 30s 读超时后关闭连接（届时本端写返回 EPIPE 错误，permit 正常归还）——因此
+    // 写阻塞不会无限期占用 permit。
     try sendResponse(writer, result);
 }
 
