@@ -159,7 +159,7 @@ func TestRegisterEmptyCode(t *testing.T) {
 
 func TestRegisterInvalidVerificationCode(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.VerifyCodeErr = errors.New("INVALID_CODE")
+	deps.tokenMgr.VerifyCodeErr = models.ErrInvalidCode
 	w := postJSON(h.Register, validRegisterBody())
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "INVALID_CODE") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())

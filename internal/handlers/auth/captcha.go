@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"auth-system/internal/handlers"
 	"auth-system/internal/paths"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -118,7 +119,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	ctx := c.Request.Context()
 	result, err := h.tokenService.ValidateAndUseToken(ctx, req.Token)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), "Token verification failed")
+		handlers.RespondTokenError(c, "AUTH", err, "Token verification failed")
 		return
 	}
 
@@ -182,7 +183,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	ctx := c.Request.Context()
 	_, err := h.tokenService.VerifyCode(ctx, code, email, tokenType)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Code verification failed: email=%s, tokenType=%s", email, tokenType))
+		handlers.RespondTokenError(c, "AUTH", err, fmt.Sprintf("Code verification failed: email=%s, tokenType=%s", email, tokenType))
 		return
 	}
 

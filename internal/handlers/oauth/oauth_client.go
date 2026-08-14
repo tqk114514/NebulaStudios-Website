@@ -409,7 +409,7 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 
 // ConfirmLink 确认绑定，更新数据库后自动登录并清除待绑定 Token
 // POST /api/auth/{provider}/confirm-link
-// 安全性保证：link_token 为一次性凭证（HttpOnly + SameSite=Strict + 短 TTL），
+// 安全性保证：link_token 为一次性凭证（HttpOnly + SameSite=Lax + 短 TTL，跨站 POST 不携带），
 // GetAndDeletePendingLink 消费后立即失效，防止重放。
 func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	token, err := utils.GetLinkTokenCookie(c)

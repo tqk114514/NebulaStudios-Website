@@ -114,7 +114,7 @@ func TestResetPasswordSuccess(t *testing.T) {
 func TestResetPasswordInvalidCode(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
 	seedUserWithPassword(deps, "u1", "reset@test.local", testStrongPassword)
-	deps.tokenMgr.VerifyCodeErr = errors.New("INVALID_CODE")
+	deps.tokenMgr.VerifyCodeErr = models.ErrInvalidCode
 
 	body := `{"email":"reset@test.local","code":"000000","password":"NewPassword2!xabc"}`
 	w := postJSON(h.ResetPassword, body)

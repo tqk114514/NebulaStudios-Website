@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"auth-system/internal/handlers"
 	"auth-system/internal/middleware"
 	"auth-system/internal/paths"
 	"auth-system/internal/services"
@@ -103,7 +104,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	tokenType := services.TokenTypeResetPassword
 	_, err := h.tokenService.VerifyCode(ctx, code, normalizedEmail, tokenType)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, err.Error(), fmt.Sprintf("Reset code verification failed: email=%s", normalizedEmail))
+		handlers.RespondTokenError(c, "AUTH", err, fmt.Sprintf("Reset code verification failed: email=%s", normalizedEmail))
 		return
 	}
 

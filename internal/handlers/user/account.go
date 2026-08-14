@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"auth-system/internal/handlers"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/paths"
@@ -117,7 +118,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 
 	_, err = h.tokenService.VerifyCode(ctx, req.Code, user.Email, services.TokenTypeDeleteAccount)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, err.Error(), fmt.Sprintf("Delete account - code verification failed: userUID=%s", userUID))
+		handlers.RespondTokenError(c, "USER", err, fmt.Sprintf("Delete account - code verification failed: userUID=%s", userUID))
 		return
 	}
 

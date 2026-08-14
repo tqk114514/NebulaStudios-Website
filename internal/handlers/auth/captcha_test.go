@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"auth-system/internal/models"
 	"auth-system/internal/services"
 )
 
@@ -122,7 +123,7 @@ func TestVerifyEmailNoToken(t *testing.T) {
 
 func TestVerifyEmailInvalidToken(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.UseTokenErr = errors.New("INVALID_TOKEN")
+	deps.tokenMgr.UseTokenErr = models.ErrInvalidToken
 
 	w := postJSON(h.VerifyEmail, `{"token":"bad-token"}`)
 	if w.Code != http.StatusBadRequest {
@@ -213,7 +214,7 @@ func TestVerifyCodeMissingParams(t *testing.T) {
 
 func TestVerifyCodeInvalid(t *testing.T) {
 	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.VerifyCodeErr = errors.New("INVALID_CODE")
+	deps.tokenMgr.VerifyCodeErr = models.ErrInvalidCode
 
 	w := postJSON(h.VerifyCode, `{"code":"000000","email":"a@b.c","tokenType":"register"}`)
 	if w.Code != http.StatusBadRequest {

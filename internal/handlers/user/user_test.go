@@ -248,7 +248,7 @@ func TestDeleteAccountWrongPassword(t *testing.T) {
 func TestDeleteAccountCodeInvalid(t *testing.T) {
 	h, deps := newTestUserHandler(t)
 	seedUser(deps, t, "Abcdef1!@#ghijklmn")
-	deps.tokenMgr.VerifyCodeErr = errors.New("INVALID_CODE")
+	deps.tokenMgr.VerifyCodeErr = models.ErrInvalidCode
 
 	w := postUserJSON(h.DeleteAccount, `{"code":"bad","password":"Abcdef1!@#ghijklmn"}`)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "INVALID_CODE") {
