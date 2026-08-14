@@ -40,6 +40,13 @@ func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (
 	return lastStatus, lastBody, lastErr
 }
 
+// applyProxyAuthHeaders 附加代理访问凭证（Cloudflare Access Service Token），
+// 由 CF 边缘拦截未认证请求，不消耗 Worker 配额。
+func (h *GoogleHandler) applyProxyAuthHeaders(req *http.Request) {
+	req.Header.Set("CF-Access-Client-Id", h.proxyAccessClientID)
+	req.Header.Set("CF-Access-Client-Secret", h.proxyAccessClientSecret)
+}
+
 // verifyProxyEnvelope 校验代理 /token 签名响应（WorkerTokenEnvelope），成功返回 Google 原始响应体
 func (h *GoogleHandler) verifyProxyEnvelope(body []byte) ([]byte, error) {
 	var envelope WorkerTokenEnvelope
@@ -70,7 +77,13 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
 	status, body, err := h.doWithProxyFailover("token exchange", func(base string) (int, []byte, error) {
-		resp, err := client.Post(base+"/token", "application/x-www-form-urlencoded", strings.NewReader(encoded))
+		req, err := http.NewRequest("POST", base+"/token", strings.NewReader(encoded))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		h.applyProxyAuthHeaders(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -129,6 +142,7 @@ func (h *GoogleHandler) getUserInfo(accessToken string) (map[string]any, error) 
 			return 0, nil, err
 		}
 		req.Header.Set("Authorization", "Bearer "+accessToken)
+		h.applyProxyAuthHeaders(req)
 		resp, err := client.Do(req)
 		if err != nil {
 			return 0, nil, err

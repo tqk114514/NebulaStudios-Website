@@ -18,8 +18,10 @@ import (
 // GoogleHandler Google OAuth Handler
 type GoogleHandler struct {
 	*oauth.ExternalProviderHandler
-	proxyURLs []string
-	verifier  *WorkerTokenVerifier // 代理签名验签器（含 id_token claims 校验）
+	proxyURLs               []string
+	verifier                *WorkerTokenVerifier // 代理签名验签器（含 id_token claims 校验）
+	proxyAccessClientID     string               // CF Access Service Token（可选）
+	proxyAccessClientSecret string
 }
 
 // NewGoogleHandler 创建 Google OAuth Handler，验证必需依赖后初始化。
@@ -38,6 +40,8 @@ func NewGoogleHandler(
 	h := &GoogleHandler{
 		ExternalProviderHandler: base,
 		proxyURLs:               cfg.GoogleProxyURLs(),
+		proxyAccessClientID:     cfg.ProxyAccessClientID,
+		proxyAccessClientSecret: cfg.ProxyAccessClientSecret,
 	}
 	h.ClientID = cfg.GoogleClientID
 	h.ClientSecret = cfg.GoogleClientSecret
@@ -46,6 +50,12 @@ func NewGoogleHandler(
 	if h.ClientID == "" || h.ClientSecret == "" || len(h.proxyURLs) == 0 {
 		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)", "")
 	} else {
+		// 代理访问凭证（CF Access Service Token）：代理仅接受带此凭证的请求，缺失即启动失败
+		if h.proxyAccessClientID == "" || h.proxyAccessClientSecret == "" {
+			return nil, utils.LogError("OAUTH-GOOGLE", "NewGoogleHandler",
+				fmt.Errorf("GOOGLE_PROXY_ACCESS_CLIENT_ID or GOOGLE_PROXY_ACCESS_CLIENT_SECRET missing"),
+				"Google OAuth configured but proxy access credentials unavailable")
+		}
 		// id_token 验签：代理 Worker 现场验 Google 签名后签名背书，本服务验 Worker 签名（ED25519 公钥预置）
 		verifier, verr := NewWorkerTokenVerifier(h.ClientID, cfg.WorkerSigningPublicKey)
 		if verr != nil {

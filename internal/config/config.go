@@ -50,7 +50,11 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleProxyURL     string
 
-	// Google id_token 验证：代理 Worker 签名背书的 Ed25519 验签公钥（PKIX DER base64）
+	// 代理的 Cloudflare Access Service Token（必需；代理仅接受带此凭证的请求，边缘拦截不耗 Worker 配额）
+	ProxyAccessClientID     string
+	ProxyAccessClientSecret string
+
+	// Google id_token 验证：代理 Worker 签名背书的 Ed25519 验签公钥（PEM 全文）
 	WorkerSigningPublicKey string
 
 	QREncryptionKey     string
@@ -122,6 +126,8 @@ func Load() (*Config, error) {
 	newCfg.GoogleClientID = getEnv("GOOGLE_CLIENT_ID", "")
 	newCfg.GoogleClientSecret = getEnv("GOOGLE_CLIENT_SECRET", "")
 	newCfg.GoogleProxyURL = getEnv("GOOGLE_PROXY_URL", "")
+	newCfg.ProxyAccessClientID = getEnv("GOOGLE_PROXY_ACCESS_CLIENT_ID", "")
+	newCfg.ProxyAccessClientSecret = getEnv("GOOGLE_PROXY_ACCESS_CLIENT_SECRET", "")
 	newCfg.WorkerSigningPublicKey = getEnv("WORKER_SIGNING_PUBLIC_KEY", "")
 
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")

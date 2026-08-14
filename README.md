@@ -243,6 +243,10 @@ GOOGLE_CLIENT_ID="your-client-id"
 GOOGLE_CLIENT_SECRET="your-client-secret"
 GOOGLE_PROXY_URL="https://your-proxy.workers.dev"
 
+# 代理的 Cloudflare Access Service Token（必需，配合 Access 应用限制代理仅本服务器可访问）
+GOOGLE_PROXY_ACCESS_CLIENT_ID="your-access-client-id"
+GOOGLE_PROXY_ACCESS_CLIENT_SECRET="your-access-client-secret"
+
 # Google id_token 验签（代理 Worker 签名背书的 Ed25519 验签公钥，PEM 全文，与 JWT_PRIVATE_KEY 配置方式一致）
 WORKER_SIGNING_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 
