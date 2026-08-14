@@ -50,8 +50,8 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleProxyURL     string
 
-	// Google id_token 验证：预置的 Google JWKS 文档（base64），部署前自行获取
-	GoogleJWKSSHA256 string
+	// Google id_token 验证：代理 Worker 签名背书的 Ed25519 验签公钥（PKIX DER base64）
+	WorkerSigningPublicKey string
 
 	QREncryptionKey     string
 	QRKeyDerivationSalt string
@@ -122,7 +122,7 @@ func Load() (*Config, error) {
 	newCfg.GoogleClientID = getEnv("GOOGLE_CLIENT_ID", "")
 	newCfg.GoogleClientSecret = getEnv("GOOGLE_CLIENT_SECRET", "")
 	newCfg.GoogleProxyURL = getEnv("GOOGLE_PROXY_URL", "")
-	newCfg.GoogleJWKSSHA256 = getEnv("GOOGLE_JWKS_SHA256", "")
+	newCfg.WorkerSigningPublicKey = getEnv("WORKER_SIGNING_PUBLIC_KEY", "")
 
 	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
 	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")

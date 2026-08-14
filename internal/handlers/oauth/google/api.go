@@ -40,6 +40,15 @@ func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (
 	return lastStatus, lastBody, lastErr
 }
 
+// verifyProxyEnvelope 校验代理 /token 签名响应（WorkerTokenEnvelope），成功返回 Google 原始响应体
+func (h *GoogleHandler) verifyProxyEnvelope(body []byte) ([]byte, error) {
+	var envelope WorkerTokenEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("invalid envelope json: %w", err)
+	}
+	return h.verifier.VerifyEnvelope(&envelope)
+}
+
 // exchangeCodeForToken 通过代理用授权码换取 token，支持多代理故障转移
 func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
@@ -71,7 +80,18 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 			}
 		}(resp.Body)
 		b, err := io.ReadAll(resp.Body)
-		return resp.StatusCode, b, err
+		if err != nil {
+			return 0, nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return resp.StatusCode, b, nil
+		}
+		// 代理成功响应为签名信封 {data, timestamp, signature}：验签解包，失败视为该代理不可用（触发故障转移）
+		unwrapped, verr := h.verifyProxyEnvelope(b)
+		if verr != nil {
+			return 0, nil, fmt.Errorf("proxy envelope invalid: %w", verr)
+		}
+		return http.StatusOK, unwrapped, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: request failed: %v", oauth.ErrOAuthTokenExchange, err)

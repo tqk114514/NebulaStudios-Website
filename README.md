@@ -60,7 +60,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - 已有账号绑定 Microsoft 时需邮件验证确认
 - 支持解绑 Microsoft 账号
 - PKCE 流程保护
-- 支持 Google 账号登录和绑定（身份仅取自验签后的 `id_token`，公钥由 `GOOGLE_JWKS_SHA256` 预置）
+- 支持 Google 账号登录和绑定
 
 ### 扫码登录
 
@@ -243,8 +243,8 @@ GOOGLE_CLIENT_ID="your-client-id"
 GOOGLE_CLIENT_SECRET="your-client-secret"
 GOOGLE_PROXY_URL="https://your-proxy.workers.dev"
 
-# Google id_token 验签
-GOOGLE_JWKS_SHA256="your-base64-jwks"
+# Google id_token 验签（代理 Worker 签名背书的 Ed25519 验签公钥，PEM 全文，与 JWT_PRIVATE_KEY 配置方式一致）
+WORKER_SIGNING_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 
 # 扫码登录加密
 QR_ENCRYPTION_KEY="your-encryption-key"

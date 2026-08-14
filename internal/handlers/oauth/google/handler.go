@@ -19,7 +19,7 @@ import (
 type GoogleHandler struct {
 	*oauth.ExternalProviderHandler
 	proxyURLs []string
-	verifier  *GoogleIDTokenVerifier // id_token 验签器
+	verifier  *WorkerTokenVerifier // 代理签名验签器（含 id_token claims 校验）
 }
 
 // NewGoogleHandler 创建 Google OAuth Handler，验证必需依赖后初始化。
@@ -46,11 +46,11 @@ func NewGoogleHandler(
 	if h.ClientID == "" || h.ClientSecret == "" || len(h.proxyURLs) == 0 {
 		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)", "")
 	} else {
-		// id_token 验签器：公钥来自 GOOGLE_JWKS_SHA256 预置的 JWKS（base64），运行时不拉取
-		verifier, verr := NewGoogleIDTokenVerifier(h.ClientID, cfg.GoogleJWKSSHA256)
+		// id_token 验签：代理 Worker 现场验 Google 签名后签名背书，本服务验 Worker 签名（ED25519 公钥预置）
+		verifier, verr := NewWorkerTokenVerifier(h.ClientID, cfg.WorkerSigningPublicKey)
 		if verr != nil {
 			return nil, utils.LogError("OAUTH-GOOGLE", "NewGoogleHandler", verr,
-				"Google OAuth configured but id_token verifier unavailable: check GOOGLE_JWKS_SHA256")
+				"Google OAuth configured but worker token verifier unavailable: check WORKER_SIGNING_PUBLIC_KEY")
 		}
 		h.verifier = verifier
 	}
@@ -122,7 +122,7 @@ func (h *GoogleHandler) exchangeAndFetch(code, codeVerifier string) (map[string]
 }
 
 func (h *GoogleHandler) parseIdentity(tokenData, userInfo map[string]any) oauth.ProviderIdentity {
-	// 身份只从验签后的 id_token 提取：代理/userinfo 返回的任何字段均不作为身份依据
+	// 身份只从 Worker 验签背书的 id_token 提取：代理/userinfo 返回的任何字段均不作为身份依据
 	if h.verifier == nil {
 		utils.LogError("OAUTH-GOOGLE", "parseIdentity", ErrVerifierNotConfigured, "id_token verifier is nil")
 		return oauth.ProviderIdentity{}
@@ -134,15 +134,15 @@ func (h *GoogleHandler) parseIdentity(tokenData, userInfo map[string]any) oauth.
 		return oauth.ProviderIdentity{}
 	}
 
-	claims, err := h.verifier.Verify(context.Background(), idToken)
+	claims, err := h.verifier.VerifyIDTokenClaims(context.Background(), idToken)
 	if err != nil {
-		utils.LogError("OAUTH-GOOGLE", "parseIdentity", err, "id_token verification failed, refusing to authenticate")
+		utils.LogError("OAUTH-GOOGLE", "parseIdentity", err, "id_token claims verification failed, refusing to authenticate")
 		return oauth.ProviderIdentity{}
 	}
 
 	googleID := claims.Sub
 
-	// 仅信任 Google 已验证的邮箱（id_token 中的 email_verified 是 Google 签名的）
+	// 仅信任 Google 已验证的邮箱（id_token 声明由 Worker 验签背书）
 	email := claims.Email
 	if !claims.EmailVerified {
 		email = ""
