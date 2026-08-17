@@ -42,7 +42,7 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 	operatorUID, _ := middleware.GetUID(c)
 	requestID, otac, expiresAt := h.exportService.GenerateOTAC(operatorUID)
 
-	utils.LogInfo("DATA-EXPORT", fmt.Sprintf("OTAC: %s | request_id: %s | user: %s", otac, requestID, operatorUID))
+	utils.LogInfoCtx(c.Request.Context(), "DATA-EXPORT", "Data export download requested", "otac", utils.TruncateIdentifier(otac), "request_id", requestID, "user", operatorUID)
 
 	utils.RespondSuccess(c, gin.H{
 		"requestId": requestID,
@@ -80,7 +80,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 
 	salt1, err := utils.ParseExportSalt1(h.dataExportSalt)
 	if err != nil {
-		utils.LogError("DATA-EXPORT", "DownloadExport", err)
+		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err)
 		utils.RespondError(c, http.StatusInternalServerError, "EXPORT_SALT_NOT_CONFIGURED")
 		return
 	}
@@ -90,14 +90,14 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 
 	users, err := h.dataExportRepo.QueryAllUsers(ctx)
 	if err != nil {
-		utils.LogError("DATA-EXPORT", "DownloadExport", err, "Failed to query users")
+		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Failed to query users")
 		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
 
 	logs, err := h.dataExportRepo.QueryAllUserLogs(ctx)
 	if err != nil {
-		utils.LogError("DATA-EXPORT", "DownloadExport", err, "Failed to query user logs")
+		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Failed to query user logs")
 		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
 		return
 	}
@@ -120,7 +120,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 
 	encrypted, err := utils.ExportEncrypt(salt1, salt2, header, payload)
 	if err != nil {
-		utils.LogError("DATA-EXPORT", "DownloadExport", err, "Encryption failed")
+		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Encryption failed")
 		utils.RespondError(c, http.StatusInternalServerError, "ENCRYPTION_FAILED")
 		return
 	}
@@ -128,7 +128,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	filename := fmt.Sprintf("nebula-backup-%s.enc", time.Now().In(utils.ShanghaiLocation()).Format("2006-01-02T15-04-05"))
 
 	if err := h.logRepo.LogDataExport(ctx, operatorUID, len(users), len(logs)); err != nil {
-		utils.LogWarn("DATA-EXPORT", "Failed to log export", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "DATA-EXPORT", "Failed to log export", "error", err)
 	}
 
 	c.Header("Content-Type", "application/octet-stream")
@@ -154,7 +154,7 @@ func (h *AdminHandler) PreviewImport(c *gin.Context) {
 
 	exportHeader, err := utils.ExportDecryptHeader(data)
 	if err != nil {
-		utils.LogWarn("DATA-IMPORT", fmt.Sprintf("PreviewImport: %v", err))
+		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "PreviewImport", "error", err)
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_FILE_FORMAT")
 		return
 	}
@@ -183,7 +183,7 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 	salt1, err := utils.ParseExportSalt1(h.dataExportSalt)
 	if err != nil {
-		utils.LogError("DATA-IMPORT", "ExecuteImport", err)
+		utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err)
 		utils.RespondError(c, http.StatusInternalServerError, "EXPORT_SALT_NOT_CONFIGURED")
 		return
 	}
@@ -196,7 +196,7 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 	payload, err := utils.ExportDecrypt(salt1, data)
 	if err != nil {
-		utils.LogWarn("DATA-IMPORT", fmt.Sprintf("ExecuteImport: %v", err))
+		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", "error", err)
 		utils.RespondError(c, http.StatusBadRequest, "DECRYPTION_FAILED")
 		return
 	}
@@ -213,28 +213,28 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 		usersResult, logsImported, logsFailed, err = h.dataExportRepo.ImportAllInTransaction(txCtx, payload.Users, payload.UserLogs)
 		if err != nil {
-			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import data in transaction")
+			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import data in transaction")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
 			return
 		}
 	} else {
 		usersResult, err = h.dataExportRepo.ImportUsers(ctx, payload.Users)
 		if err != nil {
-			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
+			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
 			return
 		}
 
 		logsImported, logsFailed, err = h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
 		if err != nil {
-			utils.LogError("DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
+			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
 			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
 			return
 		}
 	}
 
 	if err := h.logRepo.LogDataImport(ctx, operatorUID, usersResult.Imported, logsImported); err != nil {
-		utils.LogWarn("DATA-IMPORT", "Failed to log import", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "Failed to log import", "error", err)
 	}
 
 	utils.RespondSuccess(c, gin.H{

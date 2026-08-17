@@ -70,7 +70,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	}
 	if existingUser != nil {
 		_, _, _ = h.tokenService.CreateToken(ctx, "timing-constant-dummy@invalid", services.TokenTypeRegister)
-		utils.LogInfo("AUTH", fmt.Sprintf("SendCode requested for already-registered email (suppressed): email=%s", validatedEmail))
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "SendCode requested for already-registered email (suppressed)", "email", validatedEmail)
 		utils.RespondSuccess(c, gin.H{
 			"message":    "Code sent",
 			"expireTime": time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli(),
@@ -92,7 +92,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 
 	h.emailService.SendVerificationEmailAsync(validatedEmail, "register", language, verifyURL, "AUTH")
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Verification code sent (async): email=%s", validatedEmail))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Verification code sent (async)", "email", validatedEmail)
 	utils.RespondSuccess(c, gin.H{
 		"message":    "Code sent",
 		"expireTime": expireTime,
@@ -128,7 +128,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Token verified successfully: email=%s", result.Email))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Token verified successfully", "email", result.Email)
 	utils.RespondSuccess(c, gin.H{
 		"code":  result.Code,
 		"email": result.Email,
@@ -187,6 +187,6 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 		return
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Code verified successfully: email=%s, tokenType=%s", email, tokenType))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Code verified successfully", "email", email, "token_type", tokenType)
 	utils.RespondSuccess(c, gin.H{})
 }

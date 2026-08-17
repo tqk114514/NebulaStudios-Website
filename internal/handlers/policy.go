@@ -52,7 +52,7 @@ func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
-		utils.LogError("POLICY", "GetPolicyVersions", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPolicyVersions", err, "path", manifestPath)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
 		return
 	}
@@ -90,7 +90,7 @@ func (h *PolicyHandler) GetPublicNoticePolicies(c *gin.Context) {
 
 	policies, err := services.GetPublicNoticePolicies(manifestPath)
 	if err != nil {
-		utils.LogError("POLICY", "GetPublicNoticePolicies", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPublicNoticePolicies", err, "path", manifestPath)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
 		return
 	}
@@ -124,7 +124,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
-		utils.LogError("POLICY", "GetPendingConsent", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "path", manifestPath)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
 		return
 	}
@@ -133,7 +133,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	consentRepo := models.NewUserConsentRepository(h.pool)
 	consents, err := consentRepo.FindByUserUID(ctx, userUID)
 	if err != nil {
-		utils.LogError("POLICY", "GetPendingConsent", err, fmt.Sprintf("Failed to query consents: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "user_uid", userUID)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "DATABASE_ERROR", "Failed to query user consents")
 		return
 	}
@@ -196,7 +196,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
-		utils.LogError("POLICY", "RecordConsent", err, fmt.Sprintf("Failed to read manifest: %s", manifestPath))
+		utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "path", manifestPath)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
 		return
 	}
@@ -220,13 +220,13 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	consentRepo := models.NewUserConsentRepository(h.pool)
 	for _, p := range req.Policies {
 		if err := consentRepo.LogConsent(ctx, userUID, p.PolicyType, p.PolicyVersion); err != nil {
-			utils.LogError("POLICY", "RecordConsent", err, fmt.Sprintf("Failed to log consent: userUID=%s, type=%s, version=%s", userUID, p.PolicyType, p.PolicyVersion))
+			utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "user_uid", userUID, "type", p.PolicyType, "version", p.PolicyVersion)
 			utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "CONSENT_LOG_FAILED", "Failed to record consent")
 			return
 		}
 	}
 
-	utils.LogInfo("POLICY", fmt.Sprintf("Policy consent recorded: userUID=%s, count=%d", userUID, len(req.Policies)))
+	utils.LogInfoCtx(c.Request.Context(), "POLICY", "Policy consent recorded", "user_uid", userUID, "count", len(req.Policies))
 	utils.RespondSuccess(c, gin.H{"message": "Consent recorded"})
 }
 

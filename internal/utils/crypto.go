@@ -70,7 +70,7 @@ func GenerateSecureToken() (string, error) {
 	}
 
 	token := hex.EncodeToString(bytes)
-	LogDebug("CRYPTO", fmt.Sprintf("Generated secure token: length=%d", len(token)))
+	LogDebug("CRYPTO", "Generated secure token", "length", len(token))
 	return token, nil
 }
 
@@ -89,7 +89,7 @@ func GenerateCode() (string, error) {
 	}
 
 	result := string(code)
-	LogDebug("CRYPTO", fmt.Sprintf("Generated verification code: length=%d", len(result)))
+	LogDebug("CRYPTO", "Generated verification code", "length", len(result))
 	return result, nil
 }
 
@@ -108,7 +108,7 @@ func GenerateUID() (string, error) {
 	}
 
 	result := string(uid)
-	LogDebug("CRYPTO", fmt.Sprintf("Generated UID: length=%d", len(result)))
+	LogDebug("CRYPTO", "Generated UID", "length", len(result))
 	return result, nil
 }
 
@@ -138,7 +138,7 @@ func HashPassword(password string) (string, error) {
 	result := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argon2Memory, argon2Time, argon2Threads, b64Salt, b64Hash)
 
-	LogDebug("CRYPTO", fmt.Sprintf("Password hashed successfully: algorithm=argon2id, memory=%dKB", argon2Memory/1024))
+	LogDebug("CRYPTO", "Password hashed successfully", "algorithm", "argon2id", "memory_kb", argon2Memory/1024)
 	return result, nil
 }
 
@@ -162,31 +162,31 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 {
-		LogWarn("CRYPTO", fmt.Sprintf("Invalid hash format: expected 6 parts, got %d", len(parts)))
+		LogWarn("CRYPTO", "Invalid hash format", "expected_parts", 6, "got", len(parts))
 		return false, ErrInvalidHash
 	}
 
 	var version int
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to parse version: %v", err))
+		LogWarn("CRYPTO", "Failed to parse version", "error", err)
 		return false, fmt.Errorf("%w: invalid version", ErrInvalidHash)
 	}
 
 	var memory, time uint32
 	var threads uint8
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to parse parameters: %v", err))
+		LogWarn("CRYPTO", "Failed to parse parameters", "error", err)
 		return false, fmt.Errorf("%w: invalid parameters", ErrInvalidHash)
 	}
 
 	if memory == 0 || time == 0 || threads == 0 {
-		LogWarn("CRYPTO", fmt.Sprintf("Invalid hash parameters: memory=%d, time=%d, threads=%d", memory, time, threads))
+		LogWarn("CRYPTO", "Invalid hash parameters", "memory", memory, "time", time, "threads", threads)
 		return false, fmt.Errorf("%w: zero parameters", ErrInvalidHash)
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode salt: %v", err))
+		LogWarn("CRYPTO", "Failed to decode salt", "error", err)
 		return false, fmt.Errorf("%w: invalid salt encoding", ErrInvalidHash)
 	}
 
@@ -197,7 +197,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 
 	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode hash: %v", err))
+		LogWarn("CRYPTO", "Failed to decode hash", "error", err)
 		return false, fmt.Errorf("%w: invalid hash encoding", ErrInvalidHash)
 	}
 
@@ -210,7 +210,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 
 	match := subtle.ConstantTimeCompare(hash, expectedHash) == 1
 
-	LogDebug("CRYPTO", fmt.Sprintf("Password verification result: %v", match))
+	LogDebug("CRYPTO", "Password verification result", "match", match)
 
 	return match, nil
 }
@@ -264,7 +264,7 @@ func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
 		base64.URLEncoding.EncodeToString(authTag) + "." +
 		base64.URLEncoding.EncodeToString(actualCiphertext)
 
-	LogDebug("CRYPTO", fmt.Sprintf("Data encrypted successfully: plaintext_size=%d, ciphertext_size=%d", len(plaintext), len(result)))
+	LogDebug("CRYPTO", "Data encrypted successfully", "plaintext_size", len(plaintext), "ciphertext_size", len(result))
 	return result, nil
 }
 
@@ -284,35 +284,35 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 
 	parts := strings.Split(ciphertextB64, ".")
 	if len(parts) != 3 {
-		LogWarn("CRYPTO", fmt.Sprintf("Invalid ciphertext format: expected 3 parts, got %d", len(parts)))
+		LogWarn("CRYPTO", "Invalid ciphertext format", "expected_parts", 3, "got", len(parts))
 		return nil, ErrInvalidCiphertextFormat
 	}
 
 	nonce, err := base64.URLEncoding.DecodeString(parts[0])
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode nonce: %v", err))
+		LogWarn("CRYPTO", "Failed to decode nonce", "error", err)
 		return nil, fmt.Errorf("%w: invalid nonce", ErrDecryptionFailed)
 	}
 
 	if len(nonce) != gcmNonceSize {
-		LogWarn("CRYPTO", fmt.Sprintf("Invalid nonce size: got %d, expected %d", len(nonce), gcmNonceSize))
+		LogWarn("CRYPTO", "Invalid nonce size", "got", len(nonce), "expected", gcmNonceSize)
 		return nil, fmt.Errorf("%w: invalid nonce size", ErrDecryptionFailed)
 	}
 
 	authTag, err := base64.URLEncoding.DecodeString(parts[1])
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode authTag: %v", err))
+		LogWarn("CRYPTO", "Failed to decode authTag", "error", err)
 		return nil, fmt.Errorf("%w: invalid authTag", ErrDecryptionFailed)
 	}
 
 	if len(authTag) != gcmTagSize {
-		LogWarn("CRYPTO", fmt.Sprintf("Invalid authTag size: got %d, expected %d", len(authTag), gcmTagSize))
+		LogWarn("CRYPTO", "Invalid authTag size", "got", len(authTag), "expected", gcmTagSize)
 		return nil, fmt.Errorf("%w: invalid authTag size", ErrDecryptionFailed)
 	}
 
 	ciphertext, err := base64.URLEncoding.DecodeString(parts[2])
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Failed to decode ciphertext: %v", err))
+		LogWarn("CRYPTO", "Failed to decode ciphertext", "error", err)
 		return nil, fmt.Errorf("%w: invalid ciphertext", ErrDecryptionFailed)
 	}
 
@@ -330,11 +330,11 @@ func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
 
 	plaintext, err := gcm.Open(nil, nonce, combined, nil)
 	if err != nil {
-		LogWarn("CRYPTO", fmt.Sprintf("Decryption failed: %v", err))
+		LogWarn("CRYPTO", "Decryption failed", "error", err)
 		return nil, ErrDecryptionFailed
 	}
 
-	LogDebug("CRYPTO", fmt.Sprintf("Data decrypted successfully: ciphertext_size=%d, plaintext_size=%d", len(ciphertextB64), len(plaintext)))
+	LogDebug("CRYPTO", "Data decrypted successfully", "ciphertext_size", len(ciphertextB64), "plaintext_size", len(plaintext))
 	return plaintext, nil
 }
 
@@ -356,7 +356,7 @@ func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
 		return nil, fmt.Errorf("hkdf key derivation failed: %w", err)
 	}
 
-	LogDebug("CRYPTO", fmt.Sprintf("Key derived using HKDF-SHA256: key_len=%d", len(key)))
+	LogDebug("CRYPTO", "Key derived using HKDF-SHA256", "key_len", len(key))
 	return key, nil
 }
 

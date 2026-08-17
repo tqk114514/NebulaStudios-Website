@@ -86,7 +86,7 @@ func Load() (*Config, error) {
 	newCfg.DatabaseURL = getEnv("DATABASE_URL", "")
 	dbMaxConns, err := getEnvInt("DB_MAX_CONNS", 10)
 	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid DB_MAX_CONNS, using default: %v", err))
+		utils.LogWarn("CONFIG", "Invalid DB_MAX_CONNS, using default", "error", err)
 	}
 	newCfg.DBMaxConns = dbMaxConns
 
@@ -95,19 +95,19 @@ func Load() (*Config, error) {
 	newCfg.JWTAudience = getEnv("JWT_AUDIENCE", "")
 	jwtExpires, err := getEnvDuration("JWT_EXPIRES_IN", 60*24*time.Hour)
 	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid JWT_EXPIRES_IN, using default (60 days): %v", err))
+		utils.LogWarn("CONFIG", "Invalid JWT_EXPIRES_IN, using default (60 days)", "error", err)
 	}
 	newCfg.JWTExpiresIn = jwtExpires
 
 	accessTokenExpiry, err := getEnvDuration("ACCESS_TOKEN_EXPIRY", 1*time.Hour)
 	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid ACCESS_TOKEN_EXPIRY, using default (1h): %v", err))
+		utils.LogWarn("CONFIG", "Invalid ACCESS_TOKEN_EXPIRY, using default (1h)", "error", err)
 	}
 	newCfg.AccessTokenExpiry = accessTokenExpiry
 
 	refreshTokenExpiry, err := getEnvDuration("REFRESH_TOKEN_EXPIRY", 30*24*time.Hour)
 	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid REFRESH_TOKEN_EXPIRY, using default (30d): %v", err))
+		utils.LogWarn("CONFIG", "Invalid REFRESH_TOKEN_EXPIRY, using default (30d)", "error", err)
 	}
 	newCfg.RefreshTokenExpiry = refreshTokenExpiry
 
@@ -117,7 +117,7 @@ func Load() (*Config, error) {
 	newCfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
 	smtpPort, err := getEnvInt("SMTP_PORT", 0)
 	if err != nil {
-		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid SMTP_PORT, using default: %v", err))
+		utils.LogWarn("CONFIG", "Invalid SMTP_PORT, using default", "error", err)
 	}
 	newCfg.SMTPPort = smtpPort
 
@@ -148,8 +148,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s, db_max_conns=%d",
-		newCfg.Port, newCfg.DBMaxConns))
+	utils.LogInfo("CONFIG", "Configuration loaded", "port", newCfg.Port, "db_max_conns", newCfg.DBMaxConns)
 
 	return newCfg, nil
 }

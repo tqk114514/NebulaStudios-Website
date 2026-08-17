@@ -245,14 +245,14 @@ func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any)
 		switch role {
 		case RoleUser, RoleAdmin, RoleSuperAdmin:
 		default:
-			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("User %s has invalid role %d, downgraded to RoleUser", uid, role))
+			utils.LogWarn("DATA-IMPORT", "User has invalid role, downgraded to RoleUser", "uid", uid, "role", role)
 			role = RoleUser
 			result.RoleDowngraded++
 		}
 
 		password := toString(user["password"])
 		if !strings.HasPrefix(password, "$argon2") {
-			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Skip importing user %s: invalid password hash format", uid))
+			utils.LogWarn("DATA-IMPORT", "Skip importing user: invalid password hash format", "uid", uid)
 			result.PasswordSkipped++
 			continue
 		}
@@ -292,7 +292,7 @@ func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any)
 	var hasError bool
 	for _, uid := range uids {
 		if _, err := br.Exec(); err != nil {
-			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user %s: %v", uid, err))
+			utils.LogWarn("DATA-IMPORT", "Failed to import user", "uid", uid, "error", err)
 			hasError = true
 			result.Failed++
 		} else {
@@ -348,7 +348,7 @@ func importUserLogsBatch(ctx context.Context, conn pgxConn, logs []map[string]an
 	var hasError bool
 	for _, id := range ids {
 		if _, err := br.Exec(); err != nil {
-			utils.LogWarn("DATA-IMPORT", fmt.Sprintf("Failed to import user log %d: %v", id, err))
+			utils.LogWarn("DATA-IMPORT", "Failed to import user log", "id", id, "error", err)
 			hasError = true
 			failed++
 		} else {

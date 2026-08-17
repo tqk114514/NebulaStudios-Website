@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -34,56 +35,107 @@ var loggerInstance Logger
 
 // zapLogger 基于 zap 的 Logger 实现
 type zapLogger struct {
-	zap   *zap.Logger
-	sugar *zap.SugaredLogger
+	zap    *zap.Logger
+	sugar  *zap.SugaredLogger
+	fields []any // 附加字段（如 request_id），由 With 创建，每条日志自动携带
 }
 
-func (l *zapLogger) Debug(category, message string) {
-	masked := maskSensitiveData(message)
-	if category == "" {
-		l.sugar.Debug(masked)
-	} else {
-		l.sugar.Debugw(masked, "category", category)
+// normalizeKV 兼容旧式调用：
+// 新式 API 要求 keysAndValues 为 key/value 交替序列；若为奇数个，
+// 说明末尾是旧式裸字符串 context（如 "uid=xxx"），将其并入 message，
+// 避免结构化字段模式下丢信息。
+func normalizeKV(message string, keysAndValues []any) (string, []any) {
+	if len(keysAndValues)%2 == 1 {
+		tail := keysAndValues[len(keysAndValues)-1]
+		keysAndValues = keysAndValues[:len(keysAndValues)-1]
+		if s := fmt.Sprint(tail); s != "" {
+			message = message + ": " + s
+		}
 	}
+	return message, keysAndValues
 }
 
-func (l *zapLogger) Info(category, message string) {
-	masked := maskSensitiveData(message)
-	if category == "" {
-		l.sugar.Info(masked)
-	} else {
-		l.sugar.Infow(masked, "category", category)
+// maskFields 对结构化字段的字符串值做脱敏（邮箱/IP/Token），
+// 防止结构化字段绕过 message 级别的脱敏把 PII 写进日志。
+func maskFields(keysAndValues []any) []any {
+	for i := 1; i < len(keysAndValues); i += 2 {
+		if s, ok := keysAndValues[i].(string); ok {
+			keysAndValues[i] = maskSensitiveData(s)
+		}
 	}
+	return keysAndValues
 }
 
-func (l *zapLogger) Warn(category, message string) {
-	masked := maskSensitiveData(message)
-	if category == "" {
-		l.sugar.Warn(masked)
-	} else {
-		l.sugar.Warnw(masked, "category", category)
-	}
+// With 返回一个附加了结构化字段的 Logger，每条日志自动携带这些字段。
+// 典型用途：为单个请求附加 request_id，使同一次请求的所有日志行可按 ID 归组。
+func (l *zapLogger) With(fields ...any) Logger {
+	merged := make([]any, 0, len(l.fields)+len(fields))
+	merged = append(merged, l.fields...)
+	merged = append(merged, fields...)
+	return &zapLogger{zap: l.zap, sugar: l.sugar, fields: merged}
 }
 
-func (l *zapLogger) Error(category, message string) {
-	masked := maskSensitiveData(message)
-	if category == "" {
-		l.sugar.Error(masked)
-	} else {
-		l.sugar.Errorw(masked, "category", category)
+// LoggerFromContext 返回一个自动携带 ctx 中 request_id 字段的 Logger；
+// ctx 未设置 request_id 时返回全局 Logger。
+func LoggerFromContext(ctx context.Context) Logger {
+	if ctx != nil {
+		if id := RequestIDFrom(ctx); id != "" {
+			if l, ok := GetLogger().(*zapLogger); ok {
+				return l.With(RequestIDKey, id)
+			}
+		}
 	}
+	return GetLogger()
+}
+
+func (l *zapLogger) Debug(category, message string, keysAndValues ...any) {
+	message, keysAndValues = normalizeKV(message, keysAndValues)
+	message = maskSensitiveData(message)
+	l.sugar.Debugw(message, appendFields(category, l.fields, maskFields(keysAndValues))...)
+}
+
+func (l *zapLogger) Info(category, message string, keysAndValues ...any) {
+	message, keysAndValues = normalizeKV(message, keysAndValues)
+	message = maskSensitiveData(message)
+	l.sugar.Infow(message, appendFields(category, l.fields, maskFields(keysAndValues))...)
+}
+
+func (l *zapLogger) Warn(category, message string, keysAndValues ...any) {
+	message, keysAndValues = normalizeKV(message, keysAndValues)
+	message = maskSensitiveData(message)
+	l.sugar.Warnw(message, appendFields(category, l.fields, maskFields(keysAndValues))...)
+}
+
+func (l *zapLogger) Error(category, message string, keysAndValues ...any) {
+	message, keysAndValues = normalizeKV(message, keysAndValues)
+	message = maskSensitiveData(message)
+	l.sugar.Errorw(message, appendFields(category, l.fields, maskFields(keysAndValues))...)
+}
+
+// appendFields 将 category 与附加字段（extra，如 request_id）置于结构化字段最前
+func appendFields(category string, extra []any, keysAndValues []any) []any {
+	if category == "" && len(extra) == 0 {
+		return keysAndValues
+	}
+	fields := make([]any, 0, len(extra)+len(keysAndValues)+2)
+	if category != "" {
+		fields = append(fields, "category", category)
+	}
+	fields = append(fields, extra...)
+	fields = append(fields, keysAndValues...)
+	return fields
 }
 
 func (l *zapLogger) Printf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
-	masked := maskSensitiveData(message)
-	l.sugar.Info(masked)
+	message = maskSensitiveData(message)
+	l.sugar.Info(message)
 }
 
 func (l *zapLogger) Fatalf(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
-	masked := maskSensitiveData(message)
-	l.sugar.Fatal(masked)
+	message = maskSensitiveData(message)
+	l.sugar.Fatal(message)
 }
 
 func (l *zapLogger) Sync() {
@@ -105,26 +157,49 @@ func GetLogger() Logger {
 	return loggerInstance
 }
 
+// initLogger 初始化基于 zap 的默认 Logger。
+// 默认输出 JSON 结构化日志到 stderr（便于采集/检索），
+// 可通过环境变量覆盖：
+//
+//	LOG_ENCODING=console  开发时人类可读输出（默认 json）
+//	LOG_LEVEL=debug       日志级别（默认 info；可选 debug/warn/error）
 func initLogger() {
 	loggerOnce.Do(func() {
+		encoding := os.Getenv("LOG_ENCODING")
+		if encoding != "console" && encoding != "json" {
+			encoding = "json"
+		}
+
+		level := zapcore.InfoLevel
+		switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+		case "debug":
+			level = zapcore.DebugLevel
+		case "warn":
+			level = zapcore.WarnLevel
+		case "error":
+			level = zapcore.ErrorLevel
+		}
+
 		config := zap.Config{
-			Level:            zap.NewAtomicLevelAt(zapcore.InfoLevel),
+			Level:            zap.NewAtomicLevelAt(level),
 			Development:      false,
-			Encoding:         "console",
+			Encoding:         encoding,
 			OutputPaths:      []string{"stderr"},
 			ErrorOutputPaths: []string{"stderr"},
 			EncoderConfig: zapcore.EncoderConfig{
 				TimeKey:        "time",
 				LevelKey:       "level",
 				MessageKey:     "msg",
-				EncodeTime:     zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05"),
-				EncodeLevel:    zapcore.CapitalLevelEncoder,
+				CallerKey:      "caller",
+				EncodeTime:     zapcore.ISO8601TimeEncoder,
+				EncodeLevel:    zapcore.LowercaseLevelEncoder,
 				EncodeDuration: zapcore.StringDurationEncoder,
+				EncodeCaller:   zapcore.ShortCallerEncoder,
 			},
 		}
 
 		zl, err := config.Build(
-			zap.AddCallerSkip(1),
+			zap.AddCallerSkip(2),
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[LOGGER] Failed to init zap: %v, falling back to basic logger\n", err)
@@ -162,22 +237,6 @@ func LogFatalf(format string, args ...any) {
 // SyncLogger 同步日志缓冲区（程序退出前调用）
 func SyncLogger() {
 	GetLogger().Sync()
-}
-
-func logDebug(message string) {
-	GetLogger().Debug("", message)
-}
-
-func logInfo(message string) {
-	GetLogger().Info("", message)
-}
-
-func logWarn(message string) {
-	GetLogger().Warn("", message)
-}
-
-func logError(message string) {
-	GetLogger().Error("", message)
 }
 
 // maskSensitiveData 脱敏敏感数据

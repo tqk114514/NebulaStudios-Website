@@ -120,7 +120,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 		existingToken, findErr := s.tokenRepo.FindByToken(ctx, tokenHash)
 		if findErr != nil {
 			if utils.IsDatabaseNotFound(findErr) {
-				utils.LogDebug("TOKEN", "Token not found", utils.TruncateIdentifier(tokenHash))
+				utils.LogDebug("TOKEN", "Token not found", "token_hash", utils.TruncateIdentifier(tokenHash))
 				return nil, models.ErrInvalidToken
 			}
 			return nil, findErr
@@ -157,7 +157,7 @@ func (s *TokenService) ValidateAndUseToken(ctx context.Context, tokenStr string)
 		codeStr = *token.Code
 	}
 
-	utils.LogInfo("TOKEN", fmt.Sprintf("Token validated: email=%s, type=%s", token.Email, token.Type))
+	utils.LogInfo("TOKEN", "Token validated", "email", token.Email, "type", token.Type)
 
 	return &TokenResult{
 		Code:  codeStr,
@@ -180,19 +180,19 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.LogDebug("TOKEN", "Code not found", codeStr)
+			utils.LogDebug("TOKEN", "Code not found", "code", codeStr)
 			return nil, models.ErrInvalidCode
 		}
 		return nil, err
 	}
 
 	if code.Email != normalizedEmail {
-		utils.LogWarn("TOKEN", fmt.Sprintf("Email mismatch: expected=%s, got=%s", code.Email, normalizedEmail))
+		utils.LogWarn("TOKEN", "Email mismatch", "expected", code.Email, "got", normalizedEmail)
 		return nil, models.ErrEmailMismatch
 	}
 
 	if expectedType != "" && code.Type != expectedType {
-		utils.LogWarn("TOKEN", fmt.Sprintf("Type mismatch: expected=%s, got=%s", expectedType, code.Type))
+		utils.LogWarn("TOKEN", "Type mismatch", "expected", expectedType, "got", code.Type)
 		return nil, models.ErrTypeMismatch
 	}
 
@@ -210,7 +210,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 		return nil, fmt.Errorf("failed to update verification: %w", err)
 	}
 
-	utils.LogInfo("TOKEN", fmt.Sprintf("Code verified: email=%s, type=%s", normalizedEmail, code.Type))
+	utils.LogInfo("TOKEN", "Code verified", "email", normalizedEmail, "type", code.Type)
 
 	return &CodeResult{Type: code.Type}, nil
 }
@@ -272,14 +272,14 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 
 	s.codeRepo.DeleteByCode(ctx, codeStr)
 
-	utils.LogInfo("TOKEN", fmt.Sprintf("Code used and removed: email=%s", normalizedEmail))
+	utils.LogInfo("TOKEN", "Code used and removed", "email", normalizedEmail)
 	return nil
 }
 
 // InvalidateCodeByEmail 使指定邮箱的验证码失效
 func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, tokenType *string) error {
 	if email == "" {
-		utils.LogWarn("TOKEN", "InvalidateCodeByEmail called with empty email", "")
+		utils.LogWarn("TOKEN", "InvalidateCodeByEmail called with empty email")
 		return nil
 	}
 
@@ -346,11 +346,11 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		now := time.Now().UnixMilli()
 		count, err := s.tokenRepo.DeleteExpired(ctx, now)
 		if err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup expired tokens", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup expired tokens", "error", err)
 			return
 		}
 		if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired tokens", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired tokens", "count", count)
 		}
 	})
 
@@ -364,11 +364,11 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		now := time.Now().UnixMilli()
 		count, err := s.codeRepo.DeleteExpired(ctx, now)
 		if err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup expired codes", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup expired codes", "error", err)
 			return
 		}
 		if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired codes", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired codes", "count", count)
 		}
 	})
 
@@ -381,9 +381,9 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 
 		repo := models.NewOAuthAuthCodeRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup OAuth auth codes", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth auth codes", "error", err)
 		} else if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth auth codes", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired OAuth auth codes", "count", count)
 		}
 	})
 
@@ -396,9 +396,9 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 
 		repo := models.NewOAuthAccessTokenRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup OAuth access tokens", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth access tokens", "error", err)
 		} else if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth access tokens", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired OAuth access tokens", "count", count)
 		}
 	})
 
@@ -411,9 +411,9 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 
 		repo := models.NewOAuthRefreshTokenRepository(s.pool)
 		if count, err := repo.DeleteExpired(ctx); err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", "error", err)
 		} else if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired OAuth refresh tokens", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired OAuth refresh tokens", "count", count)
 		}
 	})
 
@@ -426,11 +426,11 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 
 		count, err := s.sessionTokenRepo.DeleteExpired(ctx)
 		if err != nil {
-			utils.LogWarn("TOKEN", "Failed to cleanup expired session tokens", err)
+			utils.LogWarn("TOKEN", "Failed to cleanup expired session tokens", "error", err)
 			return
 		}
 		if count > 0 {
-			utils.LogInfo("TOKEN", fmt.Sprintf("Cleaned up %d expired session tokens", count))
+			utils.LogInfo("TOKEN", "Cleaned up expired session tokens", "count", count)
 		}
 	})
 

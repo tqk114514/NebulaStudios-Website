@@ -98,12 +98,11 @@ func NewEmailService(cfg *config.Config) (*EmailService, error) {
 	}
 
 	if err := validateTemplateAndTexts(template, texts); err != nil {
-		utils.LogWarn("EMAIL", "Template validation warning", fmt.Sprintf("error=%v", err))
+		utils.LogWarn("EMAIL", "Template validation warning", "error", err)
 		// 不返回错误，只记录警告
 	}
 
-	utils.LogInfo("EMAIL", fmt.Sprintf("Email service initialized: host=%s, port=%d, from=%s",
-		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom))
+	utils.LogInfo("EMAIL", "Email service initialized", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom)
 
 	service := &EmailService{
 		cfg:        cfg,
@@ -130,7 +129,7 @@ func (s *EmailService) VerifyConnection() error {
 	}
 	defer func() {
 		if err := client.Close(); err != nil {
-			utils.LogWarn("EMAIL", "Failed to close SMTP client", "")
+			utils.LogWarn("EMAIL", "Failed to close SMTP client")
 		}
 	}()
 
@@ -146,11 +145,11 @@ func (s *EmailService) SendVerificationEmailAsync(to, emailType, language, verif
 		defer func() {
 			if r := recover(); r != nil {
 				utils.LogError(logContext, "SendVerificationEmailAsync",
-					fmt.Errorf("panic: %v", r), fmt.Sprintf("to=%s, type=%s", to, emailType))
+					fmt.Errorf("panic: %v", r), "to", to, "type", emailType)
 			}
 		}()
 		if err := s.SendVerificationEmail(to, emailType, language, verifyURL); err != nil {
-			utils.LogError(logContext, "SendVerificationEmailAsync", err, fmt.Sprintf("to=%s, type=%s", to, emailType))
+			utils.LogError(logContext, "SendVerificationEmailAsync", err, "to", to, "type", emailType)
 		}
 	}()
 }
@@ -177,7 +176,7 @@ func (s *EmailService) SendVerificationEmail(to, emailType, language, verifyURL 
 	typeTexts := s.getTypeTexts(langTexts, emailType)
 
 	if err := validateTexts(common, typeTexts); err != nil {
-		utils.LogWarn("EMAIL", "Missing texts, using default language", fmt.Sprintf("type=%s, language=%s", emailType, language))
+		utils.LogWarn("EMAIL", "Missing texts, using default language", "type", emailType, "language", language)
 		s.mu.RLock()
 		langTexts = s.texts[defaultLanguage]
 		s.mu.RUnlock()
@@ -194,7 +193,7 @@ func (s *EmailService) SendVerificationEmail(to, emailType, language, verifyURL 
 	subject := typeTexts["subject"]
 	if subject == "" {
 		subject = "Verification Email"
-		utils.LogWarn("EMAIL", "Missing subject, using default", fmt.Sprintf("type=%s", emailType))
+		utils.LogWarn("EMAIL", "Missing subject, using default", "type", emailType)
 	}
 
 	if err := s.sendEmail(to, subject, html, textBody); err != nil {
@@ -220,12 +219,12 @@ func (s *EmailService) getLanguageTexts(language string) map[string]map[string]s
 
 	langTexts, ok := s.texts[language]
 	if !ok {
-		utils.LogWarn("EMAIL", "Language not found, using default", fmt.Sprintf("language=%s, default=%s", language, defaultLanguage))
+		utils.LogWarn("EMAIL", "Language not found, using default", "language", language, "default", defaultLanguage)
 		langTexts = s.texts[defaultLanguage]
 	}
 
 	if langTexts == nil {
-		utils.LogError("EMAIL", "getTexts", fmt.Errorf("default language texts not found"), "")
+		utils.LogError("EMAIL", "getTexts", fmt.Errorf("default language texts not found"))
 		return make(map[string]map[string]string)
 	}
 
@@ -240,7 +239,7 @@ func (s *EmailService) getTypeTexts(langTexts map[string]map[string]string, emai
 
 	typeTexts, ok := langTexts[emailType]
 	if !ok {
-		utils.LogWarn("EMAIL", "Email type not found, using default", fmt.Sprintf("type=%s, default=%s", emailType, defaultEmailType))
+		utils.LogWarn("EMAIL", "Email type not found, using default", "type", emailType, "default", defaultEmailType)
 		typeTexts = langTexts[defaultEmailType]
 	}
 
@@ -288,7 +287,7 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 
 	// 校验 CRLF 防止邮件头部注入：to/subject/from 含换行符可注入 Bcc/Reply-To 等头
 	if containsNewline(to) || containsNewline(subject) || containsNewline(s.cfg.SMTPFrom) {
-		utils.LogError("EMAIL", "send", ErrEmailHeaderInjection, fmt.Sprintf("CRLF detected in email headers: to=%q, subject=%q", to, subject))
+		utils.LogError("EMAIL", "send", ErrEmailHeaderInjection, "reason", "CRLF detected in email headers", "to", to, "subject", subject)
 		return ErrEmailHeaderInjection
 	}
 
@@ -314,13 +313,13 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 	msg.AddAlternativeString(mail.TypeTextHTML, htmlBody)
 
 	if err := client.DialAndSend(msg); err != nil {
-		utils.LogError("EMAIL", "send", err, fmt.Sprintf("Failed to send email: to=%s, subject=%s", to, subject))
+		utils.LogError("EMAIL", "send", err, "to", to, "subject", subject)
 		// 发送失败，重置连接（下次会重新建立）
 		s.resetClient()
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	utils.LogInfo("EMAIL", fmt.Sprintf("Email sent successfully: to=%s, subject=%s", to, subject))
+	utils.LogInfo("EMAIL", "Email sent successfully", "to", to, "subject", subject)
 	return nil
 }
 
@@ -348,7 +347,7 @@ func (s *EmailService) createClient() (*mail.Client, error) {
 		tlsPolicy = mail.TLSOpportunistic
 		authType = mail.SMTPAuthPlain
 		useSSL = false
-		utils.LogWarn("EMAIL", "Non-standard SMTP port, using STARTTLS", fmt.Sprintf("port=%d", s.cfg.SMTPPort))
+		utils.LogWarn("EMAIL", "Non-standard SMTP port, using STARTTLS", "port", s.cfg.SMTPPort)
 	}
 
 	options := []mail.Option{
@@ -366,8 +365,7 @@ func (s *EmailService) createClient() (*mail.Client, error) {
 
 	client, err := mail.NewClient(s.cfg.SMTPHost, options...)
 	if err != nil {
-		utils.LogError("EMAIL", "createClient", err, fmt.Sprintf("Failed to create SMTP client: host=%s, port=%d",
-			s.cfg.SMTPHost, s.cfg.SMTPPort))
+		utils.LogError("EMAIL", "createClient", err, "host", s.cfg.SMTPHost, "port", s.cfg.SMTPPort)
 		return nil, fmt.Errorf("%w: %v", ErrEmailClientCreateFailed, err)
 	}
 
@@ -408,7 +406,7 @@ func (s *EmailService) closeClient() {
 
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
-			utils.LogWarn("EMAIL", "Failed to close SMTP client", "")
+			utils.LogWarn("EMAIL", "Failed to close SMTP client")
 		}
 		s.client = nil
 		utils.LogInfo("EMAIL", "SMTP connection closed")
@@ -504,7 +502,7 @@ func loadTemplate(path string) (string, error) {
 		return "", fmt.Errorf("%w: template is empty", ErrEmailTemplateNotFound)
 	}
 
-	utils.LogInfo("EMAIL", fmt.Sprintf("Email template loaded: %s (%d bytes)", path, len(templateBytes)))
+	utils.LogInfo("EMAIL", "Email template loaded", "path", path, "bytes", len(templateBytes))
 	return template, nil
 }
 
@@ -527,7 +525,7 @@ func loadTexts(path string) (EmailTexts, error) {
 		return nil, fmt.Errorf("%w: texts is empty", ErrEmailInvalidTexts)
 	}
 
-	utils.LogInfo("EMAIL", fmt.Sprintf("Email texts loaded: %s (%d languages)", path, len(texts)))
+	utils.LogInfo("EMAIL", "Email texts loaded", "path", path, "languages", len(texts))
 	return texts, nil
 }
 

@@ -65,10 +65,10 @@ func (r *SessionTokenRepository) Create(ctx context.Context, token *SessionToken
 	)
 
 	if err != nil {
-		return utils.LogError("SESSION_TOKEN", "Create", err, fmt.Sprintf("user_uid=%s", token.UserUID))
+		return utils.LogError("SESSION_TOKEN", "Create", err, "user_uid", token.UserUID)
 	}
 
-	utils.LogInfo("SESSION_TOKEN", fmt.Sprintf("Session token created: family_id=%s, user_uid=%s", token.FamilyID, token.UserUID))
+	utils.LogInfo("SESSION_TOKEN", "Session token created", "family_id", token.FamilyID, "user_uid", token.UserUID)
 	return nil
 }
 
@@ -95,7 +95,7 @@ func (r *SessionTokenRepository) FindByHash(ctx context.Context, tokenHash strin
 		if err.Error() == "no rows in result set" {
 			return nil, ErrSessionTokenNotFound
 		}
-		return nil, utils.LogError("SESSION_TOKEN", "FindByHash", err, tokenHash)
+		return nil, utils.LogError("SESSION_TOKEN", "FindByHash", err, "token_hash", tokenHash)
 	}
 
 	return token, nil
@@ -113,7 +113,7 @@ func (r *SessionTokenRepository) MarkUsed(ctx context.Context, id int64) error {
 	`, id)
 
 	if err != nil {
-		return utils.LogError("SESSION_TOKEN", "MarkUsed", err, fmt.Sprintf("id=%d", id))
+		return utils.LogError("SESSION_TOKEN", "MarkUsed", err, "id", id)
 	}
 
 	if result.RowsAffected() == 0 {
@@ -134,11 +134,11 @@ func (r *SessionTokenRepository) RevokeFamily(ctx context.Context, familyID stri
 	`, familyID)
 
 	if err != nil {
-		return 0, utils.LogError("SESSION_TOKEN", "RevokeFamily", err, fmt.Sprintf("family_id=%s", familyID))
+		return 0, utils.LogError("SESSION_TOKEN", "RevokeFamily", err, "family_id", familyID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("SESSION_TOKEN", fmt.Sprintf("Token family revoked: family_id=%s, count=%d", familyID, count))
+	utils.LogInfo("SESSION_TOKEN", "Token family revoked", "family_id", familyID, "count", count)
 	return count, nil
 }
 
@@ -153,11 +153,11 @@ func (r *SessionTokenRepository) RevokeUser(ctx context.Context, userUID string)
 	`, userUID)
 
 	if err != nil {
-		return 0, utils.LogError("SESSION_TOKEN", "RevokeUser", err, fmt.Sprintf("user_uid=%s", userUID))
+		return 0, utils.LogError("SESSION_TOKEN", "RevokeUser", err, "user_uid", userUID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("SESSION_TOKEN", fmt.Sprintf("User tokens revoked: user_uid=%s, count=%d", userUID, count))
+	utils.LogInfo("SESSION_TOKEN", "User tokens revoked", "user_uid", userUID, "count", count)
 	return count, nil
 }
 
@@ -174,7 +174,7 @@ func (r *SessionTokenRepository) DeleteExpired(ctx context.Context) (int64, erro
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogInfo("SESSION_TOKEN", fmt.Sprintf("Deleted %d expired session tokens", count))
+		utils.LogInfo("SESSION_TOKEN", "Deleted expired session tokens", "count", count)
 	}
 	return count, nil
 }

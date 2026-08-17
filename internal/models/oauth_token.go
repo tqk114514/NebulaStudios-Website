@@ -157,10 +157,10 @@ func (r *OAuthAuthCodeRepository) Create(ctx context.Context, code *OAuthAuthCod
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_CODE", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", code.ClientID, code.UserUID))
+		return utils.LogError("OAUTH_CODE", "Create", err, "client_id", code.ClientID, "user_uid", code.UserUID)
 	}
 
-	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code created: id=%d, client_id=%s, user_uid=%s", code.ID, code.ClientID, code.UserUID))
+	utils.LogInfo("OAUTH_CODE", "Auth code created", "id", code.ID, "client_id", code.ClientID, "user_uid", code.UserUID)
 	return nil
 }
 
@@ -188,7 +188,7 @@ func (r *OAuthAuthCodeRepository) FindByCode(ctx context.Context, codeHash strin
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOAuthCodeNotFound
 		}
-		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, fmt.Sprintf("code_hash=%s", utils.TruncateIdentifier(codeHash)))
+		return nil, utils.LogError("OAUTH_CODE", "FindByCode", err, "code_hash", utils.TruncateIdentifier(codeHash))
 	}
 
 	return authCode, nil
@@ -206,14 +206,14 @@ func (r *OAuthAuthCodeRepository) MarkUsed(ctx context.Context, id int64) error 
 	`, id)
 
 	if err != nil {
-		return utils.LogError("OAUTH_CODE", "MarkUsed", err, fmt.Sprintf("id=%d", id))
+		return utils.LogError("OAUTH_CODE", "MarkUsed", err, "id", id)
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrOAuthCodeUsed // 如果没有行被更新，说明已经被使用了，返回已使用错误
 	}
 
-	utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Auth code marked as used: id=%d", id))
+	utils.LogInfo("OAUTH_CODE", "Auth code marked as used", "id", id)
 	return nil
 }
 
@@ -233,7 +233,7 @@ func (r *OAuthAuthCodeRepository) DeleteExpired(ctx context.Context) (int64, err
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogInfo("OAUTH_CODE", fmt.Sprintf("Deleted %d expired/used auth codes", count))
+		utils.LogInfo("OAUTH_CODE", "Deleted expired/used auth codes", "count", count)
 	}
 	return count, nil
 }
@@ -265,10 +265,10 @@ func (r *OAuthAccessTokenRepository) Create(ctx context.Context, token *OAuthAcc
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_ACCESS_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", token.ClientID, token.UserUID))
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "Create", err, "client_id", token.ClientID, "user_uid", token.UserUID)
 	}
 
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token created: id=%d, client_id=%s, user_uid=%s", token.ID, token.ClientID, token.UserUID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", "Access token created", "id", token.ID, "client_id", token.ClientID, "user_uid", token.UserUID)
 	return nil
 }
 
@@ -309,10 +309,10 @@ func (r *OAuthAccessTokenRepository) Delete(ctx context.Context, id int64) error
 
 	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE id = $1", id)
 	if err != nil {
-		return utils.LogError("OAUTH_ACCESS_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
+		return utils.LogError("OAUTH_ACCESS_TOKEN", "Delete", err, "id", id)
 	}
 
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Access token deleted: id=%d", id))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", "Access token deleted", "id", id)
 	return nil
 }
 
@@ -341,11 +341,11 @@ func (r *OAuthAccessTokenRepository) DeleteByUserAndClient(ctx context.Context, 
 	`, userUID, clientID)
 
 	if err != nil {
-		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUserAndClient", err, "user_uid", userUID, "client_id", clientID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_uid=%s, client_id=%s", count, userUID, clientID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", "Deleted access tokens", "count", count, "user_uid", userUID, "client_id", clientID)
 	return count, nil
 }
 
@@ -357,11 +357,11 @@ func (r *OAuthAccessTokenRepository) DeleteByUser(ctx context.Context, userUID s
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByUser", err, "user_uid", userUID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for user_uid=%s", count, userUID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", "Deleted access tokens", "count", count, "user_uid", userUID)
 	return count, nil
 }
 
@@ -378,7 +378,7 @@ func (r *OAuthAccessTokenRepository) DeleteExpired(ctx context.Context) (int64, 
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d expired access tokens", count))
+		utils.LogInfo("OAUTH_ACCESS_TOKEN", "Deleted expired access tokens", "count", count)
 	}
 	return count, nil
 }
@@ -391,11 +391,11 @@ func (r *OAuthAccessTokenRepository) DeleteByClient(ctx context.Context, clientI
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_access_tokens WHERE client_id = $1", clientID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
+		return 0, utils.LogError("OAUTH_ACCESS_TOKEN", "DeleteByClient", err, "client_id", clientID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_ACCESS_TOKEN", fmt.Sprintf("Deleted %d access tokens for client_id=%s", count, clientID))
+	utils.LogInfo("OAUTH_ACCESS_TOKEN", "Deleted access tokens", "count", count, "client_id", clientID)
 	return count, nil
 }
 
@@ -431,10 +431,10 @@ func (r *OAuthRefreshTokenRepository) Create(ctx context.Context, token *OAuthRe
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_REFRESH_TOKEN", "Create", err, fmt.Sprintf("client_id=%s, user_uid=%s", token.ClientID, token.UserUID))
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Create", err, "client_id", token.ClientID, "user_uid", token.UserUID)
 	}
 
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token created: id=%d, client_id=%s, user_uid=%s", token.ID, token.ClientID, token.UserUID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Refresh token created", "id", token.ID, "client_id", token.ClientID, "user_uid", token.UserUID)
 	return nil
 }
 
@@ -480,10 +480,10 @@ func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) erro
 
 	_, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE id = $1", id)
 	if err != nil {
-		return utils.LogError("OAUTH_REFRESH_TOKEN", "Delete", err, fmt.Sprintf("id=%d", id))
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Delete", err, "id", id)
 	}
 
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Refresh token deleted: id=%d", id))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Refresh token deleted", "id", id)
 	return nil
 }
 
@@ -512,11 +512,11 @@ func (r *OAuthRefreshTokenRepository) DeleteByUserAndClient(ctx context.Context,
 	`, userUID, clientID)
 
 	if err != nil {
-		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUserAndClient", err, "user_uid", userUID, "client_id", clientID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_uid=%s, client_id=%s", count, userUID, clientID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Deleted refresh tokens", "count", count, "user_uid", userUID, "client_id", clientID)
 	return count, nil
 }
 
@@ -528,11 +528,11 @@ func (r *OAuthRefreshTokenRepository) DeleteByUser(ctx context.Context, userUID 
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByUser", err, "user_uid", userUID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for user_uid=%s", count, userUID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Deleted refresh tokens", "count", count, "user_uid", userUID)
 	return count, nil
 }
 
@@ -549,7 +549,7 @@ func (r *OAuthRefreshTokenRepository) DeleteExpired(ctx context.Context) (int64,
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d expired refresh tokens", count))
+		utils.LogInfo("OAUTH_REFRESH_TOKEN", "Deleted expired refresh tokens", "count", count)
 	}
 	return count, nil
 }
@@ -562,11 +562,11 @@ func (r *OAuthRefreshTokenRepository) DeleteByClient(ctx context.Context, client
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE client_id = $1", clientID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
+		return 0, utils.LogError("OAUTH_REFRESH_TOKEN", "DeleteByClient", err, "client_id", clientID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_REFRESH_TOKEN", fmt.Sprintf("Deleted %d refresh tokens for client_id=%s", count, clientID))
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Deleted refresh tokens", "count", count, "client_id", clientID)
 	return count, nil
 }
 
@@ -601,10 +601,10 @@ func (r *OAuthGrantRepository) CreateOrUpdate(ctx context.Context, grant *OAuthG
 	)
 
 	if err != nil {
-		return utils.LogError("OAUTH_GRANT", "CreateOrUpdate", err, fmt.Sprintf("user_uid=%s, client_id=%s", grant.UserUID, grant.ClientID))
+		return utils.LogError("OAUTH_GRANT", "CreateOrUpdate", err, "user_uid", grant.UserUID, "client_id", grant.ClientID)
 	}
 
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant created/updated: id=%d, user_uid=%s, client_id=%s", grant.ID, grant.UserUID, grant.ClientID))
+	utils.LogInfo("OAUTH_GRANT", "Grant created/updated", "id", grant.ID, "user_uid", grant.UserUID, "client_id", grant.ClientID)
 	return nil
 }
 
@@ -624,7 +624,7 @@ func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string
 	`, userUID)
 
 	if err != nil {
-		return nil, utils.LogError("OAUTH_GRANT", "FindByUserUID", err, fmt.Sprintf("user_uid=%s", userUID))
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserUID", err, "user_uid", userUID)
 	}
 	defer rows.Close()
 
@@ -665,7 +665,7 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID 
 		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 			return nil, ErrOAuthGrantNotFound
 		}
-		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
+		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, "user_uid", userUID, "client_id", clientID)
 	}
 
 	return grant, nil
@@ -682,14 +682,14 @@ func (r *OAuthGrantRepository) Delete(ctx context.Context, userUID string, clien
 	`, userUID, clientID)
 
 	if err != nil {
-		return utils.LogError("OAUTH_GRANT", "Delete", err, fmt.Sprintf("user_uid=%s, client_id=%s", userUID, clientID))
+		return utils.LogError("OAUTH_GRANT", "Delete", err, "user_uid", userUID, "client_id", clientID)
 	}
 
 	if result.RowsAffected() == 0 {
 		return ErrOAuthGrantNotFound
 	}
 
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Grant deleted: user_uid=%s, client_id=%s", userUID, clientID))
+	utils.LogInfo("OAUTH_GRANT", "Grant deleted", "user_uid", userUID, "client_id", clientID)
 	return nil
 }
 
@@ -701,11 +701,11 @@ func (r *OAuthGrantRepository) DeleteByUser(ctx context.Context, userUID string)
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_grants WHERE user_uid = $1", userUID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, fmt.Sprintf("user_uid=%s", userUID))
+		return 0, utils.LogError("OAUTH_GRANT", "DeleteByUser", err, "user_uid", userUID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for user_uid=%s", count, userUID))
+	utils.LogInfo("OAUTH_GRANT", "Deleted grants", "count", count, "user_uid", userUID)
 	return count, nil
 }
 
@@ -717,11 +717,11 @@ func (r *OAuthGrantRepository) DeleteByClient(ctx context.Context, clientID stri
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_grants WHERE client_id = $1", clientID)
 	if err != nil {
-		return 0, utils.LogError("OAUTH_GRANT", "DeleteByClient", err, fmt.Sprintf("client_id=%s", clientID))
+		return 0, utils.LogError("OAUTH_GRANT", "DeleteByClient", err, "client_id", clientID)
 	}
 
 	count := result.RowsAffected()
-	utils.LogInfo("OAUTH_GRANT", fmt.Sprintf("Deleted %d grants for client_id=%s", count, clientID))
+	utils.LogInfo("OAUTH_GRANT", "Deleted grants", "count", count, "client_id", clientID)
 	return count, nil
 }
 

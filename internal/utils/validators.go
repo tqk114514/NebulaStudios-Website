@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"regexp"
@@ -86,7 +85,7 @@ func ValidateEmail(email string) ValidationResult {
 	trimmed := strings.ToLower(strings.TrimSpace(email))
 
 	if len(trimmed) > 254 {
-		LogDebug("VALIDATOR", fmt.Sprintf("Email validation failed: too long (%d chars)", len(trimmed)))
+		LogDebug("VALIDATOR", "Email validation failed: too long", "chars", len(trimmed))
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidEmail}
 	}
 
@@ -135,12 +134,12 @@ func ValidateUsername(username string) ValidationResult {
 	runeCount := utf8.RuneCountInString(trimmed)
 
 	if runeCount < usernameMinLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Username validation failed: too short (%d chars)", runeCount))
+		LogDebug("VALIDATOR", "Username validation failed: too short", "chars", runeCount)
 		return ValidationResult{Valid: false, ErrorCode: ErrUsernameTooShort}
 	}
 
 	if runeCount > usernameMaxLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Username validation failed: too long (%d chars)", runeCount))
+		LogDebug("VALIDATOR", "Username validation failed: too long", "chars", runeCount)
 		return ValidationResult{Valid: false, ErrorCode: ErrUsernameTooLong}
 	}
 
@@ -160,12 +159,12 @@ func ValidatePassword(password string) ValidationResult {
 	}
 
 	if len(password) < passwordMinLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Password validation failed: too short (%d chars)", len(password)))
+		LogDebug("VALIDATOR", "Password validation failed: too short", "chars", len(password))
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordTooShort}
 	}
 
 	if len(password) > passwordMaxLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Password validation failed: too long (%d chars)", len(password)))
+		LogDebug("VALIDATOR", "Password validation failed: too long", "chars", len(password))
 		return ValidationResult{Valid: false, ErrorCode: ErrPasswordTooLong}
 	}
 
@@ -227,7 +226,7 @@ func ValidateAvatarURL(avatarURL string) ValidationResult {
 // validateDataURL 验证 data URL
 func validateDataURL(dataURL string) ValidationResult {
 	if len(dataURL) > dataURLMaxLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Data URL validation failed: too long (%d bytes)", len(dataURL)))
+		LogDebug("VALIDATOR", "Data URL validation failed: too long", "bytes", len(dataURL))
 		return ValidationResult{Valid: false, ErrorCode: ErrURLTooLong}
 	}
 
@@ -242,19 +241,19 @@ func validateDataURL(dataURL string) ValidationResult {
 // validateHTTPURL 验证 HTTP/HTTPS URL
 func validateHTTPURL(httpURL string) ValidationResult {
 	if len(httpURL) > urlMaxLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("HTTP URL validation failed: too long (%d chars)", len(httpURL)))
+		LogDebug("VALIDATOR", "HTTP URL validation failed: too long", "chars", len(httpURL))
 		return ValidationResult{Valid: false, ErrorCode: ErrURLTooLong}
 	}
 
 	parsed, err := url.Parse(httpURL)
 	if err != nil {
-		LogDebug("VALIDATOR", fmt.Sprintf("HTTP URL validation failed: parse error: %v", err))
+		LogDebug("VALIDATOR", "HTTP URL validation failed: parse error", "error", err)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
-		LogDebug("VALIDATOR", fmt.Sprintf("HTTP URL validation failed: invalid protocol: %s", scheme))
+		LogDebug("VALIDATOR", "HTTP URL validation failed: invalid protocol", "scheme", scheme)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURLProtocol}
 	}
 
@@ -265,7 +264,7 @@ func validateHTTPURL(httpURL string) ValidationResult {
 	}
 
 	if isBlockedHost(hostname) {
-		LogWarn("VALIDATOR", fmt.Sprintf("Blocked internal URL: %s", hostname))
+		LogWarn("VALIDATOR", "Blocked internal URL", "hostname", hostname)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
 	}
 
@@ -275,7 +274,7 @@ func validateHTTPURL(httpURL string) ValidationResult {
 
 	pathname := strings.ToLower(parsed.Path)
 	if !hasImageExtension(pathname) {
-		LogWarn("VALIDATOR", fmt.Sprintf("URL does not end with image extension: %s", pathname))
+		LogWarn("VALIDATOR", "URL does not end with image extension", "path", pathname)
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidImageURL}
 	}
 
@@ -295,13 +294,13 @@ func isBlockedHost(hostname string) bool {
 
 	ips, err := net.LookupIP(hostname)
 	if err != nil {
-		LogWarn("VALIDATOR", fmt.Sprintf("DNS resolution failed for hostname: %s", hostname))
+		LogWarn("VALIDATOR", "DNS resolution failed for hostname", "hostname", hostname)
 		return true
 	}
 
 	for _, resolvedIP := range ips {
 		if isBlockedIP(resolvedIP) {
-			LogWarn("VALIDATOR", fmt.Sprintf("Blocked domain pointing to internal IP: %s (IP: %s)", hostname, resolvedIP.String()))
+			LogWarn("VALIDATOR", "Blocked domain pointing to internal IP", "hostname", hostname, "ip", resolvedIP.String())
 			return true
 		}
 	}
@@ -361,7 +360,7 @@ func ValidateCode(code string) ValidationResult {
 	trimmed := strings.TrimSpace(code)
 
 	if len(trimmed) != verificationCodeLength {
-		LogDebug("VALIDATOR", fmt.Sprintf("Code validation failed: invalid length (%d)", len(trimmed)))
+		LogDebug("VALIDATOR", "Code validation failed: invalid length", "length", len(trimmed))
 		return ValidationResult{Valid: false, ErrorCode: ErrInvalidCode}
 	}
 

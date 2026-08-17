@@ -36,7 +36,7 @@ func NewLocalStorageService(cfg *config.Config) (*LocalStorageService, error) {
 
 	imgProcessor := NewImgProcessor()
 
-	utils.LogInfo("STORAGE", fmt.Sprintf("Local storage initialized: dir=%s", dir))
+	utils.LogInfo("STORAGE", "Local storage initialized", "dir", dir)
 	return &LocalStorageService{
 		dir:          dir,
 		baseURL:      cfg.BaseURL,
@@ -66,15 +66,15 @@ func (s *LocalStorageService) UploadAvatar(_ context.Context, userUID string, im
 	}
 
 	avatarURL := fmt.Sprintf("%s/avatars/%s", s.baseURL, filename)
-	utils.LogInfo("STORAGE", fmt.Sprintf("Avatar saved: userUID=%s, url=%s, size=%d bytes", userUID, avatarURL, len(webpData)))
+	utils.LogInfo("STORAGE", "Avatar saved", "user_uid", userUID, "url", avatarURL, "size", len(webpData))
 
 	// 生成 Brotli 压缩副本（失败不影响主文件，与 dist 静态资源一致）
 	if brData, err := CompressBrotli(webpData); err == nil {
 		if werr := os.WriteFile(path+".br", brData, 0o644); werr != nil {
-			utils.LogWarn("STORAGE", "Failed to write brotli avatar", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarn("STORAGE", "Failed to write brotli avatar", "user_uid", userUID)
 		}
 	} else {
-		utils.LogWarn("STORAGE", "Failed to compress avatar", fmt.Sprintf("userUID=%s: %v", userUID, err))
+		utils.LogWarn("STORAGE", "Failed to compress avatar", "user_uid", userUID, "error", err)
 	}
 
 	return avatarURL, nil
@@ -107,9 +107,9 @@ func (s *LocalStorageService) DeleteAvatar(_ context.Context, userUID string) er
 	}
 	// 同步删除 Brotli 压缩副本（不存在则忽略）
 	if err := os.Remove(path + ".br"); err != nil && !os.IsNotExist(err) {
-		utils.LogWarn("STORAGE", "Failed to delete brotli avatar", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarn("STORAGE", "Failed to delete brotli avatar", "user_uid", userUID)
 	}
-	utils.LogInfo("STORAGE", fmt.Sprintf("Avatar deleted: userUID=%s", userUID))
+	utils.LogInfo("STORAGE", "Avatar deleted", "user_uid", userUID)
 	return nil
 }
 

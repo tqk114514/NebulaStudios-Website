@@ -231,10 +231,10 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogEmailWhitelistCreate(ctx, operatorUID, item); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log create email whitelist", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log create email whitelist", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist created: operatorUID=%s, domain=%s", operatorUID, domain))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "Email whitelist created", "operator_uid", operatorUID, "domain", domain)
 	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
@@ -331,10 +331,10 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorUID, item); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log update email whitelist", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log update email whitelist", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist updated: operatorUID=%s, id=%d", operatorUID, id))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "Email whitelist updated", "operator_uid", operatorUID, "id", id)
 	utils.RespondSuccessWithData(c, gin.H{"item": item})
 }
 
@@ -369,10 +369,10 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorUID, id); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log delete email whitelist", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log delete email whitelist", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Email whitelist deleted: operatorUID=%s, id=%d", operatorUID, id))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "Email whitelist deleted", "operator_uid", operatorUID, "id", id)
 	utils.RespondSuccess(c, gin.H{"message": "Email whitelist entry deleted"})
 }
 

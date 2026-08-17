@@ -79,7 +79,7 @@ func newShardedCache[V any](name string, cleanupInterval, entryTTL time.Duration
 	for i := range shardCount {
 		cache, err := lru.New[string, V](maxEntriesPerShard)
 		if err != nil {
-			utils.LogError("RATELIMIT", "newShardedCache", err, fmt.Sprintf("Failed to create LRU cache for shard %d (%s)", i, name))
+			utils.LogError("RATELIMIT", "newShardedCache", err, "shard", i, "name", name)
 			cache, _ = lru.New[string, V](1)
 		}
 		sc.shards[i] = &cacheShard[V]{cache: cache}
@@ -88,8 +88,7 @@ func newShardedCache[V any](name string, cleanupInterval, entryTTL time.Duration
 	sc.cleanupWG.Add(1)
 	go sc.cleanupLoop()
 
-	utils.LogInfo("RATELIMIT", fmt.Sprintf("ShardedCache[%s] created: shards=%d, cleanupInterval=%v, entryTTL=%v",
-		name, shardCount, cleanupInterval, entryTTL))
+	utils.LogInfo("RATELIMIT", "ShardedCache created", "name", name, "shards", shardCount, "cleanup_interval", cleanupInterval, "entry_ttl", entryTTL)
 
 	return sc
 }
@@ -97,7 +96,7 @@ func newShardedCache[V any](name string, cleanupInterval, entryTTL time.Duration
 func (sc *ShardedCache[V]) stop() {
 	close(sc.stopChan)
 	sc.cleanupWG.Wait()
-	utils.LogInfo("RATELIMIT", fmt.Sprintf("ShardedCache[%s] stopped", sc.name))
+	utils.LogInfo("RATELIMIT", "ShardedCache stopped", "name", sc.name)
 }
 
 func (sc *ShardedCache[V]) cleanupLoop() {
@@ -142,7 +141,7 @@ func (sc *ShardedCache[V]) cleanupExpiredEntries() {
 	}
 
 	if cleanedCount > 0 {
-		utils.LogDebug("RATELIMIT", fmt.Sprintf("Cleaned up %d expired entries in ShardedCache[%s]", cleanedCount, sc.name))
+		utils.LogDebug("RATELIMIT", "Cleaned up expired entries in ShardedCache", "count", cleanedCount, "name", sc.name)
 	}
 }
 
@@ -197,11 +196,11 @@ type ShardedDataExportLimiter struct {
 // NewShardedRateLimiter 创建分片限流器
 func NewShardedRateLimiter(r rate.Limit, burst int) *ShardedRateLimiter {
 	if r <= 0 {
-		utils.LogWarn("RATELIMIT", "Invalid rate, using default", fmt.Sprintf("rate=%v", r))
+		utils.LogWarn("RATELIMIT", "Invalid rate, using default", "rate", r)
 		r = rate.Every(defaultLoginRate)
 	}
 	if burst <= 0 {
-		utils.LogWarn("RATELIMIT", "Invalid burst, using default", fmt.Sprintf("burst=%d", burst))
+		utils.LogWarn("RATELIMIT", "Invalid burst, using default", "burst", burst)
 		burst = defaultLoginBurst
 	}
 
@@ -219,7 +218,7 @@ func (srl *ShardedRateLimiter) Stop() {
 
 func (srl *ShardedRateLimiter) Allow(key string) bool {
 	if key == "" {
-		utils.LogWarn("RATELIMIT", "Empty key, allowing request", "")
+		utils.LogWarn("RATELIMIT", "Empty key, allowing request")
 		return true
 	}
 
@@ -260,7 +259,7 @@ func (srl *ShardedRateLimiter) Stats() int {
 // NewShardedEmailRateLimiter 创建分片邮件限流器
 func NewShardedEmailRateLimiter(interval time.Duration) *ShardedEmailRateLimiter {
 	if interval <= 0 {
-		utils.LogWarn("RATELIMIT", "Invalid email interval, using default", fmt.Sprintf("interval=%v", interval))
+		utils.LogWarn("RATELIMIT", "Invalid email interval, using default", "interval", interval)
 		interval = defaultEmailInterval
 	}
 
@@ -277,7 +276,7 @@ func (serl *ShardedEmailRateLimiter) Stop() {
 
 func (serl *ShardedEmailRateLimiter) Allow(email string) bool {
 	if email == "" {
-		utils.LogWarn("RATELIMIT", "Empty email, denying request", "")
+		utils.LogWarn("RATELIMIT", "Empty email, denying request")
 		return false
 	}
 
@@ -498,7 +497,7 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 		ip := utils.GetClientIP(c)
 
 		if !limiter.Allow(ip) {
-			utils.LogWarn("RATELIMIT", "Rate limit exceeded", fmt.Sprintf("ip=%s, path=%s", ip, c.Request.URL.Path))
+			utils.LogWarnCtx(c.Request.Context(), "RATELIMIT", "Rate limit exceeded", "ip", ip, "path", c.Request.URL.Path)
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success":   false,
 				"errorCode": "RATE_LIMIT",

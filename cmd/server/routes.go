@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	"auth-system/internal/config"
@@ -42,6 +41,10 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 }
 
 func setupMiddleware(r *gin.Engine, cfg *config.Config) {
+	// RequestID 必须最先注册：为请求生成 request_id，
+	// 使同一次请求的所有日志行（含后续中间件与 handler）都能按 ID 归组。
+	r.Use(middleware.RequestID())
+
 	r.Use(gin.Recovery())
 
 	r.Use(middleware.BodySizeLimit(defaultMaxBodySize, "/admin/api/data/import"))
@@ -65,7 +68,7 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 
 	// 本地头像存储目录
 	r.GET("/avatars/*filepath", hdlrs.staticHandler.ServeAvatar)
-	utils.LogInfo("STATIC", fmt.Sprintf("Serving avatars from %s", cfg.AvatarDir))
+	utils.LogInfo("STATIC", "Serving avatars", "dir", cfg.AvatarDir)
 }
 
 func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {

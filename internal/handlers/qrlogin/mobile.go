@@ -49,7 +49,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	}
 
 	if time.Now().UnixMilli() > qrToken.ExpireTime {
-		utils.LogWarn("QR-LOGIN", "Token expired in Scan", fmt.Sprintf("token=%s", utils.TruncateIdentifier(originalToken)))
+		utils.LogWarnCtx(c.Request.Context(), "QR-LOGIN", "Token expired in Scan", "token", utils.TruncateIdentifier(originalToken))
 		_ = h.qrLoginRepo.Delete(ctx, tokenHash)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
@@ -60,7 +60,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 	now := time.Now().UnixMilli()
 	success, err := h.qrLoginRepo.UpdateStatusWithCondition(ctx, tokenHash, QRStatusPending, QRStatusScanned, &now)
 	if err != nil {
-		utils.LogError("QR-LOGIN", "Scan", err, "Failed to update token status in Scan")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "Scan", err, "Failed to update token status in Scan")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
 		return
 	}
@@ -72,7 +72,7 @@ func (h *QRLoginHandler) Scan(c *gin.Context) {
 
 	h.notifyStatusChange(encryptedToken, "scanned", nil)
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Token scanned: pcIP=%s, browser=%s, os=%s", qrToken.PcIP, browser, os))
+	utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Token scanned", "pc_ip", qrToken.PcIP, "browser", browser, "os", os)
 
 	utils.RespondSuccess(c, gin.H{
 		"pcInfo": gin.H{
@@ -135,7 +135,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 	}
 
 	if time.Now().UnixMilli() > qrToken.ExpireTime {
-		utils.LogWarn("QR-LOGIN", "Token expired in MobileConfirm", "")
+		utils.LogWarnCtx(c.Request.Context(), "QR-LOGIN", "Token expired in MobileConfirm")
 		_ = h.qrLoginRepo.Delete(ctx, tokenHash)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
@@ -143,14 +143,14 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 
 	pcSessionToken, _, err := h.sessionService.GenerateTokens(c.Request.Context(), userUID, false)
 	if err != nil {
-		utils.LogError("QR-LOGIN", "MobileConfirm", err, fmt.Sprintf("Failed to generate PC session token: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "MobileConfirm", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "SESSION_CREATE_FAILED")
 		return
 	}
 
 	success, err := h.qrLoginRepo.ConfirmLoginWithCondition(ctx, tokenHash, userUID, utils.HashToken(pcSessionToken))
 	if err != nil {
-		utils.LogError("QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "MobileConfirm", err, "Failed to update token status in MobileConfirm")
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update token status")
 		return
 	}
@@ -164,7 +164,7 @@ func (h *QRLoginHandler) MobileConfirm(c *gin.Context) {
 		"sessionToken": pcSessionToken,
 	})
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Mobile confirmed login: userUID=%s", userUID))
+	utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Mobile confirmed login", "user_uid", userUID)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -196,11 +196,11 @@ func (h *QRLoginHandler) MobileCancel(c *gin.Context) {
 
 	err = h.qrLoginRepo.Delete(ctx, tokenHash)
 	if err != nil {
-		utils.LogWarn("QR-LOGIN", "Failed to delete token in MobileCancel", "")
+		utils.LogWarnCtx(c.Request.Context(), "QR-LOGIN", "Failed to delete token in MobileCancel")
 	}
 
 	h.notifyStatusChange(encryptedToken, "cancelled", nil)
 
-	utils.LogInfo("QR-LOGIN", "Mobile cancelled login")
+	utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Mobile cancelled login")
 	utils.RespondSuccess(c, gin.H{})
 }

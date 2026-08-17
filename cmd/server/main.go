@@ -111,7 +111,7 @@ func loadConfig() (*config.Config, error) {
 		cfg.Port = "3000"
 	}
 
-	utils.LogInfo("CONFIG", fmt.Sprintf("Configuration loaded: port=%s", cfg.Port))
+	utils.LogInfo("CONFIG", "Configuration loaded", "port", cfg.Port)
 	return cfg, nil
 }
 
@@ -209,14 +209,14 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UserCache: %w", err)
 	}
-	utils.LogInfo("SERVICES", fmt.Sprintf("UserCache initialized: maxSize=%d, ttl=%v", userCacheMaxSize, userCacheTTL))
+	utils.LogInfo("SERVICES", "UserCache initialized", "max_size", userCacheMaxSize, "ttl", userCacheTTL)
 
 	emailSvc, err := services.NewEmailService(cfg)
 	if err != nil || emailSvc == nil {
-		utils.LogWarn("SERVICES", fmt.Sprintf("Email service unavailable: %v", err))
+		utils.LogWarn("SERVICES", "Email service unavailable", "error", err)
 	} else {
 		if err := emailSvc.VerifyConnection(); err != nil {
-			utils.LogWarn("SERVICES", fmt.Sprintf("SMTP verification failed: %v", err))
+			utils.LogWarn("SERVICES", "SMTP verification failed", "error", err)
 		} else {
 			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
 		}
@@ -225,7 +225,7 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 
 	storageSvc, err := services.NewLocalStorageService(cfg)
 	if err != nil || storageSvc == nil {
-		utils.LogWarn("SERVICES", fmt.Sprintf("Storage service unavailable: %v", err))
+		utils.LogWarn("SERVICES", "Storage service unavailable", "error", err)
 	} else {
 		svcs.StorageService = storageSvc
 		svcs.ImgProcessor = storageSvc.GetImgProcessor()
@@ -355,7 +355,7 @@ func startServer(srv *http.Server) {
 		return
 	}
 
-	utils.LogInfo("SERVER", fmt.Sprintf("Starting HTTP server on %s", srv.Addr))
+	utils.LogInfo("SERVER", "Starting HTTP server", "addr", srv.Addr)
 
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -364,7 +364,7 @@ func startServer(srv *http.Server) {
 		}
 	}()
 
-	utils.LogInfo("SERVER", fmt.Sprintf("Server is running on http://localhost%s", srv.Addr))
+	utils.LogInfo("SERVER", "Server is running", "url", "http://localhost"+srv.Addr)
 }
 
 func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
@@ -372,7 +372,7 @@ func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-quit
-	utils.LogInfo("SERVER", fmt.Sprintf("Received %s signal, initiating graceful shutdown...", sig))
+	utils.LogInfo("SERVER", "Received signal, initiating graceful shutdown", "signal", sig)
 
 	svcs.ExportTokenService.Stop()
 

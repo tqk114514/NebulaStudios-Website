@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -77,7 +76,7 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 
 	siteKey := h.captchaService.GetSiteKey()
 	if siteKey == "" {
-		utils.LogWarn("STATIC", "Captcha site key not configured", "")
+		utils.LogWarnCtx(c.Request.Context(), "STATIC", "Captcha site key not configured")
 	}
 
 	utils.RespondSuccessWithData(c, gin.H{
@@ -118,7 +117,7 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 		return
 	}
 
-	utils.LogError("STATIC", "serveBrotliOrDecompressed", nil, fmt.Sprintf("Neither .br nor original file found: brPath=%s", brPath))
+	utils.LogErrorCtx(c.Request.Context(), "STATIC", "serveBrotliOrDecompressed", nil, "br_path", brPath)
 	serve404Fallback(c)
 }
 
@@ -133,7 +132,7 @@ func serveHTML(c *gin.Context, basePath, pageName string) {
 
 	htmlData, err := os.ReadFile(origPath)
 	if err != nil {
-		utils.LogError("STATIC", "serveHTML", err, fmt.Sprintf("HTML file not found: %s", origPath))
+		utils.LogErrorCtx(c.Request.Context(), "STATIC", "serveHTML", err, "path", origPath)
 		serve404Fallback(c)
 		return
 	}
@@ -267,13 +266,13 @@ func (h *StaticHandler) ServeAvatar(c *gin.Context) {
 		if data, rerr := os.ReadFile(path); rerr == nil {
 			if brData, cerr := services.CompressBrotli(data); cerr == nil {
 				if werr := os.WriteFile(brPath, brData, 0o644); werr != nil {
-					utils.LogWarn("STATIC", "Failed to write brotli avatar", fmt.Sprintf("path=%s: %v", brPath, werr))
+					utils.LogWarnCtx(c.Request.Context(), "STATIC", "Failed to write brotli avatar", "path", brPath, "error", werr)
 				}
 			} else {
-				utils.LogWarn("STATIC", "Failed to compress avatar", fmt.Sprintf("path=%s: %v", path, cerr))
+				utils.LogWarnCtx(c.Request.Context(), "STATIC", "Failed to compress avatar", "path", path, "error", cerr)
 			}
 		} else {
-			utils.LogWarn("STATIC", "Failed to read avatar for brotli", fmt.Sprintf("path=%s: %v", path, rerr))
+			utils.LogWarnCtx(c.Request.Context(), "STATIC", "Failed to read avatar for brotli", "path", path, "error", rerr)
 		}
 	}
 
@@ -300,7 +299,7 @@ func NotFoundHandler(c *gin.Context) {
 	// 记录 404 请求（仅记录非静态资源请求）
 	path := c.Request.URL.Path
 	if !isStaticAsset(path) {
-		utils.LogInfo("STATIC", fmt.Sprintf("404: %s %s", c.Request.Method, path))
+		utils.LogInfoCtx(c.Request.Context(), "STATIC", "404", "method", c.Request.Method, "path", path)
 	}
 
 	// 设置安全头和缓存控制（完全禁止缓存，确保权限变更后立即生效）

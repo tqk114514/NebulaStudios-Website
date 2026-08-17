@@ -36,12 +36,12 @@ var contentTypeMap = map[string]string{
 // PreCompressedStatic Brotli 预压缩静态文件中间件，dist 目录只存放 .br 文件，直接服务预压缩内容
 func PreCompressedStatic(basePath string) gin.HandlerFunc {
 	if basePath == "" {
-		utils.LogWarn("COMPRESS", "Empty base path, using default './dist'", "")
+		utils.LogWarn("COMPRESS", "Empty base path, using default './dist'")
 		basePath = "./dist"
 	}
 
 	if _, err := os.Stat(basePath); os.IsNotExist(err) {
-		utils.LogWarn("COMPRESS", "Base path does not exist", fmt.Sprintf("path=%s", basePath))
+		utils.LogWarn("COMPRESS", "Base path does not exist", "path", basePath)
 	}
 
 	return func(c *gin.Context) {
@@ -50,7 +50,7 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 		cleanPath := filepath.Clean(reqPath)
 
 		if strings.Contains(cleanPath, "..") {
-			utils.LogWarn("COMPRESS", "Path traversal attempt detected", fmt.Sprintf("path=%s", reqPath))
+			utils.LogWarnCtx(c.Request.Context(), "COMPRESS", "Path traversal attempt detected", "path", reqPath)
 			c.Next()
 			return
 		}
@@ -78,26 +78,26 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 		cleanBrPath := filepath.Clean(brPath)
 		absBasePath, err := filepath.Abs(basePath)
 		if err != nil {
-			utils.LogWarn("COMPRESS", "Failed to get absolute base path", fmt.Sprintf("error=%v", err))
+			utils.LogWarnCtx(c.Request.Context(), "COMPRESS", "Failed to get absolute base path", "error", err)
 			c.Next()
 			return
 		}
 		absBrPath, err := filepath.Abs(cleanBrPath)
 		if err != nil {
-			utils.LogWarn("COMPRESS", "Failed to get absolute br path", fmt.Sprintf("error=%v", err))
+			utils.LogWarnCtx(c.Request.Context(), "COMPRESS", "Failed to get absolute br path", "error", err)
 			c.Next()
 			return
 		}
 
 		// 确保最终路径在基础路径内，防止路径遍历
 		if !strings.HasPrefix(absBrPath, absBasePath+string(os.PathSeparator)) && absBrPath != absBasePath {
-			utils.LogWarn("COMPRESS", "Path traversal attempt blocked", fmt.Sprintf("path=%s, brPath=%s", reqPath, brPath))
+			utils.LogWarnCtx(c.Request.Context(), "COMPRESS", "Path traversal attempt blocked", "path", reqPath, "br_path", brPath)
 			c.Next()
 			return
 		}
 
 		if _, err := os.Stat(absBrPath); os.IsNotExist(err) {
-			utils.LogDebug("COMPRESS", fmt.Sprintf("Brotli file not found: %s", absBrPath))
+			utils.LogDebugCtx(c.Request.Context(), "COMPRESS", "Brotli file not found", "path", absBrPath)
 			c.Next()
 			return
 		}
@@ -109,28 +109,28 @@ func PreCompressedStatic(basePath string) gin.HandlerFunc {
 // ServeCompressedHTML 服务预压缩的 HTML 文件，用于页面路由
 func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 	if basePath == "" {
-		utils.LogWarn("COMPRESS", "Empty base path for HTML, using default './dist'", "")
+		utils.LogWarn("COMPRESS", "Empty base path for HTML, using default './dist'")
 		basePath = "./dist"
 	}
 	if htmlFile == "" {
-		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("empty HTML file name"), "")
+		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("empty HTML file name"))
 		return errorHandler("HTML file name is empty")
 	}
 
 	if strings.Contains(htmlFile, "..") || strings.Contains(htmlFile, "/") {
-		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("invalid HTML file name: %s", htmlFile), "")
+		utils.LogError("COMPRESS", "ServeCompressedHTML", fmt.Errorf("invalid HTML file name: %s", htmlFile))
 		return errorHandler("Invalid HTML file name")
 	}
 
 	brPath := filepath.Join(basePath, "account/pages", htmlFile+".html"+brotliExtension)
 
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		utils.LogWarn("COMPRESS", "HTML file not found at startup", fmt.Sprintf("path=%s", brPath))
+		utils.LogWarn("COMPRESS", "HTML file not found at startup", "path", brPath)
 	}
 
 	return func(c *gin.Context) {
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogInfo("COMPRESS", fmt.Sprintf("HTML file not found: %s", brPath), "")
+			utils.LogInfoCtx(c.Request.Context(), "COMPRESS", "HTML file not found", "path", brPath)
 			c.String(404, "Page not found")
 			return
 		}
@@ -142,28 +142,28 @@ func ServeCompressedHTML(basePath, htmlFile string) func(*gin.Context) {
 // ServeCompressedPolicyHTML 服务预压缩的 Policy 模块 HTML 文件
 func ServeCompressedPolicyHTML(basePath, htmlFile string) func(*gin.Context) {
 	if basePath == "" {
-		utils.LogWarn("COMPRESS", "Empty base path for Policy HTML, using default './dist'", "")
+		utils.LogWarn("COMPRESS", "Empty base path for Policy HTML, using default './dist'")
 		basePath = "./dist"
 	}
 	if htmlFile == "" {
-		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("empty Policy HTML file name"), "")
+		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("empty Policy HTML file name"))
 		return errorHandler("Policy HTML file name is empty")
 	}
 
 	if strings.Contains(htmlFile, "..") || strings.Contains(htmlFile, "/") {
-		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("invalid Policy HTML file name: %s", htmlFile), "")
+		utils.LogError("COMPRESS", "ServeCompressedPolicyHTML", fmt.Errorf("invalid Policy HTML file name: %s", htmlFile))
 		return errorHandler("Invalid Policy HTML file name")
 	}
 
 	brPath := filepath.Join(basePath, "policy/pages", htmlFile+".html"+brotliExtension)
 
 	if _, err := os.Stat(brPath); os.IsNotExist(err) {
-		utils.LogWarn("COMPRESS", "Policy HTML file not found at startup", fmt.Sprintf("path=%s", brPath))
+		utils.LogWarn("COMPRESS", "Policy HTML file not found at startup", "path", brPath)
 	}
 
 	return func(c *gin.Context) {
 		if _, err := os.Stat(brPath); os.IsNotExist(err) {
-			utils.LogInfo("COMPRESS", fmt.Sprintf("Policy HTML file not found: %s", brPath), "")
+			utils.LogInfoCtx(c.Request.Context(), "COMPRESS", "Policy HTML file not found", "path", brPath)
 			c.String(404, "Page not found")
 			return
 		}
@@ -265,7 +265,7 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 		return
 	}
 
-	utils.LogError("COMPRESS", "serveBrotliOrDecompressed", nil, fmt.Sprintf("Neither .br nor original file found: brPath=%s", brPath))
+	utils.LogErrorCtx(c.Request.Context(), "COMPRESS", "serveBrotliOrDecompressed", nil, "br_path", brPath)
 	c.String(500, "Internal server error")
 	c.Abort()
 }
@@ -273,7 +273,7 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 // errorHandler 返回 500 错误处理函数
 func errorHandler(message string) func(*gin.Context) {
 	return func(c *gin.Context) {
-		utils.LogError("COMPRESS", "errorHandler", fmt.Errorf("%s", message), "")
+		utils.LogErrorCtx(c.Request.Context(), "COMPRESS", "errorHandler", fmt.Errorf("%s", message))
 		c.String(500, "Internal server error")
 	}
 }

@@ -24,7 +24,7 @@ const (
 // AdminMiddleware 管理员权限中间件（role >= 1），直接查数据库确保权限实时生效，必须在 AuthMiddleware 之后使用
 func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 	if userRepo == nil {
-		utils.LogError("ADMIN-MW", "AdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
+		utils.LogError("ADMIN-MW", "AdminMiddleware", fmt.Errorf("UserRepository is nil"))
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -39,7 +39,7 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 
 		userUID, ok := middleware.GetUID(c)
 		if !ok {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -49,19 +49,19 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 
 		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
-			utils.LogError("ADMIN-MW", "AdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
+			utils.LogErrorCtx(c.Request.Context(), "ADMIN-MW", "AdminMiddleware", err, "ip", clientIP)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if !user.IsAdmin() {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -74,7 +74,7 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 // SuperAdminMiddleware 超级管理员权限中间件（role >= 2），直接查数据库确保权限实时生效，必须在 AuthMiddleware 之后使用
 func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 	if userRepo == nil {
-		utils.LogError("ADMIN-MW", "SuperAdminMiddleware", fmt.Errorf("UserRepository is nil"), "")
+		utils.LogError("ADMIN-MW", "SuperAdminMiddleware", fmt.Errorf("UserRepository is nil"))
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -89,7 +89,7 @@ func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 
 		userUID, ok := middleware.GetUID(c)
 		if !ok {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "UNAUTHORIZED")
 			return
 		}
@@ -99,19 +99,19 @@ func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 
 		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
-			utils.LogError("ADMIN-MW", "SuperAdminMiddleware", err, fmt.Sprintf("ip=%s", clientIP))
+			utils.LogErrorCtx(c.Request.Context(), "ADMIN-MW", "SuperAdminMiddleware", err, "ip", clientIP)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if user == nil {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "USER_NOT_FOUND")
 			return
 		}
 
 		if !user.IsSuperAdmin() {
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			respondForbidden(c, "ACCESS_DENIED")
 			return
 		}
@@ -161,7 +161,7 @@ func respondForbidden(c *gin.Context, errorCode string) {
 // AdminPageMiddleware 管理员页面权限中间件，用于保护后台页面，失败时伪装成 404（隐藏后台入口）
 func AdminPageMiddleware(userRepo models.UserReader, sessionService services.SessionManager) gin.HandlerFunc {
 	if userRepo == nil || sessionService == nil {
-		utils.LogError("ADMIN-MW", "AdminPageMiddleware", fmt.Errorf("UserRepository or SessionService is nil"), "")
+		utils.LogError("ADMIN-MW", "AdminPageMiddleware", fmt.Errorf("UserRepository or SessionService is nil"))
 		return func(c *gin.Context) {
 			handlers.NotFoundHandler(c)
 		}
@@ -175,7 +175,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		token := middleware.ExtractToken(c)
 		if token == "" {
 			// 未登录，伪装成 404（隐藏后台入口）
-			utils.LogDebug("ADMIN-MW", "Admin page access without token, showing 404")
+			utils.LogDebugCtx(c.Request.Context(), "ADMIN-MW", "Admin page access without token, showing 404")
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -185,7 +185,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil || claims == nil || claims.UID == "" {
 			// Token 无效，伪装成 404
-			utils.LogDebug("ADMIN-MW", "Admin page access with invalid token, showing 404")
+			utils.LogDebugCtx(c.Request.Context(), "ADMIN-MW", "Admin page access with invalid token, showing 404")
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -199,7 +199,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil || user == nil {
 			// 用户不存在，伪装成 404
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return
@@ -208,7 +208,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		// 检查管理员权限
 		if !user.IsAdmin() {
 			// 非管理员，伪装成 404（不暴露后台存在）
-			utils.LogWarn("ADMIN-MW", "Unauthorized access attempt", fmt.Sprintf("ip=%s", clientIP))
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
 			handlers.NotFoundHandler(c)
 			c.Abort()
 			return

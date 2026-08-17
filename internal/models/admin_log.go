@@ -150,8 +150,7 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 		return fmt.Errorf("create admin log failed: %w", err)
 	}
 
-	utils.LogInfo("ADMIN_LOG", fmt.Sprintf("Log created: id=%d, admin_uid=%s, action=%s",
-		log.ID, log.AdminUID, log.Action))
+	utils.LogInfo("ADMIN_LOG", "Log created", "id", log.ID, "admin_uid", log.AdminUID, "action", log.Action)
 	return nil
 }
 

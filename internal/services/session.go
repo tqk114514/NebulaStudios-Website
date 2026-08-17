@@ -96,11 +96,11 @@ func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService,
 	}
 	if accessExpiry < minAccessTokenExpiry {
 		accessExpiry = minAccessTokenExpiry
-		utils.LogWarn("SESSION", "Access token expiry adjusted to minimum", fmt.Sprintf("newExpiry=%v", accessExpiry))
+		utils.LogWarn("SESSION", "Access token expiry adjusted to minimum", "new_expiry", accessExpiry)
 	}
 	if accessExpiry > maxAccessTokenExpiry {
 		accessExpiry = maxAccessTokenExpiry
-		utils.LogWarn("SESSION", "Access token expiry adjusted to maximum", fmt.Sprintf("newExpiry=%v", accessExpiry))
+		utils.LogWarn("SESSION", "Access token expiry adjusted to maximum", "new_expiry", accessExpiry)
 	}
 
 	refreshExpiry := cfg.RefreshTokenExpiry
@@ -109,15 +109,14 @@ func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService,
 	}
 	if refreshExpiry < minRefreshTokenExpiry {
 		refreshExpiry = minRefreshTokenExpiry
-		utils.LogWarn("SESSION", "Refresh token expiry adjusted to minimum", fmt.Sprintf("newExpiry=%v", refreshExpiry))
+		utils.LogWarn("SESSION", "Refresh token expiry adjusted to minimum", "new_expiry", refreshExpiry)
 	}
 	if refreshExpiry > maxRefreshTokenExpiry {
 		refreshExpiry = maxRefreshTokenExpiry
-		utils.LogWarn("SESSION", "Refresh token expiry adjusted to maximum", fmt.Sprintf("newExpiry=%v", refreshExpiry))
+		utils.LogWarn("SESSION", "Refresh token expiry adjusted to maximum", "new_expiry", refreshExpiry)
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Session service initialized: accessExpiry=%v, refreshExpiry=%v, issuer=%s, audience=%s, alg=ES256",
-		accessExpiry, refreshExpiry, issuer, audience))
+	utils.LogInfo("SESSION", "Session service initialized", "access_expiry", accessExpiry, "refresh_expiry", refreshExpiry, "issuer", issuer, "audience", audience, "alg", "ES256")
 
 	return &SessionService{
 		privateKey:         privateKey,
@@ -133,17 +132,17 @@ func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService,
 // banned: true = 封禁用户，只签发短期 access_token，不签发 refresh_token
 func (s *SessionService) GenerateTokens(ctx context.Context, uid string, banned bool) (accessToken string, refreshToken string, err error) {
 	if uid == "" {
-		utils.LogWarn("SESSION", "Invalid user UID for token generation", fmt.Sprintf("uid=%s", uid))
+		utils.LogWarn("SESSION", "Invalid user UID for token generation", "uid", uid)
 		return "", "", ErrInvalidUser
 	}
 
 	if s == nil {
-		utils.LogError("SESSION", "GenerateTokens", fmt.Errorf("session service is nil"), "")
+		utils.LogError("SESSION", "GenerateTokens", fmt.Errorf("session service is nil"))
 		return "", "", ErrTokenGenerationFailed
 	}
 
 	if s.privateKey == nil {
-		utils.LogError("SESSION", "GenerateTokens", fmt.Errorf("ECDSA private key is nil"), "")
+		utils.LogError("SESSION", "GenerateTokens", fmt.Errorf("ECDSA private key is nil"))
 		return "", "", ErrTokenGenerationFailed
 	}
 
@@ -160,7 +159,7 @@ func (s *SessionService) GenerateTokens(ctx context.Context, uid string, banned 
 	}
 
 	if banned {
-		utils.LogInfo("SESSION", fmt.Sprintf("Banned user access token generated: uid=%s, expiry=%v", uid, accessExpiry))
+		utils.LogInfo("SESSION", "Banned user access token generated", "uid", uid, "expiry", accessExpiry)
 		return accessToken, "", nil
 	}
 
@@ -169,7 +168,7 @@ func (s *SessionService) GenerateTokens(ctx context.Context, uid string, banned 
 		return "", "", err
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Tokens generated: uid=%s, accessExpiry=%v, refreshExpiry=%v", uid, accessExpiry, s.refreshTokenExpiry))
+	utils.LogInfo("SESSION", "Tokens generated", "uid", uid, "access_expiry", accessExpiry, "refresh_expiry", s.refreshTokenExpiry)
 	return accessToken, refreshToken, nil
 }
 
@@ -181,7 +180,7 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 	}
 
 	if s == nil {
-		utils.LogError("SESSION", "RefreshTokens", fmt.Errorf("session service is nil"), "")
+		utils.LogError("SESSION", "RefreshTokens", fmt.Errorf("session service is nil"))
 		return "", "", ErrTokenError
 	}
 
@@ -201,16 +200,14 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 
 	if existing.Used {
 		s.sessionTokenRepo.RevokeFamily(ctx, existing.FamilyID)
-		utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked",
-			fmt.Sprintf("user_uid=%s, family_id=%s", existing.UserUID, existing.FamilyID))
+		utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked", "user_uid", existing.UserUID, "family_id", existing.FamilyID)
 		return "", "", ErrRefreshTokenReused
 	}
 
 	if markErr := s.sessionTokenRepo.MarkUsed(ctx, existing.ID); markErr != nil {
 		if errors.Is(markErr, models.ErrSessionTokenReused) {
 			s.sessionTokenRepo.RevokeFamily(ctx, existing.FamilyID)
-			utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked",
-				fmt.Sprintf("user_uid=%s, family_id=%s", existing.UserUID, existing.FamilyID))
+			utils.LogWarn("SESSION", "Refresh token reuse detected - family revoked", "user_uid", existing.UserUID, "family_id", existing.FamilyID)
 			return "", "", ErrRefreshTokenReused
 		}
 		return "", "", fmt.Errorf("failed to mark refresh token as used: %w", markErr)
@@ -223,8 +220,7 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 		if err != nil {
 			return "", "", err
 		}
-		utils.LogInfo("SESSION", fmt.Sprintf("Banned user refreshed short-lived access token: uid=%s, family_id=%s",
-			existing.UserUID, existing.FamilyID))
+		utils.LogInfo("SESSION", "Banned user refreshed short-lived access token", "uid", existing.UserUID, "family_id", existing.FamilyID)
 		return newAccessToken, "", nil
 	}
 
@@ -238,7 +234,7 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 		return "", "", err
 	}
 
-	utils.LogInfo("SESSION", fmt.Sprintf("Tokens refreshed: uid=%s, family_id=%s", existing.UserUID, existing.FamilyID))
+	utils.LogInfo("SESSION", "Tokens refreshed", "uid", existing.UserUID, "family_id", existing.FamilyID)
 	return newAccessToken, newRefreshToken, nil
 }
 
@@ -272,18 +268,18 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 	}
 
 	if s == nil {
-		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("session service is nil"), "")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("session service is nil"))
 		return nil, ErrTokenError
 	}
 
 	if s.privateKey == nil {
-		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("ECDSA private key is nil"), "")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("ECDSA private key is nil"))
 		return nil, ErrTokenError
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
-			utils.LogWarn("SESSION", "Unexpected signing method", fmt.Sprintf("alg=%v", token.Header["alg"]))
+			utils.LogWarn("SESSION", "Unexpected signing method", "alg", token.Header["alg"])
 			return nil, ErrInvalidSigningMethod
 		}
 		return &s.privateKey.PublicKey, nil
@@ -294,18 +290,18 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 	}
 
 	if token == nil {
-		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("parsed token is nil"), "")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("parsed token is nil"))
 		return nil, ErrInvalidTokenSession
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("failed to extract claims"), "")
+		utils.LogError("SESSION", "VerifyToken", fmt.Errorf("failed to extract claims"))
 		return nil, ErrInvalidTokenSession
 	}
 
 	if !token.Valid {
-		utils.LogWarn("SESSION", "Token is not valid", "")
+		utils.LogWarn("SESSION", "Token is not valid")
 		return nil, ErrInvalidTokenSession
 	}
 
@@ -347,7 +343,7 @@ func (s *SessionService) generateAccessToken(uid string, expiry time.Duration) (
 
 	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
-		utils.LogError("SESSION", "generateAccessToken", err, fmt.Sprintf("Failed to sign token: uid=%s", uid))
+		utils.LogError("SESSION", "generateAccessToken", err, "uid", uid)
 		return "", fmt.Errorf("%w: %v", ErrTokenGenerationFailed, err)
 	}
 
@@ -418,21 +414,21 @@ func (s *SessionService) handleParseError(err error) error {
 	}
 
 	if errors.Is(err, jwt.ErrSignatureInvalid) {
-		utils.LogWarn("SESSION", "Invalid token signature", "")
+		utils.LogWarn("SESSION", "Invalid token signature")
 		return ErrInvalidTokenSession
 	}
 
 	if errors.Is(err, jwt.ErrTokenMalformed) {
-		utils.LogWarn("SESSION", "Malformed token", "")
+		utils.LogWarn("SESSION", "Malformed token")
 		return ErrInvalidTokenSession
 	}
 
 	if errors.Is(err, jwt.ErrTokenNotValidYet) {
-		utils.LogWarn("SESSION", "Token not valid yet", "")
+		utils.LogWarn("SESSION", "Token not valid yet")
 		return ErrInvalidTokenSession
 	}
 
-	utils.LogWarn("SESSION", "Token parse error", fmt.Sprintf("error=%v", err))
+	utils.LogWarn("SESSION", "Token parse error", "error", err)
 	return ErrInvalidTokenSession
 }
 
@@ -443,23 +439,23 @@ func (s *SessionService) validateClaims(claims *Claims) error {
 	}
 
 	if claims.UID == "" {
-		utils.LogWarn("SESSION", "Invalid user UID in claims", fmt.Sprintf("uid=%s", claims.UID))
+		utils.LogWarn("SESSION", "Invalid user UID in claims", "uid", claims.UID)
 		return ErrInvalidUser
 	}
 
 	if claims.ExpiresAt == nil {
-		utils.LogWarn("SESSION", "Token has no expiry time", "")
+		utils.LogWarn("SESSION", "Token has no expiry time")
 		return ErrInvalidTokenSession
 	}
 
 	if claims.Issuer != s.jwtIssuer {
-		utils.LogWarn("SESSION", "Invalid token issuer", fmt.Sprintf("expected=%s, got=%s", s.jwtIssuer, claims.Issuer))
+		utils.LogWarn("SESSION", "Invalid token issuer", "expected", s.jwtIssuer, "got", claims.Issuer)
 		return ErrInvalidTokenSession
 	}
 
 	audienceValid := slices.Contains(claims.Audience, s.jwtAudience)
 	if !audienceValid {
-		utils.LogWarn("SESSION", "Invalid token audience", fmt.Sprintf("expected=%s, got=%v", s.jwtAudience, claims.Audience))
+		utils.LogWarn("SESSION", "Invalid token audience", "expected", s.jwtAudience, "got", claims.Audience)
 		return ErrInvalidTokenSession
 	}
 

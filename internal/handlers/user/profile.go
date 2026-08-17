@@ -78,15 +78,15 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		return
 	}
 
-	h.invalidateUserCache(userUID)
+	h.invalidateUserCache(c.Request.Context(), userUID)
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogChangeUsername(ctx, userUID, oldUsername, newUsername); err != nil {
-			utils.LogWarn("USER", "Failed to log username change", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log username change", "user_uid", userUID)
 		}
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("Username updated: userUID=%s, newUsername=%s", userUID, newUsername))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Username updated", "user_uid", userUID, "new_username", newUsername)
 	utils.RespondSuccess(c, gin.H{"username": newUsername})
 }
 
@@ -134,17 +134,17 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 			return
 		}
 
-		h.invalidateUserCache(userUID)
+		h.invalidateUserCache(c.Request.Context(), userUID)
 
 		// 隐私日志：仅当同步此前开启（true→false 实际变化）时记录关闭同步
 		if h.userLogRepo != nil {
 			if currentUser.MicrosoftAvatarSync {
 				if err := h.userLogRepo.LogDisableAvatarSync(ctx, userUID, "microsoft"); err != nil {
-					utils.LogWarn("USER", "Failed to log avatar sync disable", fmt.Sprintf("userUID=%s", userUID))
+					utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log avatar sync disable", "user_uid", userUID)
 				}
 			}
 			if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, ""); err != nil {
-				utils.LogWarn("USER", "Failed to log avatar removal", fmt.Sprintf("userUID=%s", userUID))
+				utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log avatar removal", "user_uid", userUID)
 			}
 		}
 
@@ -153,7 +153,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		if currentUser.AvatarURL == "microsoft" {
 			resultAvatarURL = h.defaultAvatarURL
 		}
-		utils.LogInfo("USER", fmt.Sprintf("Avatar removed: userUID=%s", userUID))
+		utils.LogInfoCtx(c.Request.Context(), "USER", "Avatar removed", "user_uid", userUID)
 		utils.RespondSuccess(c, gin.H{"avatar_url": resultAvatarURL})
 		return
 	}
@@ -182,20 +182,20 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		return
 	}
 
-	h.invalidateUserCache(userUID)
+	h.invalidateUserCache(c.Request.Context(), userUID)
 
 	if h.userLogRepo != nil {
 		// 隐私日志：仅当同步此前关闭（false→true 实际变化）时记录开启同步
 		if urlResult.Value == "microsoft" && !currentUser.MicrosoftAvatarSync {
 			if err := h.userLogRepo.LogEnableAvatarSync(ctx, userUID, "microsoft"); err != nil {
-				utils.LogWarn("USER", "Failed to log avatar sync enable", fmt.Sprintf("userUID=%s", userUID))
+				utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log avatar sync enable", "user_uid", userUID)
 			}
 		}
 		if err := h.userLogRepo.LogChangeAvatar(ctx, userUID, oldAvatarURL, urlResult.Value); err != nil {
-			utils.LogWarn("USER", "Failed to log avatar change", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log avatar change", "user_uid", userUID)
 		}
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("Avatar updated: userUID=%s", userUID))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Avatar updated", "user_uid", userUID)
 	utils.RespondSuccess(c, gin.H{"avatar_url": urlResult.Value})
 }

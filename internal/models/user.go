@@ -434,12 +434,12 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 			)
 
 			if err == nil {
-				utils.LogInfo("USER", fmt.Sprintf("User created: id=%d, email=%s", user.ID, user.Email))
+				utils.LogInfo("USER", "User created", "id", user.ID, "email", user.Email, "uid", user.UID)
 				return nil
 			}
 
 			if IsUniqueViolation(err, "uid") {
-				utils.LogWarn("USER", "UID collision, retrying", fmt.Sprintf("attempt=%d, uid=%s", attempt+1, user.UID))
+				utils.LogWarn("USER", "UID collision, retrying", "attempt", attempt+1, "uid", user.UID)
 				user.UID = ""
 				continue
 			}
@@ -462,7 +462,7 @@ func (r *UserRepository) Create(ctx context.Context, user *User) error {
 		return r.handleWriteError(err, "Create", user.Email)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User created: id=%d, email=%s", user.ID, user.Email))
+	utils.LogInfo("USER", "User created", "id", user.ID, "email", user.Email, "uid", user.UID)
 	return nil
 }
 
@@ -473,7 +473,7 @@ func (r *UserRepository) Update(ctx context.Context, uid string, updates map[str
 	}
 
 	if len(updates) == 0 {
-		utils.LogWarn("USER", fmt.Sprintf("Update called with empty updates: uid=%s", uid))
+		utils.LogWarn("USER", "Update called with empty updates", "uid", uid)
 		return nil
 	}
 
@@ -501,7 +501,7 @@ func (r *UserRepository) Update(ctx context.Context, uid string, updates map[str
 		return utils.HandleDatabaseError("USER", "Update", errors.New("no rows affected"), uid)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User updated: uid=%s, fields=%d", uid, len(updates)))
+	utils.LogInfo("USER", "User updated", "uid", uid, "fields", len(updates))
 	return nil
 }
 
@@ -523,7 +523,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, uid, plainPassword 
 
 	hashedPassword, err := utils.HashPassword(plainPassword)
 	if err != nil {
-		return utils.LogError("USER", "UpdatePassword", err, fmt.Sprintf("uid=%s", uid))
+		return utils.LogError("USER", "UpdatePassword", err, "uid", uid)
 	}
 
 	result, err := r.pool.Exec(ctx,
@@ -538,7 +538,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, uid, plainPassword 
 		return utils.HandleDatabaseError("USER", "UpdatePassword", errors.New("no rows affected"), uid)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("Password updated: uid=%s", uid))
+	utils.LogInfo("USER", "Password updated", "uid", uid)
 	return nil
 }
 
@@ -554,14 +554,14 @@ func (r *UserRepository) Delete(ctx context.Context, uid string) error {
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM users WHERE uid = $1", uid)
 	if err != nil {
-		return utils.LogError("USER", "Delete", err, fmt.Sprintf("uid=%s", uid))
+		return utils.LogError("USER", "Delete", err, "uid", uid)
 	}
 
 	if result.RowsAffected() == 0 {
 		return utils.HandleDatabaseError("USER", "Delete", errors.New("no rows affected"), uid)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User deleted: uid=%s", uid))
+	utils.LogInfo("USER", "User deleted", "uid", uid)
 	return nil
 }
 
@@ -580,7 +580,7 @@ func (r *UserRepository) handleWriteError(err error, operation string, identifie
 		return ErrGoogleIDExists
 	}
 
-	return utils.LogError("USER", operation, err, fmt.Sprintf("identifier=%v", identifier))
+	return utils.LogError("USER", operation, err, "identifier", identifier)
 }
 
 // buildUpdateQuery 构建更新 SQL 查询，使用白名单验证字段防止 SQL 注入
@@ -592,7 +592,7 @@ func (r *UserRepository) buildUpdateQuery(uid string, updates map[string]any) (s
 	for key, value := range updates {
 		// 验证字段是否在白名单中（防止 SQL 注入）
 		if !allowedUpdateFields[key] {
-			utils.LogWarn("USER", fmt.Sprintf("Attempted to update disallowed field: %s", key))
+			utils.LogWarn("USER", "Attempted to update disallowed field", "field", key)
 			continue
 		}
 
@@ -690,7 +690,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
-			utils.LogWarn("USER", fmt.Sprintf("Failed to scan user: %v", err))
+			utils.LogWarn("USER", "Failed to scan user", "error", err)
 			continue
 		}
 		users = append(users, user)
@@ -762,14 +762,14 @@ func (r *UserRepository) Ban(ctx context.Context, userUID, adminUID string, reas
 	`, reason, adminUID, unbanAt, userUID)
 
 	if err != nil {
-		return utils.LogError("USER", "Ban", err, fmt.Sprintf("userUID=%s", userUID))
+		return utils.LogError("USER", "Ban", err, "user_uid", userUID)
 	}
 
 	if result.RowsAffected() == 0 {
 		return utils.HandleDatabaseError("USER", "Ban", errors.New("no rows affected"), userUID)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User banned: uid=%s, admin_uid=%s, reason=%s", userUID, adminUID, reason))
+	utils.LogInfo("USER", "User banned", "uid", userUID, "admin_uid", adminUID, "reason", reason)
 	return nil
 }
 
@@ -795,13 +795,13 @@ func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
 	`, userUID)
 
 	if err != nil {
-		return utils.LogError("USER", "Unban", err, fmt.Sprintf("userUID=%s", userUID))
+		return utils.LogError("USER", "Unban", err, "user_uid", userUID)
 	}
 
 	if result.RowsAffected() == 0 {
 		return utils.HandleDatabaseError("USER", "Unban", errors.New("no rows affected"), userUID)
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("User unbanned: uid=%s", userUID))
+	utils.LogInfo("USER", "User unbanned", "uid", userUID)
 	return nil
 }

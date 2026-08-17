@@ -90,10 +90,10 @@ func (r *QRLoginRepository) Create(ctx context.Context, qrToken *QRLoginToken) e
 	`, qrToken.TokenHash, qrToken.Status, qrToken.PcIP, qrToken.PcUserAgent, qrToken.CreatedAt, qrToken.ExpireTime)
 
 	if err != nil {
-		return utils.LogError("QRLOGIN", "Create", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(qrToken.TokenHash)))
+		return utils.LogError("QRLOGIN", "Create", err, "token_hash", utils.TruncateIdentifier(qrToken.TokenHash))
 	}
 
-	utils.LogInfo("QRLOGIN", fmt.Sprintf("Token created: ip=%s", qrToken.PcIP))
+	utils.LogInfo("QRLOGIN", "Token created", "ip", qrToken.PcIP)
 	return nil
 }
 
@@ -123,10 +123,10 @@ func (r *QRLoginRepository) UpdateStatus(ctx context.Context, tokenHash, status 
 	}
 
 	if err != nil {
-		return utils.LogError("QRLOGIN", "UpdateStatus", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+		return utils.LogError("QRLOGIN", "UpdateStatus", err, "token_hash", utils.TruncateIdentifier(tokenHash))
 	}
 
-	utils.LogInfo("QRLOGIN", fmt.Sprintf("Token status updated: status=%s", status))
+	utils.LogInfo("QRLOGIN", "Token status updated", "status", status)
 	return nil
 }
 
@@ -158,14 +158,14 @@ func (r *QRLoginRepository) UpdateStatusWithCondition(ctx context.Context, token
 	}
 
 	if err != nil {
-		return false, utils.LogError("QRLOGIN", "UpdateStatusWithCondition", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+		return false, utils.LogError("QRLOGIN", "UpdateStatusWithCondition", err, "token_hash", utils.TruncateIdentifier(tokenHash))
 	}
 
 	rowsAffected := commandTag.RowsAffected()
 	success := rowsAffected > 0
 
 	if success {
-		utils.LogInfo("QRLOGIN", fmt.Sprintf("Token status atomically updated: %s -> %s", fromStatus, toStatus))
+		utils.LogInfo("QRLOGIN", "Token status atomically updated", "from", fromStatus, "to", toStatus)
 	}
 
 	return success, nil
@@ -188,10 +188,10 @@ func (r *QRLoginRepository) ConfirmLogin(ctx context.Context, tokenHash string, 
 	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionTokenHash, tokenHash)
 
 	if err != nil {
-		return utils.LogError("QRLOGIN", "ConfirmLogin", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+		return utils.LogError("QRLOGIN", "ConfirmLogin", err, "token_hash", utils.TruncateIdentifier(tokenHash))
 	}
 
-	utils.LogInfo("QRLOGIN", fmt.Sprintf("Login confirmed: userUID=%s", userUID))
+	utils.LogInfo("QRLOGIN", "Login confirmed", "user_uid", userUID)
 	return nil
 }
 
@@ -212,14 +212,14 @@ func (r *QRLoginRepository) ConfirmLoginWithCondition(ctx context.Context, token
 	`, QRStatusConfirmed, userUID, time.Now().UnixMilli(), pcSessionTokenHash, tokenHash, QRStatusScanned)
 
 	if err != nil {
-		return false, utils.LogError("QRLOGIN", "ConfirmLoginWithCondition", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+		return false, utils.LogError("QRLOGIN", "ConfirmLoginWithCondition", err, "token_hash", utils.TruncateIdentifier(tokenHash))
 	}
 
 	rowsAffected := commandTag.RowsAffected()
 	success := rowsAffected > 0
 
 	if success {
-		utils.LogInfo("QRLOGIN", fmt.Sprintf("Login atomically confirmed: userUID=%s", userUID))
+		utils.LogInfo("QRLOGIN", "Login atomically confirmed", "user_uid", userUID)
 	}
 
 	return success, nil
@@ -237,14 +237,14 @@ func (r *QRLoginRepository) Delete(ctx context.Context, tokenHash string) error 
 
 	result, err := r.pool.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		return utils.LogError("QRLOGIN", "Delete", err, fmt.Sprintf("token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+		return utils.LogError("QRLOGIN", "Delete", err, "token_hash", utils.TruncateIdentifier(tokenHash))
 	}
 
 	if result.RowsAffected() == 0 {
 		return utils.HandleDatabaseError("QRLOGIN", "Delete", errors.New("no rows affected"), utils.TruncateIdentifier(tokenHash))
 	}
 
-	utils.LogInfo("QRLOGIN", fmt.Sprintf("Token deleted: token_hash=%s", utils.TruncateIdentifier(tokenHash)))
+	utils.LogInfo("QRLOGIN", "Token deleted", "token_hash", utils.TruncateIdentifier(tokenHash))
 	return nil
 }
 
@@ -283,7 +283,7 @@ func (r *QRLoginRepository) ConsumeAndSetSession(ctx context.Context, tokenHash,
 
 	// 检查是否过期
 	if time.Now().UnixMilli() > expireTime {
-		utils.LogWarn("QRLOGIN", "Token expired in ConsumeAndSetSession", "")
+		utils.LogWarn("QRLOGIN", "Token expired in ConsumeAndSetSession")
 		_, _ = tx.Exec(ctx, "DELETE FROM qr_login_tokens WHERE token_hash = $1", tokenHash)
 		_ = tx.Commit(ctx)
 		return "", errors.New("TOKEN_EXPIRED")

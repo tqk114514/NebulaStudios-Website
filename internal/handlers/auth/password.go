@@ -67,10 +67,10 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 		h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")
 
-		utils.LogInfo("AUTH", fmt.Sprintf("Reset password code sent (async): email=%s", normalizedEmail))
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "Reset password code sent (async)", "email", normalizedEmail)
 	} else {
 		_, _, _ = h.tokenService.CreateToken(ctx, "timing-constant-dummy@invalid", services.TokenTypeResetPassword)
-		utils.LogInfo("AUTH", fmt.Sprintf("Reset password requested for non-existent email: email=%s", normalizedEmail))
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "Reset password requested for non-existent email", "email", normalizedEmail)
 	}
 
 	utils.RespondSuccess(c, gin.H{"expireTime": expireTime})
@@ -136,14 +136,14 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	if err := h.sessionService.RevokeUserTokens(c.Request.Context(), user.UID); err != nil {
-		utils.LogWarn("AUTH", "Failed to revoke user tokens during password reset", fmt.Sprintf("userUID=%s", user.UID))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to revoke user tokens during password reset", "user_uid", user.UID)
 	}
 
 	_ = h.tokenService.InvalidateCodeByEmail(ctx, normalizedEmail, &tokenType)
 
 	h.userCache.Invalidate(user.UID)
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Password reset successful: email=%s, userUID=%s", normalizedEmail, user.UID))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Password reset successful", "email", normalizedEmail, "user_uid", user.UID)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -225,17 +225,17 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := h.sessionService.RevokeUserTokens(c.Request.Context(), userUID); err != nil {
-		utils.LogWarn("AUTH", "Failed to revoke user tokens during password change", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to revoke user tokens during password change", "user_uid", userUID)
 	}
 
 	h.userCache.Invalidate(userUID)
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogChangePassword(ctx, userUID); err != nil {
-			utils.LogWarn("AUTH", "Failed to log password change", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to log password change", "user_uid", userUID)
 		}
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("Password changed successfully: userUID=%s, email=%s", userUID, user.Email))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Password changed successfully", "user_uid", userUID, "email", user.Email)
 	utils.RespondSuccess(c, gin.H{})
 }

@@ -1,7 +1,6 @@
 package oauth
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -106,7 +105,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id", fmt.Sprintf("clientID=%s", clientID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Invalid client_id", "client_id", clientID)
 		h.redirectToErrorPage(c, "invalid_client", "Invalid client_id")
 		return
 	}
@@ -117,7 +116,7 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 	}
 
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
-		utils.LogWarn("OAUTH-PROVIDER", "Invalid redirect_uri", fmt.Sprintf("redirectURI=%s, expected=%s", redirectURI, client.RedirectURI))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Invalid redirect_uri", "redirect_uri", redirectURI, "expected", client.RedirectURI)
 		h.redirectToErrorPage(c, "invalid_request", "Invalid redirect_uri")
 		return
 	}
@@ -149,13 +148,13 @@ func (h *OAuthProviderHandler) Authorize(c *gin.Context) {
 
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "Authorize", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "OAUTH-PROVIDER", "Authorize", err, "user_uid", userUID)
 		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Banned user attempted to authorize", "user_uid", userUID)
 		h.redirectWithError(c, redirectURI, state, "access_denied", "User is banned")
 		return
 	}
@@ -253,13 +252,13 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 
 	client, err := h.oauthService.ValidateClientID(c.Request.Context(), clientID)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Invalid client_id in POST", fmt.Sprintf("clientID=%s", clientID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Invalid client_id in POST", "client_id", clientID)
 		h.respondAuthorizeError(c, isJSON, "invalid_client", "", "", "Invalid client_id")
 		return
 	}
 
 	if !h.oauthService.ValidateRedirectURI(client, redirectURI) {
-		utils.LogWarn("OAUTH-PROVIDER", "Invalid redirect_uri in POST", fmt.Sprintf("redirectURI=%s", redirectURI))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Invalid redirect_uri in POST", "redirect_uri", redirectURI)
 		h.respondAuthorizeError(c, isJSON, "invalid_request", "", "", "Invalid redirect_uri")
 		return
 	}
@@ -272,19 +271,19 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to get user in POST: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "OAUTH-PROVIDER", "AuthorizePost", err, "user_uid", userUID)
 		h.respondAuthorizeError(c, isJSON, "server_error", redirectURI, state, "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to authorize in POST", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Banned user attempted to authorize in POST", "user_uid", userUID)
 		h.respondAuthorizeError(c, isJSON, "access_denied", redirectURI, state, "User is banned")
 		return
 	}
 
 	if decision != "approve" {
-		utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("User denied authorization: userUID=%s, clientID=%s", userUID, clientID))
+		utils.LogInfoCtx(c.Request.Context(), "OAUTH-PROVIDER", "User denied authorization", "user_uid", userUID, "client_id", clientID)
 		h.respondAuthorizeError(c, isJSON, "access_denied", redirectURI, state, "User denied authorization")
 		return
 	}
@@ -297,19 +296,19 @@ func (h *OAuthProviderHandler) AuthorizePost(c *gin.Context) {
 
 	code, err := h.oauthService.CreateAuthorizationCode(c.Request.Context(), clientID, userUID, redirectURI, normalizedScope, codeChallenge, codeChallengeMethod)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "AuthorizePost", err, fmt.Sprintf("Failed to create auth code: userUID=%s, clientID=%s", userUID, clientID))
+		utils.LogErrorCtx(c.Request.Context(), "OAUTH-PROVIDER", "AuthorizePost", err, "user_uid", userUID, "client_id", clientID)
 		h.respondAuthorizeError(c, isJSON, "server_error", redirectURI, state, "Failed to create authorization code")
 		return
 	}
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogOAuthAuthorize(c.Request.Context(), userUID, clientID, client.Name, normalizedScope); err != nil {
-			utils.LogWarn("OAUTH-PROVIDER", "Failed to log OAuth authorize", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Failed to log OAuth authorize", "user_uid", userUID)
 		}
 	}
 
 	redirectURL := h.buildRedirectURL(redirectURI, code, state)
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Authorization granted: userUID=%s, clientID=%s", userUID, clientID))
+	utils.LogInfoCtx(c.Request.Context(), "OAUTH-PROVIDER", "Authorization granted", "user_uid", userUID, "client_id", clientID)
 	h.respondAuthorizeSuccess(c, isJSON, redirectURL)
 }
 
@@ -327,7 +326,7 @@ func (h *OAuthProviderHandler) Token(c *gin.Context) {
 
 	_, err := h.oauthService.ValidateClient(c.Request.Context(), clientID, clientSecret)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Client validation failed", fmt.Sprintf("clientID=%s", clientID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Client validation failed", "client_id", clientID)
 		h.respondTokenError(c, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
@@ -360,19 +359,19 @@ func (h *OAuthProviderHandler) handleAuthorizationCodeGrant(c *gin.Context, clie
 
 	tokenResp, userUID, err := h.oauthService.ExchangeAuthorizationCode(c.Request.Context(), code, clientID, redirectURI, codeVerifier)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Code exchange failed", fmt.Sprintf("clientID=%s, error=%s, redirectURI=%s, hasVerifier=%v", clientID, err.Error(), redirectURI, codeVerifier != ""))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Code exchange failed", "client_id", clientID, "error", err, "redirect_uri", redirectURI, "has_verifier", codeVerifier != "")
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid authorization code")
 		return
 	}
 
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token exchange", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "User banned or not found during token exchange", "user_uid", userUID)
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token issued: clientID=%s, userUID=%s", clientID, userUID))
+	utils.LogInfoCtx(c.Request.Context(), "OAUTH-PROVIDER", "Token issued", "client_id", clientID, "user_uid", userUID)
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -387,19 +386,19 @@ func (h *OAuthProviderHandler) handleRefreshTokenGrant(c *gin.Context, clientID 
 
 	tokenResp, userUID, err := h.oauthService.RefreshAccessToken(c.Request.Context(), refreshToken, clientID)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Token refresh failed", fmt.Sprintf("clientID=%s, error=%s", clientID, err.Error()))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Token refresh failed", "client_id", clientID, "error", err)
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "Invalid refresh token")
 		return
 	}
 
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), userUID, h.userRepo.FindByUID)
 	if err != nil || user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "User banned or not found during token refresh", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "User banned or not found during token refresh", "user_uid", userUID)
 		h.respondTokenError(c, http.StatusBadRequest, "invalid_grant", "User is banned or not found")
 		return
 	}
 
-	utils.LogInfo("OAUTH-PROVIDER", fmt.Sprintf("Token refreshed: clientID=%s, userUID=%s", clientID, userUID))
+	utils.LogInfoCtx(c.Request.Context(), "OAUTH-PROVIDER", "Token refreshed", "client_id", clientID, "user_uid", userUID)
 	c.JSON(http.StatusOK, tokenResp)
 }
 
@@ -420,20 +419,20 @@ func (h *OAuthProviderHandler) UserInfo(c *gin.Context) {
 
 	tokenInfo, err := h.oauthService.ValidateAccessToken(c.Request.Context(), accessToken)
 	if err != nil {
-		utils.LogWarn("OAUTH-PROVIDER", "Access token validation failed", "")
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Access token validation failed")
 		h.respondUserInfoError(c, http.StatusUnauthorized, "invalid_token", "Invalid or expired access token")
 		return
 	}
 
 	user, err := h.userCache.GetOrLoad(c.Request.Context(), tokenInfo.UserUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.LogError("OAUTH-PROVIDER", "UserInfo", err, fmt.Sprintf("Failed to get user for userinfo: userUID=%s", tokenInfo.UserUID))
+		utils.LogErrorCtx(c.Request.Context(), "OAUTH-PROVIDER", "UserInfo", err, "user_uid", tokenInfo.UserUID)
 		h.respondUserInfoError(c, http.StatusInternalServerError, "server_error", "Failed to get user info")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn("OAUTH-PROVIDER", "Banned user attempted to access userinfo", fmt.Sprintf("userUID=%s", tokenInfo.UserUID))
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH-PROVIDER", "Banned user attempted to access userinfo", "user_uid", tokenInfo.UserUID)
 		h.respondUserInfoError(c, http.StatusForbidden, "access_denied", "User is banned")
 		return
 	}
@@ -478,7 +477,7 @@ func (h *OAuthProviderHandler) Revoke(c *gin.Context) {
 
 	_ = h.oauthService.RevokeToken(c.Request.Context(), token)
 
-	utils.LogInfo("OAUTH-PROVIDER", "Token revoked")
+	utils.LogInfoCtx(c.Request.Context(), "OAUTH-PROVIDER", "Token revoked")
 	c.Status(http.StatusOK)
 }
 

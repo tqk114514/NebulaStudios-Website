@@ -3,7 +3,6 @@ package admin
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -157,11 +156,10 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorUID, client.ID, client.ClientID, client.Name); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log create OAuth client", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log create OAuth client", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client created: operatorUID=%s, clientID=%s, name=%s",
-		operatorUID, client.ClientID, client.Name))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "OAuth client created", "operator_uid", operatorUID, "client_id", client.ClientID, "name", client.Name)
 
 	utils.RespondSuccessWithData(c, createOAuthClientResponse{
 		Client:       client,
@@ -212,10 +210,10 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log update OAuth client", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log update OAuth client", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client updated: operatorUID=%s, clientID=%s", operatorUID, client.ClientID))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "OAuth client updated", "operator_uid", operatorUID, "client_id", client.ClientID)
 
 	utils.RespondSuccess(c, gin.H{"message": "Client updated"})
 }
@@ -254,11 +252,10 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log delete OAuth client", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log delete OAuth client", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client deleted: operatorUID=%s, clientID=%s, name=%s",
-		operatorUID, client.ClientID, client.Name))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "OAuth client deleted", "operator_uid", operatorUID, "client_id", client.ClientID, "name", client.Name)
 
 	utils.RespondSuccess(c, gin.H{"message": "Client deleted"})
 }
@@ -297,10 +294,10 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log regenerate OAuth client secret", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log regenerate OAuth client secret", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client secret regenerated: operatorUID=%s, clientID=%s", operatorUID, client.ClientID))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "OAuth client secret regenerated", "operator_uid", operatorUID, "client_id", client.ClientID)
 
 	utils.RespondSuccessWithData(c, regenerateSecretResponse{
 		ClientSecret: newSecret,
@@ -355,14 +352,14 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 	}
 
 	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorUID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log toggle OAuth client", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log toggle OAuth client", "error", err)
 	}
 
 	status := "disabled"
 	if req.Enabled {
 		status = "enabled"
 	}
-	utils.LogInfo("ADMIN", fmt.Sprintf("OAuth client %s: operatorUID=%s, clientID=%s", status, operatorUID, client.ClientID))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "OAuth client status changed", "status", status, "operator_uid", operatorUID, "client_id", client.ClientID)
 
 	utils.RespondSuccess(c, gin.H{"message": "Client " + status})
 }

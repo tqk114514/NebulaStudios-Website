@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"hash/maphash"
 	"net/http"
 	"strings"
@@ -88,7 +87,7 @@ func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *W
 				origin := r.Header.Get("Origin")
 				// 浏览器 WebSocket 握手必发 Origin，空 Origin 来自非浏览器客户端，拒绝以防绕过
 				if origin == "" {
-					utils.LogWarn("WS", "WebSocket origin rejected", "empty origin")
+					utils.LogWarn("WS", "WebSocket origin rejected", "reason", "empty origin")
 					return false
 				}
 
@@ -105,11 +104,11 @@ func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *W
 					}
 				}
 
-				utils.LogWarn("WS", "WebSocket origin rejected", fmt.Sprintf("origin=%s", origin))
+				utils.LogWarn("WS", "WebSocket origin rejected", "origin", origin)
 				return false
 			},
 			Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
-				utils.LogError("WS", "Upgrade", reason, fmt.Sprintf("WebSocket upgrade error: status=%d", status))
+				utils.LogError("WS", "Upgrade", reason, "status", status)
 			},
 		},
 		qrLoginRepo: qrLoginRepo,
@@ -124,7 +123,7 @@ func NewWebSocketService(cfg *config.Config, qrLoginRepo models.QRLoginStore) *W
 	ws.wg.Add(1)
 	go ws.cleanup()
 
-	utils.LogInfo("WS", fmt.Sprintf("WebSocket service initialized: shards=%d, maxConnections=%d", wsShardCount, maxConnections))
+	utils.LogInfo("WS", "WebSocket service initialized", "shards", wsShardCount, "max_connections", maxConnections)
 
 	return ws
 }
@@ -140,14 +139,14 @@ func (ws *WebSocketService) SetTokenDecrypter(fn func(string) (string, error)) {
 // HandleQRLogin 处理扫码登录 WebSocket 连接
 func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	if ws.IsShutdown() {
-		utils.LogWarn("WS", "Service is shutdown, rejecting connection", "")
+		utils.LogWarn("WS", "Service is shutdown, rejecting connection")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
 		return
 	}
 
 	token := c.Query("token")
 	if token == "" {
-		utils.LogWarn("WS", "Missing token in WebSocket request", "")
+		utils.LogWarn("WS", "Missing token in WebSocket request")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
 		return
 	}
@@ -172,8 +171,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 
 	// 前端传入的是加密 token，需解密为原始 token 后再哈希查库
 	originalToken, err := decrypter(token)
-	if err != nil {
-		utils.LogWarn("WS", "Failed to decrypt QR token for WebSocket", fmt.Sprintf("err=%v", err))
+	if err != nil {				utils.LogWarn("WS", "Failed to decrypt QR token for WebSocket", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
@@ -182,27 +180,23 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	defer cancel()
 
 	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, utils.HashToken(originalToken))
-	if err != nil {
-		utils.LogWarn("WS", "Invalid QR token for WebSocket", fmt.Sprintf("token=%s, err=%v", utils.TruncateIdentifier(token), err))
+	if err != nil {				utils.LogWarn("WS", "Invalid QR token for WebSocket", "token", utils.TruncateIdentifier(token), "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
 	now := time.Now().UnixMilli()
-	if qrToken.ExpireTime > 0 && now > qrToken.ExpireTime {
-		utils.LogWarn("WS", "Expired QR token for WebSocket", fmt.Sprintf("token=%s", token))
+	if qrToken.ExpireTime > 0 && now > qrToken.ExpireTime {				utils.LogWarn("WS", "Expired QR token for WebSocket", "token", utils.TruncateIdentifier(token))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "token expired"})
 		return
 	}
 
-	if qrToken.Status != models.QRStatusPending && qrToken.Status != models.QRStatusScanned {
-		utils.LogWarn("WS", "QR token in invalid state for WebSocket", fmt.Sprintf("token=%s, status=%s", token, qrToken.Status))
+	if qrToken.Status != models.QRStatusPending && qrToken.Status != models.QRStatusScanned {				utils.LogWarn("WS", "QR token in invalid state for WebSocket", "token", utils.TruncateIdentifier(token), "status", qrToken.Status)
 		c.JSON(http.StatusConflict, gin.H{"error": "token already consumed"})
 		return
 	}
 
-	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
-		utils.LogWarn("WS", "Max connections reached, rejecting new client", fmt.Sprintf("max=%d", maxConnections))
+	if atomic.LoadInt32(&ws.connCount) >= maxConnections {				utils.LogWarn("WS", "Max connections reached, rejecting new client", "max", maxConnections)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "too many connections"})
 		return
 	}
@@ -220,8 +214,7 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 		createdAt: time.Now(),
 	}
 
-	if !ws.register(client) {
-		utils.LogWarn("WS", "Failed to register client", fmt.Sprintf("token=%s", token))
+	if !ws.register(client) {			utils.LogWarn("WS", "Failed to register client", "token", utils.TruncateIdentifier(token))
 		_ = conn.Close()
 		return
 	}
@@ -237,7 +230,7 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	}
 
 	if token == "" {
-		utils.LogWarn("WS", "Empty token in NotifyStatusChange", "")
+		utils.LogWarn("WS", "Empty token in NotifyStatusChange")
 		return
 	}
 
@@ -267,7 +260,7 @@ func (ws *WebSocketService) NotifyStatusChange(token, status string, data map[st
 	}
 
 	if err := ws.sendToClient(client, jsonData); err != nil {
-		utils.LogWarn("WS", "Failed to send message", fmt.Sprintf("token=%s", token))
+		utils.LogWarn("WS", "Failed to send message", "token", utils.TruncateIdentifier(token))
 	}
 }
 
@@ -314,7 +307,7 @@ func (ws *WebSocketService) Shutdown(ctx context.Context) {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		utils.LogWarn("WS", "Shutdown timeout exceeded, forcing shutdown", "")
+		utils.LogWarn("WS", "Shutdown timeout exceeded, forcing shutdown")
 	}
 }
 
@@ -363,7 +356,7 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 	if existingClient, ok := shard.clients[client.token]; ok {
 		ws.closeClient(existingClient)
 		shard.clients[client.token] = client
-		utils.LogInfo("WS", fmt.Sprintf("Replaced existing client: token=%s", client.token))
+		utils.LogInfo("WS", "Replaced existing client", "token", utils.TruncateIdentifier(client.token))
 		return true
 	}
 
@@ -371,7 +364,7 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 	for {
 		current := atomic.LoadInt32(&ws.connCount)
 		if current >= maxConnections {
-			utils.LogWarn("WS", "Max connections reached, rejecting new client", fmt.Sprintf("max=%d", maxConnections))
+			utils.LogWarn("WS", "Max connections reached, rejecting new client", "max", maxConnections)
 			return false
 		}
 		if atomic.CompareAndSwapInt32(&ws.connCount, current, current+1) {
@@ -380,7 +373,7 @@ func (ws *WebSocketService) register(client *WSClient) bool {
 	}
 
 	shard.clients[client.token] = client
-	utils.LogInfo("WS", fmt.Sprintf("Client registered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount)))
+	utils.LogInfo("WS", "Client registered", "token", utils.TruncateIdentifier(client.token), "total", atomic.LoadInt32(&ws.connCount))
 	return true
 }
 
@@ -395,7 +388,7 @@ func (ws *WebSocketService) unregister(client *WSClient) {
 		delete(shard.clients, client.token)
 		ws.closeClient(client)
 		atomic.AddInt32(&ws.connCount, -1)
-		utils.LogInfo("WS", fmt.Sprintf("Client unregistered: token=%s, total=%d", client.token, atomic.LoadInt32(&ws.connCount)))
+		utils.LogInfo("WS", "Client unregistered", "token", utils.TruncateIdentifier(client.token), "total", atomic.LoadInt32(&ws.connCount))
 	}
 }
 
@@ -443,7 +436,7 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 		select {
 		case message, ok := <-client.send:
 			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				utils.LogWarn("WS", "Failed to set write deadline", "")
+				utils.LogWarn("WS", "Failed to set write deadline")
 				return
 			}
 
@@ -462,7 +455,7 @@ func (ws *WebSocketService) writePump(client *WSClient) {
 
 		case <-ticker.C:
 			if err := client.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				utils.LogWarn("WS", "Failed to set write deadline for ping", "")
+				utils.LogWarn("WS", "Failed to set write deadline for ping")
 				return
 			}
 
@@ -483,13 +476,13 @@ func (ws *WebSocketService) readPump(client *WSClient) {
 	client.conn.SetReadLimit(maxMessageSize)
 
 	if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		utils.LogWarn("WS", "Failed to set read deadline", "")
+		utils.LogWarn("WS", "Failed to set read deadline")
 		return
 	}
 
 	client.conn.SetPongHandler(func(string) error {
 		if err := client.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			utils.LogWarn("WS", "Failed to set read deadline in pong handler", "")
+			utils.LogWarn("WS", "Failed to set read deadline in pong handler")
 			return err
 		}
 		return nil
@@ -551,7 +544,7 @@ func (ws *WebSocketService) cleanupExpired() {
 	}
 
 	if expired > 0 {
-		utils.LogInfo("WS", fmt.Sprintf("Cleaned up %d expired connections, remaining: %d", expired, atomic.LoadInt32(&ws.connCount)))
+		utils.LogInfo("WS", "Cleaned up expired connections", "expired", expired, "remaining", atomic.LoadInt32(&ws.connCount))
 	}
 }
 

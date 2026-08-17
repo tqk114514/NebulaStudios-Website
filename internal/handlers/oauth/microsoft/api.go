@@ -1,6 +1,7 @@
 package microsoft
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,7 @@ import (
 )
 
 // exchangeCodeForToken 用授权码换取 token，同时验证 code_verifier
-func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
+func (h *MicrosoftHandler) exchangeCodeForToken(ctx context.Context, code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", oauth.ErrOAuthTokenExchange)
 	}
@@ -49,7 +50,7 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		utils.LogError("OAUTH-MS", "exchangeCodeForToken", fmt.Errorf("status %d", resp.StatusCode), fmt.Sprintf("Token exchange failed with status %d: %s", resp.StatusCode, string(body)))
+		utils.LogErrorCtx(ctx, "OAUTH-MS", "exchangeCodeForToken", fmt.Errorf("status %d", resp.StatusCode), "status", resp.StatusCode, "response", string(body))
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthTokenExchange, resp.StatusCode)
 	}
 
@@ -60,14 +61,14 @@ func (h *MicrosoftHandler) exchangeCodeForToken(code string, codeVerifier string
 
 	if errCode, ok := result["error"].(string); ok {
 		errDesc, _ := result["error_description"].(string)
-		utils.LogError("OAUTH-MS", "exchangeCodeForToken", fmt.Errorf("%s", errCode), fmt.Sprintf("Token exchange error: %s - %s", errCode, errDesc))
+		utils.LogErrorCtx(ctx, "OAUTH-MS", "exchangeCodeForToken", fmt.Errorf("%s", errCode), "error_code", errCode, "error_description", errDesc)
 		return nil, fmt.Errorf("%w: %s", oauth.ErrOAuthTokenExchange, errCode)
 	}
 
 	return result, nil
 }
 
-func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, error) {
+func (h *MicrosoftHandler) getUserInfo(ctx context.Context, accessToken string) (map[string]any, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", oauth.ErrOAuthUserInfo)
 	}
@@ -95,7 +96,7 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, erro
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		utils.LogError("OAUTH-MS", "getUserInfo", fmt.Errorf("status %d", resp.StatusCode), fmt.Sprintf("Get user info failed with status %d: %s", resp.StatusCode, string(body)))
+		utils.LogErrorCtx(ctx, "OAUTH-MS", "getUserInfo", fmt.Errorf("status %d", resp.StatusCode), "status", resp.StatusCode, "response", string(body))
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthUserInfo, resp.StatusCode)
 	}
 
@@ -106,7 +107,7 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, erro
 
 	if errCode, ok := result["error"].(map[string]any); ok {
 		if code, ok := errCode["code"].(string); ok {
-			utils.LogError("OAUTH-MS", "getUserInfo", fmt.Errorf("%s", code), fmt.Sprintf("Get user info error: %s", code))
+			utils.LogErrorCtx(ctx, "OAUTH-MS", "getUserInfo", fmt.Errorf("%s", code), "error_code", code)
 			return nil, fmt.Errorf("%w: %s", oauth.ErrOAuthUserInfo, code)
 		}
 	}
@@ -115,15 +116,15 @@ func (h *MicrosoftHandler) getUserInfo(accessToken string) (map[string]any, erro
 }
 
 // getAvatarData 获取微软头像，返回二进制数据和 Content-Type，失败时返回空
-func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
+func (h *MicrosoftHandler) getAvatarData(ctx context.Context, accessToken string) ([]byte, string) {
 	if accessToken == "" {
-		utils.LogWarn("OAUTH-MS", "Empty access token for avatar request", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Empty access token for avatar request")
 		return nil, ""
 	}
 
 	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me/photo/$value", nil)
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to create avatar request", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to create avatar request")
 		return nil, ""
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -131,7 +132,7 @@ func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "Avatar request failed", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Avatar request failed")
 		return nil, ""
 	}
 	defer func(Body io.ReadCloser) {
@@ -142,19 +143,19 @@ func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode != http.StatusNotFound {
-			utils.LogWarn("OAUTH-MS", "Avatar request returned non-OK status", fmt.Sprintf("status=%d", resp.StatusCode))
+			utils.LogWarnCtx(ctx, "OAUTH-MS", "Avatar request returned non-OK status", "status", resp.StatusCode)
 		}
 		return nil, ""
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to read avatar response", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to read avatar response")
 		return nil, ""
 	}
 
 	if len(body) > 5*1024*1024 {
-		utils.LogWarn("OAUTH-MS", "Avatar too large, skipping", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Avatar too large, skipping")
 		return nil, ""
 	}
 
@@ -164,7 +165,7 @@ func (h *MicrosoftHandler) getAvatarData(accessToken string) ([]byte, string) {
 	}
 
 	if !strings.HasPrefix(contentType, "image/") {
-		utils.LogWarn("OAUTH-MS", "Invalid avatar content type", fmt.Sprintf("contentType=%s", contentType))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Invalid avatar content type", "content_type", contentType)
 		return nil, ""
 	}
 

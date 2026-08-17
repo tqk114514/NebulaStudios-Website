@@ -89,7 +89,7 @@ func NewWorkerTokenVerifier(clientID, publicKeyPEM string) (*WorkerTokenVerifier
 		return nil, fmt.Errorf("%w: not an Ed25519 public key", ErrInvalidWorkerPublicKey)
 	}
 
-	utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("Worker token verifier initialized: clientID=%s", clientID))
+	utils.LogInfo("OAUTH-GOOGLE", "Worker token verifier initialized", "client_id", clientID)
 	return &WorkerTokenVerifier{clientID: clientID, pubKey: pubKey}, nil
 }
 
@@ -127,7 +127,7 @@ func (v *WorkerTokenVerifier) VerifyIDTokenClaims(ctx context.Context, idToken s
 	// 解析声明（不验证签名——签名背书已由 VerifyEnvelope 完成）
 	token, _, err := jwt.NewParser().ParseUnverified(idToken, &GoogleIDTokenClaims{})
 	if err != nil {
-		utils.LogWarn("OAUTH-GOOGLE", "Failed to parse id_token claims", err.Error())
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "Failed to parse id_token claims", "error", err)
 		return nil, fmt.Errorf("%w: %v", ErrInvalidClaims, err)
 	}
 	claims, ok := token.Claims.(*GoogleIDTokenClaims)
@@ -137,24 +137,24 @@ func (v *WorkerTokenVerifier) VerifyIDTokenClaims(ctx context.Context, idToken s
 
 	// 校验 issuer（Google 固定，精确匹配）
 	if claims.Issuer != googleIssuer {
-		utils.LogWarn("OAUTH-GOOGLE", "id_token issuer mismatch", fmt.Sprintf("expected=%s, got=%s", googleIssuer, claims.Issuer))
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "id_token issuer mismatch", "expected", googleIssuer, "got", claims.Issuer)
 		return nil, fmt.Errorf("%w: issuer mismatch", ErrInvalidClaims)
 	}
 
 	// 校验 audience（必须包含本应用 client_id）
 	if !slices.Contains(claims.Audience, v.clientID) {
-		utils.LogWarn("OAUTH-GOOGLE", "id_token audience mismatch", fmt.Sprintf("expected clientID=%s, aud=%v", v.clientID, claims.Audience))
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "id_token audience mismatch", "expected_client_id", v.clientID, "aud", claims.Audience)
 		return nil, fmt.Errorf("%w: audience mismatch", ErrInvalidClaims)
 	}
 
 	// 校验过期（ParseUnverified 不做，需手动）
 	if claims.ExpiresAt == nil || !claims.ExpiresAt.After(time.Now()) {
-		utils.LogWarn("OAUTH-GOOGLE", "id_token expired or missing exp", "")
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "id_token expired or missing exp")
 		return nil, fmt.Errorf("%w: expired", ErrInvalidClaims)
 	}
 
 	if claims.Sub == "" {
-		utils.LogWarn("OAUTH-GOOGLE", "id_token missing sub", "")
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "id_token missing sub")
 		return nil, fmt.Errorf("%w: missing sub", ErrInvalidClaims)
 	}
 

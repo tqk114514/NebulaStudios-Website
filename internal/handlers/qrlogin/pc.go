@@ -2,7 +2,6 @@ package qrlogin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -23,7 +22,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 
 	token, err := utils.GenerateSecureToken()
 	if err != nil {
-		utils.LogError("QR-LOGIN", "Generate", err, "Failed to generate secure token")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "Generate", err, "Failed to generate secure token")
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -48,7 +47,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 
 	err = h.qrLoginRepo.Create(ctx, qrToken)
 	if err != nil {
-		utils.LogError("QR-LOGIN", "Generate", err, "Failed to save token to database")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "Generate", err, "Failed to save token to database")
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
@@ -57,7 +56,7 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 		"t": token,
 	})
 	if err != nil {
-		utils.LogError("QR-LOGIN", "Generate", err, "Failed to marshal payload")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "Generate", err, "Failed to marshal payload")
 		_ = h.qrLoginRepo.Delete(ctx, utils.HashToken(token))
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
@@ -65,13 +64,13 @@ func (h *QRLoginHandler) Generate(c *gin.Context) {
 
 	encryptedToken, err := utils.EncryptAESGCM(payload, h.encryptKey)
 	if err != nil {
-		utils.LogError("QR-LOGIN", "Generate", err, "Failed to encrypt token")
+		utils.LogErrorCtx(c.Request.Context(), "QR-LOGIN", "Generate", err, "Failed to encrypt token")
 		_ = h.qrLoginRepo.Delete(ctx, utils.HashToken(token))
 		utils.RespondError(c, http.StatusInternalServerError, "QR_TOKEN_GENERATE_FAILED")
 		return
 	}
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Token generated: ip=%s", pcIP))
+	utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Token generated", "ip", pcIP)
 
 	utils.RespondSuccess(c, gin.H{
 		"token":      encryptedToken,
@@ -91,7 +90,7 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 
 	originalToken, err := h.decryptToken(encryptedToken)
 	if err != nil {
-		utils.LogDebug("QR-LOGIN", "Failed to decrypt token in Cancel")
+		utils.LogDebugCtx(c.Request.Context(), "QR-LOGIN", "Failed to decrypt token in Cancel")
 		utils.RespondSuccess(c, gin.H{})
 		return
 	}
@@ -100,9 +99,9 @@ func (h *QRLoginHandler) Cancel(c *gin.Context) {
 
 	err = h.qrLoginRepo.Delete(ctx, utils.HashToken(originalToken))
 	if err != nil {
-		utils.LogWarn("QR-LOGIN", "Failed to delete token in Cancel", "")
+		utils.LogWarnCtx(c.Request.Context(), "QR-LOGIN", "Failed to delete token in Cancel")
 	} else {
-		utils.LogInfo("QR-LOGIN", "Token cancelled by PC")
+		utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Token cancelled by PC")
 	}
 
 	utils.RespondSuccess(c, gin.H{})
@@ -172,6 +171,6 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 	utils.SetTokenCookieGin(c, accessToken)
 	utils.SetRefreshTokenCookieGin(c, refreshToken)
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("Session cookies set for PC: userUID=%s", claims.UID))
+	utils.LogInfoCtx(c.Request.Context(), "QR-LOGIN", "Session cookies set for PC", "user_uid", claims.UID)
 	utils.RespondSuccess(c, gin.H{})
 }

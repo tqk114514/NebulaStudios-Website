@@ -1,6 +1,7 @@
 package google
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 // 网络错误或任何非 200 状态码都自动切换到下一个代理：
 //   - 代理本身故障（404/502 等）→ 重试能恢复
 //   - Google 的真实错误（400 invalid_grant 等）→ 同一 code 在多个代理上结果一致，重试无害
-func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (statusCode int, body []byte, err error)) (int, []byte, error) {
+func (h *GoogleHandler) doWithProxyFailover(ctx context.Context, op string, fn func(baseURL string) (statusCode int, body []byte, err error)) (int, []byte, error) {
 	if len(h.proxyURLs) == 0 {
 		return 0, nil, fmt.Errorf("no google proxy configured")
 	}
@@ -31,9 +32,9 @@ func (h *GoogleHandler) doWithProxyFailover(op string, fn func(baseURL string) (
 		lastStatus, lastBody, lastErr = status, body, err
 		if i < len(h.proxyURLs)-1 {
 			if err != nil {
-				utils.LogWarn("OAUTH-GOOGLE", fmt.Sprintf("%s: proxy %s failed (%v), trying next", op, base, err), "")
+				utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", op+": proxy failed, trying next", "proxy", base, "error", err)
 			} else {
-				utils.LogWarn("OAUTH-GOOGLE", fmt.Sprintf("%s: proxy %s returned status %d, trying next", op, base, status), "")
+				utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", op+": proxy returned non-OK status, trying next", "proxy", base, "status", status)
 			}
 		}
 	}
@@ -57,7 +58,7 @@ func (h *GoogleHandler) verifyProxyEnvelope(body []byte) ([]byte, error) {
 }
 
 // exchangeCodeForToken 通过代理用授权码换取 token，支持多代理故障转移
-func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (map[string]any, error) {
+func (h *GoogleHandler) exchangeCodeForToken(ctx context.Context, code string, codeVerifier string) (map[string]any, error) {
 	if code == "" {
 		return nil, fmt.Errorf("%w: empty code", oauth.ErrOAuthTokenExchange)
 	}
@@ -76,7 +77,7 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 	encoded := data.Encode()
 
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
-	status, body, err := h.doWithProxyFailover("token exchange", func(base string) (int, []byte, error) {
+	status, body, err := h.doWithProxyFailover(ctx, "token exchange", func(base string) (int, []byte, error) {
 		req, err := http.NewRequest("POST", base+"/token", strings.NewReader(encoded))
 		if err != nil {
 			return 0, nil, err
@@ -111,7 +112,7 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 	}
 
 	if status != http.StatusOK {
-		utils.LogError("OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("status %d", status), fmt.Sprintf("Token exchange failed with status %d: %s", status, string(body)))
+		utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("status %d", status), "status", status, "response", string(body))
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthTokenExchange, status)
 	}
 
@@ -122,7 +123,7 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 
 	if errCode, ok := result["error"].(string); ok {
 		errDesc, _ := result["error_description"].(string)
-		utils.LogError("OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("%s", errCode), fmt.Sprintf("Token exchange error: %s - %s", errCode, errDesc))
+		utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "exchangeCodeForToken", fmt.Errorf("%s", errCode), "error_code", errCode, "error_description", errDesc)
 		return nil, fmt.Errorf("%w: %s", oauth.ErrOAuthTokenExchange, errCode)
 	}
 
@@ -130,13 +131,13 @@ func (h *GoogleHandler) exchangeCodeForToken(code string, codeVerifier string) (
 }
 
 // getUserInfo 通过代理获取 Google 用户信息，支持多代理故障转移
-func (h *GoogleHandler) getUserInfo(accessToken string) (map[string]any, error) {
+func (h *GoogleHandler) getUserInfo(ctx context.Context, accessToken string) (map[string]any, error) {
 	if accessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", oauth.ErrOAuthUserInfo)
 	}
 
 	client := &http.Client{Timeout: oauth.HTTPClientTimeout}
-	status, body, err := h.doWithProxyFailover("userinfo", func(base string) (int, []byte, error) {
+	status, body, err := h.doWithProxyFailover(ctx, "userinfo", func(base string) (int, []byte, error) {
 		req, err := http.NewRequest("GET", base+"/userinfo", nil)
 		if err != nil {
 			return 0, nil, err
@@ -160,7 +161,7 @@ func (h *GoogleHandler) getUserInfo(accessToken string) (map[string]any, error) 
 	}
 
 	if status != http.StatusOK {
-		utils.LogError("OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("status %d", status), fmt.Sprintf("Get user info failed with status %d: %s", status, string(body)))
+		utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("status %d", status), "status", status, "response", string(body))
 		return nil, fmt.Errorf("%w: status %d", oauth.ErrOAuthUserInfo, status)
 	}
 
@@ -171,7 +172,7 @@ func (h *GoogleHandler) getUserInfo(accessToken string) (map[string]any, error) 
 
 	if errCode, ok := result["error"].(map[string]any); ok {
 		if code, ok := errCode["code"].(string); ok {
-			utils.LogError("OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("%s", code), fmt.Sprintf("Get user info error: %s", code))
+			utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "getUserInfo", fmt.Errorf("%s", code), "error_code", code)
 			return nil, fmt.Errorf("%w: %s", oauth.ErrOAuthUserInfo, code)
 		}
 	}

@@ -44,8 +44,8 @@ type ProviderSpec struct {
 
 	IsConfigured     func() bool
 	BuildAuthURL     func(state, codeChallenge string) string
-	ExchangeAndFetch func(code, codeVerifier string) (tokenData, userInfo map[string]any, err error)
-	ParseIdentity    func(tokenData, userInfo map[string]any) ProviderIdentity
+	ExchangeAndFetch func(ctx context.Context, code, codeVerifier string) (tokenData, userInfo map[string]any, err error)
+	ParseIdentity    func(ctx context.Context, tokenData, userInfo map[string]any) ProviderIdentity
 	FindByID         func(ctx context.Context, id string) (*models.User, error)
 	IsLinked         func(user *models.User) bool
 	GetLinkedInfo    func(user *models.User) (id, name string)
@@ -119,7 +119,7 @@ func (h *ExternalProviderHandler) Auth(c *gin.Context) {
 
 	action := c.DefaultQuery("action", ActionLogin)
 	if action != ActionLogin && action != ActionLink {
-		utils.LogWarn(h.Spec.LogModule, "Invalid action, defaulting to login", fmt.Sprintf("action=%s", action))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Invalid action, defaulting to login", "action", action)
 		action = ActionLogin
 	}
 
@@ -127,14 +127,14 @@ func (h *ExternalProviderHandler) Auth(c *gin.Context) {
 
 	state, err := GenerateState()
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "Login", err, "Failed to generate state")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Login", err, "Failed to generate state")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_error")
 		return
 	}
 
 	codeVerifier, err := GenerateCodeVerifier()
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "Login", err, "Failed to generate code verifier")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Login", err, "Failed to generate code verifier")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_error")
 		return
 	}
@@ -151,20 +151,20 @@ func (h *ExternalProviderHandler) Auth(c *gin.Context) {
 	if action == ActionLink {
 		token, err := utils.GetTokenCookie(c)
 		if err != nil || token == "" {
-			utils.LogWarn(h.Spec.LogModule, "Link action but no token cookie", "")
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Link action but no token cookie")
 			RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
 
 		claims, err := h.SessionService.VerifyToken(token)
 		if err != nil {
-			utils.LogWarn(h.Spec.LogModule, "Link action but invalid session", "")
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Link action but invalid session")
 			RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
 
 		if claims == nil || claims.UID == "" {
-			utils.LogWarn(h.Spec.LogModule, "Link action but invalid claims", "")
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Link action but invalid claims")
 			RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "session_expired")
 			return
 		}
@@ -173,24 +173,24 @@ func (h *ExternalProviderHandler) Auth(c *gin.Context) {
 		defer cancel()
 		user, err := h.UserCache.GetOrLoad(ctx, claims.UID, h.UserRepo.FindByUID)
 		if err != nil {
-			utils.LogError(h.Spec.LogModule, "Auth", err, fmt.Sprintf("Failed to get user for ban check: userUID=%s", claims.UID))
+			utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Auth", err, "user_uid", claims.UID)
 			RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "oauth_error")
 			return
 		}
 		if user.CheckBanned() {
-			utils.LogWarn(h.Spec.LogModule, "Banned user attempted to link "+h.Spec.Name, fmt.Sprintf("userUID=%s", claims.UID))
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Banned user attempted to link "+h.Spec.Name, "user_uid", claims.UID)
 			RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "user_banned")
 			return
 		}
 
 		stateData.UserUID = claims.UID
-		utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("Link action initiated: userUID=%s", claims.UID))
+		utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, "Link action initiated", "user_uid", claims.UID)
 	}
 
 	SaveState(state, stateData)
 
 	redirectURL := h.Spec.BuildAuthURL(state, codeChallenge)
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("Redirecting to %s auth with PKCE: action=%s", h.Spec.Name, action))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, "Redirecting to "+h.Spec.Name+" auth with PKCE", "action", action)
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -203,38 +203,38 @@ func (h *ExternalProviderHandler) Callback(c *gin.Context) {
 	errorDesc := c.Query("error_description")
 
 	if errorParam != "" {
-		utils.LogWarn(h.Spec.LogModule, h.Spec.Name+" auth denied", fmt.Sprintf("error=%s, desc=%s", errorParam, errorDesc))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" auth denied", "error", errorParam, "description", errorDesc)
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_denied")
 		return
 	}
 
 	if code == "" {
-		utils.LogWarn(h.Spec.LogModule, "Missing code parameter in callback", "")
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Missing code parameter in callback")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if state == "" {
-		utils.LogWarn(h.Spec.LogModule, "Missing state parameter in callback", "")
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Missing state parameter in callback")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	stateData, exists := GetAndDeleteState(state)
 	if !exists {
-		utils.LogWarn(h.Spec.LogModule, "Invalid state - not found in storage (may be duplicate request)", "")
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Invalid state - not found in storage (may be duplicate request)")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if stateData == nil {
-		utils.LogError(h.Spec.LogModule, "Callback", fmt.Errorf("state data is nil"), "State data is nil")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", fmt.Errorf("state data is nil"), "State data is nil")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
 	if time.Now().UnixMilli()-stateData.Timestamp > StateExpiryMS {
-		utils.LogWarn(h.Spec.LogModule, "State expired", "")
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "State expired")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_expired")
 		return
 	}
@@ -245,37 +245,37 @@ func (h *ExternalProviderHandler) Callback(c *gin.Context) {
 	returnURL := stateData.ReturnURL
 
 	if action == ActionLink && currentUserUID == "" {
-		utils.LogWarn(h.Spec.LogModule, "Link action but no valid userUID in state", "")
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Link action but no valid userUID in state")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "session_expired")
 		return
 	}
 
 	if codeVerifier == "" {
-		utils.LogError(h.Spec.LogModule, "Callback", fmt.Errorf("missing code_verifier"), "Code verifier not found in state")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", fmt.Errorf("missing code_verifier"), "Code verifier not found in state")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_invalid")
 		return
 	}
 
-	tokenData, userInfo, err := h.Spec.ExchangeAndFetch(code, codeVerifier)
+	tokenData, userInfo, err := h.Spec.ExchangeAndFetch(c.Request.Context(), code, codeVerifier)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "Callback", err, "Failed to exchange code for token")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", err, "Failed to exchange code for token")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
 	accessToken, ok := tokenData["access_token"].(string)
 	if !ok || accessToken == "" {
-		utils.LogError(h.Spec.LogModule, "Callback", fmt.Errorf("no access_token in response"), "No access_token in token response")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", fmt.Errorf("no access_token in response"), "No access_token in token response")
 		if errMsg, ok := tokenData["error"].(string); ok {
-			utils.LogError(h.Spec.LogModule, "Callback", fmt.Errorf("token error: %s", errMsg), "Token error")
+			utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", fmt.Errorf("token error: %s", errMsg), "Token error")
 		}
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
 
-	identity := h.Spec.ParseIdentity(tokenData, userInfo)
+	identity := h.Spec.ParseIdentity(c.Request.Context(), tokenData, userInfo)
 	if identity.ProviderID == "" {
-		utils.LogError(h.Spec.LogModule, "Callback", fmt.Errorf("no id in user info"), "No id in "+h.Spec.Name+" user info")
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Callback", fmt.Errorf("no id in user info"), "No id in "+h.Spec.Name+" user info")
 		RedirectWithError(c, h.BaseURL, paths.PathAccountLogin, "oauth_failed")
 		return
 	}
@@ -308,19 +308,19 @@ func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 
 	user, err := h.UserRepo.FindByUID(ctx, userUID)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "Unlink", err, fmt.Sprintf("FindByUID failed in Unlink: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Unlink", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn(h.Spec.LogModule, "User not found in Unlink", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in Unlink", "user_uid", userUID)
 		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 		return
 	}
 
 	if !h.Spec.IsLinked(user) {
-		utils.LogWarn(h.Spec.LogModule, h.Spec.NotLinkedLog, fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.NotLinkedLog, "user_uid", userUID)
 		utils.RespondError(c, http.StatusBadRequest, "NOT_LINKED")
 		return
 	}
@@ -329,14 +329,14 @@ func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 
 	err = h.UserRepo.Update(ctx, userUID, h.Spec.UnlinkFields(user))
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "Unlink", err, fmt.Sprintf("Failed to unlink %s account: userUID=%s", h.Spec.Name, userUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Unlink", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
 		return
 	}
 
 	if h.UserLogRepo != nil {
 		if err := h.Spec.LogUnlink(ctx, userUID, oldProviderID, oldProviderName); err != nil {
-			utils.LogWarn(h.Spec.LogModule, "Failed to log unlink "+h.Spec.NameLower, fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Failed to log unlink "+h.Spec.NameLower, "user_uid", userUID)
 		}
 	}
 
@@ -346,7 +346,7 @@ func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 		h.Spec.AfterUnlink(ctx, userUID, user)
 	}
 
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("%s account unlinked: username=%s, userUID=%s", h.Spec.Name, user.Username, userUID))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" account unlinked", "username", user.Username, "user_uid", userUID)
 	utils.RespondSuccess(c, gin.H{"message": h.Spec.Name + " account unlinked"})
 }
 
@@ -362,20 +362,20 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 
 	pendingData, exists := GetPendingLink(token)
 	if !exists {
-		utils.LogWarn(h.Spec.LogModule, "Pending link not found", fmt.Sprintf("token=%s", token))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link not found", "token", utils.TruncateIdentifier(token))
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	if pendingData == nil {
-		utils.LogError(h.Spec.LogModule, "GetPendingLinkInfo", fmt.Errorf("pending link data is nil"), fmt.Sprintf("token=%s", token))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "GetPendingLinkInfo", fmt.Errorf("pending link data is nil"), "token", utils.TruncateIdentifier(token))
 		DeletePendingLink(token)
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
-		utils.LogWarn(h.Spec.LogModule, "Pending link expired", fmt.Sprintf("token=%s", token))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link expired", "token", utils.TruncateIdentifier(token))
 		DeletePendingLink(token)
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
@@ -385,18 +385,18 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 
 	user, err := h.UserRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "GetPendingLinkInfo", err, fmt.Sprintf("FindByUID failed: userUID=%s", pendingData.UserUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "GetPendingLinkInfo", err, "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn(h.Spec.LogModule, "User not found in GetPendingLinkInfo", fmt.Sprintf("userUID=%s", pendingData.UserUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in GetPendingLinkInfo", "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("Pending link info retrieved: userUID=%s, %sName=%s", pendingData.UserUID, h.Spec.NameLower, pendingData.DisplayName))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, "Pending link info retrieved", "user_uid", pendingData.UserUID, h.Spec.NameLower+"_name", pendingData.DisplayName)
 	utils.RespondSuccess(c, gin.H{
 		"data": gin.H{
 			h.Spec.NameLower + "Name":   pendingData.DisplayName,
@@ -421,19 +421,19 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 
 	pendingData, exists := GetAndDeletePendingLink(token)
 	if !exists {
-		utils.LogWarn(h.Spec.LogModule, "Pending link not found in ConfirmLink", fmt.Sprintf("token=%s", token))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link not found in ConfirmLink", "token", utils.TruncateIdentifier(token))
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	if pendingData == nil {
-		utils.LogError(h.Spec.LogModule, "ConfirmLink", fmt.Errorf("pending link data is nil"), fmt.Sprintf("token=%s", token))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", fmt.Errorf("pending link data is nil"), "token", utils.TruncateIdentifier(token))
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
-		utils.LogWarn(h.Spec.LogModule, "Pending link expired in ConfirmLink", fmt.Sprintf("token=%s", token))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link expired in ConfirmLink", "token", utils.TruncateIdentifier(token))
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
 		return
 	}
@@ -442,30 +442,30 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 
 	existingUser, err := h.Spec.FindByID(ctx, pendingData.ProviderID)
 	if err != nil {
-		utils.LogDebug(h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in ConfirmLink")
+		utils.LogDebugCtx(c.Request.Context(), h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in ConfirmLink")
 	}
 
 	if existingUser != nil && existingUser.UID != pendingData.UserUID {
-		utils.LogWarn(h.Spec.LogModule, h.Spec.Name+" account already linked in ConfirmLink", fmt.Sprintf("%sID=%s, existingUserUID=%s, targetUserUID=%s", h.Spec.NameLower, pendingData.ProviderID, existingUser.UID, pendingData.UserUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" account already linked in ConfirmLink", h.Spec.NameLower+"_id", pendingData.ProviderID, "existing_user_uid", existingUser.UID, "target_user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusBadRequest, h.Spec.AlreadyLinkedError)
 		return
 	}
 
 	user, err := h.UserRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "ConfirmLink", err, fmt.Sprintf("FindByUID failed: userUID=%s", pendingData.UserUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user == nil {
-		utils.LogWarn(h.Spec.LogModule, "User not found in ConfirmLink", fmt.Sprintf("userUID=%s", pendingData.UserUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in ConfirmLink", "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
 		return
 	}
 
 	if user.CheckBanned() {
-		utils.LogWarn(h.Spec.LogModule, "Banned user attempted to confirm link", fmt.Sprintf("userUID=%s", pendingData.UserUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Banned user attempted to confirm link", "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusForbidden, "USER_BANNED")
 		return
 	}
@@ -479,14 +479,14 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 
 	err = h.UserRepo.Update(ctx, pendingData.UserUID, h.Spec.LinkFields(identity))
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "ConfirmLink", err, fmt.Sprintf("Failed to link %s account: userUID=%s", h.Spec.Name, pendingData.UserUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", pendingData.UserUID)
 		utils.RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
 		return
 	}
 
 	if h.UserLogRepo != nil {
 		if err := h.Spec.LogLink(ctx, pendingData.UserUID, pendingData.ProviderID, pendingData.DisplayName); err != nil {
-			utils.LogWarn(h.Spec.LogModule, "Failed to log link "+h.Spec.NameLower+" in ConfirmLink", fmt.Sprintf("userUID=%s", pendingData.UserUID))
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Failed to log link "+h.Spec.NameLower+" in ConfirmLink", "user_uid", pendingData.UserUID)
 		}
 	}
 
@@ -498,7 +498,7 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 
 	accessToken, refreshToken, err := h.SessionService.GenerateTokens(c.Request.Context(), user.UID, false)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "ConfirmLink", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", user.UID)
 		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
 		return
 	}
@@ -508,7 +508,7 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 
 	utils.ClearLinkTokenCookieGin(c)
 
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("%s account linked and logged in via ConfirmLink: username=%s, userUID=%s", h.Spec.Name, user.Username, user.UID))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" account linked and logged in via ConfirmLink", "username", user.Username, "user_uid", user.UID)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -516,25 +516,25 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 func (h *ExternalProviderHandler) handleLinkAction(c *gin.Context, ctx context.Context, currentUserUID string, identity ProviderIdentity) {
 	existingUser, err := h.Spec.FindByID(ctx, identity.ProviderID)
 	if err != nil {
-		utils.LogDebug(h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in handleLinkAction")
+		utils.LogDebugCtx(c.Request.Context(), h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in handleLinkAction")
 	}
 
 	if existingUser != nil && existingUser.UID != currentUserUID {
-		utils.LogWarn(h.Spec.LogModule, h.Spec.Name+" account already linked to another user", fmt.Sprintf("%sID=%s, existingUserUID=%s, currentUserUID=%s", h.Spec.NameLower, identity.ProviderID, existingUser.UID, currentUserUID))
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" account already linked to another user", h.Spec.NameLower+"_id", identity.ProviderID, "existing_user_uid", existingUser.UID, "current_user_uid", currentUserUID)
 		RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, h.Spec.AlreadyLinkedRedir)
 		return
 	}
 
 	err = h.UserRepo.Update(ctx, currentUserUID, h.Spec.LinkFields(identity))
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "handleLinkAction", err, fmt.Sprintf("Failed to update user with %s info: userUID=%s", h.Spec.Name, currentUserUID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "handleLinkAction", err, "user_uid", currentUserUID)
 		RedirectWithError(c, h.BaseURL, paths.PathAccountDashboard, "link_failed")
 		return
 	}
 
 	if h.UserLogRepo != nil {
 		if err := h.Spec.LogLink(ctx, currentUserUID, identity.ProviderID, identity.DisplayName); err != nil {
-			utils.LogWarn(h.Spec.LogModule, "Failed to log link "+h.Spec.NameLower, fmt.Sprintf("userUID=%s", currentUserUID))
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Failed to log link "+h.Spec.NameLower, "user_uid", currentUserUID)
 		}
 	}
 
@@ -544,7 +544,7 @@ func (h *ExternalProviderHandler) handleLinkAction(c *gin.Context, ctx context.C
 		h.Spec.AfterLink(ctx, currentUserUID, identity)
 	}
 
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("%s account linked: userUID=%s, %sID=%s", h.Spec.Name, currentUserUID, h.Spec.NameLower, identity.ProviderID))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" account linked", "user_uid", currentUserUID, h.Spec.NameLower+"_id", identity.ProviderID)
 	RedirectWithSuccess(c, h.BaseURL, paths.PathAccountDashboard, h.Spec.LinkedSuccess)
 }
 
@@ -552,13 +552,13 @@ func (h *ExternalProviderHandler) handleLinkAction(c *gin.Context, ctx context.C
 func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.Context, identity ProviderIdentity, returnURL string) {
 	user, err := h.Spec.FindByID(ctx, identity.ProviderID)
 	if err != nil {
-		utils.LogDebug(h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in handleLoginAction")
+		utils.LogDebugCtx(c.Request.Context(), h.Spec.LogModule, "FindBy"+h.Spec.Name+"ID error in handleLoginAction")
 	}
 
 	if user != nil {
 		err = h.UserRepo.Update(ctx, user.UID, h.Spec.ProfileFields(identity))
 		if err != nil {
-			utils.LogWarn(h.Spec.LogModule, "Failed to update "+h.Spec.Name+" name", fmt.Sprintf("userUID=%s", user.UID))
+			utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Failed to update "+h.Spec.Name+" name", "user_uid", user.UID)
 		}
 		h.UserCache.Invalidate(user.UID)
 
@@ -570,13 +570,13 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 	if user == nil && identity.Email != "" {
 		existingUser, err := h.UserRepo.FindByEmail(ctx, identity.Email)
 		if err != nil {
-			utils.LogDebug(h.Spec.LogModule, "FindByEmail error in handleLoginAction")
+			utils.LogDebugCtx(c.Request.Context(), h.Spec.LogModule, "FindByEmail error in handleLoginAction")
 		}
 
 		if existingUser != nil && !h.Spec.IsLinked(existingUser) {
 			linkToken, err := GenerateLinkToken()
 			if err != nil {
-				utils.LogError(h.Spec.LogModule, "handleLoginAction", err, "Failed to generate link token")
+				utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "handleLoginAction", err, "Failed to generate link token")
 				if returnURL != "" {
 					RedirectWithError(c, h.BaseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "oauth_error")
 				} else {
@@ -594,7 +594,7 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 				Timestamp:         time.Now().UnixMilli(),
 			})
 
-			utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("Found existing user with same email, redirecting to confirm: email=%s, userUID=%s", identity.Email, existingUser.UID))
+			utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, "Found existing user with same email, redirecting to confirm", "email", identity.Email, "user_uid", existingUser.UID)
 			utils.SetLinkTokenCookieGin(c, linkToken)
 			c.Redirect(http.StatusFound, h.BaseURL+paths.PathAccountLink)
 			return
@@ -602,7 +602,7 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 	}
 
 	if user == nil {
-		utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("No linked account found for %s ID: %s", h.Spec.Name, identity.ProviderID))
+		utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, "No linked account found for "+h.Spec.Name+" ID", "provider_id", identity.ProviderID)
 		if returnURL != "" {
 			RedirectWithError(c, h.BaseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "no_linked_account")
 		} else {
@@ -613,7 +613,7 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 
 	accessToken, refreshToken, err := h.SessionService.GenerateTokens(c.Request.Context(), user.UID, false)
 	if err != nil {
-		utils.LogError(h.Spec.LogModule, "handleLoginAction", err, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
+		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "handleLoginAction", err, "user_uid", user.UID)
 		if returnURL != "" {
 			RedirectWithError(c, h.BaseURL, paths.PathAccountLogin+"?return="+url.QueryEscape(returnURL), "token_error")
 		} else {
@@ -624,7 +624,7 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 
 	SetAuthCookie(c, accessToken)
 	utils.SetRefreshTokenCookieGin(c, refreshToken)
-	utils.LogInfo(h.Spec.LogModule, fmt.Sprintf("%s login successful: username=%s, userUID=%s", h.Spec.Name, user.Username, user.UID))
+	utils.LogInfoCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.Name+" login successful", "username", user.Username, "user_uid", user.UID)
 	safeReturn := SafeReturnURL(returnURL, h.BaseURL, "")
 	if safeReturn != "" {
 		c.Redirect(http.StatusFound, safeReturn)

@@ -9,48 +9,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LogError 记录错误日志并返回包装后的错误
-func LogError(module, operation string, err error, context ...any) error {
+// LogError 记录错误日志并返回包装后的错误。
+// keysAndValues 为结构化字段（key/value 交替序列），如 "uid", uid。
+func LogError(module, operation string, err error, keysAndValues ...any) error {
 	if err == nil {
 		return nil
 	}
 
-	msg := fmt.Sprintf("[%s] ERROR: %s failed", module, operation)
-	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context)
-	}
-	msg += fmt.Sprintf(", error=%v", err)
-
-	logError(msg)
+	msg := fmt.Sprintf("%s failed", operation)
+	fields := append([]any{"error", err.Error()}, keysAndValues...)
+	GetLogger().Error(module, msg, fields...)
 
 	return fmt.Errorf("%s failed: %w", operation, err)
 }
 
-// LogWarn 记录警告日志
-func LogWarn(module, message string, context ...any) {
-	msg := fmt.Sprintf("[%s] WARN: %s", module, message)
-	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context)
-	}
-	logWarn(msg)
+// LogWarn 记录警告日志。
+// keysAndValues 为结构化字段（key/value 交替序列）。
+func LogWarn(module, message string, keysAndValues ...any) {
+	GetLogger().Warn(module, message, keysAndValues...)
 }
 
-// LogInfo 记录信息日志
-func LogInfo(module, message string, context ...any) {
-	msg := fmt.Sprintf("[%s] %s", module, message)
-	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context)
-	}
-	logInfo(msg)
+// LogInfo 记录信息日志。
+// keysAndValues 为结构化字段（key/value 交替序列）。
+func LogInfo(module, message string, keysAndValues ...any) {
+	GetLogger().Info(module, message, keysAndValues...)
 }
 
-// LogDebug 记录调试日志
-func LogDebug(module, message string, context ...any) {
-	msg := fmt.Sprintf("[%s] DEBUG: %s", module, message)
-	if len(context) > 0 {
-		msg += fmt.Sprintf(": %v", context)
-	}
-	logDebug(msg)
+// LogDebug 记录调试日志。
+// keysAndValues 为结构化字段（key/value 交替序列）。
+func LogDebug(module, message string, keysAndValues ...any) {
+	GetLogger().Debug(module, message, keysAndValues...)
 }
 
 // DatabaseError 数据库错误包装
@@ -83,7 +71,7 @@ func HandleDatabaseError(module, operation string, err error, identifier any) er
 	isNotFound := errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set"
 
 	if isNotFound {
-		LogDebug(module, fmt.Sprintf("%s not found: identifier=%v", operation, identifier))
+		LogDebug(module, operation+" not found", "identifier", identifier)
 		return &DatabaseError{
 			Operation: operation,
 			Err:       err,
@@ -91,7 +79,7 @@ func HandleDatabaseError(module, operation string, err error, identifier any) er
 		}
 	}
 
-	LogError(module, operation, err, fmt.Sprintf("identifier=%v", identifier))
+	LogError(module, operation, err, "identifier", identifier)
 
 	return &DatabaseError{
 		Operation: operation,

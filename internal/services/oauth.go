@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -109,7 +108,7 @@ func (s *OAuthService) CreateClient(ctx context.Context, name, description, redi
 		return nil, "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Client created: id=%d, name=%s", client.ID, name))
+	utils.LogInfo("OAUTH", "Client created", "id", client.ID, "name", name)
 	return client, clientSecret, nil
 }
 
@@ -204,7 +203,7 @@ func (s *OAuthService) RegenerateSecret(ctx context.Context, id int64) (string, 
 		return "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Secret regenerated: id=%d", id))
+	utils.LogInfo("OAUTH", "Secret regenerated", "id", id)
 	return newSecret, nil
 }
 
@@ -265,7 +264,7 @@ func (s *OAuthService) ToggleClient(ctx context.Context, id int64, enabled bool)
 		if !enabled {
 			status = "disabled"
 		}
-		utils.LogInfo("OAUTH", fmt.Sprintf("Client %s: id=%d", status, id))
+		utils.LogInfo("OAUTH", "Client status changed", "status", status, "id", id)
 	}
 	return err
 }
@@ -320,7 +319,7 @@ func (s *OAuthService) CreateAuthorizationCode(ctx context.Context, clientID str
 	grant := &models.OAuthGrant{UserUID: userUID, ClientID: clientID, Scope: scope}
 	_ = s.grantRepo.CreateOrUpdate(ctx, grant)
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code created: client_id=%s, user_uid=%s", clientID, userUID))
+	utils.LogInfo("OAUTH", "Auth code created", "client_id", clientID, "user_uid", userUID)
 	return code, nil
 }
 
@@ -372,7 +371,7 @@ func (s *OAuthService) ExchangeAuthorizationCode(ctx context.Context, code, clie
 		return nil, "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Auth code exchanged: client_id=%s, user_uid=%s", clientID, authCode.UserUID))
+	utils.LogInfo("OAUTH", "Auth code exchanged", "client_id", clientID, "user_uid", authCode.UserUID)
 	return tokenResp, authCode.UserUID, nil
 }
 
@@ -406,7 +405,7 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 		return nil, "", err
 	}
 
-	utils.LogInfo("OAUTH", fmt.Sprintf("Token refreshed: client_id=%s, user_uid=%s", clientID, token.UserUID))
+	utils.LogInfo("OAUTH", "Token refreshed", "client_id", clientID, "user_uid", token.UserUID)
 	return tokenResp, token.UserUID, nil
 }
 
@@ -441,15 +440,15 @@ func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
 // 撤销是尽力而为：删除失败仅记录日志，不中断调用方（Token 本身已不可用）
 func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userUID string, clientID string) error {
 	if _, err := s.accessTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete access tokens", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete access tokens", "user_uid", userUID, "client_id", clientID, "error", err)
 	}
 	if _, err := s.refreshTokenRepo.DeleteByUserAndClient(ctx, userUID, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete refresh tokens", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete refresh tokens", "user_uid", userUID, "client_id", clientID, "error", err)
 	}
 	if err := s.grantRepo.Delete(ctx, userUID, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete grant", fmt.Sprintf("user_uid=%s, client_id=%s, error=%v", userUID, clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete grant", "user_uid", userUID, "client_id", clientID, "error", err)
 	}
-	utils.LogInfo("OAUTH", fmt.Sprintf("User-client tokens revoked: user_uid=%s, client_id=%s", userUID, clientID))
+	utils.LogInfo("OAUTH", "User-client tokens revoked", "user_uid", userUID, "client_id", clientID)
 	return nil
 }
 
@@ -457,15 +456,15 @@ func (s *OAuthService) RevokeUserClientTokens(ctx context.Context, userUID strin
 // 尽力而为：删除失败仅记录日志，Token 哈希无法再被换取新 Token
 func (s *OAuthService) RevokeUserTokens(ctx context.Context, userUID string) error {
 	if _, err := s.accessTokenRepo.DeleteByUser(ctx, userUID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete user access tokens", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+		utils.LogWarn("OAUTH", "Failed to delete user access tokens", "user_uid", userUID, "error", err)
 	}
 	if _, err := s.refreshTokenRepo.DeleteByUser(ctx, userUID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete user refresh tokens", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+		utils.LogWarn("OAUTH", "Failed to delete user refresh tokens", "user_uid", userUID, "error", err)
 	}
 	if _, err := s.grantRepo.DeleteByUser(ctx, userUID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete user grants", fmt.Sprintf("user_uid=%s, error=%v", userUID, err))
+		utils.LogWarn("OAUTH", "Failed to delete user grants", "user_uid", userUID, "error", err)
 	}
-	utils.LogInfo("OAUTH", fmt.Sprintf("All user tokens revoked: user_uid=%s", userUID))
+	utils.LogInfo("OAUTH", "All user tokens revoked", "user_uid", userUID)
 	return nil
 }
 
@@ -484,15 +483,15 @@ func (s *OAuthService) FindUserGrant(ctx context.Context, userUID, clientID stri
 // 尽力而为：删除失败仅记录日志
 func (s *OAuthService) RevokeClientTokens(ctx context.Context, clientID string) error {
 	if _, err := s.accessTokenRepo.DeleteByClient(ctx, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete client access tokens", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete client access tokens", "client_id", clientID, "error", err)
 	}
 	if _, err := s.refreshTokenRepo.DeleteByClient(ctx, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete client refresh tokens", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete client refresh tokens", "client_id", clientID, "error", err)
 	}
 	if _, err := s.grantRepo.DeleteByClient(ctx, clientID); err != nil {
-		utils.LogWarn("OAUTH", "Failed to delete client grants", fmt.Sprintf("client_id=%s, error=%v", clientID, err))
+		utils.LogWarn("OAUTH", "Failed to delete client grants", "client_id", clientID, "error", err)
 	}
-	utils.LogInfo("OAUTH", fmt.Sprintf("All client tokens revoked: client_id=%s", clientID))
+	utils.LogInfo("OAUTH", "All client tokens revoked", "client_id", clientID)
 	return nil
 }
 

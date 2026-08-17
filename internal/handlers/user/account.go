@@ -74,7 +74,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 
 	h.emailService.SendVerificationEmailAsync(user.Email, "delete_account", language, verifyURL, "USER")
 
-	utils.LogInfo("USER", fmt.Sprintf("Delete code sent (async): userUID=%s, email=%s", userUID, user.Email))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Delete code sent (async)", "user_uid", userUID, "email", user.Email)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -107,7 +107,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 
 	match, err := utils.VerifyPassword(req.Password, user.Password)
 	if err != nil {
-		utils.LogError("USER", "DeleteAccount", err, fmt.Sprintf("Password verification error: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "DeleteAccount", err, "user_uid", userUID)
 		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "INTERNAL_ERROR", "")
 		return
 	}
@@ -123,38 +123,38 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	if err := h.userRepo.Delete(ctx, userUID); err != nil {
-		utils.LogError("USER", "DeleteAccount", err, fmt.Sprintf("Failed to delete user: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "DeleteAccount", err, "user_uid", userUID)
 		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "DELETE_FAILED", "")
 		return
 	}
 
 	if h.oauthService != nil {
 		if err := h.oauthService.RevokeUserTokens(ctx, userUID); err != nil {
-			utils.LogWarn("USER", "Failed to revoke OAuth tokens after account deletion", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to revoke OAuth tokens after account deletion", "user_uid", userUID)
 		}
 	}
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogDeleteAccount(ctx, userUID); err != nil {
-			utils.LogWarn("USER", "Failed to log delete account", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log delete account", "user_uid", userUID)
 		}
 	}
 
 	if h.storageService != nil && h.storageService.IsConfigured() {
 		if err := h.storageService.DeleteAvatar(ctx, userUID); err != nil {
-			utils.LogWarn("USER", "Failed to delete R2 avatar", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to delete R2 avatar", "user_uid", userUID)
 		}
 	}
 
-	h.invalidateUserCache(userUID)
+	h.invalidateUserCache(c.Request.Context(), userUID)
 
 	if err := h.tokenService.InvalidateCodeByEmail(ctx, user.Email, nil); err != nil {
-		utils.LogWarn("USER", "Failed to invalidate codes after delete", fmt.Sprintf("email=%s", user.Email))
+		utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to invalidate codes after delete", "email", user.Email)
 	}
 
 	utils.ClearTokenCookieGin(c)
 
-	utils.LogInfo("USER", fmt.Sprintf("Account deleted: userUID=%s, email=%s", userUID, user.Email))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Account deleted", "user_uid", userUID, "email", user.Email)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -188,7 +188,7 @@ func (h *UserHandler) GetLogs(c *gin.Context) {
 	ctx := c.Request.Context()
 	logs, total, err := h.userLogRepo.FindByUserUID(ctx, userUID, page, pageSize)
 	if err != nil {
-		utils.LogError("USER", "GetLogs", err, fmt.Sprintf("Failed to get logs: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "GetLogs", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
 		return
 	}
@@ -222,7 +222,7 @@ func (h *UserHandler) GetOAuthGrants(c *gin.Context) {
 	ctx := c.Request.Context()
 	grants, err := h.oauthService.GetUserGrants(ctx, userUID)
 	if err != nil {
-		utils.LogError("USER", "GetOAuthGrants", err, fmt.Sprintf("Failed to get OAuth grants: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "GetOAuthGrants", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
 		return
 	}
@@ -268,24 +268,24 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 			utils.RespondError(c, http.StatusNotFound, "GRANT_NOT_FOUND")
 			return
 		}
-		utils.LogError("USER", "RevokeOAuthGrant", err, fmt.Sprintf("Failed to find grant: userUID=%s, clientID=%s", userUID, clientID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "RevokeOAuthGrant", err, "user_uid", userUID, "client_id", clientID)
 		utils.RespondError(c, http.StatusInternalServerError, "GRANT_LOOKUP_FAILED")
 		return
 	}
 
 	if err := h.oauthService.RevokeUserClientTokens(ctx, userUID, clientID); err != nil {
-		utils.LogError("USER", "RevokeOAuthGrant", err, fmt.Sprintf("Failed to revoke OAuth grant: userUID=%s, clientID=%s", userUID, clientID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "RevokeOAuthGrant", err, "user_uid", userUID, "client_id", clientID)
 		utils.RespondError(c, http.StatusInternalServerError, "REVOKE_FAILED")
 		return
 	}
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogOAuthRevoke(ctx, userUID, clientID, client.Name); err != nil {
-			utils.LogWarn("USER", "Failed to log OAuth revoke", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to log OAuth revoke", "user_uid", userUID)
 		}
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("OAuth grant revoked: userUID=%s, clientID=%s", userUID, clientID))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "OAuth grant revoked", "user_uid", userUID, "client_id", clientID)
 	utils.RespondSuccess(c, gin.H{})
 }
 
@@ -316,7 +316,7 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 
 	if !h.limiterMgr.DataExportAllow(userUID) {
 		waitTime := h.limiterMgr.DataExportWaitTime(userUID)
-		utils.LogWarn("USER", "Data export rate limit exceeded", fmt.Sprintf("userUID=%s, waitTime=%ds", userUID, waitTime))
+		utils.LogWarnCtx(c.Request.Context(), "USER", "Data export rate limit exceeded", "user_uid", userUID, "wait_time", waitTime)
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"success":   false,
 			"errorCode": "RATE_LIMIT",
@@ -327,12 +327,12 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 
 	token, err := h.exportTokenService.Generate(userUID)
 	if err != nil {
-		utils.LogError("USER", "RequestDataExport", err, fmt.Sprintf("Failed to generate export token: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "RequestDataExport", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATE_FAILED")
 		return
 	}
 
-	utils.LogInfo("USER", fmt.Sprintf("Data export token generated: userUID=%s", userUID))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Data export token generated", "user_uid", userUID)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"token":   token,
@@ -351,7 +351,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	userUID, valid := h.exportTokenService.ValidateAndConsume(token)
 
 	if !valid || userUID == "" {
-		utils.LogWarn("USER", "Invalid export token", "")
+		utils.LogWarnCtx(c.Request.Context(), "USER", "Invalid export token")
 		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
@@ -360,7 +360,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 
 	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
-		utils.LogError("USER", "DownloadUserData", err, fmt.Sprintf("FindByUID failed for export: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "DownloadUserData", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "DATABASE_ERROR")
 		return
 	}
@@ -369,7 +369,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	if h.userLogRepo != nil {
 		logs, _, err = h.userLogRepo.FindByUserUID(ctx, userUID, 1, 10000)
 		if err != nil {
-			utils.LogWarn("USER", "Failed to get logs for export", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to get logs for export", "user_uid", userUID)
 			logs = []*models.UserLog{}
 		}
 	}
@@ -394,7 +394,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 
 	jsonData, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
-		utils.LogError("USER", "DownloadUserData", err, fmt.Sprintf("Failed to marshal export data: userUID=%s", userUID))
+		utils.LogErrorCtx(c.Request.Context(), "USER", "DownloadUserData", err, "user_uid", userUID)
 		utils.RespondError(c, http.StatusInternalServerError, "EXPORT_FAILED")
 		return
 	}
@@ -415,5 +415,5 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", finalData)
 
-	utils.LogInfo("USER", fmt.Sprintf("Data exported: userUID=%s, size=%d bytes", userUID, len(finalData)))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Data exported", "user_uid", userUID, "size", len(finalData))
 }

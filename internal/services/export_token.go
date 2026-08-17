@@ -61,7 +61,7 @@ func (s *ExportTokenService) Generate(userUID string) (string, error) {
 		ExpiresAt: time.Now().Add(defaultExportTokenTTL),
 	})
 
-	utils.LogInfo("EXPORT_TOKEN", fmt.Sprintf("Token generated: userUID=%s", userUID))
+	utils.LogInfo("EXPORT_TOKEN", "Token generated", "user_uid", userUID)
 	return token, nil
 }
 
@@ -115,8 +115,7 @@ func (s *ExportTokenService) cleanupExpired() {
 			count++
 		}
 	}
-	if count > 0 {
-		utils.LogInfo("EXPORT_TOKEN", fmt.Sprintf("Cleanup completed: expired=%d", count))
+	if count > 0 {			utils.LogInfo("EXPORT_TOKEN", "Cleanup completed", "expired", count)
 	}
 }
 

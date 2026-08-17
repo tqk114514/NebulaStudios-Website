@@ -2,8 +2,8 @@
 package user
 
 import (
+	"context"
 	"errors"
-	"fmt"
 
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -97,9 +97,9 @@ func (h *UserHandler) verifyCaptcha(token, clientIP string) error {
 	return h.captchaService.Verify(token, clientIP)
 }
 
-func (h *UserHandler) invalidateUserCache(userUID string) {
+func (h *UserHandler) invalidateUserCache(ctx context.Context, userUID string) {
 	if h.userCache != nil {
 		h.userCache.Invalidate(userUID)
-		utils.LogInfo("USER", fmt.Sprintf("Cache invalidated: userUID=%s", userUID))
+		utils.LogInfoCtx(ctx, "USER", "Cache invalidated", "user_uid", userUID)
 	}
 }

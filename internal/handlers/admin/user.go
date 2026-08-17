@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -176,11 +175,10 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	h.userCache.Invalidate(targetUserUID)
 
 	if err := h.logRepo.LogSetRole(ctx, operatorUID, targetUserUID, targetUser.Username, targetUser.Role, req.Role); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log set_role", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log set_role", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("Role updated: operatorUID=%s, operatorRole=%d, targetUID=%s, oldRole=%d, newRole=%d",
-		operatorUID, operatorRole, targetUserUID, targetUser.Role, req.Role))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "Role updated", "operator_uid", operatorUID, "operator_role", operatorRole, "target_uid", targetUserUID, "old_role", targetUser.Role, "new_role", req.Role)
 
 	utils.RespondSuccess(c, gin.H{"message": "Role updated"})
 }
@@ -235,11 +233,10 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	h.userCache.Invalidate(targetUserUID)
 
 	if err := h.logRepo.LogDeleteUser(ctx, operatorUID, targetUserUID, targetUser.Username, targetUser.Email); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log delete_user", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log delete_user", "error", err)
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("User deleted: operatorUID=%s, targetUID=%s, targetUsername=%s",
-		operatorUID, targetUserUID, targetUser.Username))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "User deleted", "operator_uid", operatorUID, "target_uid", targetUserUID, "target_username", targetUser.Username)
 
 	utils.RespondSuccess(c, gin.H{"message": "User deleted"})
 }
@@ -319,17 +316,16 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	h.userCache.Invalidate(targetUserUID)
 
 	if err := h.logRepo.LogBanUser(ctx, operatorUID, targetUserUID, targetUser.Username, req.Reason, unbanAt); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log ban_user", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log ban_user", "error", err)
 	}
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogBanned(ctx, targetUserUID, req.Reason, unbanAt); err != nil {
-			utils.LogWarn("ADMIN", "Failed to log user banned", err.Error())
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log user banned", "error", err)
 		}
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("User banned: operatorUID=%s, targetUID=%s, reason=%s, days=%d",
-		operatorUID, targetUserUID, req.Reason, req.Days))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "User banned", "operator_uid", operatorUID, "target_uid", targetUserUID, "reason", req.Reason, "days", req.Days)
 
 	utils.RespondSuccess(c, gin.H{"message": "User banned"})
 }
@@ -374,17 +370,16 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	h.userCache.Invalidate(targetUserUID)
 
 	if err := h.logRepo.LogUnbanUser(ctx, operatorUID, targetUserUID, targetUser.Username); err != nil {
-		utils.LogWarn("ADMIN", "Failed to log unban_user", err.Error())
+		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log unban_user", "error", err)
 	}
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogUnbanned(ctx, targetUserUID); err != nil {
-			utils.LogWarn("ADMIN", "Failed to log user unbanned", err.Error())
+			utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log user unbanned", "error", err)
 		}
 	}
 
-	utils.LogInfo("ADMIN", fmt.Sprintf("User unbanned: operatorUID=%s, targetUID=%s",
-		operatorUID, targetUserUID))
+	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "User unbanned", "operator_uid", operatorUID, "target_uid", targetUserUID)
 
 	utils.RespondSuccess(c, gin.H{"message": "User unbanned"})
 }

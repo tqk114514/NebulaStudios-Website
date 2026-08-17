@@ -325,7 +325,7 @@ func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context, dom
 
 		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) != 2 {
-			utils.LogWarn("DATABASE", "Invalid whitelist entry format", fmt.Sprintf("entry=%s", entry))
+			utils.LogWarn("DATABASE", "Invalid whitelist entry format", "entry", entry)
 			continue
 		}
 
@@ -333,7 +333,7 @@ func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context, dom
 		signupURL := strings.TrimSpace(parts[1])
 
 		if domain == "" || signupURL == "" {
-			utils.LogWarn("DATABASE", "Skipping empty domain or signup_url in whitelist entry", fmt.Sprintf("entry=%s", entry))
+			utils.LogWarn("DATABASE", "Skipping empty domain or signup_url in whitelist entry", "entry", entry)
 			continue
 		}
 
@@ -343,16 +343,16 @@ func (r *EmailWhitelistRepository) InitDefaultWhitelist(ctx context.Context, dom
 			ON CONFLICT (domain) DO NOTHING
 		`, domain, signupURL)
 		if err != nil {
-			utils.LogWarn("DATABASE", "Failed to add whitelist domain", fmt.Sprintf("domain=%s, err=%v", domain, err))
+			utils.LogWarn("DATABASE", "Failed to add whitelist domain", "domain", domain, "error", err)
 			continue
 		}
 
 		if result.RowsAffected() > 0 {
 			addedCount++
-			utils.LogInfo("DATABASE", "Added whitelist domain from config", fmt.Sprintf("domain=%s", domain))
+			utils.LogInfo("DATABASE", "Added whitelist domain from config", "domain", domain)
 		}
 	}
 
-	utils.LogInfo("DATABASE", "Email whitelist initialized from config", fmt.Sprintf("added=%d, configured=%d", addedCount, len(entries)))
+	utils.LogInfo("DATABASE", "Email whitelist initialized from config", "added", addedCount, "configured", len(entries))
 	return nil
 }

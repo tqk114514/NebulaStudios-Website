@@ -38,27 +38,26 @@ func AuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := ExtractToken(c)
 		if token == "" {
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token not found: ip=%s", utils.GetClientIP(c)))
+			utils.LogDebugCtx(c.Request.Context(), "AUTH-MW", "Token not found", "ip", utils.GetClientIP(c))
 			respondUnauthorized(c, ErrAuthTokenNotFound.Error())
 			return
 		}
 
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Token verification failed: ip=%s", utils.GetClientIP(c)))
+			utils.LogDebugCtx(c.Request.Context(), "AUTH-MW", "Token verification failed", "ip", utils.GetClientIP(c))
 			respondUnauthorized(c, err.Error())
 			return
 		}
 
 		if claims == nil {
-			utils.LogError("AUTH-MW", "AuthMiddleware", fmt.Errorf("claims is nil after successful verification"), "")
+			utils.LogErrorCtx(c.Request.Context(), "AUTH-MW", "AuthMiddleware", fmt.Errorf("claims is nil after successful verification"))
 			respondUnauthorized(c, "INVALID_CLAIMS")
 			return
 		}
 
 		if claims.UID == "" {
-			utils.LogWarn("AUTH-MW", "Token valid but claims contains empty UID",
-				fmt.Sprintf("path=%s, ip=%s", c.Request.URL.Path, utils.GetClientIP(c)))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH-MW", "Token valid but claims contains empty UID", "path", c.Request.URL.Path, "ip", utils.GetClientIP(c))
 			respondUnauthorized(c, "INVALID_UID")
 			return
 		}
@@ -71,7 +70,7 @@ func AuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 // OptionalAuthMiddleware 可选认证中间件，有有效 Token 则挂载 UID 到 Context，无 Token 或无效则继续处理
 func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerFunc {
 	if sessionService == nil {
-		utils.LogWarn("AUTH-MW", "SessionService is nil for optional auth, skipping auth", "")
+		utils.LogWarn("AUTH-MW", "SessionService is nil for optional auth, skipping auth")
 		return func(c *gin.Context) {
 			c.Next()
 		}
@@ -86,13 +85,13 @@ func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerF
 
 		claims, err := sessionService.VerifyToken(token)
 		if err != nil {
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Optional auth token invalid: path=%s", c.Request.URL.Path))
+			utils.LogDebugCtx(c.Request.Context(), "AUTH-MW", "Optional auth token invalid", "path", c.Request.URL.Path)
 			c.Next()
 			return
 		}
 
 		if claims == nil || claims.UID == "" {
-			utils.LogDebug("AUTH-MW", fmt.Sprintf("Optional auth invalid claims: path=%s", c.Request.URL.Path))
+			utils.LogDebugCtx(c.Request.Context(), "AUTH-MW", "Optional auth invalid claims", "path", c.Request.URL.Path)
 			c.Next()
 			return
 		}
@@ -105,7 +104,7 @@ func OptionalAuthMiddleware(sessionService services.SessionManager) gin.HandlerF
 // GetUID 从 Context 获取用户 UID
 func GetUID(c *gin.Context) (string, bool) {
 	if c == nil {
-		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("context is nil"), "")
+		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("context is nil"))
 		return "", false
 	}
 
@@ -116,12 +115,12 @@ func GetUID(c *gin.Context) (string, bool) {
 
 	uidStr, ok := uid.(string)
 	if !ok {
-		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("type assertion failed: got %T, want string", uid), "")
+		utils.LogError("AUTH-MW", "GetUID", fmt.Errorf("type assertion failed: got %T, want string", uid))
 		return "", false
 	}
 
 	if uidStr == "" {
-		utils.LogWarn("AUTH-MW", "Invalid user UID in context", fmt.Sprintf("uid=%s", uidStr))
+		utils.LogWarn("AUTH-MW", "Invalid user UID in context", "uid", uidStr)
 		return "", false
 	}
 
@@ -165,7 +164,7 @@ func respondUnauthorized(c *gin.Context, errorCode string) {
 // errorMiddleware 返回初始化失败时的 500 错误中间件
 func errorMiddleware(err error) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		utils.LogError("AUTH-MW", "errorMiddleware", err, "Middleware initialization error")
+		utils.LogErrorCtx(c.Request.Context(), "AUTH-MW", "errorMiddleware", err, "Middleware initialization error")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
 			"errorCode": "INTERNAL_ERROR",
@@ -178,14 +177,14 @@ func errorMiddleware(err error) gin.HandlerFunc {
 // 当 JWT 有效但用户在数据库中不存在时（如数据库重置），清除 Cookie 并放行，防止重定向循环
 func GuestOnlyMiddleware(sessionService services.SessionManager, userCache services.UserCacheStore, userRepo models.UserReader) gin.HandlerFunc {
 	if sessionService == nil {
-		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check", "")
+		utils.LogWarn("AUTH-MW", "SessionService is nil for guest-only, skipping check")
 		return func(c *gin.Context) {
 			c.Next()
 		}
 	}
 
 	if userCache == nil || userRepo == nil {
-		utils.LogWarn("AUTH-MW", "UserCache or UserRepo is nil for guest-only, using token-only check", "")
+		utils.LogWarn("AUTH-MW", "UserCache or UserRepo is nil for guest-only, using token-only check")
 		return guestOnlyTokenCheck(sessionService)
 	}
 
@@ -212,8 +211,7 @@ func GuestOnlyMiddleware(sessionService services.SessionManager, userCache servi
 
 		user, err := userCache.GetOrLoad(ctx, claims.UID, userRepo.FindByUID)
 		if err != nil || user == nil {
-			utils.LogWarn("AUTH-MW", "Valid token but user not found, clearing cookie and treating as guest",
-				fmt.Sprintf("userUID=%s", claims.UID))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH-MW", "Valid token but user not found, clearing cookie and treating as guest", "user_uid", claims.UID)
 			utils.ClearTokenCookieGin(c)
 			c.Next()
 			return

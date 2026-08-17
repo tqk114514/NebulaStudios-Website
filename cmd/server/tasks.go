@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"auth-system/internal/handlers/oauth"
+	"auth-system/internal/middleware"
 	"auth-system/internal/models"
 	"auth-system/internal/services"
 	"auth-system/internal/utils"
@@ -21,7 +22,7 @@ func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	utils.LogInfo("TASKS", "OAuth cleanup task started")
 
 	go runTokenCleanup(svcs.TokenService)
-	utils.LogInfo("TASKS", fmt.Sprintf("Token cleanup task started: interval=%v", tokenCleanupInterval))
+	utils.LogInfo("TASKS", "Token cleanup task started", "interval", tokenCleanupInterval)
 
 	go runUserLogCleanup(repos.UserLogRepo)
 	utils.LogInfo("TASKS", "User log cleanup task started: interval=24h, retention=6 months")
@@ -74,7 +75,7 @@ func runUserLogCleanup(userLogRepo models.UserLogStore) {
 		if err != nil {
 			utils.LogError("TASKS", "DeleteExpiredLogs", err, "initial cleanup")
 		} else if count > 0 {
-			utils.LogInfo("TASKS", fmt.Sprintf("Initial user log cleanup completed: deleted=%d", count))
+			utils.LogInfo("TASKS", "Initial user log cleanup completed", "deleted", count)
 		}
 	}()
 
@@ -96,7 +97,7 @@ func runUserLogCleanup(userLogRepo models.UserLogStore) {
 			if err != nil {
 				utils.LogError("TASKS", "DeleteExpiredLogs", err)
 			} else if count > 0 {
-				utils.LogInfo("TASKS", fmt.Sprintf("User log cleanup completed: deleted=%d", count))
+				utils.LogInfo("TASKS", "User log cleanup completed", "deleted", count)
 			}
 		}()
 	}
@@ -116,12 +117,14 @@ func loggerMiddleware() gin.HandlerFunc {
 		latency := time.Since(start)
 		status := c.Writer.Status()
 
+		reqID := middleware.GetRequestID(c)
+
 		if status >= 500 {
-			utils.LogError("HTTP", "Request", fmt.Errorf("status %d", status), fmt.Sprintf("%s %s %v", c.Request.Method, path, latency))
+			utils.LogError("HTTP", "Request", fmt.Errorf("status %d", status), "request_id", reqID, "method", c.Request.Method, "path", path, "latency", latency)
 		} else if status >= 400 {
-			utils.LogWarn("HTTP", fmt.Sprintf("%s %s %d %v", c.Request.Method, path, status, latency))
+			utils.LogWarn("HTTP", "Request", "request_id", reqID, "method", c.Request.Method, "path", path, "status", status, "latency", latency)
 		} else {
-			utils.LogInfo("HTTP", fmt.Sprintf("%s %s %d %v", c.Request.Method, path, status, latency))
+			utils.LogInfo("HTTP", "Request", "request_id", reqID, "method", c.Request.Method, "path", path, "status", status, "latency", latency)
 		}
 	}
 }

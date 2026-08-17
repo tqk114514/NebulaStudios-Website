@@ -47,7 +47,7 @@ func NewMicrosoftHandler(
 	h.RedirectURI = cfg.BaseURL + "/api/auth/microsoft/callback"
 
 	if h.ClientID == "" || h.ClientSecret == "" {
-		utils.LogWarn("OAUTH-MS", "Microsoft OAuth not configured (MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET missing)", "")
+		utils.LogWarn("OAUTH-MS", "Microsoft OAuth not configured (MICROSOFT_CLIENT_ID or MICROSOFT_CLIENT_SECRET missing)")
 	}
 
 	h.Spec = oauth.ProviderSpec{
@@ -76,8 +76,7 @@ func NewMicrosoftHandler(
 		AfterUnlink:        h.afterUnlink,
 	}
 
-	utils.LogInfo("OAUTH-MS", fmt.Sprintf("MicrosoftHandler initialized: baseURL=%s, configured=%v",
-		cfg.BaseURL, h.isConfigured()))
+	utils.LogInfo("OAUTH-MS", "MicrosoftHandler initialized", "base_url", cfg.BaseURL, "configured", h.isConfigured())
 
 	return h, nil
 }
@@ -100,8 +99,8 @@ func (h *MicrosoftHandler) buildAuthURL(state, codeChallenge string) string {
 	return "https://login.microsoftonline.com/" + MicrosoftTenant + "/oauth2/v2.0/authorize?" + params.Encode()
 }
 
-func (h *MicrosoftHandler) exchangeAndFetch(code, codeVerifier string) (map[string]any, map[string]any, error) {
-	tokenData, err := h.exchangeCodeForToken(code, codeVerifier)
+func (h *MicrosoftHandler) exchangeAndFetch(ctx context.Context, code, codeVerifier string) (map[string]any, map[string]any, error) {
+	tokenData, err := h.exchangeCodeForToken(ctx, code, codeVerifier)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,14 +108,14 @@ func (h *MicrosoftHandler) exchangeAndFetch(code, codeVerifier string) (map[stri
 	if !ok || accessToken == "" {
 		return tokenData, nil, fmt.Errorf("no access_token in token response")
 	}
-	userInfo, err := h.getUserInfo(accessToken)
+	userInfo, err := h.getUserInfo(ctx, accessToken)
 	if err != nil {
 		return tokenData, nil, err
 	}
 	return tokenData, userInfo, nil
 }
 
-func (h *MicrosoftHandler) parseIdentity(tokenData, userInfo map[string]any) oauth.ProviderIdentity {
+func (h *MicrosoftHandler) parseIdentity(ctx context.Context, tokenData, userInfo map[string]any) oauth.ProviderIdentity {
 	microsoftID, _ := userInfo["id"].(string)
 
 	// 个人微软账户的 msUser.mail 可能是别名，ID Token 中的 email claim 才是真实绑定邮箱（验证签名后）
@@ -128,7 +127,7 @@ func (h *MicrosoftHandler) parseIdentity(tokenData, userInfo map[string]any) oau
 	}
 
 	accessToken, _ := tokenData["access_token"].(string)
-	avatarData, avatarCT := h.getAvatarData(accessToken)
+	avatarData, avatarCT := h.getAvatarData(ctx, accessToken)
 
 	// 头像转存为 data URL，供待绑定确认页展示；原始二进制留给 AfterLink/AfterLogin 异步转存
 	var avatarURL string
@@ -167,7 +166,7 @@ func (h *MicrosoftHandler) getLinkedInfo(user *models.User) (id, name string) {
 func (h *MicrosoftHandler) logLink(ctx context.Context, userUID, id, displayName string) error {
 	// 绑定即开启头像同步（隐私事件：服务器开始持续存储微软头像）
 	if err := h.UserLogRepo.LogEnableAvatarSync(ctx, userUID, "microsoft"); err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to log avatar sync enable on link", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to log avatar sync enable on link", "user_uid", userUID)
 	}
 	return h.UserLogRepo.LogLinkMicrosoft(ctx, userUID, id, displayName)
 }
@@ -175,7 +174,7 @@ func (h *MicrosoftHandler) logLink(ctx context.Context, userUID, id, displayName
 func (h *MicrosoftHandler) logUnlink(ctx context.Context, userUID, id, displayName string) error {
 	// 解绑即停止头像同步（隐私事件：服务器停止存储微软头像）
 	if err := h.UserLogRepo.LogDisableAvatarSync(ctx, userUID, "microsoft"); err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to log avatar sync disable on unlink", fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to log avatar sync disable on unlink", "user_uid", userUID)
 	}
 	return h.UserLogRepo.LogUnlinkMicrosoft(ctx, userUID, id, displayName)
 }
@@ -205,7 +204,7 @@ func (h *MicrosoftHandler) unlinkFields(user *models.User) map[string]any {
 	}
 	if user.AvatarURL == h.Spec.AvatarStateValue {
 		fields["avatar_url"] = h.DefaultAvatarURL
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("User was using Microsoft avatar, resetting to default: userUID=%s", user.UID))
+		utils.LogInfo("OAUTH-MS", "User was using Microsoft avatar, resetting to default", "user_uid", user.UID)
 	}
 	return fields
 }
@@ -244,9 +243,9 @@ func (h *MicrosoftHandler) afterUnlink(ctx context.Context, userUID string, user
 			deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.StorageService.DeleteAvatar(deleteCtx, uid); err != nil {
-				utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", fmt.Sprintf("userUID=%s", uid))
+				utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", "user_uid", uid)
 			} else {
-				utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar deleted from R2: userUID=%s", uid))
+				utils.LogInfo("OAUTH-MS", "Avatar deleted from R2", "user_uid", uid)
 			}
 		}
 	}(userUID)

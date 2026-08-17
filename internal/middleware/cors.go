@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -102,7 +101,7 @@ func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 		setCORSHeaders(c, allowOrigin, config)
 
 		if c.Request.Method == http.MethodOptions {
-			utils.LogDebug("CORS", fmt.Sprintf("Preflight request: origin=%s, path=%s", origin, c.Request.URL.Path))
+			utils.LogDebugCtx(c.Request.Context(), "CORS", "Preflight request", "origin", origin, "path", c.Request.URL.Path)
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
@@ -120,7 +119,7 @@ func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowA
 	// 如果允许凭证，则绝对不能允许所有来源——这是 CORS 凭证泄露漏洞的关键防护
 	if allowCredentials && allowAllOrigins {
 		utils.LogError("CORS", "determineAllowOrigin", nil, "BLOCKED: CORS request blocked - AllowCredentials=true but no origin whitelist")
-		utils.LogError("CORS", "determineAllowOrigin", nil, fmt.Sprintf("Origin: %s", origin))
+		utils.LogError("CORS", "determineAllowOrigin", nil, "origin", origin)
 		return ""
 	}
 
@@ -132,7 +131,7 @@ func determineAllowOrigin(origin string, allowOriginsMap map[string]bool, allowA
 		return origin
 	}
 
-	utils.LogWarn("CORS", "Origin not allowed", fmt.Sprintf("origin=%s", origin))
+	utils.LogWarn("CORS", "Origin not allowed", "origin", origin)
 	return ""
 }
 

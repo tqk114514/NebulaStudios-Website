@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -188,7 +187,7 @@ func GenerateCodeVerifier() (string, error) {
 // SetAuthCookie 设置认证 Cookie
 func SetAuthCookie(c *gin.Context, token string) {
 	if token == "" {
-		utils.LogWarn("OAUTH", "Attempted to set empty token cookie", "")
+		utils.LogWarnCtx(c.Request.Context(), "OAUTH", "Attempted to set empty token cookie")
 		return
 	}
 	utils.SetTokenCookieGin(c, token)
@@ -299,7 +298,7 @@ func cleanupExpiredData() {
 	linkMu.Unlock()
 
 	if stateCount > 0 || linkCount > 0 {
-		utils.LogInfo("OAUTH", fmt.Sprintf("Cleanup completed: states=%d, links=%d", stateCount, linkCount))
+		utils.LogInfo("OAUTH", "Cleanup completed", "states", stateCount, "links", linkCount)
 	}
 }
 

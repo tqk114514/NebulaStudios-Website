@@ -4,7 +4,6 @@ import (
 	"auth-system/internal/utils"
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -115,11 +114,10 @@ func (r *TokenRepository) Create(ctx context.Context, token *Token) error {
 	`, token.TokenHash, token.Email, token.Type, token.CreatedAt, token.ExpireTime)
 
 	if err != nil {
-		return utils.LogError("TOKEN", "Create", err,
-			fmt.Sprintf("email=%s, type=%s", token.Email, token.Type))
+		return utils.LogError("TOKEN", "Create", err, "email", token.Email, "type", token.Type)
 	}
 
-	utils.LogInfo("TOKEN", fmt.Sprintf("Token created: email=%s, type=%s", token.Email, token.Type))
+	utils.LogInfo("TOKEN", "Token created", "email", token.Email, "type", token.Type)
 	return nil
 }
 
@@ -153,7 +151,7 @@ func (r *TokenRepository) UpdateCode(ctx context.Context, tokenHash, code string
 
 	_, err := r.pool.Exec(ctx, "UPDATE tokens SET code = $1 WHERE token_hash = $2", code, tokenHash)
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to update token code", err)
+		utils.LogWarn("TOKEN", "Failed to update token code", "error", err)
 	}
 	return err
 }
@@ -166,7 +164,7 @@ func (r *TokenRepository) MarkUsed(ctx context.Context, tokenHash string) error 
 
 	_, err := r.pool.Exec(ctx, "UPDATE tokens SET used = 1 WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to mark token as used", err)
+		utils.LogWarn("TOKEN", "Failed to mark token as used", "error", err)
 	}
 	return err
 }
@@ -222,7 +220,7 @@ func (r *TokenRepository) DeleteByToken(ctx context.Context, tokenHash string) e
 
 	_, err := r.pool.Exec(ctx, "DELETE FROM tokens WHERE token_hash = $1", tokenHash)
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to delete token", err)
+		utils.LogWarn("TOKEN", "Failed to delete token", "error", err)
 	}
 	return err
 }
@@ -249,7 +247,7 @@ func (r *CodeRepository) Create(ctx context.Context, code *Code) error {
 	`, code.Code, code.Email, code.Type, code.CreatedAt, code.ExpireTime)
 
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to create code record", err)
+		utils.LogWarn("TOKEN", "Failed to create code record", "error", err)
 	}
 	return err
 }
@@ -288,7 +286,7 @@ func (r *CodeRepository) UpdateVerification(ctx context.Context, codeStr string,
 	`, verifiedAt, codeStr)
 
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to update code verification status", err)
+		utils.LogWarn("TOKEN", "Failed to update code verification status", "error", err)
 	}
 	return err
 }
@@ -301,7 +299,7 @@ func (r *CodeRepository) DeleteByCode(ctx context.Context, codeStr string) error
 
 	_, err := r.pool.Exec(ctx, "DELETE FROM codes WHERE code = $1", codeStr)
 	if err != nil {
-		utils.LogWarn("TOKEN", "Failed to delete code", err)
+		utils.LogWarn("TOKEN", "Failed to delete code", "error", err)
 	}
 	return err
 }
@@ -324,10 +322,10 @@ func (r *CodeRepository) DeleteByEmail(ctx context.Context, email string, tokenT
 	}
 
 	if err != nil {
-		return utils.LogError("TOKEN", "DeleteByEmail", err, fmt.Sprintf("email=%s", email))
+		return utils.LogError("TOKEN", "DeleteByEmail", err, "email", email)
 	}
 
-	utils.LogInfo("TOKEN", fmt.Sprintf("Codes deleted: email=%s", email))
+	utils.LogInfo("TOKEN", "Codes deleted", "email", email)
 	return nil
 }
 

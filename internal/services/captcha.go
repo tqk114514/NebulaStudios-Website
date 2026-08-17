@@ -73,7 +73,7 @@ type CaptchaService struct {
 // NewCaptchaService 创建验证服务
 func NewCaptchaService(cfg *config.Config) *CaptchaService {
 	if cfg == nil {
-		utils.LogWarn("CAPTCHA", "Config is nil, service will be disabled", "")
+		utils.LogWarn("CAPTCHA", "Config is nil, service will be disabled")
 		return &CaptchaService{
 			enabled: false,
 			client: &http.Client{
@@ -91,7 +91,7 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		panic(fmt.Sprintf("CAPTCHA configuration error: failed to create used token cache: %v", err))
 	}
 
-	utils.LogInfo("CAPTCHA", fmt.Sprintf("Service initialized: siteKey=%s...", truncateCaptchaKey(cfg.TurnstileSiteKey, 8)))
+	utils.LogInfo("CAPTCHA", "Service initialized", "site_key", truncateCaptchaKey(cfg.TurnstileSiteKey, 8))
 
 	return &CaptchaService{
 		siteKey:    cfg.TurnstileSiteKey,
@@ -112,12 +112,12 @@ func (s *CaptchaService) Verify(token, remoteIP string) error {
 // VerifyWithContext 验证 Token（带上下文）
 func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, remoteIP string) error {
 	if !s.IsEnabled() {
-		utils.LogWarn("CAPTCHA", "Service is disabled, captcha verification cannot be performed", "")
+		utils.LogWarn("CAPTCHA", "Service is disabled, captcha verification cannot be performed")
 		return ErrCaptchaNotConfigured
 	}
 
 	if token == "" {
-		utils.LogWarn("CAPTCHA", "Empty token provided", "")
+		utils.LogWarn("CAPTCHA", "Empty token provided")
 		return ErrCaptchaEmptyToken
 	}
 
@@ -131,7 +131,7 @@ func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, remoteIP 
 	s.mu.Lock()
 	if _, used := s.usedTokens.Get(cleanToken); used {
 		s.mu.Unlock()
-		utils.LogWarn("CAPTCHA", "Token replay detected (local)", fmt.Sprintf("ip=%s", remoteIP))
+		utils.LogWarn("CAPTCHA", "Token replay detected (local)", "ip", remoteIP)
 		return ErrCaptchaFailed
 	}
 	// 预占：先记录，验证失败则回滚
@@ -196,7 +196,7 @@ func (s *CaptchaService) doVerify(ctx context.Context, token, remoteIP string) e
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			utils.LogWarn("CAPTCHA", "Failed to close response body", "")
+			utils.LogWarn("CAPTCHA", "Failed to close response body")
 		}
 	}()
 
@@ -219,11 +219,11 @@ func (s *CaptchaService) doVerify(ctx context.Context, token, remoteIP string) e
 
 	if !result.Success {
 		errorMsg := formatCaptchaErrorCodes(result.ErrorCodes)
-		utils.LogWarn("CAPTCHA", "Verification failed", fmt.Sprintf("error=%s, ip=%s", errorMsg, remoteIP))
+		utils.LogWarn("CAPTCHA", "Verification failed", "error", errorMsg, "ip", remoteIP)
 		return ErrCaptchaFailed
 	}
 
-	utils.LogInfo("CAPTCHA", fmt.Sprintf("Verification successful: hostname=%s, ip=%s", result.Hostname, remoteIP))
+	utils.LogInfo("CAPTCHA", "Verification successful", "hostname", result.Hostname, "ip", remoteIP)
 	return nil
 }
 

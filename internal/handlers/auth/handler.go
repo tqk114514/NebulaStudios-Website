@@ -90,7 +90,7 @@ func NewAuthHandler(
 		return nil, utils.LogError("AUTH", "NewAuthHandler", err, "Failed to generate dummy password hash")
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("AuthHandler initialized: baseURL=%s, whitelistEnabled=%v", baseURL, emailWhitelistRepo != nil))
+	utils.LogInfo("AUTH", "AuthHandler initialized", "base_url", baseURL, "whitelist_enabled", emailWhitelistRepo != nil)
 
 	return &AuthHandler{
 		userRepo:           userRepo,
@@ -111,7 +111,7 @@ func NewAuthHandler(
 // setAuthCookie 设置认证 Cookie
 func (h *AuthHandler) setAuthCookie(c *gin.Context, token string) {
 	if token == "" {
-		utils.LogWarn("AUTH", "Attempted to set empty token cookie")
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Attempted to set empty token cookie")
 		return
 	}
 	utils.SetTokenCookieGin(c, token)
@@ -234,14 +234,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if existingUser, err := h.userRepo.FindByEmail(ctx, emailResult.Value); err != nil {
 		// 预检查失败不阻断注册：唯一性由下方 Create 的 ErrEmailExists 权威校验，DB 故障仅记日志
-		utils.LogWarn("AUTH", "Failed to check email existence", fmt.Sprintf("email=%s, error=%v", emailResult.Value, err))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to check email existence", "email", emailResult.Value, "error", err)
 	} else if existingUser != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
 		return
 	}
 
 	if existingUser, err := h.userRepo.FindByUsername(ctx, usernameResult.Value); err != nil {
-		utils.LogWarn("AUTH", "Failed to check username existence", fmt.Sprintf("username=%s, error=%v", usernameResult.Value, err))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to check username existence", "username", usernameResult.Value, "error", err)
 	} else if existingUser != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
 		return
@@ -262,7 +262,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if h.userLogRepo != nil {
 		if err := h.userLogRepo.LogRegister(ctx, user.UID); err != nil {
-			utils.LogWarn("AUTH", "Failed to log register", fmt.Sprintf("userUID=%s", user.UID))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to log register", "user_uid", user.UID)
 		}
 	}
 
@@ -271,23 +271,23 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
 		manifest, err := services.LoadPolicyManifest(manifestPath)
 		if err != nil {
-			utils.LogWarn("AUTH", "Failed to load policy manifest for consent", fmt.Sprintf("userUID=%s, err=%v", user.UID, err))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to load policy manifest for consent", "user_uid", user.UID, "error", err)
 		} else {
 			now := time.Now().Format("2006-01-02")
 			for _, policyType := range []string{models.PolicyTypePrivacy, models.PolicyTypeTerms} {
 				version := manifest.GetLatestEffectiveVersion(policyType, now)
 				if version == "" {
-					utils.LogWarn("AUTH", "No effective policy version found for consent", fmt.Sprintf("userUID=%s, type=%s", user.UID, policyType))
+					utils.LogWarnCtx(c.Request.Context(), "AUTH", "No effective policy version found for consent", "user_uid", user.UID, "type", policyType)
 					continue
 				}
 				if err := h.userConsentRepo.LogConsent(ctx, user.UID, policyType, version); err != nil {
-					utils.LogWarn("AUTH", "Failed to log consent", fmt.Sprintf("userUID=%s, type=%s, version=%s", user.UID, policyType, version))
+					utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to log consent", "user_uid", user.UID, "type", policyType, "version", version)
 				}
 			}
 		}
 	}
 
-	utils.LogInfo("AUTH", fmt.Sprintf("User registered successfully: username=%s, email=%s", usernameResult.Value, emailResult.Value))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "User registered successfully", "username", usernameResult.Value, "email", emailResult.Value)
 	utils.RespondSuccess(c, gin.H{"message": "Registration successful"})
 }
 
@@ -360,7 +360,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	h.userCache.Set(user.UID, user)
 
-	utils.LogInfo("AUTH", fmt.Sprintf("User logged in: username=%s, userUID=%s, ip=%s", user.Username, user.UID, clientIP))
+	utils.LogInfoCtx(c.Request.Context(), "AUTH", "User logged in", "username", user.Username, "user_uid", user.UID, "ip", clientIP)
 	utils.RespondSuccess(c, gin.H{
 		"message": "Login successful",
 		"data": gin.H{
@@ -393,8 +393,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	}
 
 	if user == nil {
-		utils.LogWarn("AUTH", "GetMe: valid JWT but user not found in database, clearing cookies",
-			fmt.Sprintf("userUID=%s", userUID))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", "GetMe: valid JWT but user not found in database, clearing cookies", "user_uid", userUID)
 		h.clearAuthCookie(c)
 		utils.ClearRefreshTokenCookieGin(c)
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
@@ -412,11 +411,11 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if ok && userUID != "" {
 		if err := h.sessionService.RevokeUserTokens(c.Request.Context(), userUID); err != nil {
-			utils.LogWarn("AUTH", "Failed to revoke user tokens during logout", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to revoke user tokens during logout", "user_uid", userUID)
 		}
-		utils.LogInfo("AUTH", fmt.Sprintf("User logged out: userUID=%s", userUID))
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "User logged out", "user_uid", userUID)
 	} else {
-		utils.LogInfo("AUTH", "User logged out (no session)")
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "User logged out (no session)")
 	}
 
 	h.clearAuthCookie(c)

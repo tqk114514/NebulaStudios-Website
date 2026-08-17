@@ -31,12 +31,12 @@ const (
 // InitDB 初始化数据库连接池并执行迁移
 func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
 	if cfg == nil {
-		utils.LogError("DATABASE", "InitDB", fmt.Errorf("config is nil"), "")
+		utils.LogError("DATABASE", "InitDB", fmt.Errorf("config is nil"))
 		return nil, ErrDBNilConfig
 	}
 
 	if cfg.DatabaseURL == "" {
-		utils.LogError("DATABASE", "InitDB", fmt.Errorf("database URL is empty"), "")
+		utils.LogError("DATABASE", "InitDB", fmt.Errorf("database URL is empty"))
 		return nil, ErrDBEmptyURL
 	}
 
@@ -65,8 +65,8 @@ func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("%w: %v", ErrDBPingFailed, err)
 	}
 
-	utils.LogInfo("DATABASE", fmt.Sprintf("PostgreSQL connected successfully (maxConns=%d, minConns=%d)",
-		poolConfig.MaxConns, poolConfig.MinConns))
+	utils.LogInfo("DATABASE", "PostgreSQL connected successfully", "max_conns",
+		poolConfig.MaxConns, "min_conns", poolConfig.MinConns)
 
 	if err := initTables(ctx, pool); err != nil {
 		pool.Close()
@@ -95,7 +95,7 @@ func HealthCheck(pool *pgxpool.Pool) error {
 	defer cancel()
 
 	if err := pool.Ping(ctx); err != nil {
-		utils.LogWarn("DATABASE", "Health check failed", "")
+		utils.LogWarn("DATABASE", "Health check failed")
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func configurePool(poolConfig *pgxpool.Config, cfg *config.Config) {
 		poolConfig.MaxConns = int32(cfg.DBMaxConns)
 	} else {
 		poolConfig.MaxConns = 10
-		utils.LogWarn("DATABASE", "DBMaxConns not set, using default 10", "")
+		utils.LogWarn("DATABASE", "DBMaxConns not set, using default 10")
 	}
 
 	poolConfig.MinConns = defaultMinConns

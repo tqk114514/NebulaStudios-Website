@@ -87,7 +87,7 @@ func fetchMicrosoftJWKS(ctx context.Context) (map[string]*rsa.PublicKey, error) 
 		}
 		pubKey, err := jwkToRSAPublicKey(k)
 		if err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to parse JWK", fmt.Sprintf("kid=%s: %v", k.Kid, err))
+			utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to parse JWK", "kid", k.Kid, "error", err)
 			continue
 		}
 		keys[k.Kid] = pubKey
@@ -187,7 +187,7 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 	// 先解析 header 获取 kid
 	unverifiedToken, _, err := jwt.NewParser().ParseUnverified(idToken, jwt.MapClaims{})
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to parse ID token header", err.Error())
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "Failed to parse ID token header", "error", err)
 		return ""
 	}
 
@@ -196,20 +196,20 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 		kid = kidVal
 	}
 	if kid == "" {
-		utils.LogWarn("OAUTH-MS", "ID token missing kid header", "")
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "ID token missing kid header")
 		return ""
 	}
 
 	// 获取 JWKS 公钥
 	keys, err := fetchMicrosoftJWKS(ctx)
 	if err != nil {
-		utils.LogError("OAUTH-MS", "extractIDTokenEmail", err, "Failed to fetch JWKS")
+		utils.LogErrorCtx(ctx, "OAUTH-MS", "extractIDTokenEmail", err, "Failed to fetch JWKS")
 		return ""
 	}
 
 	pubKey, ok := keys[kid]
 	if !ok {
-		utils.LogWarn("OAUTH-MS", "ID token kid not found in JWKS", fmt.Sprintf("kid=%s", kid))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "ID token kid not found in JWKS", "kid", kid)
 		return ""
 	}
 
@@ -221,7 +221,7 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 		return pubKey, nil
 	}, jwt.WithValidMethods([]string{"RS256"}))
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "ID token signature verification failed", err.Error())
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "ID token signature verification failed", "error", err)
 		return ""
 	}
 
@@ -237,7 +237,7 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 	// 因此需要校验 iss 前缀和格式，而非精确匹配 "common"
 	iss, _ := claims["iss"].(string)
 	if !isValidMicrosoftIssuer(iss) {
-		utils.LogWarn("OAUTH-MS", "ID token issuer mismatch", fmt.Sprintf("iss=%s", iss))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "ID token issuer mismatch", "iss", iss)
 		return ""
 	}
 
@@ -255,7 +255,7 @@ func (h *MicrosoftHandler) extractIDTokenEmail(ctx context.Context, tokenData ma
 		}
 	}
 	if !audValid {
-		utils.LogWarn("OAUTH-MS", "ID token audience mismatch", fmt.Sprintf("clientID=%s", h.ClientID))
+		utils.LogWarnCtx(ctx, "OAUTH-MS", "ID token audience mismatch", "client_id", h.ClientID)
 		return ""
 	}
 
@@ -285,7 +285,7 @@ func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
 	base64Data := dataURL[commaIdx+1:]
 	imageData, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
-		utils.LogWarn("OAUTH-MS", "Failed to decode base64 avatar", "")
+		utils.LogWarn("OAUTH-MS", "Failed to decode base64 avatar")
 		return nil, ""
 	}
 
@@ -301,7 +301,7 @@ func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string,
 	if h.StorageService != nil && h.StorageService.IsConfigured() {
 		avatarURL, err := h.StorageService.UploadAvatar(ctx, userUID, imageData)
 		if err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to R2, falling back to base64", fmt.Sprintf("userUID=%s", userUID))
+			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to R2, falling back to base64", "user_uid", userUID)
 		} else {
 			return avatarURL
 		}
@@ -322,7 +322,7 @@ func (h *MicrosoftHandler) calculateAvatarHash(imageData []byte) string {
 func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash string, avatarData []byte, avatarContentType string) {
 	defer func() {
 		if r := recover(); r != nil {
-			utils.LogError("OAUTH-MS", "processAvatarAsync", fmt.Errorf("panic: %v", r), fmt.Sprintf("userUID=%s", userUID))
+			utils.LogError("OAUTH-MS", "processAvatarAsync", fmt.Errorf("panic: %v", r), "user_uid", userUID)
 		}
 	}()
 
@@ -331,7 +331,7 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 
 	// 用户已关闭微软头像自动同步（移除头像场景）时跳过，不再下载/存储/更新
 	if user, err := h.UserRepo.FindByUID(ctx, userUID); err == nil && !user.MicrosoftAvatarSync {
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar sync disabled, skipping: userUID=%s", userUID))
+		utils.LogInfo("OAUTH-MS", "Avatar sync disabled, skipping", "user_uid", userUID)
 		return
 	}
 
@@ -345,12 +345,12 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 			"microsoft_avatar_hash": newAvatarHash,
 		})
 		if err != nil {
-			utils.LogError("OAUTH-MS", "processAvatarAsync", err, fmt.Sprintf("Failed to update avatar: userUID=%s", userUID))
+			utils.LogError("OAUTH-MS", "processAvatarAsync", err, "user_uid", userUID)
 			return
 		}
 
 		h.UserCache.Invalidate(userUID)
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar updated async: userUID=%s", userUID))
+		utils.LogInfo("OAUTH-MS", "Avatar updated async", "user_uid", userUID)
 
 	} else if newAvatarHash == "" && oldAvatarHash != "" {
 		err := h.UserRepo.Update(ctx, userUID, map[string]any{
@@ -358,14 +358,14 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 			"microsoft_avatar_hash": nil,
 		})
 		if err != nil {
-			utils.LogError("OAUTH-MS", "processAvatarAsync", err, fmt.Sprintf("Failed to clear avatar: userUID=%s", userUID))
+			utils.LogError("OAUTH-MS", "processAvatarAsync", err, "user_uid", userUID)
 			return
 		}
 
 		h.UserCache.Invalidate(userUID)
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar cleared async: userUID=%s", userUID))
+		utils.LogInfo("OAUTH-MS", "Avatar cleared async", "user_uid", userUID)
 
 	} else {
-		utils.LogInfo("OAUTH-MS", fmt.Sprintf("Avatar unchanged, skipping: userUID=%s", userUID))
+		utils.LogInfo("OAUTH-MS", "Avatar unchanged, skipping", "user_uid", userUID)
 	}
 }

@@ -124,12 +124,12 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 // StaticCacheHeaders 静态资源缓存头中间件，maxAge 为空或无效时使用默认值
 func StaticCacheHeaders(maxAge string) gin.HandlerFunc {
 	if maxAge == "" {
-		utils.LogWarn("SECURITY", "Empty maxAge, using default", fmt.Sprintf("default=%s", defaultStaticMaxAge))
+		utils.LogWarn("SECURITY", "Empty maxAge, using default", "default", defaultStaticMaxAge)
 		maxAge = defaultStaticMaxAge
 	}
 
 	if !isValidMaxAge(maxAge) {
-		utils.LogWarn("SECURITY", "Invalid maxAge, using default", fmt.Sprintf("maxAge=%s, default=%s", maxAge, defaultStaticMaxAge))
+		utils.LogWarn("SECURITY", "Invalid maxAge, using default", "max_age", maxAge, "default", defaultStaticMaxAge)
 		maxAge = defaultStaticMaxAge
 	}
 
@@ -186,7 +186,7 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			if err != nil || cookieToken == "" {
 				newToken, genErr := utils.GenerateSecureToken()
 				if genErr != nil {
-					utils.LogError("SECURITY", "CSRFTokenMiddleware", genErr, "Failed to generate CSRF token")
+					utils.LogErrorCtx(c.Request.Context(), "SECURITY", "CSRFTokenMiddleware", genErr, "Failed to generate CSRF token")
 					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 					return
 				}
@@ -197,7 +197,7 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 		}
 
 		if err != nil || cookieToken == "" {
-			utils.LogWarn("SECURITY", "CSRF token missing in cookie", fmt.Sprintf("path=%s", c.Request.URL.Path))
+			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token missing in cookie", "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,
 				"errorCode": "CSRF_TOKEN_MISSING",
@@ -212,7 +212,7 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 		}
 
 		if clientToken == "" || subtle.ConstantTimeCompare([]byte(clientToken), []byte(cookieToken)) != 1 {
-			utils.LogWarn("SECURITY", "CSRF token mismatch", fmt.Sprintf("path=%s", c.Request.URL.Path))
+			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token mismatch", "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,
 				"errorCode": "CSRF_TOKEN_MISMATCH",
@@ -275,11 +275,11 @@ func isValidMaxAge(maxAge string) bool {
 // AddSecurityHeader 添加单个安全头，空上下文或空键值会记录错误
 func AddSecurityHeader(c *gin.Context, key, value string) {
 	if c == nil {
-		utils.LogError("SECURITY", "AddSecurityHeader", fmt.Errorf("context is nil"), "")
+		utils.LogErrorCtx(c.Request.Context(), "SECURITY", "AddSecurityHeader", fmt.Errorf("context is nil"))
 		return
 	}
 	if key == "" || value == "" {
-		utils.LogWarn("SECURITY", "Empty header key or value", fmt.Sprintf("key=%s, value=%s", key, value))
+		utils.LogWarnCtx(c.Request.Context(), "SECURITY", "Empty header key or value", "key", key, "value", value)
 		return
 	}
 	c.Header(key, value)
@@ -289,7 +289,7 @@ func AddSecurityHeader(c *gin.Context, key, value string) {
 func GenerateCSPNonce(c *gin.Context) (string, error) {
 	b := make([]byte, cspNonceLength)
 	if _, err := rand.Read(b); err != nil {
-		utils.LogError("SECURITY", "GenerateCSPNonce", err, "Failed to generate CSP nonce")
+		utils.LogErrorCtx(c.Request.Context(), "SECURITY", "GenerateCSPNonce", err, "Failed to generate CSP nonce")
 		return "", err
 	}
 	nonce := base64.StdEncoding.EncodeToString(b)
@@ -331,8 +331,7 @@ func BodySizeLimit(maxSize int64, exemptPaths ...string) gin.HandlerFunc {
 			c.Request.Method == http.MethodPatch {
 
 			if c.Request.ContentLength > maxSize {
-				utils.LogWarn("SECURITY", "Request body too large", fmt.Sprintf("path=%s, size=%d, limit=%d",
-					c.Request.URL.Path, c.Request.ContentLength, maxSize))
+				utils.LogWarnCtx(c.Request.Context(), "SECURITY", "Request body too large", "path", c.Request.URL.Path, "size", c.Request.ContentLength, "limit", maxSize)
 				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
 					"success":   false,
 					"errorCode": "REQUEST_TOO_LARGE",

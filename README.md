@@ -219,6 +219,10 @@ PORT=3000                                                      # 服务端口（
 BASE_URL="https://your-domain.com"                             # 基础 URL（用于重定向等）
 CORS_ALLOW_ORIGINS="https://your-domain.com"                   # 允许的跨域来源
 
+# 日志（应用日志默认输出 JSON 结构化日志到 stderr，字段：time/level/msg/category/caller + 业务字段）
+LOG_ENCODING="json"                                            # 日志编码（json，开发时可设为 console）
+LOG_LEVEL="info"                                               # 日志级别（debug/info/warn/error）
+
 # SMTP 邮件（网易 163 邮箱默认使用 SSL 465 端口 + LOGIN 认证）
 SMTP_HOST="smtp.163.com"
 SMTP_PORT=465

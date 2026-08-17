@@ -72,7 +72,7 @@ func NewQRLoginHandler(
 
 	isConfigured := encryptKey != ""
 	if !isConfigured {
-		utils.LogWarn("QR-LOGIN", "Encryption key not configured, QR login will be disabled", "")
+		utils.LogWarn("QR-LOGIN", "Encryption key not configured, QR login will be disabled")
 	}
 
 	var derivedKey []byte
@@ -85,7 +85,7 @@ func NewQRLoginHandler(
 		}
 	}
 
-	utils.LogInfo("QR-LOGIN", fmt.Sprintf("QRLoginHandler initialized: configured=%v", isConfigured))
+	utils.LogInfo("QR-LOGIN", "QRLoginHandler initialized", "configured", isConfigured)
 
 	h := &QRLoginHandler{
 		sessionService: sessionService,
@@ -153,7 +153,7 @@ func parseUserAgent(userAgent string) (browser, os string) {
 // notifyStatusChange 通过 WebSocket 通知 PC 端状态变化
 func (h *QRLoginHandler) notifyStatusChange(encryptedToken, status string, data map[string]string) {
 	if h.wsService == nil {
-		utils.LogWarn("QR-LOGIN", "WebSocket service not available, skipping notification", "")
+		utils.LogWarn("QR-LOGIN", "WebSocket service not available, skipping notification")
 		return
 	}
 

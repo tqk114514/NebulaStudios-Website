@@ -132,10 +132,10 @@ func (r *UserLogRepository) Create(ctx context.Context, log *UserLog) error {
 	`, log.UserUID, log.Action, log.Details).Scan(&log.ID, &log.CreatedAt)
 
 	if err != nil {
-		return utils.LogError("USER_LOG", "Create", err, fmt.Sprintf("user_uid=%s, action=%s", log.UserUID, log.Action))
+		return utils.LogError("USER_LOG", "Create", err, "user_uid", log.UserUID, "action", log.Action)
 	}
 
-	utils.LogInfo("USER_LOG", fmt.Sprintf("Log created: id=%d, user_uid=%s, action=%s", log.ID, log.UserUID, log.Action))
+	utils.LogInfo("USER_LOG", "Log created", "id", log.ID, "user_uid", log.UserUID, "action", log.Action)
 	return nil
 }
 
@@ -390,7 +390,7 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 		userUID,
 	).Scan(&total)
 	if err != nil {
-		return nil, 0, utils.LogError("USER_LOG", "CountLogs", err, fmt.Sprintf("user_uid=%s", userUID))
+		return nil, 0, utils.LogError("USER_LOG", "CountLogs", err, "user_uid", userUID)
 	}
 
 	// 查询日志列表
@@ -402,7 +402,7 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 		LIMIT $2 OFFSET $3
 	`, userUID, pageSize, offset)
 	if err != nil {
-		return nil, 0, utils.LogError("USER_LOG", "QueryLogs", err, fmt.Sprintf("user_uid=%s", userUID))
+		return nil, 0, utils.LogError("USER_LOG", "QueryLogs", err, "user_uid", userUID)
 	}
 	defer rows.Close()
 
@@ -411,7 +411,7 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 		log := &UserLog{}
 		err := rows.Scan(&log.ID, &log.UserUID, &log.Action, &log.Details, &log.CreatedAt)
 		if err != nil {
-			utils.LogWarn("USER_LOG", fmt.Sprintf("Failed to scan log: %v", err))
+			utils.LogWarn("USER_LOG", "Failed to scan log", "error", err)
 			continue
 		}
 		logs = append(logs, log)
@@ -429,10 +429,10 @@ func (r *UserLogRepository) DeleteByUserUID(ctx context.Context, userUID string)
 
 	_, err := r.pool.Exec(ctx, "DELETE FROM user_logs WHERE user_uid = $1", userUID)
 	if err != nil {
-		return utils.LogError("USER_LOG", "DeleteByUserUID", err, fmt.Sprintf("user_uid=%s", userUID))
+		return utils.LogError("USER_LOG", "DeleteByUserUID", err, "user_uid", userUID)
 	}
 
-	utils.LogInfo("USER_LOG", fmt.Sprintf("Logs deleted: user_uid=%s", userUID))
+	utils.LogInfo("USER_LOG", "Logs deleted", "user_uid", userUID)
 	return nil
 }
 
@@ -452,7 +452,7 @@ func (r *UserLogRepository) DeleteExpiredLogs(ctx context.Context) (int64, error
 
 	count := result.RowsAffected()
 	if count > 0 {
-		utils.LogInfo("USER_LOG", fmt.Sprintf("Expired logs deleted: count=%d", count))
+		utils.LogInfo("USER_LOG", "Expired logs deleted", "count", count)
 	}
 	return count, nil
 }

@@ -33,7 +33,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 	models.UserAdminStore
 }, sessionService services.SessionManager) gin.HandlerFunc {
 	if userCache == nil || userRepo == nil {
-		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"), "")
+		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("userCache or userRepo is nil"))
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -43,7 +43,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 		}
 	}
 	if sessionService == nil {
-		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("sessionService is nil"), "")
+		utils.LogError("BAN-MW", "BanCheckMiddleware", fmt.Errorf("sessionService is nil"))
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
@@ -78,7 +78,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 		user, err := userCache.GetOrLoad(ctx, userUID, userRepo.FindByUID)
 		if err != nil {
 			// fail-closed：缓存故障时拒绝请求，防止被封禁用户绕过封禁
-			utils.LogError("BAN-MW", "BanCheckMiddleware", err, fmt.Sprintf("Failed to get user: userUID=%s", userUID))
+			utils.LogErrorCtx(c.Request.Context(), "BAN-MW", "BanCheckMiddleware", err, "user_uid", userUID)
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"success":   false,
 				"errorCode": "SERVICE_UNAVAILABLE",
@@ -88,8 +88,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 		}
 
 		if user.CheckBanned() {
-			utils.LogWarn("BAN-MW", "Banned user attempted API access", fmt.Sprintf("userUID=%s, reason=%s",
-				userUID, user.BanReason.String))
+			utils.LogWarnCtx(c.Request.Context(), "BAN-MW", "Banned user attempted API access", "user_uid", userUID, "reason", user.BanReason.String)
 
 			response := gin.H{
 				"success":   false,
@@ -121,10 +120,10 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 				unbanCtx, unbanCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer unbanCancel()
 				if err := userRepo.Unban(unbanCtx, userUID); err != nil {
-					utils.LogError("BAN-MW", "AutoUnban", err, fmt.Sprintf("Failed to auto-unban expired ban: userUID=%s", userUID))
+					utils.LogErrorCtx(c.Request.Context(), "BAN-MW", "AutoUnban", err, "user_uid", userUID)
 				} else {
 					userCache.Invalidate(userUID)
-					utils.LogInfo("BAN-MW", fmt.Sprintf("Auto-unbanned expired ban: userUID=%s", userUID))
+					utils.LogInfoCtx(c.Request.Context(), "BAN-MW", "Auto-unbanned expired ban", "user_uid", userUID)
 				}
 			}()
 		}

@@ -76,7 +76,7 @@ func (p *ImgProcessor) startProcessor() {
 	}
 
 	if len(imgProcessorBin) == 0 {
-		utils.LogWarn("IMG", "Embedded binary not found, using fallback", "")
+		utils.LogWarn("IMG", "Embedded binary not found, using fallback")
 		p.available = false
 		return
 	}
@@ -170,12 +170,12 @@ func (p *ImgProcessor) startProcessor() {
 		time.Sleep(100 * time.Millisecond)
 		if _, err := os.Stat(p.socketPath); err == nil {
 			p.available = true
-			utils.LogInfo("IMG", fmt.Sprintf("Image processor started (PID: %d)", p.cmd.Process.Pid))
+			utils.LogInfo("IMG", "Image processor started", "pid", p.cmd.Process.Pid)
 			return
 		}
 	}
 
-	utils.LogWarn("IMG", "Processor started but socket not ready", "")
+	utils.LogWarn("IMG", "Processor started but socket not ready")
 	p.available = false
 }
 
@@ -202,7 +202,7 @@ func (p *ImgProcessor) Shutdown(ctx context.Context) {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		utils.LogWarn("IMG", "Shutdown timeout exceeded, forcing shutdown", "")
+		utils.LogWarn("IMG", "Shutdown timeout exceeded, forcing shutdown")
 	}
 }
 

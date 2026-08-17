@@ -48,7 +48,7 @@ func NewGoogleHandler(
 	h.RedirectURI = cfg.BaseURL + "/api/auth/google/callback"
 
 	if h.ClientID == "" || h.ClientSecret == "" || len(h.proxyURLs) == 0 {
-		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)", "")
+		utils.LogWarn("OAUTH-GOOGLE", "Google OAuth not configured (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_PROXY_URL missing)")
 	} else {
 		// 代理访问凭证（CF Access Service Token）：代理仅接受带此凭证的请求，缺失即启动失败
 		if h.proxyAccessClientID == "" || h.proxyAccessClientSecret == "" {
@@ -91,8 +91,7 @@ func NewGoogleHandler(
 		AfterUnlink:        nil,
 	}
 
-	utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("GoogleHandler initialized: baseURL=%s, proxies=%d, configured=%v",
-		cfg.BaseURL, len(h.proxyURLs), h.isConfigured()))
+	utils.LogInfo("OAUTH-GOOGLE", "GoogleHandler initialized", "base_url", cfg.BaseURL, "proxies", len(h.proxyURLs), "configured", h.isConfigured())
 
 	return h, nil
 }
@@ -115,8 +114,8 @@ func (h *GoogleHandler) buildAuthURL(state, codeChallenge string) string {
 	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 }
 
-func (h *GoogleHandler) exchangeAndFetch(code, codeVerifier string) (map[string]any, map[string]any, error) {
-	tokenData, err := h.exchangeCodeForToken(code, codeVerifier)
+func (h *GoogleHandler) exchangeAndFetch(ctx context.Context, code, codeVerifier string) (map[string]any, map[string]any, error) {
+	tokenData, err := h.exchangeCodeForToken(ctx, code, codeVerifier)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,29 +123,29 @@ func (h *GoogleHandler) exchangeAndFetch(code, codeVerifier string) (map[string]
 	if !ok || accessToken == "" {
 		return tokenData, nil, fmt.Errorf("no access_token in token response")
 	}
-	userInfo, err := h.getUserInfo(accessToken)
+	userInfo, err := h.getUserInfo(ctx, accessToken)
 	if err != nil {
 		return tokenData, nil, err
 	}
 	return tokenData, userInfo, nil
 }
 
-func (h *GoogleHandler) parseIdentity(tokenData, userInfo map[string]any) oauth.ProviderIdentity {
+func (h *GoogleHandler) parseIdentity(ctx context.Context, tokenData, userInfo map[string]any) oauth.ProviderIdentity {
 	// 身份只从 Worker 验签背书的 id_token 提取：代理/userinfo 返回的任何字段均不作为身份依据
 	if h.verifier == nil {
-		utils.LogError("OAUTH-GOOGLE", "parseIdentity", ErrVerifierNotConfigured, "id_token verifier is nil")
+		utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "parseIdentity", ErrVerifierNotConfigured, "id_token verifier is nil")
 		return oauth.ProviderIdentity{}
 	}
 
 	idToken, _ := tokenData["id_token"].(string)
 	if idToken == "" {
-		utils.LogWarn("OAUTH-GOOGLE", "No id_token in token response, refusing to authenticate", "")
+		utils.LogWarnCtx(ctx, "OAUTH-GOOGLE", "No id_token in token response, refusing to authenticate")
 		return oauth.ProviderIdentity{}
 	}
 
 	claims, err := h.verifier.VerifyIDTokenClaims(context.Background(), idToken)
 	if err != nil {
-		utils.LogError("OAUTH-GOOGLE", "parseIdentity", err, "id_token claims verification failed, refusing to authenticate")
+		utils.LogErrorCtx(ctx, "OAUTH-GOOGLE", "parseIdentity", err, "id_token claims verification failed, refusing to authenticate")
 		return oauth.ProviderIdentity{}
 	}
 
@@ -238,7 +237,7 @@ func (h *GoogleHandler) unlinkFields(user *models.User) map[string]any {
 	}
 	if user.AvatarURL == h.Spec.AvatarStateValue {
 		fields["avatar_url"] = h.DefaultAvatarURL
-		utils.LogInfo("OAUTH-GOOGLE", fmt.Sprintf("User was using Google avatar, resetting to default: userUID=%s", user.UID))
+		utils.LogInfo("OAUTH-GOOGLE", "User was using Google avatar, resetting to default", "user_uid", user.UID)
 	}
 	return fields
 }
