@@ -119,9 +119,6 @@ func TestGenerateTokensBanned(t *testing.T) {
 	if claims.UID != "uid-123" {
 		t.Errorf("claims.UID = %q, want uid-123", claims.UID)
 	}
-	if claims.Banned == nil || !*claims.Banned {
-		t.Error("banned claim should be true")
-	}
 	// 封禁 token 使用短期过期（上下界都验）
 	if claims.ExpiresAt == nil {
 		t.Fatal("banned token should have expiresAt")
@@ -143,7 +140,7 @@ func TestVerifyTokenLifecycle(t *testing.T) {
 	s := testSessionService(t, 15*time.Minute)
 
 	// 正常生成 + 验证（generateAccessToken 为纯 JWT，不依赖 DB）
-	accessToken, err := s.generateAccessToken("user-a", boolPtr(false), 15*time.Minute)
+	accessToken, err := s.generateAccessToken("user-a", 15*time.Minute)
 	if err != nil {
 		t.Fatalf("generateAccessToken error = %v", err)
 	}
@@ -153,9 +150,6 @@ func TestVerifyTokenLifecycle(t *testing.T) {
 	}
 	if claims.UID != "user-a" {
 		t.Errorf("claims.UID = %q", claims.UID)
-	}
-	if claims.Banned == nil || *claims.Banned {
-		t.Error("non-banned token should have banned=false")
 	}
 
 	// 篡改签名 → 拒绝
@@ -173,7 +167,7 @@ func TestVerifyTokenLifecycle(t *testing.T) {
 func TestVerifyTokenExpired(t *testing.T) {
 	s := testSessionService(t, 15*time.Minute)
 	// 直接用过期时长生成 token
-	token, err := s.generateAccessToken("user-a", boolPtr(false), -time.Minute)
+	token, err := s.generateAccessToken("user-a", -time.Minute)
 	if err != nil {
 		t.Fatalf("generateAccessToken error = %v", err)
 	}
@@ -197,7 +191,7 @@ func TestVerifyTokenRejectsWrongAlgorithm(t *testing.T) {
 func TestVerifyTokenRejectsEmptyUID(t *testing.T) {
 	s := testSessionService(t, 15*time.Minute)
 	// 空 UID 的 claims → ErrInvalidUser
-	token, err := s.generateAccessToken("", boolPtr(false), 5*time.Minute)
+	token, err := s.generateAccessToken("", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("generateAccessToken error = %v", err)
 	}
@@ -223,8 +217,6 @@ func TestGetExpiryAndIsConfigured(t *testing.T) {
 		t.Errorf("GetExpiry() = %v, want 30m", s.GetExpiry())
 	}
 }
-
-func boolPtr(v bool) *bool { return &v }
 
 // signHS256 生成 HS256 签名的 token（用于验证 VerifyToken 拒绝非 ECDSA 算法）
 func signHS256(uid string) (string, error) {
@@ -312,6 +304,44 @@ func TestRefreshTokensSuccess(t *testing.T) {
 	}
 	if repo.created[0].UserUID != "u1" || repo.created[0].FamilyID == "" {
 		t.Errorf("new token = %+v, want user u1 with new family", repo.created[0])
+	}
+}
+
+func TestRefreshTokensBannedShortLived(t *testing.T) {
+	s, repo := newSessionWithFakeRepo(t)
+	tok := unexpiredSessionToken()
+	tok.Banned = true
+	repo.findResult = tok
+
+	access, refresh, err := s.RefreshTokens(context.Background(), "refresh-token-str")
+	if err != nil {
+		t.Fatalf("RefreshTokens() error = %v", err)
+	}
+	if access == "" {
+		t.Error("banned refresh should still return an access token")
+	}
+	if refresh != "" {
+		t.Error("banned refresh should NOT issue a new refresh token")
+	}
+	// 旧 refresh token 已标记使用
+	if len(repo.markUsedCalls) != 1 || repo.markUsedCalls[0] != 1 {
+		t.Errorf("MarkUsed calls = %v, want [1]", repo.markUsedCalls)
+	}
+	// 不再签发新 refresh token
+	if len(repo.created) != 0 {
+		t.Errorf("banned refresh should not create a new refresh token, got %d", len(repo.created))
+	}
+	// access token 为短期（上下界都验）
+	claims, err := s.VerifyToken(access)
+	if err != nil {
+		t.Fatalf("access token should verify: %v", err)
+	}
+	if claims.ExpiresAt == nil {
+		t.Fatal("access token should have expiresAt")
+	}
+	remaining := time.Until(claims.ExpiresAt.Time)
+	if remaining <= 0 || remaining > bannedAccessTokenExpiry {
+		t.Errorf("banned refresh access token remaining %v should be within (0, %v]", remaining, bannedAccessTokenExpiry)
 	}
 }
 

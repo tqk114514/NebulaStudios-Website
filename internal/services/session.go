@@ -48,9 +48,11 @@ const (
 )
 
 // Claims JWT 声明
+//
+// 注意：封禁状态不写入 JWT claim。封禁检查由 BanCheckMiddleware 实时查库（含缓存）完成，
+// 写入 claim 只会让已签发 token 携带过期状态，且可能与查库结果不一致。
 type Claims struct {
-	UID    string `json:"uid"`
-	Banned *bool  `json:"banned,omitempty"`
+	UID string `json:"uid"`
 	jwt.RegisteredClaims
 }
 
@@ -146,18 +148,13 @@ func (s *SessionService) GenerateTokens(ctx context.Context, uid string, banned 
 	}
 
 	var accessExpiry time.Duration
-	var bannedPtr *bool
 	if banned {
 		accessExpiry = bannedAccessTokenExpiry
-		b := true
-		bannedPtr = &b
 	} else {
 		accessExpiry = s.accessTokenExpiry
-		b := false
-		bannedPtr = &b
 	}
 
-	accessToken, err = s.generateAccessToken(uid, bannedPtr, accessExpiry)
+	accessToken, err = s.generateAccessToken(uid, accessExpiry)
 	if err != nil {
 		return "", "", err
 	}
@@ -219,12 +216,24 @@ func (s *SessionService) RefreshTokens(ctx context.Context, refreshTokenStr stri
 		return "", "", fmt.Errorf("failed to mark refresh token as used: %w", markErr)
 	}
 
-	newAccessToken, err = s.generateAccessToken(existing.UserUID, &existing.Banned, s.accessTokenExpiry)
+	// 与登录策略一致：被封禁用户只签发短期 access_token，且不再续发 refresh_token，
+	// 会话在短期 token 过期后自然终止（重新登录可查看封禁页面）。
+	if existing.Banned {
+		newAccessToken, err = s.generateAccessToken(existing.UserUID, bannedAccessTokenExpiry)
+		if err != nil {
+			return "", "", err
+		}
+		utils.LogInfo("SESSION", fmt.Sprintf("Banned user refreshed short-lived access token: uid=%s, family_id=%s",
+			existing.UserUID, existing.FamilyID))
+		return newAccessToken, "", nil
+	}
+
+	newAccessToken, err = s.generateAccessToken(existing.UserUID, s.accessTokenExpiry)
 	if err != nil {
 		return "", "", err
 	}
 
-	newRefreshToken, err = s.generateRefreshToken(ctx, existing.UserUID, existing.Banned)
+	newRefreshToken, err = s.generateRefreshToken(ctx, existing.UserUID, false)
 	if err != nil {
 		return "", "", err
 	}
@@ -321,11 +330,10 @@ func (s *SessionService) IsConfigured() bool {
 }
 
 // generateAccessToken 生成 access_token（JWT ES256）
-func (s *SessionService) generateAccessToken(uid string, banned *bool, expiry time.Duration) (string, error) {
+func (s *SessionService) generateAccessToken(uid string, expiry time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
-		UID:    uid,
-		Banned: banned,
+		UID: uid,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(now),

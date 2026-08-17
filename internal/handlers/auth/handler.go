@@ -452,7 +452,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	}
 
 	h.setAuthCookie(c, newAccessToken)
-	utils.SetRefreshTokenCookieGin(c, newRefreshToken)
+	if newRefreshToken != "" {
+		utils.SetRefreshTokenCookieGin(c, newRefreshToken)
+	} else {
+		// 封禁用户刷新只签发短期 access_token：清除已消费的 refresh_token cookie，
+		// 会话在短期 token 过期后自然终止（与登录时的封禁策略一致）。
+		utils.ClearRefreshTokenCookieGin(c)
+	}
 
 	utils.RespondSuccess(c, gin.H{"message": "Token refreshed"})
 }

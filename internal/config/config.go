@@ -115,7 +115,11 @@ func Load() (*Config, error) {
 	newCfg.SMTPFrom = getEnv("SMTP_FROM", "")
 	newCfg.SMTPUser = getEnv("SMTP_USER", "")
 	newCfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
-	newCfg.SMTPPort, _ = getEnvInt("SMTP_PORT", 0)
+	smtpPort, err := getEnvInt("SMTP_PORT", 0)
+	if err != nil {
+		utils.LogWarn("CONFIG", fmt.Sprintf("Invalid SMTP_PORT, using default: %v", err))
+	}
+	newCfg.SMTPPort = smtpPort
 
 	newCfg.TurnstileSiteKey = getEnv("TURNSTILE_SITE_KEY", "")
 	newCfg.TurnstileSecretKey = getEnv("TURNSTILE_SECRET_KEY", "")

@@ -16,6 +16,7 @@ node_modules/
 # 项目特定
 .kiro/
 .trae/
+.freebuff/
 
 # 日志
 *.log
