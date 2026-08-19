@@ -80,9 +80,7 @@ func (l *zapLogger) With(fields ...any) Logger {
 func LoggerFromContext(ctx context.Context) Logger {
 	if ctx != nil {
 		if id := RequestIDFrom(ctx); id != "" {
-			if l, ok := GetLogger().(*zapLogger); ok {
-				return l.With(RequestIDKey, id)
-			}
+			return GetLogger().With(RequestIDKey, id)
 		}
 	}
 	return GetLogger()
@@ -124,18 +122,6 @@ func appendFields(category string, extra []any, keysAndValues []any) []any {
 	fields = append(fields, extra...)
 	fields = append(fields, keysAndValues...)
 	return fields
-}
-
-func (l *zapLogger) Printf(format string, args ...any) {
-	message := fmt.Sprintf(format, args...)
-	message = maskSensitiveData(message)
-	l.sugar.Info(message)
-}
-
-func (l *zapLogger) Fatalf(format string, args ...any) {
-	message := fmt.Sprintf(format, args...)
-	message = maskSensitiveData(message)
-	l.sugar.Fatal(message)
 }
 
 func (l *zapLogger) Sync() {
@@ -222,16 +208,6 @@ func Log(message string) {
 	if l, ok := loggerInstance.(*zapLogger); ok {
 		l.sugar.Info(masked)
 	}
-}
-
-// LogPrintf 安全日志输出（格式化），自动脱敏敏感信息
-func LogPrintf(format string, args ...any) {
-	GetLogger().Printf(format, args...)
-}
-
-// LogFatalf 安全日志输出后退出，自动脱敏敏感信息
-func LogFatalf(format string, args ...any) {
-	GetLogger().Fatalf(format, args...)
 }
 
 // SyncLogger 同步日志缓冲区（程序退出前调用）

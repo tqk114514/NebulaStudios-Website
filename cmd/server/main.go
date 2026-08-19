@@ -50,7 +50,7 @@ func main() {
 
 	if err := run(); err != nil {
 		utils.LogError("SERVER", "main", err, "Server failed")
-		utils.LogFatalf("Server startup failed")
+		os.Exit(1)
 	}
 }
 
@@ -91,7 +91,9 @@ func run() error {
 	router := setupRouter(cfg, hdlrs, repos, svcs)
 
 	srv := createServer(cfg.Port, router)
-	startServer(srv)
+	if err := startServer(srv); err != nil {
+		return fmt.Errorf("server start failed: %w", err)
+	}
 
 	gracefulShutdown(srv, repos, svcs)
 
@@ -347,12 +349,10 @@ func createServer(port string, handler http.Handler) *http.Server {
 	}
 }
 
-func startServer(srv *http.Server) {
+func startServer(srv *http.Server) error {
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		utils.LogError("SERVER", "startServer", err, "Failed to bind port")
-		utils.LogFatalf("Failed to bind port %s", srv.Addr)
-		return
+		return fmt.Errorf("failed to bind port %s: %w", srv.Addr, err)
 	}
 
 	utils.LogInfo("SERVER", "Starting HTTP server", "addr", srv.Addr)
@@ -360,11 +360,12 @@ func startServer(srv *http.Server) {
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			utils.LogError("SERVER", "Serve", err, "HTTP server failed")
-			utils.LogFatalf("HTTP server startup failed")
+			os.Exit(1)
 		}
 	}()
 
 	utils.LogInfo("SERVER", "Server is running", "url", "http://localhost"+srv.Addr)
+	return nil
 }
 
 func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
