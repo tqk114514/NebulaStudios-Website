@@ -498,8 +498,8 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 			&log.TargetUID, &log.Details, &log.CreatedAt,
 		)
 		if err != nil {
-			utils.LogError("ADMIN_LOG", "FindAll.Scan", err)
-			continue
+			// 扫描失败属于编程错误，静默丢行会让分页结果悄悄缺数据
+			return nil, 0, fmt.Errorf("failed to scan admin log: %w", err)
 		}
 		if adminUsername != nil {
 			log.AdminUsername = *adminUsername
@@ -507,6 +507,9 @@ func (r *AdminLogRepository) FindAll(ctx context.Context, page, pageSize int) ([
 			log.AdminUsername = "已删除"
 		}
 		logs = append(logs, log)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate admin logs: %w", err)
 	}
 
 	return logs, total, nil

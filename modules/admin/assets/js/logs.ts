@@ -101,7 +101,8 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
  * 渲染日志表格行 HTML
  */
 function renderLogRow(log: AdminLog): string {
-  const actionName = ACTION_NAMES[log.action] || log.action;
+  // 未知 action 回退到服务端原始值，必须转义防注入（已知映射值为静态文本，转义无副作用）
+  const actionName = escapeHtml(ACTION_NAMES[log.action] || log.action);
   const details = formatDetails(log.action, log.details);
 
   return `

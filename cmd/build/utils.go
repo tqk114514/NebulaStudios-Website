@@ -34,11 +34,19 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
-	defer func() { _ = dstFile.Close() }()
 
 	written, err := io.Copy(dstFile, srcFile)
 	if err != nil {
+		_ = dstFile.Close()
+		// 移除半成品文件，避免损坏的产物混入 dist 被部署
+		_ = os.Remove(dst)
 		return fmt.Errorf("failed to copy: %w", err)
+	}
+
+	// 先显式 Close 再检查错误：Close 时的落盘失败（如 ENOSPC）不能报成功
+	if err := dstFile.Close(); err != nil {
+		_ = os.Remove(dst)
+		return fmt.Errorf("failed to close destination: %w", err)
 	}
 
 	atomic.AddInt64(&stats.BytesWritten, written)
@@ -133,8 +141,14 @@ func saveAssetManifest() error {
 	}
 
 	manifestPath := filepath.Join(distDir, "manifest.json")
-	if err := os.WriteFile(manifestPath, data, filePerm); err != nil {
+	// 原子写：先写临时文件再 rename，避免进程中断留下截断的 manifest 被部署
+	tmpPath := manifestPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, filePerm); err != nil {
 		return fmt.Errorf("failed to write manifest: %w", err)
+	}
+	if err := os.Rename(tmpPath, manifestPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename manifest: %w", err)
 	}
 
 	log.Printf("[BUILD] Saved asset manifest with %d entries", len(assetManifest))

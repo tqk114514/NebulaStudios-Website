@@ -130,6 +130,13 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// 原子消费重置码：并发重放同一验证码时只有一个请求能走到改密码，
+	// 消除 VerifyCode（标记已验证）与改密码之间的重放窗口
+	if err := h.tokenService.UseCode(ctx, code, normalizedEmail); err != nil {
+		handlers.RespondTokenError(c, "AUTH", err, fmt.Sprintf("Reset code consume failed: email=%s", normalizedEmail))
+		return
+	}
+
 	if err := h.userRepo.UpdatePassword(ctx, user.UID, password); err != nil {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "RESET_FAILED", fmt.Sprintf("Password update failed: userUID=%s", user.UID))
 		return

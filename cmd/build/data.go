@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -66,15 +67,13 @@ func minifyJSONFile(src, dst string) error {
 
 	atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 
-	var jsonData any
-	if err := json.Unmarshal(data, &jsonData); err != nil {
+	// json.Compact 做纯词法压缩（去空白），不经过 any round-trip：
+	// Unmarshal→Marshal 会把所有数字变 float64（大整数丢精度、1.0 改写成 1）
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, data); err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
 	}
-
-	minified, err := json.Marshal(jsonData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal: %w", err)
-	}
+	minified := buf.Bytes()
 
 	if err := os.WriteFile(dst, minified, filePerm); err != nil {
 		return fmt.Errorf("failed to write: %w", err)

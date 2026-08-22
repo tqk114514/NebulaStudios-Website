@@ -177,13 +177,12 @@ button {
 
 .table-container,
 .data-table {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
 }
 
 .table-container::-webkit-scrollbar,
 .data-table::-webkit-scrollbar {
-  display: none;
+  display: block;
 }
 
 .data-table {
@@ -278,6 +277,10 @@ button {
 .modal-overlay.is-hidden {
   opacity: 0;
   pointer-events: none;
+  /* visibility 将隐藏内容移出 Tab 序与辅助树（仅 opacity 不改变可达性），
+     延迟到淡出结束后生效以保留过渡动画 */
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
 }
 
 .modal-container {
@@ -329,12 +332,11 @@ button {
   padding: 24px;
   overflow-y: auto;
   max-height: 60vh;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: thin;
 }
 
 .modal-body::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
+  display: block;
 }
 
 .modal-footer {
@@ -521,6 +523,8 @@ button {
 .page-loader.is-hidden {
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 
 .loader-spinner {
@@ -613,6 +617,20 @@ button {
 .form-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* 键盘导航时给出明确的焦点环（WCAG 2.4.7 Focus Visible） */
+.form-select:focus-visible,
+.form-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .form-select option {

@@ -24,3 +24,8 @@
 .policy-agree a:hover {
   border-color: var(--fg);
 }
+
+.policy-agree a:focus-visible {
+  border-color: var(--fg);
+  outline: none;
+}

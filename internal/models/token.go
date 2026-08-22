@@ -13,6 +13,7 @@ import (
 
 var (
 	ErrInvalidToken    = errors.New("INVALID_TOKEN")
+	ErrCodeUsed        = errors.New("CODE_USED")
 	ErrTokenExpired    = errors.New("TOKEN_EXPIRED")
 	ErrTokenUsed       = errors.New("TOKEN_USED")
 	ErrInvalidCode     = errors.New("INVALID_CODE")
@@ -190,7 +191,7 @@ func (r *TokenRepository) MarkUsedAndGet(ctx context.Context, tokenHash string, 
 	`, tokenHash, now).Scan(&token.Email, &token.Type, &token.Code, &token.ExpireTime)
 
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, utils.HandleDatabaseError("TOKEN", "MarkUsedAndGet", err, utils.TruncateIdentifier(tokenHash))
@@ -303,6 +304,29 @@ func (r *CodeRepository) DeleteByCode(ctx context.Context, codeStr string) error
 		utils.LogWarn("TOKEN", "Failed to delete code", "error", err)
 	}
 	return err
+}
+
+// ConsumeVerifiedByCode 原子消费已验证的验证码：
+// 仅当验证码存在、邮箱匹配且已验证时删除，返回是否真正消费。
+// 并发重复使用（如重置密码重放）时只有一个请求返回 true
+func (r *CodeRepository) ConsumeVerifiedByCode(ctx context.Context, codeStr, email string) (bool, error) {
+	if codeStr == "" || email == "" {
+		return false, errors.New("invalid parameters")
+	}
+
+	if r.pool == nil {
+		return false, errors.New("database not ready")
+	}
+
+	result, err := r.pool.Exec(ctx, `
+		DELETE FROM codes
+		WHERE code = $1 AND email = $2 AND verified_at IS NOT NULL
+	`, codeStr, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return false, utils.LogError("TOKEN", "ConsumeVerifiedByCode", err)
+	}
+
+	return result.RowsAffected() > 0, nil
 }
 
 // DeleteByEmail 删除指定邮箱的验证码

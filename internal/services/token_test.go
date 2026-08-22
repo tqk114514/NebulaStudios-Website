@@ -51,6 +51,7 @@ type fakeCodeStore struct {
 	findErr       error
 	updatedVerifs []string
 	deletedCodes  []string
+	consumedCodes map[string]string
 	deletedEmails []string
 	latestExpiry  int64
 }
@@ -69,6 +70,17 @@ func (f *fakeCodeStore) UpdateVerification(_ context.Context, codeStr string, _ 
 func (f *fakeCodeStore) DeleteByCode(_ context.Context, codeStr string) error {
 	f.deletedCodes = append(f.deletedCodes, codeStr)
 	return nil
+}
+func (f *fakeCodeStore) ConsumeVerifiedByCode(_ context.Context, codeStr, email string) (bool, error) {
+	// 模拟原子消费：首次返回 true，之后（已被消费）返回 false
+	if f.consumedCodes == nil {
+		f.consumedCodes = make(map[string]string)
+	}
+	if _, ok := f.consumedCodes[codeStr]; ok {
+		return false, nil
+	}
+	f.consumedCodes[codeStr] = email
+	return true, nil
 }
 func (f *fakeCodeStore) DeleteByEmail(_ context.Context, email string, _ *string) error {
 	f.deletedEmails = append(f.deletedEmails, email)

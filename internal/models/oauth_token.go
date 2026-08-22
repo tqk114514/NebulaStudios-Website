@@ -292,7 +292,7 @@ func (r *OAuthAccessTokenRepository) FindByTokenHash(ctx context.Context, tokenH
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOAuthTokenNotFound
 		}
 		return nil, utils.LogError("OAUTH_ACCESS_TOKEN", "FindByTokenHash", err)
@@ -459,7 +459,7 @@ func (r *OAuthRefreshTokenRepository) FindByTokenHash(ctx context.Context, token
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOAuthTokenNotFound
 		}
 		return nil, utils.LogError("OAUTH_REFRESH_TOKEN", "FindByTokenHash", err)
@@ -658,10 +658,12 @@ func (r *OAuthGrantRepository) FindByUserUID(ctx context.Context, userUID string
 			&grant.ClientName, &grant.ClientDescription,
 		)
 		if err != nil {
-			utils.LogError("OAUTH_GRANT", "FindByUserID.Scan", err)
-			continue
+			return nil, fmt.Errorf("failed to scan oauth grant: %w", err)
 		}
 		grants = append(grants, grant)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate oauth grants: %w", err)
 	}
 
 	return grants, nil
@@ -683,7 +685,7 @@ func (r *OAuthGrantRepository) FindByUserAndClient(ctx context.Context, userUID 
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOAuthGrantNotFound
 		}
 		return nil, utils.LogError("OAUTH_GRANT", "FindByUserAndClient", err, "user_uid", userUID, "client_id", clientID)

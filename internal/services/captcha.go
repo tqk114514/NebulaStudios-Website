@@ -36,9 +36,9 @@ const (
 	captchaMaxResponseSize = 1024 * 1024
 	captchaContentTypeJSON = "application/json"
 
-	// 本地防重放：Cloudflare duplicate 检测是 best-effort，应用层需自行保证一次性
-	captchaUsedTokenCapacity = 5000            // 容量覆盖 300s 窗口内的预期请求数
-	captchaUsedTokenTTL      = 5 * time.Minute // 与 Turnstile token 有效期对齐
+	// 本地防重放：Cloudflare duplicate 检测是 best-effort，应用层需自行保证一次性。
+	// 仅按 LRU 容量淘汰（5000 覆盖 Turnstile 300s 有效期窗口内的预期请求数）
+	captchaUsedTokenCapacity = 5000
 )
 
 var captchaErrorMessages = map[string]string{

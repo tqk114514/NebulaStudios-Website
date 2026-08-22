@@ -63,6 +63,9 @@ func (r *EmailWhitelistRepository) FindAll(ctx context.Context) ([]*EmailWhiteli
 		}
 		whitelist = append(whitelist, item)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate email whitelist: %w", err)
+	}
 
 	return whitelist, nil
 }
@@ -100,6 +103,10 @@ func (r *EmailWhitelistRepository) FindAllPaginated(ctx context.Context, page in
 	err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM email_whitelist`).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count email whitelist: %w", err)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate email whitelist: %w", err)
 	}
 
 	return whitelist, total, nil

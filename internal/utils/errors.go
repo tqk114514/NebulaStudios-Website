@@ -70,7 +70,7 @@ func HandleDatabaseError(module, operation string, err error, identifier any) er
 		return nil
 	}
 
-	isNotFound := errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set"
+	isNotFound := errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows)
 
 	if isNotFound {
 		LogDebug(module, operation+" not found", "identifier", identifier)

@@ -142,6 +142,11 @@ html, body {
   }
 }
 
+/* hidden 属性强制生效：部分组件的自定义 display 会覆盖 UA 默认的 [hidden]{display:none} */
+[hidden] {
+  display: none !important;
+}
+
 /* ==================== 语言切换器 ==================== */
 
 .language-switcher {

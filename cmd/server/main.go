@@ -214,16 +214,20 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	utils.LogInfo("SERVICES", "UserCache initialized", "max_size", userCacheMaxSize, "ttl", userCacheTTL)
 
 	emailSvc, err := services.NewEmailService(cfg)
-	if err != nil || emailSvc == nil {
-		utils.LogWarn("SERVICES", "Email service unavailable", "error", err)
-	} else {
-		if err := emailSvc.VerifyConnection(); err != nil {
-			utils.LogWarn("SERVICES", "SMTP verification failed", "error", err)
-		} else {
-			utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
-		}
-		svcs.EmailService = emailSvc
+	// 服务高度依赖邮件（注册/重置/注销验证），未配置 SMTP 直接拒绝启动
+	if err != nil {
+		return nil, utils.LogError("SERVICES", "initServices", fmt.Errorf("email service is required: %w", err))
 	}
+	if emailSvc == nil {
+		return nil, utils.LogError("SERVICES", "initServices", fmt.Errorf("email service is required"))
+	}
+	if err := emailSvc.VerifyConnection(); err != nil {
+		// 连接验证失败视为瞬时故障（发送时会自动重连），仅警告不阻断启动
+		utils.LogWarn("SERVICES", "SMTP verification failed", "error", err)
+	} else {
+		utils.LogInfo("SERVICES", "EmailService initialized and SMTP verified")
+	}
+	svcs.EmailService = emailSvc
 
 	storageSvc, err := services.NewLocalStorageService(cfg)
 	if err != nil || storageSvc == nil {

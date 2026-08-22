@@ -358,12 +358,7 @@ func (r *OAuthClientRepository) checkDB() error {
 
 // handleQueryError 处理查询错误，将 sql.ErrNoRows 映射为 ErrOAuthClientNotFound
 func (r *OAuthClientRepository) handleQueryError(err error, operation string, identifier any) error {
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrOAuthClientNotFound
-	}
-
-	// pgx 使用不同的错误类型，检查错误消息
-	if err.Error() == "no rows in result set" {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows) {
 		return ErrOAuthClientNotFound
 	}
 

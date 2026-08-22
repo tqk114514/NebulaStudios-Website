@@ -210,6 +210,13 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 DATABASE_URL="postgres://user:password@localhost:5432/dbname"  # PostgreSQL 连接字符串
 JWT_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----..."              # ECDSA P-256 PEM 私钥（用于 JWT ES256 签名）
 QR_KEY_DERIVATION_SALT="your-salt"                             # 扫码登录密钥派生 Salt
+
+# SMTP 邮件（必需，未配置时服务拒绝启动；网易 163 邮箱默认使用 SSL 465 端口 + LOGIN 认证）
+SMTP_HOST="smtp.163.com"
+SMTP_PORT=465
+SMTP_USER="your-email@163.com"
+SMTP_PASSWORD="your-smtp-password"
+SMTP_FROM="your-email@163.com"
 ```
 
 **建议配置：**
@@ -222,13 +229,6 @@ CORS_ALLOW_ORIGINS="https://your-domain.com"                   # 允许的跨域
 # 日志（应用日志默认输出 JSON 结构化日志到 stderr，字段：time/level/msg/category/caller + 业务字段）
 LOG_ENCODING="json"                                            # 日志编码（json，开发时可设为 console）
 LOG_LEVEL="info"                                               # 日志级别（debug/info/warn/error）
-
-# SMTP 邮件（网易 163 邮箱默认使用 SSL 465 端口 + LOGIN 认证）
-SMTP_HOST="smtp.163.com"
-SMTP_PORT=465
-SMTP_USER="your-email@163.com"
-SMTP_PASSWORD="your-smtp-password"
-SMTP_FROM="your-email@163.com"
 
 # 验证码（至少配置一种，建议 Turnstile）
 TURNSTILE_SITE_KEY="your-site-key"
@@ -276,7 +276,7 @@ DB_MAX_CONNS=10              # 最大连接数
 DEFAULT_AVATAR_URL="https://cdn.example.com/default-avatar.svg"
 ```
 
-未配置 SMTP 或验证码时服务仍会启动，但相关功能不可用，启动日志中会有相应警告。
+未配置 SMTP 时服务会拒绝启动（注册/重置/注销验证均依赖邮件）；未配置验证码时服务仍可启动，但相关功能不可用，启动日志中会有相应警告。
 
 ### 编译步骤
 

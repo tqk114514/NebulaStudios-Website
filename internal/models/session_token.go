@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -92,7 +93,7 @@ func (r *SessionTokenRepository) FindByHash(ctx context.Context, tokenHash strin
 	)
 
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrSessionTokenNotFound
 		}
 		return nil, utils.LogError("SESSION_TOKEN", "FindByHash", err, "token_hash", tokenHash)

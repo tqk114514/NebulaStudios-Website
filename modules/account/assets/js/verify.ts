@@ -146,9 +146,16 @@ async function loadVerificationCode(card: HTMLElement | null): Promise<void> {
         verificationCodeEl.addEventListener('click', copyCode);
       }
 
-      const codeHintEl = document.querySelector('.code-hint');
+      const codeHintEl = document.querySelector('.code-hint') as HTMLElement | null;
       if (codeHintEl) {
         codeHintEl.addEventListener('click', copyCode);
+        // 键盘可达：提示是 tabindex=0 的 div，Enter/Space 触发与点击相同的复制行为
+        codeHintEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            copyCode();
+          }
+        });
       }
 
       // 保存邮箱到 sessionStorage（用于后续注册）

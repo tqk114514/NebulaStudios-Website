@@ -84,11 +84,14 @@ func brotliCompressDir(dir string) error {
 				return
 			}
 
-			mu.Lock()
-			compressedCount++
-			totalOriginal += original
-			totalCompressed += compressed
-			mu.Unlock()
+			// 空文件跳过压缩（不产生 .br），不应计入压缩文件数
+			if original > 0 {
+				mu.Lock()
+				compressedCount++
+				totalOriginal += original
+				totalCompressed += compressed
+				mu.Unlock()
+			}
 		}(path)
 	}
 

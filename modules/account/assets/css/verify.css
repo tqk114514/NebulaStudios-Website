@@ -38,7 +38,6 @@
   font-size: var(--text-lg);
   font-weight: 300;
   color: var(--fg);
-  cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
 
@@ -54,6 +53,12 @@
   cursor: pointer;
   transition: color 0.2s;
   display: inline-block;
+}
+
+.code-hint:focus-visible {
+  color: var(--fg);
+  text-decoration: underline;
+  outline: none;
 }
 
 .code-hint:hover {

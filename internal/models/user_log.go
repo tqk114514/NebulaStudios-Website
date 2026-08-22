@@ -411,10 +411,12 @@ func (r *UserLogRepository) FindByUserUID(ctx context.Context, userUID string, p
 		log := &UserLog{}
 		err := rows.Scan(&log.ID, &log.UserUID, &log.Action, &log.Details, &log.CreatedAt)
 		if err != nil {
-			utils.LogWarn("USER_LOG", "Failed to scan log", "error", err)
-			continue
+			return nil, 0, fmt.Errorf("failed to scan user log: %w", err)
 		}
 		logs = append(logs, log)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate user logs: %w", err)
 	}
 
 	return logs, total, nil

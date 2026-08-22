@@ -479,38 +479,41 @@ async function handleFormSubmit(): Promise<void> {
 
   localOauthFormSubmit.disabled = true;
 
-  if (editingClientId) {
-    // 编辑模式
-    const success = await updateClient(editingClientId, name, description, redirectUri);
-    if (success) {
-      showToast('应用已更新', 'success');
-      hideModal(oauthFormModal);
-      await updateClientRow(editingClientId);
+  // finally 恢复按钮：中途任何异常（DOM 操作/意外错误）都不能让按钮永久卡在禁用态
+  try {
+    if (editingClientId) {
+      // 编辑模式
+      const success = await updateClient(editingClientId, name, description, redirectUri);
+      if (success) {
+        showToast('应用已更新', 'success');
+        hideModal(oauthFormModal);
+        await updateClientRow(editingClientId);
+      } else {
+        showToast('更新失败', 'error');
+      }
     } else {
-      showToast('更新失败', 'error');
+      // 创建模式
+      const result = await createClient(name, description, redirectUri);
+      if (result) {
+        hideModal(oauthFormModal);
+        showSecretModal(result.client_secret);
+        showToast('应用创建成功', 'success');
+        animateTableRow({
+          tableBody: oauthTableBody!,
+          action: 'insert',
+          item: result.client,
+          renderRow: renderClientRow,
+          bindEvents: bindClientRowEvents,
+          cache: clientsCache as DataCache<unknown>,
+          getCacheKey: (c) => c.id
+        });
+      } else {
+        showToast('创建失败', 'error');
+      }
     }
-  } else {
-    // 创建模式
-    const result = await createClient(name, description, redirectUri);
-    if (result) {
-      hideModal(oauthFormModal);
-      showSecretModal(result.client_secret);
-      showToast('应用创建成功', 'success');
-      animateTableRow({
-        tableBody: oauthTableBody!,
-        action: 'insert',
-        item: result.client,
-        renderRow: renderClientRow,
-        bindEvents: bindClientRowEvents,
-        cache: clientsCache as DataCache<unknown>,
-        getCacheKey: (c) => c.id
-      });
-    } else {
-      showToast('创建失败', 'error');
-    }
+  } finally {
+    localOauthFormSubmit.disabled = false;
   }
-
-  localOauthFormSubmit.disabled = false;
 }
 
 // ==================== 密钥显示弹窗 ====================

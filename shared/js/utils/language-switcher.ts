@@ -33,12 +33,23 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   const languageSwitcher = document.querySelector('.language-switcher');
   const currentBtn = document.querySelector('.language-current');
   const langText = document.querySelector('.language-current .lang-text');
+  const languageDropdown = document.querySelector('.language-dropdown') as HTMLElement | null;
   const languageOptions = document.querySelectorAll('.language-dropdown .language-option');
 
   if (!languageSwitcher || !currentBtn || !languageOptions.length) {
     console.warn('[I18N] WARN: Language switcher elements not found');
     return () => {};
   }
+
+  // hidden 属性与 is-open 类保持同步：CSS 不可用（被拦截/加载失败）时
+  // 选项不会意外展示，也确保关闭态不可聚焦
+  const setDropdownOpen = (open: boolean): void => {
+    languageSwitcher.classList.toggle('is-open', open);
+    currentBtn.setAttribute('aria-expanded', String(open));
+    if (languageDropdown) {
+      languageDropdown.hidden = !open;
+    }
+  };
 
   // 设置当前语言状态
   const currentLang = window.currentLanguage || 'zh-CN';
@@ -56,8 +67,7 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   const handleCurrentBtnClick = (e: Event) => {
     e.preventDefault();
     e.stopPropagation();
-    const isOpen = languageSwitcher.classList.toggle('is-open');
-    currentBtn.setAttribute('aria-expanded', String(isOpen));
+    setDropdownOpen(!languageSwitcher.classList.contains('is-open'));
   };
 
   // 点击选项切换语言
@@ -71,8 +81,7 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
       const selectedLang = option.getAttribute('data-lang');
 
       // 关闭下拉菜单
-      languageSwitcher.classList.remove('is-open');
-      currentBtn.setAttribute('aria-expanded', 'false');
+      setDropdownOpen(false);
 
       if (!selectedLang || selectedLang === window.currentLanguage) {return;}
 
@@ -115,17 +124,36 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   // 点击外部关闭下拉菜单
   const handleDocumentClick = (e: MouseEvent) => {
     if (!languageSwitcher.contains(e.target as Node)) {
-      languageSwitcher.classList.remove('is-open');
-      currentBtn.setAttribute('aria-expanded', 'false');
+      setDropdownOpen(false);
     }
   };
 
-  // ESC 键关闭下拉菜单
-  const handleDocumentKeydown = (e: KeyboardEvent) => {
+  // ESC 关闭 + 方向键/Home/End 在选项间移动焦点（listbox 键盘模式基本支持）
+  const handleDocumentKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && languageSwitcher.classList.contains('is-open')) {
-      languageSwitcher.classList.remove('is-open');
-      currentBtn.setAttribute('aria-expanded', 'false');
+      setDropdownOpen(false);
+      return;
     }
+    if (!languageSwitcher.classList.contains('is-open')) {
+      return;
+    }
+
+    const options = Array.from(languageOptions) as HTMLElement[];
+    const currentIndex = options.indexOf(document.activeElement as HTMLElement);
+    let nextIndex = -1;
+    if (e.key === 'ArrowDown') {
+      nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, options.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      nextIndex = currentIndex < 0 ? options.length - 1 : Math.max(currentIndex - 1, 0);
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = options.length - 1;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    options[nextIndex]?.focus();
   };
 
   currentBtn.addEventListener('click', handleCurrentBtnClick);

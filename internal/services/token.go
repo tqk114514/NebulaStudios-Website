@@ -247,7 +247,10 @@ func (s *TokenService) IsCodeVerified(ctx context.Context, codeStr, email string
 	return true, nil
 }
 
-// UseCode 使用验证码（删除）
+// UseCode 使用验证码（原子消费）
+// 单条 DELETE 以"存在 + 邮箱匹配 + 已验证"为条件并检查影响行数：
+// 并发提交同一验证码时只有一个请求成功，其余返回 ErrCodeUsed，
+// 消除"验证→使用"两步之间的重放窗口
 func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error {
 	if codeStr == "" {
 		return models.ErrInvalidCode
@@ -258,19 +261,14 @@ func (s *TokenService) UseCode(ctx context.Context, codeStr, email string) error
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
-	code, err := s.codeRepo.FindByCode(ctx, codeStr)
+	consumed, err := s.codeRepo.ConsumeVerifiedByCode(ctx, codeStr, normalizedEmail)
 	if err != nil {
-		return models.ErrInvalidCode
+		return err
 	}
-
-	if code.Email != normalizedEmail {
-		return models.ErrEmailMismatch
+	if !consumed {
+		// 不存在 / 邮箱不匹配 / 未验证 / 已被并发消费，统一按已使用处理
+		return models.ErrCodeUsed
 	}
-	if !code.IsVerified() {
-		return models.ErrCodeNotVerified
-	}
-
-	s.codeRepo.DeleteByCode(ctx, codeStr)
 
 	utils.LogInfo("TOKEN", "Code used and removed", "email", normalizedEmail)
 	return nil
