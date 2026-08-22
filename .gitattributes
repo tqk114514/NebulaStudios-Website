@@ -3,3 +3,6 @@
 
 # 排除 vendor 目录的语言统计
 img-processor/vendor/** linguist-vendored
+
+# 排除本地内嵌 JS 库的语言统计（上游源码副本，非本项目代码）
+shared/js/lib/** linguist-vendored
