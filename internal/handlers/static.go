@@ -1,4 +1,4 @@
-// Package handlers 提供静态文件服务、页面路由、配置 API 和健康检查。
+// Package handlers 提供静态文件服务、页面路由和配置 API。
 package handlers
 
 import (
@@ -295,22 +295,29 @@ func (h *StaticHandler) ServeAvatar(c *gin.Context) {
 	c.File(path)
 }
 
-// NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面
-func NotFoundHandler(c *gin.Context) {
-	// 记录 404 请求（仅记录非静态资源请求）
-	path := c.Request.URL.Path
-	if !isStaticAsset(path) {
-		utils.LogInfoCtx(c.Request.Context(), "STATIC", "404", "method", c.Request.Method, "path", path)
+// NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面。
+// cdnURL 用于构建与正常页面一致的完整 CSP（含 CDN 域名白名单）——
+// 未知路径不经过 SecurityHeaders 的 CSP 分支，此前仅设 frame-ancestors
+// 且 nonce 从未生成，导致页面输出字面量 {{CSP_NONCE}} 且无 script-src 约束
+func NotFoundHandler(cdnURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 记录 404 请求（仅记录非静态资源请求）
+		path := c.Request.URL.Path
+		if !isStaticAsset(path) {
+			utils.LogInfoCtx(c.Request.Context(), "STATIC", "404", "method", c.Request.Method, "path", path)
+		}
+
+		// 生成 nonce 并设置完整 CSP（nonce 写入 context，serveHTML 据此替换占位符）
+		middleware.SetHTMLPageCSP(c, cdnURL)
+
+		// 完全禁止缓存，确保权限变更后立即生效
+		c.Header("Cache-Control", CacheControlNoStore)
+		c.Header("Pragma", "no-cache")
+		c.Status(http.StatusNotFound)
+
+		// 服务 404 页面
+		serveHTML(c, DistAccountPages, "404.html")
 	}
-
-	// 设置安全头和缓存控制（完全禁止缓存，确保权限变更后立即生效）
-	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
-	c.Header("Cache-Control", CacheControlNoStore)
-	c.Header("Pragma", "no-cache")
-	c.Status(http.StatusNotFound)
-
-	// 服务 404 页面
-	serveHTML(c, DistAccountPages, "404.html")
 }
 
 // isStaticAsset 检查路径是否为静态资源，用于过滤 404 日志

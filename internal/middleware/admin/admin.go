@@ -158,13 +158,13 @@ func respondForbidden(c *gin.Context, errorCode string) {
 	c.Abort()
 }
 
-// AdminPageMiddleware 管理员页面权限中间件，用于保护后台页面，失败时伪装成 404（隐藏后台入口）
-func AdminPageMiddleware(userRepo models.UserReader, sessionService services.SessionManager) gin.HandlerFunc {
+// AdminPageMiddleware 管理员页面权限中间件，用于保护后台页面，失败时伪装成 404（隐藏后台入口）。
+// cdnURL 透传给 404 页处理，保证伪装响应也带完整 CSP
+func AdminPageMiddleware(userRepo models.UserReader, sessionService services.SessionManager, cdnURL string) gin.HandlerFunc {
+	notFound := handlers.NotFoundHandler(cdnURL)
 	if userRepo == nil || sessionService == nil {
 		utils.LogError("ADMIN-MW", "AdminPageMiddleware", fmt.Errorf("UserRepository or SessionService is nil"))
-		return func(c *gin.Context) {
-			handlers.NotFoundHandler(c)
-		}
+		return notFound
 	}
 
 	return func(c *gin.Context) {
@@ -176,7 +176,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		if token == "" {
 			// 未登录，伪装成 404（隐藏后台入口）
 			utils.LogDebugCtx(c.Request.Context(), "ADMIN-MW", "Admin page access without token, showing 404")
-			handlers.NotFoundHandler(c)
+			notFound(c)
 			c.Abort()
 			return
 		}
@@ -186,7 +186,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		if err != nil || claims == nil || claims.UID == "" {
 			// Token 无效，伪装成 404
 			utils.LogDebugCtx(c.Request.Context(), "ADMIN-MW", "Admin page access with invalid token, showing 404")
-			handlers.NotFoundHandler(c)
+			notFound(c)
 			c.Abort()
 			return
 		}
@@ -200,7 +200,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		if err != nil || user == nil {
 			// 用户不存在，伪装成 404
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			handlers.NotFoundHandler(c)
+			notFound(c)
 			c.Abort()
 			return
 		}
@@ -209,7 +209,7 @@ func AdminPageMiddleware(userRepo models.UserReader, sessionService services.Ses
 		if !user.IsAdmin() {
 			// 非管理员，伪装成 404（不暴露后台存在）
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			handlers.NotFoundHandler(c)
+			notFound(c)
 			c.Abort()
 			return
 		}

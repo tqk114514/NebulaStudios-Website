@@ -28,13 +28,13 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 
 	setupStaticFiles(r, cfg, hdlrs)
 
-	setupPageRoutes(r, repos, svcs)
+	setupPageRoutes(r, cfg, repos, svcs)
 
 	setupAPIRoutes(r, hdlrs, repos, svcs)
 
 	setupWebSocketRoutes(r, svcs)
 
-	r.NoRoute(handlers.NotFoundHandler)
+	r.NoRoute(handlers.NotFoundHandler(cfg.CDNURL))
 
 	utils.LogInfo("ROUTER", "Routes configured successfully")
 	return r
@@ -71,7 +71,7 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 	utils.LogInfo("STATIC", "Serving avatars", "dir", cfg.AvatarDir)
 }
 
-func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
+func setupPageRoutes(r *gin.Engine, cfg *config.Config, repos *Repos, svcs *Services) {
 	r.GET("/", handlers.ServeHomePage)
 
 	accountPages := r.Group("/account")
@@ -91,7 +91,7 @@ func setupPageRoutes(r *gin.Engine, repos *Repos, svcs *Services) {
 	r.GET("/policy", handlers.ServePolicyPage)
 
 	adminPage := r.Group("/admin")
-	adminPage.Use(adminmw.AdminPageMiddleware(repos.UserRepo, svcs.SessionService))
+	adminPage.Use(adminmw.AdminPageMiddleware(repos.UserRepo, svcs.SessionService, cfg.CDNURL))
 	{
 		adminPage.GET("", handlers.ServeAdminPage)
 	}

@@ -139,9 +139,8 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 旧版路由（如 `/login`、`/register` 等）通过 301 重定向到新版路径。
 
-### 健康检查与版本
+### 版本信息
 
-- `GET /health`：返回服务状态（ok/degraded）、数据库连接池统计、缓存命中率、WebSocket 连接数
 - `GET /api/version`：返回编译时注入的 Git commit
 
 ### 后台任务

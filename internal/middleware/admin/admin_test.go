@@ -125,7 +125,7 @@ func TestSuperAdminMiddlewareSuperAdminAllowed(t *testing.T) {
 func TestAdminPageNoToken404(t *testing.T) {
 	repo := testutil.NewFakeUserRepo()
 	sess := &testutil.FakeSessionManager{}
-	w := runAdmin(AdminPageMiddleware(repo, sess), "", "")
+	w := runAdmin(AdminPageMiddleware(repo, sess, ""), "", "")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (隐藏后台入口)", w.Code)
 	}
@@ -134,7 +134,7 @@ func TestAdminPageNoToken404(t *testing.T) {
 func TestAdminPageInvalidToken404(t *testing.T) {
 	repo := testutil.NewFakeUserRepo()
 	sess := &testutil.FakeSessionManager{VerifyErr: errTestVerify}
-	w := runAdmin(AdminPageMiddleware(repo, sess), "", "token=bad")
+	w := runAdmin(AdminPageMiddleware(repo, sess, ""), "", "token=bad")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
 	}
@@ -144,7 +144,7 @@ func TestAdminPageNonAdmin404(t *testing.T) {
 	repo := testutil.NewFakeUserRepo()
 	seedAdminUser(repo, "u1", models.RoleUser)
 	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: "u1"}}
-	w := runAdmin(AdminPageMiddleware(repo, sess), "", "token=valid")
+	w := runAdmin(AdminPageMiddleware(repo, sess, ""), "", "token=valid")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (非管理员伪装)", w.Code)
 	}
@@ -154,7 +154,7 @@ func TestAdminPageAdminAllowed(t *testing.T) {
 	repo := testutil.NewFakeUserRepo()
 	seedAdminUser(repo, "u1", models.RoleAdmin)
 	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: "u1"}}
-	w := runAdmin(AdminPageMiddleware(repo, sess), "", "token=valid")
+	w := runAdmin(AdminPageMiddleware(repo, sess, ""), "", "token=valid")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}

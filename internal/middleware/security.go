@@ -306,6 +306,23 @@ func GetCSPNonce(c *gin.Context) string {
 	return ""
 }
 
+// SetHTMLPageCSP 为未经 SecurityHeaders CSP 分支处理的 HTML 响应（如 NoRoute 的 404 页面）
+// 生成 nonce 并设置与正常页面一致的完整 CSP（含 CDN 域名白名单）。
+// nonce 写入 context，供 serveHTML 完成 {{CSP_NONCE}} 占位符替换
+func SetHTMLPageCSP(c *gin.Context, cdnURL string) {
+	nonce := GetCSPNonce(c)
+	if nonce == "" {
+		generated, err := GenerateCSPNonce(c)
+		if err != nil {
+			// 生成失败时至少保留基础防护，避免完全无 CSP
+			c.Header("Content-Security-Policy", "frame-ancestors 'self'")
+			return
+		}
+		nonce = generated
+	}
+	c.Header("Content-Security-Policy", buildCSPWithNonce(nonce, cdnURL))
+}
+
 // buildCSPWithNonce 在 CSP 模板的 script-src 和 style-src 中注入 nonce 指令，并用 cdnURL 填充占位符
 func buildCSPWithNonce(nonce, cdnURL string) string {
 	nonceDirective := "'nonce-" + nonce + "'"

@@ -224,3 +224,31 @@ func TestGenerateCSPNonceUnique(t *testing.T) {
 		t.Error("nonces should be unique per request")
 	}
 }
+
+func TestSetHTMLPageCSP(t *testing.T) {
+	// 无既有 nonce：应生成 nonce、写入 context 并设置完整 CSP
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	SetHTMLPageCSP(c, "https://cdn.example.com")
+	csp := c.Writer.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'nonce-") {
+		t.Errorf("CSP should contain nonce'd script-src, got %s", csp)
+	}
+	if !strings.Contains(csp, "https://cdn.example.com") {
+		t.Errorf("CSP should contain cdnURL, got %s", csp)
+	}
+	if !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Errorf("CSP should contain frame-ancestors, got %s", csp)
+	}
+	nonce := GetCSPNonce(c)
+	if nonce == "" || !strings.Contains(csp, "'nonce-"+nonce+"'") {
+		t.Error("nonce in CSP header should match the one stored in context")
+	}
+
+	// 已有 nonce：复用而不重新生成
+	c.Set(cspNonceKey, "EXISTINGNONSE")
+	SetHTMLPageCSP(c, "https://cdn.example.com")
+	csp2 := c.Writer.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp2, "'nonce-EXISTINGNONSE'") {
+		t.Errorf("existing nonce should be reused, got %s", csp2)
+	}
+}
