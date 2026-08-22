@@ -66,12 +66,8 @@ if ($Frontend) {
         if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
     }
 
-    Write-Host "=== Type-checking frontend (tsc --noEmit) ===" -ForegroundColor Cyan
-    # --no-install：npx 只使用本地已装的包，绝不联网下载
-    npx --no-install tsc --noEmit
-    if ($LASTEXITCODE -ne 0) { throw "TypeScript type-check failed" }
-    Write-Host "Type-check OK" -ForegroundColor Green
-
+    # 先构建再类型检查：cmd/build 会依据 shared/js/lib 目录重新生成 vendor.ts
+    # 并补齐 ts-nocheck 头，tsc 必须在生成之后跑才能校验到最新引用
     Write-Host "=== Building frontend ===" -ForegroundColor Cyan
     # go run 的 log.Printf 输出到 stderr，PowerShell 的 Stop 策略会误判为终止错误，
     # 临时放宽策略，通过 LASTEXITCODE 判断真实结果
@@ -82,4 +78,10 @@ if ($Frontend) {
     $ErrorActionPreference = $prevEAP
     if ($buildExit -ne 0) { throw "Frontend build failed" }
     Write-Host "Frontend build OK" -ForegroundColor Green
+
+    Write-Host "=== Type-checking frontend (tsc --noEmit) ===" -ForegroundColor Cyan
+    # --no-install：npx 只使用本地已装的包，绝不联网下载
+    npx --no-install tsc --noEmit
+    if ($LASTEXITCODE -ne 0) { throw "TypeScript type-check failed" }
+    Write-Host "Type-check OK" -ForegroundColor Green
 }
