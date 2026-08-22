@@ -90,10 +90,9 @@ func NewUserHandler(
 }
 
 // verifyCaptcha 验证人机验证 Token
+// 空 token 等场景由 CaptchaService.Verify 统一处理：
+// 启用时返回 ErrCaptchaEmptyToken，禁用（CAPTCHA_ENABLED=false）时一律放行
 func (h *UserHandler) verifyCaptcha(token, clientIP string) error {
-	if token == "" {
-		return errors.New("captcha token is empty")
-	}
 	return h.captchaService.Verify(token, clientIP)
 }
 

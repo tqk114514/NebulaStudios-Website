@@ -43,6 +43,12 @@ type Config struct {
 	TurnstileSiteKey   string
 	TurnstileSecretKey string
 
+	// CaptchaEnabled 是否启用人机验证（CAPTCHA_ENABLED，必填）。
+	// false 时登录/注册/重置/删除等动作全部跳过校验，前端不展示验证组件
+	CaptchaEnabled bool
+	// captchaEnabledSet 标记 CAPTCHA_ENABLED 是否被显式配置（区分 false 与缺失）
+	captchaEnabledSet bool
+
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
 
@@ -124,6 +130,16 @@ func Load() (*Config, error) {
 	newCfg.TurnstileSiteKey = getEnv("TURNSTILE_SITE_KEY", "")
 	newCfg.TurnstileSecretKey = getEnv("TURNSTILE_SECRET_KEY", "")
 
+	// CAPTCHA_ENABLED 必填：仅接受 true/false，缺失或非法值直接报错
+	if raw := getEnv("CAPTCHA_ENABLED", ""); raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CAPTCHA_ENABLED %q: must be true or false", raw)
+		}
+		newCfg.CaptchaEnabled = enabled
+		newCfg.captchaEnabledSet = true
+	}
+
 	newCfg.MicrosoftClientID = getEnv("MICROSOFT_CLIENT_ID", "")
 	newCfg.MicrosoftClientSecret = getEnv("MICROSOFT_CLIENT_SECRET", "")
 
@@ -173,8 +189,10 @@ func validateConfig(c *Config) error {
 		missingKeys = append(missingKeys, "EMAIL_WHITELIST_DOMAINS")
 	}
 
-	if c.TurnstileSecretKey == "" {
-		warnings = append(warnings, "No captcha configured (TURNSTILE_SECRET_KEY is empty)")
+	if !c.captchaEnabledSet {
+		missingKeys = append(missingKeys, "CAPTCHA_ENABLED")
+	} else if c.CaptchaEnabled && (c.TurnstileSiteKey == "" || c.TurnstileSecretKey == "") {
+		missingKeys = append(missingKeys, "TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY (required when CAPTCHA_ENABLED=true)")
 	}
 
 	if c.SMTPUser == "" || c.SMTPPassword == "" {

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"auth-system/internal/config"
 )
 
 // fakeTransport 拦截所有 HTTP 请求并返回模拟 Turnstile 响应
@@ -151,14 +153,43 @@ func TestCaptchaVerifyNetworkError(t *testing.T) {
 func TestCaptchaVerifyNotEnabled(t *testing.T) {
 	usedTokens, _ := lru.New[string, time.Time](10)
 	s := &CaptchaService{enabled: false, usedTokens: usedTokens}
-	if err := s.Verify("tok-123", ""); !errors.Is(err, ErrCaptchaNotConfigured) {
-		t.Fatalf("Verify() error = %v, want ErrCaptchaNotConfigured", err)
+	// CAPTCHA_ENABLED=false：空 token / 任意 token 一律放行
+	if err := s.Verify("", ""); err != nil {
+		t.Fatalf("Verify(empty) error = %v, want nil (disabled)", err)
+	}
+	if err := s.Verify("tok-123", ""); err != nil {
+		t.Fatalf("Verify() error = %v, want nil (disabled)", err)
 	}
 	if s.IsEnabled() {
 		t.Error("IsEnabled() = true for disabled service")
 	}
 	if s.GetSiteKey() != "" {
 		t.Error("GetSiteKey() should be empty for disabled service")
+	}
+}
+
+func TestNewCaptchaServiceDisabled(t *testing.T) {
+	s, err := NewCaptchaService(&config.Config{CaptchaEnabled: false})
+	if err != nil {
+		t.Fatalf("NewCaptchaService(disabled) error = %v", err)
+	}
+	if s.IsEnabled() {
+		t.Error("IsEnabled() = true for disabled service")
+	}
+	if err := s.Verify("anything", "1.2.3.4"); err != nil {
+		t.Errorf("Verify() error = %v, want nil (disabled)", err)
+	}
+}
+
+func TestNewCaptchaServiceEnabledWithoutKeys(t *testing.T) {
+	if _, err := NewCaptchaService(&config.Config{CaptchaEnabled: true}); err == nil {
+		t.Fatal("NewCaptchaService(enabled, no keys) should return error")
+	}
+}
+
+func TestNewCaptchaServiceNilConfig(t *testing.T) {
+	if _, err := NewCaptchaService(nil); err == nil {
+		t.Fatal("NewCaptchaService(nil) should return error")
 	}
 }
 

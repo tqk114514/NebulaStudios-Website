@@ -75,11 +75,12 @@ func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	}
 
 	siteKey := h.captchaService.GetSiteKey()
-	if siteKey == "" {
-		utils.LogWarnCtx(c.Request.Context(), "STATIC", "Captcha site key not configured")
+	if siteKey == "" && h.captchaService.IsEnabled() {
+		utils.LogWarnCtx(c.Request.Context(), "STATIC", "Captcha enabled but site key is empty")
 	}
 
 	utils.RespondSuccessWithData(c, gin.H{
+		"enabled": h.captchaService.IsEnabled(),
 		"siteKey": siteKey,
 	})
 }

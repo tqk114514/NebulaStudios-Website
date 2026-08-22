@@ -88,12 +88,10 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 ### 验证码
 
-支持同时配置多种验证器，前端按优先级自动选择：
+通过 `CAPTCHA_ENABLED` 开关控制（必填配置）：
 
-- Cloudflare Turnstile
-- hCaptcha
-
-未配置任何验证器时服务仍可运行（仅记录警告），但建议至少配置一种。
+- `true`：启用 Cloudflare Turnstile 人机验证，登录、注册发码、密码重置发码、修改密码、注销账户等动作均需通过验证，前端展示验证组件
+- `false`：上述动作全部跳过人机验证，前端不展示验证组件（登录等页面直接提交）
 
 ### 图片处理
 
@@ -217,6 +215,13 @@ SMTP_PORT=465
 SMTP_USER="your-email@163.com"
 SMTP_PASSWORD="your-smtp-password"
 SMTP_FROM="your-email@163.com"
+
+# 人机验证开关（必需，仅接受 true/false）：false 时登录/注册/重置密码/删除账户等
+# 全部跳过人机验证且前端不展示验证组件
+CAPTCHA_ENABLED=true
+# Turnstile 密钥（CAPTCHA_ENABLED=true 时必需；false 时可省略）
+TURNSTILE_SITE_KEY="your-site-key"
+TURNSTILE_SECRET_KEY="your-secret-key"
 ```
 
 **建议配置：**
@@ -229,13 +234,6 @@ CORS_ALLOW_ORIGINS="https://your-domain.com"                   # 允许的跨域
 # 日志（应用日志默认输出 JSON 结构化日志到 stderr，字段：time/level/msg/category/caller + 业务字段）
 LOG_ENCODING="json"                                            # 日志编码（json，开发时可设为 console）
 LOG_LEVEL="info"                                               # 日志级别（debug/info/warn/error）
-
-# 验证码（至少配置一种，建议 Turnstile）
-TURNSTILE_SITE_KEY="your-site-key"
-TURNSTILE_SECRET_KEY="your-secret-key"
-# 或
-HCAPTCHA_SITE_KEY="your-site-key"
-HCAPTCHA_SECRET_KEY="your-secret-key"
 
 # Microsoft OAuth 登录
 MICROSOFT_CLIENT_ID="your-client-id"
@@ -276,7 +274,7 @@ DB_MAX_CONNS=10              # 最大连接数
 DEFAULT_AVATAR_URL="https://cdn.example.com/default-avatar.svg"
 ```
 
-未配置 SMTP 时服务会拒绝启动（注册/重置/注销验证均依赖邮件）；未配置验证码时服务仍可启动，但相关功能不可用，启动日志中会有相应警告。
+未配置 SMTP 或未设置 CAPTCHA_ENABLED 时服务会拒绝启动（注册/重置/注销验证均依赖邮件；验证码开关必须显式声明）；CAPTCHA_ENABLED=false 时跳过全部人机验证，TURNSTILE 密钥可省略。
 
 ### 编译步骤
 

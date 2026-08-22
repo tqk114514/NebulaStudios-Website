@@ -219,7 +219,7 @@ func (f *FakeSessionManager) VerifyToken(string) (*services.Claims, error) {
 
 // ---------- FakeCaptcha: services.CaptchaVerifier ----------
 // 模拟已启用且验证通过的验证码服务：默认放行（返回 nil），验证失败由 VerifyErr 开关控制。
-// 注：真实 CaptchaService.Verify 在未启用时返回 ErrCaptchaNotConfigured，此处放行仅用于验证 handler 的错误传播。
+// 注：真实 CaptchaService.Verify 在禁用（CAPTCHA_ENABLED=false）时放行，此处放行仅用于验证 handler 的错误传播。
 
 type FakeCaptcha struct {
 	VerifyErr error

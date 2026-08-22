@@ -26,7 +26,6 @@ var (
 	ErrCaptchaNetworkErr      = errors.New("CAPTCHA_NETWORK_ERROR")
 	ErrCaptchaTimeout         = errors.New("CAPTCHA_TIMEOUT")
 	ErrCaptchaInvalidResponse = errors.New("CAPTCHA_INVALID_RESPONSE")
-	ErrCaptchaNotConfigured   = errors.New("CAPTCHA_NOT_CONFIGURED")
 )
 
 const (
@@ -71,24 +70,30 @@ type CaptchaService struct {
 }
 
 // NewCaptchaService 创建验证服务
-func NewCaptchaService(cfg *config.Config) *CaptchaService {
+//
+// CAPTCHA_ENABLED=false 时返回禁用态服务：Verify 一律放行、GetSiteKey 返回空
+// （前端据此不渲染验证组件）；启用时要求 Turnstile 密钥已配置
+func NewCaptchaService(cfg *config.Config) (*CaptchaService, error) {
 	if cfg == nil {
-		utils.LogWarn("CAPTCHA", "Config is nil, service will be disabled")
-		return &CaptchaService{
-			enabled: false,
-			client: &http.Client{
-				Timeout: captchaDefaultTimeout,
-			},
-		}
+		return nil, ErrCaptchaNilConfig
+	}
+
+	client := &http.Client{
+		Timeout: captchaDefaultTimeout,
+	}
+
+	if !cfg.CaptchaEnabled {
+		utils.LogInfo("CAPTCHA", "Service disabled (CAPTCHA_ENABLED=false), all captcha checks are skipped")
+		return &CaptchaService{enabled: false, client: client}, nil
 	}
 
 	if cfg.TurnstileSiteKey == "" || cfg.TurnstileSecretKey == "" {
-		panic("CAPTCHA configuration error: turnstile site key and secret key must be configured")
+		return nil, fmt.Errorf("captcha is enabled (CAPTCHA_ENABLED=true) but TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY is not configured")
 	}
 
 	usedTokens, err := lru.New[string, time.Time](captchaUsedTokenCapacity)
 	if err != nil {
-		panic(fmt.Sprintf("CAPTCHA configuration error: failed to create used token cache: %v", err))
+		return nil, fmt.Errorf("failed to create used token cache: %w", err)
 	}
 
 	utils.LogInfo("CAPTCHA", "Service initialized", "site_key", truncateCaptchaKey(cfg.TurnstileSiteKey, 8))
@@ -98,10 +103,8 @@ func NewCaptchaService(cfg *config.Config) *CaptchaService {
 		secretKey:  cfg.TurnstileSecretKey,
 		enabled:    true,
 		usedTokens: usedTokens,
-		client: &http.Client{
-			Timeout: captchaDefaultTimeout,
-		},
-	}
+		client:     client,
+	}, nil
 }
 
 // Verify 验证 Token
@@ -112,8 +115,9 @@ func (s *CaptchaService) Verify(token, remoteIP string) error {
 // VerifyWithContext 验证 Token（带上下文）
 func (s *CaptchaService) VerifyWithContext(ctx context.Context, token, remoteIP string) error {
 	if !s.IsEnabled() {
-		utils.LogWarn("CAPTCHA", "Service is disabled, captcha verification cannot be performed")
-		return ErrCaptchaNotConfigured
+		// 显式禁用（CAPTCHA_ENABLED=false）：所有需要人机验证的动作直接放行
+		utils.LogDebug("CAPTCHA", "Service is disabled, skipping captcha verification")
+		return nil
 	}
 
 	if token == "" {

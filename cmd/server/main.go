@@ -191,7 +191,11 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	var err error
 
 	svcs.TokenService = services.NewTokenService(pool)
-	svcs.CaptchaService = services.NewCaptchaService(cfg)
+	captchaSvc, err := services.NewCaptchaService(cfg)
+	if err != nil {
+		return nil, utils.LogError("SERVICES", "initServices", fmt.Errorf("captcha service init failed: %w", err))
+	}
+	svcs.CaptchaService = captchaSvc
 	svcs.WSService = services.NewWebSocketService(cfg, models.NewQRLoginRepository(pool))
 	svcs.OAuthService = services.NewOAuthService(pool)
 	svcs.ExportService = services.NewExportService()
