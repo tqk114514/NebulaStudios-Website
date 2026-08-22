@@ -33,7 +33,6 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
   const languageSwitcher = document.querySelector('.language-switcher');
   const currentBtn = document.querySelector('.language-current');
   const langText = document.querySelector('.language-current .lang-text');
-  const languageDropdown = document.querySelector('.language-dropdown') as HTMLElement | null;
   const languageOptions = document.querySelectorAll('.language-dropdown .language-option');
 
   if (!languageSwitcher || !currentBtn || !languageOptions.length) {
@@ -41,14 +40,11 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
     return () => {};
   }
 
-  // hidden 属性与 is-open 类保持同步：CSS 不可用（被拦截/加载失败）时
-  // 选项不会意外展示，也确保关闭态不可聚焦
+  // 关闭态的可达性由 CSS 的 visibility: hidden 保证（移出 Tab 序与辅助技术树），
+  // 打开/关闭仅切换类名即可触发过渡，无需额外管理 hidden 属性
   const setDropdownOpen = (open: boolean): void => {
     languageSwitcher.classList.toggle('is-open', open);
     currentBtn.setAttribute('aria-expanded', String(open));
-    if (languageDropdown) {
-      languageDropdown.hidden = !open;
-    }
   };
 
   // 设置当前语言状态
