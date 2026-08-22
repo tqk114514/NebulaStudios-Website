@@ -4,3 +4,4 @@ export { default as DOMPurify } from './cure53-DOMPurify@3.4.14/src/purify.ts';
 export { marked } from './markedjs-marked@18.0.10/src/marked.ts';
 export { default as UAParser } from './faisalman-ua-parser-js@1.0.41/src/ua-parser.js';
 export { QRCanvas, QRCamera, frameLoop } from './paulmillr-qr@0.6.0/src/dom.ts';
+export { default as encodeQR } from './paulmillr-qr@0.6.0/src/index.ts';

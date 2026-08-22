@@ -13,12 +13,15 @@ import (
 // shared/js/lib/名字@新版本 目录并重新执行构建，无需改动任何业务代码
 var vendorLibs = []struct {
 	dirPrefix string
-	exports   string
+	exports   []string
 }{
-	{"cure53-DOMPurify@", "export { default as DOMPurify } from './%s/src/purify.ts';"},
-	{"markedjs-marked@", "export { marked } from './%s/src/marked.ts';"},
-	{"faisalman-ua-parser-js@", "export { default as UAParser } from './%s/src/ua-parser.js';"},
-	{"paulmillr-qr@", "export { QRCanvas, QRCamera, frameLoop } from './%s/src/dom.ts';"},
+	{"cure53-DOMPurify@", []string{"export { default as DOMPurify } from './%s/src/purify.ts';"}},
+	{"markedjs-marked@", []string{"export { marked } from './%s/src/marked.ts';"}},
+	{"faisalman-ua-parser-js@", []string{"export { default as UAParser } from './%s/src/ua-parser.js';"}},
+	{"paulmillr-qr@", []string{
+		"export { QRCanvas, QRCamera, frameLoop } from './%s/src/dom.ts';",
+		"export { default as encodeQR } from './%s/src/index.ts';",
+	}},
 }
 
 // syncVendorLibs 依据 shared/js/lib 目录中实际存在的版本生成 vendor.ts，
@@ -36,7 +39,9 @@ func syncVendorLibs() error {
 		if err := ensureTSNocheck(filepath.Join(sharedDir, "js", "lib", dir)); err != nil {
 			return err
 		}
-		lines = append(lines, fmt.Sprintf(lib.exports, dir))
+		for _, tmpl := range lib.exports {
+			lines = append(lines, fmt.Sprintf(tmpl, dir))
+		}
 	}
 
 	content := "// 本文件由 cmd/build 依据 shared/js/lib 目录自动生成，请勿手动修改。\n" +

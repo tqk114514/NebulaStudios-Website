@@ -12,7 +12,7 @@
 import { createModalController, type ModalController } from './ui/feedback.ts';
 import { fetchApi } from './api/fetch.ts';
 import { isMobileDevice } from '../../../../../shared/js/utils/device.ts';
-import encodeQR from '../../../../../shared/js/lib/paulmillr-qr@0.6.0/src/index.ts';
+import { encodeQR } from '../../../../../shared/js/lib/vendor.ts';
 
 // ==================== 类型定义 ====================
 
