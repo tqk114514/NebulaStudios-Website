@@ -2,8 +2,6 @@ package admin
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -96,7 +94,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 
 	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if utils.IsDatabaseNotFound(err) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -141,7 +139,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if utils.IsDatabaseNotFound(err) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -206,7 +204,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if utils.IsDatabaseNotFound(err) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -284,7 +282,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if utils.IsDatabaseNotFound(err) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}
@@ -348,7 +346,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if utils.IsDatabaseNotFound(err) {
 			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
 			return
 		}

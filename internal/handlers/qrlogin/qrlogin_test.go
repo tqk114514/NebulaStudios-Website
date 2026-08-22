@@ -406,6 +406,8 @@ func TestSetSessionInvalidToken(t *testing.T) {
 
 func TestSetSessionExpired(t *testing.T) {
 	h, deps := newTestQR(t, true)
+	// 会话 Token 先于消费验证（避免验证失败烧掉二维码），需先通过 JWT 校验
+	deps.session.VerifyResult = &services.Claims{UID: "u1"}
 	deps.qrRepo.ConsumeErr = errors.New("TOKEN_EXPIRED")
 	enc := encryptQRToken(t, testQRToken)
 
@@ -420,6 +422,7 @@ func TestSetSessionExpired(t *testing.T) {
 
 func TestSetSessionAlreadyUsed(t *testing.T) {
 	h, deps := newTestQR(t, true)
+	deps.session.VerifyResult = &services.Claims{UID: "u1"}
 	deps.qrRepo.ConsumeErr = errors.New("invalid token status")
 	enc := encryptQRToken(t, testQRToken)
 
@@ -462,6 +465,7 @@ func TestSetSessionInvalidUserErr(t *testing.T) {
 
 func TestSetSessionNotFoundErr(t *testing.T) {
 	h, deps := newTestQR(t, true)
+	deps.session.VerifyResult = &services.Claims{UID: "u1"}
 	deps.qrRepo.ConsumeErr = errors.New("some other error")
 	enc := encryptQRToken(t, testQRToken)
 

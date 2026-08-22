@@ -17,6 +17,7 @@ node_modules/
 .kiro/
 .trae/
 .freebuff/
+.opencodereview/
 
 # 日志
 *.log

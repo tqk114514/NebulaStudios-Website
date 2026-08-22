@@ -78,7 +78,7 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
 
   if (action.startsWith('email_whitelist_')) {
     const domain = escapeHtml(details.domain as string || '');
-    return domain || JSON.stringify(details);
+    return domain || escapeHtml(JSON.stringify(details));
   }
 
   if (action === 'data_export') {
@@ -93,7 +93,8 @@ function formatDetails(action: string, details?: Record<string, unknown>): strin
     return `用户 ${users} 条, 日志 ${logs} 条`;
   }
 
-  return JSON.stringify(details);
+  // 兜底分支：details 含用户可控字段（用户名/封禁理由等），必须转义防存储型 XSS
+  return escapeHtml(JSON.stringify(details));
 }
 
 /**

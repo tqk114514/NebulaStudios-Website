@@ -229,6 +229,12 @@ function updateExpiryDisplay(timerElement: HTMLElement | null, onExpired?: Expir
   const remaining = codeExpiryTime - now;
 
   if (remaining <= 0) {
+    // 到点即停本地轮询：由服务器校验结果驱动后续动作
+    // （确认未过期时 checkCodeExpiry 会经 startCodeExpiryTimer 重启计时）
+    if (codeExpiryTimer) {
+      clearInterval(codeExpiryTimer);
+      codeExpiryTimer = null;
+    }
     checkCodeExpiry(onExpired);
     return;
   }

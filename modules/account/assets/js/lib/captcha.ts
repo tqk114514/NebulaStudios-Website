@@ -95,19 +95,27 @@ export async function loadCaptchaConfig(): Promise<boolean> {
 
 /**
  * 动态加载 Turnstile SDK
+ *
+ * 模块级 promise 缓存保证幂等：并发调用共享同一次加载；
+ * 失败后清空缓存允许重试，并移除残留的 <script> 标签——
+ * 已触发过 load/error 的标签不会再触发事件，复用它会让 promise 永久挂起
  */
 function loadSDK(): Promise<void> {
+  if (!sdkLoadPromise) {
+    sdkLoadPromise = injectSDKScript().catch((err: Error) => {
+      sdkLoadPromise = null;
+      throw err;
+    });
+  }
+  return sdkLoadPromise;
+}
+
+let sdkLoadPromise: Promise<void> | null = null;
+
+function injectSDKScript(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>(`script[src^="${SDK_URL.split('?')[0]}"]`);
-    if (existingScript) {
-      if (existingScript.dataset.loaded === 'true') {
-        resolve();
-        return;
-      }
-      existingScript.addEventListener('load', () => resolve(), { once: true });
-      existingScript.addEventListener('error', () => reject(new Error('Failed to load captcha SDK')), { once: true });
-      return;
-    }
+    document.querySelectorAll<HTMLScriptElement>(`script[src^="${SDK_URL.split('?')[0]}"]`)
+      .forEach(script => script.remove());
 
     const script = document.createElement('script');
     script.src = SDK_URL;
@@ -118,6 +126,7 @@ function loadSDK(): Promise<void> {
       resolve();
     };
     script.onerror = (): void => {
+      script.remove();
       reject(new Error('Failed to load captcha SDK'));
     };
     document.head.appendChild(script);

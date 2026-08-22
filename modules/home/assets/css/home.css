@@ -15,7 +15,18 @@
 
 /* ==================== 基础覆盖 ==================== */
 
-*, *::before, *::after, a, button, [role="button"], input, select, textarea, label {
+/* 自定义光标仅在 JS 就绪（给 body 加 has-custom-cursor）后启用——渐进增强：
+   JS 加载失败或被禁用时保留系统光标，页面仍可正常使用 */
+body.has-custom-cursor *,
+body.has-custom-cursor *::before,
+body.has-custom-cursor *::after,
+body.has-custom-cursor a,
+body.has-custom-cursor button,
+body.has-custom-cursor [role="button"],
+body.has-custom-cursor input,
+body.has-custom-cursor select,
+body.has-custom-cursor textarea,
+body.has-custom-cursor label {
   cursor: none !important;
 }
 
@@ -664,13 +675,18 @@ body:has(button:hover) #cursor-ring {
 
 /* ==================== 滚动显示动画 ==================== */
 
+/* 隐藏态仅在 JS 可用（html.js，由 head 内联脚本添加）时生效：
+   JS 禁用/加载失败时内容保持可见，不会整页空白 */
 .reveal {
-  opacity: 0;
-  transform: translateY(32px);
   transition: opacity 0.9s var(--ease), transform 0.9s var(--ease);
 }
 
-.reveal.visible {
+html.js .reveal {
+  opacity: 0;
+  transform: translateY(32px);
+}
+
+html.js .reveal.visible {
   opacity: 1;
   transform: none;
 }

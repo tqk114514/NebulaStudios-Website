@@ -23,7 +23,7 @@ func brotliCompressDir(dir string) error {
 		totalCompressed int64
 		mu              sync.Mutex
 		wg              sync.WaitGroup
-		errChan         = make(chan error, 100)
+		errs            []error
 	)
 
 	var filesToCompress []string
@@ -76,7 +76,11 @@ func brotliCompressDir(dir string) error {
 
 			original, compressed, err := brotliFile(filePath)
 			if err != nil {
-				errChan <- fmt.Errorf("%s: %w", filePath, err)
+				// 互斥锁保护的切片收集错误：channel 缓存在失败数超限时会连同
+				// 信号量一起卡死 wg.Wait（死锁），切片方式无此上限问题
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s: %w", filePath, err))
+				mu.Unlock()
 				return
 			}
 
@@ -89,11 +93,8 @@ func brotliCompressDir(dir string) error {
 	}
 
 	wg.Wait()
-	close(errChan)
 
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
+	for _, err := range errs {
 		log.Printf("[BUILD] WARN: Brotli compression failed: %v", err)
 	}
 

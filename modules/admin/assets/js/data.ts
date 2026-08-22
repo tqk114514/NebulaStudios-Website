@@ -144,6 +144,8 @@ function showExportAuthModal(): void {
     }
   };
 
+  // 先清可能残留的旧定时器：重复点击导出会多次打开弹窗，旧 interval 不清会一直泄漏
+  stopTimer();
   updateTimer();
   exportTimer = setInterval(updateTimer, 1000);
 
@@ -282,6 +284,11 @@ function bindImportPreviewEvents(): void {
     try {
       const strategyRadio = document.querySelector<HTMLInputElement>('input[name="import-strategy"]:checked');
       const strategy = strategyRadio?.value || 'merge';
+
+      // 全量覆盖会先清空所有用户和日志，属于不可逆破坏性操作，需要二次确认
+      if (strategy === 'overwrite' && !window.confirm('全量覆盖将先清空所有用户和日志，再用备份数据完全替换，此操作不可恢复。\n确定继续吗？')) {
+        return;
+      }
 
       const resp = await fetchApi<{ usersImported: number; logsImported: number; usersFailed: number; logsFailed: number; usersPasswordSkipped: number; usersRoleDowngraded: number }>('/admin/api/data/import/execute', {
         method: 'POST',

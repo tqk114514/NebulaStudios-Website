@@ -51,7 +51,7 @@ func (f *FakeUserRepo) FindByUID(_ context.Context, uid string) (*models.User, e
 	if u := f.UIDs[uid]; u != nil {
 		return u, nil
 	}
-	// 与真实仓库一致：未找到返回 sql.ErrNoRows（BanUser 等 handler 用 errors.Is 检查）
+	// 未找到返回 not-found 错误：handler 经 utils.IsDatabaseNotFound 识别（真实仓库返回包装后的 DatabaseError）
 	return nil, sql.ErrNoRows
 }
 func (f *FakeUserRepo) FindByEmail(_ context.Context, email string) (*models.User, error) {

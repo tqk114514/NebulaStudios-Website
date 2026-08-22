@@ -114,7 +114,8 @@ func addToManifest(originalPath string) (string, error) {
 
 	assetManifest[originalPath] = hashedName
 
-	relPath := strings.TrimPrefix(originalPath, "dist/")
+	// 归一化为 / 分隔的相对路径键（Windows 下 filepath.Join 产生 \），供 HTML 资源引用改写精确匹配
+	relPath := strings.TrimPrefix(filepath.ToSlash(originalPath), distDir+"/")
 	assetManifest[relPath] = hashedName
 
 	return hashedName, nil

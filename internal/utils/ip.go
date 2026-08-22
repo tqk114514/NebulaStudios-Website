@@ -60,8 +60,10 @@ func GetClientIP(c *gin.Context) string {
 	}
 
 	if isLocalOrigin(c.Request.RemoteAddr) {
-		if ip := strings.TrimSpace(c.GetHeader("CF-Connecting-IP")); ip != "" {
-			return ip
+		// 校验必须是单个合法 IP：拒绝 "1.2.3.4, 5.6.7.8"、带端口或任意字符串注入，
+		// 避免污染限流键与日志；非法时回退 ClientIP
+		if ip := net.ParseIP(strings.TrimSpace(c.GetHeader("CF-Connecting-IP"))); ip != nil {
+			return ip.String()
 		}
 	}
 

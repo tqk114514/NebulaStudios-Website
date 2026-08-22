@@ -85,16 +85,13 @@ export function enableCardAutoResize(card: HTMLElement | null): () => void {
   observeChildren();
 
   const mutationObserver = new MutationObserver((mutations) => {
-    let shouldReobserve = false;
+    // 内容删除（如错误提示隐藏）同样改变高度，只看 addedNodes 会让卡片卡在旧高度
     for (const mutation of mutations) {
-      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        shouldReobserve = true;
+      if (mutation.type === 'childList') {
+        observeChildren();
+        debouncedAdjust();
         break;
       }
-    }
-    if (shouldReobserve) {
-      observeChildren();
-      debouncedAdjust();
     }
   });
 

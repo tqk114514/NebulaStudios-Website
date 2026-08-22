@@ -133,8 +133,9 @@ func run() error {
 func setupDistDir() error {
 	log.Println("[BUILD] Setting up dist directory...")
 
+	// 清理失败的旧产物混入新构建会导致不一致部署，必须中止而非警告
 	if err := os.RemoveAll(distDir); err != nil {
-		log.Printf("[BUILD] WARN: Failed to remove old dist dir: %v", err)
+		return fmt.Errorf("failed to remove old dist dir: %w", err)
 	}
 
 	dirs := []string{

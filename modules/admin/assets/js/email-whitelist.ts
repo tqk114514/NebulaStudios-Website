@@ -87,12 +87,13 @@ async function createEntry(domain: string, signupUrl: string, logoUrl: string): 
   return result.success && result.data ? result.data.item || null : null;
 }
 
-async function updateEntry(id: number, domain: string, signupUrl: string, logoUrl: string, isEnabled: boolean): Promise<EmailWhitelistEntry | null> {
+async function updateEntry(id: number, domain: string, signupUrl: string, logoUrl: string, isEnabled: boolean): Promise<boolean> {
   const result = await fetchApi<{ item: EmailWhitelistEntry }>(`/admin/api/email-whitelist/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ domain, signup_url: signupUrl, logo_url: logoUrl, is_enabled: isEnabled }),
   });
-  return result.success && result.data ? result.data.item || null : null;
+  // 后端"无变更"分支返回 success 且不带 item，也算成功
+  return result.success;
 }
 
 async function deleteEntry(id: number): Promise<boolean> {
@@ -390,7 +391,11 @@ async function handleSubmit(e: Event): Promise<void> {
     if (editingEntryId) {
       const entryId = editingEntryId;
       const entry = currentEntries.find(e => e.id === entryId);
-      await updateEntry(entryId, domain, signupUrl, logoUrl, entry?.is_enabled ?? true);
+      const updated = await updateEntry(entryId, domain, signupUrl, logoUrl, entry?.is_enabled ?? true);
+      if (!updated) {
+        showToast('更新失败', 'error');
+        return;
+      }
       showToast('更新成功', 'success');
       closeFormModal();
       await updateWhitelistRow(entryId);

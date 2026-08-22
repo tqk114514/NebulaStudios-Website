@@ -133,6 +133,19 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	// 先验证会话 Token 的 JWT 有效性，再消费一次性 QR Token：
+	// 若先消费后验证，JWT 无效时二维码已被作废且无法重试
+	claims, err := h.sessionService.VerifyToken(sessionToken)
+	if err != nil {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid session token in SetSession")
+		return
+	}
+
+	if claims == nil || claims.UID == "" {
+		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid claims in SetSession")
+		return
+	}
+
 	userUID, err := h.qrLoginRepo.ConsumeAndSetSession(ctx, utils.HashToken(originalToken), utils.HashToken(sessionToken))
 	if err != nil {
 		errStr := err.Error()
@@ -151,13 +164,7 @@ func (h *QRLoginHandler) SetSession(c *gin.Context) {
 		return
 	}
 
-	claims, err := h.sessionService.VerifyToken(sessionToken)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid session token in SetSession")
-		return
-	}
-
-	if claims == nil || claims.UID == "" || claims.UID != userUID {
+	if claims.UID != userUID {
 		utils.HTTPErrorResponse(c, "QR-LOGIN", http.StatusBadRequest, "INVALID_SESSION", "Invalid claims in SetSession")
 		return
 	}

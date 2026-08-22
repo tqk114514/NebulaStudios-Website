@@ -3,12 +3,12 @@ package models
 import (
 	"auth-system/internal/utils"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -121,7 +121,7 @@ func (r *EmailWhitelistRepository) FindByDomain(ctx context.Context, domain stri
 	`, domain).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEmailWhitelistNotFound
 		}
 		return nil, fmt.Errorf("failed to find email whitelist by domain: %w", err)
@@ -144,7 +144,7 @@ func (r *EmailWhitelistRepository) FindByID(ctx context.Context, id int64) (*Ema
 	`, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEmailWhitelistNotFound
 		}
 		return nil, fmt.Errorf("failed to find email whitelist by id: %w", err)
@@ -170,7 +170,7 @@ func (r *EmailWhitelistRepository) IsDomainAllowed(ctx context.Context, domain s
 	`, domain).Scan(&signupURL, &isEnabled)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false, "", nil
 		}
 		return false, "", fmt.Errorf("failed to check domain allowance: %w", err)
@@ -242,7 +242,7 @@ func (r *EmailWhitelistRepository) Update(ctx context.Context, id int64, domain,
 	`, domain, signupURL, logoURL, isEnabled, id).Scan(&item.ID, &item.Domain, &item.SignupURL, &item.LogoURL, &item.IsEnabled, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEmailWhitelistNotFound
 		}
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {

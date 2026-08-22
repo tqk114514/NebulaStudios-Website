@@ -460,9 +460,18 @@ async function handleFormSubmit(): Promise<void> {
     return;
   }
 
-  // 验证 URL 格式
+  // 验证 URL 格式（与服务端 validateRedirectURIScheme 规则一致：
+  // 仅 https（需有主机名）或 http 且仅限本地回环，拒绝 javascript:/data: 等危险 scheme 及锚点）
   try {
-    new URL(redirectUri);
+    const parsed = new URL(redirectUri);
+    const host = parsed.hostname.toLowerCase();
+    const schemeOk =
+      parsed.protocol === 'https:' && host !== '' ||
+      parsed.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1' || host === '::1');
+    if (!schemeOk || parsed.hash) {
+      showToast('回调地址必须为 https（或 http 且仅限本地回环），且不能包含 # 锚点', 'error');
+      return;
+    }
   } catch {
     showToast('回调地址格式不正确', 'error');
     return;
@@ -575,8 +584,13 @@ export function initOAuthPage(): void {
   }
 
   if (oauthSecretClose && oauthSecretOk && copySecretBtn && oauthSecretModal) {
-    oauthSecretClose.addEventListener('click', () => hideModal(oauthSecretModal));
-    oauthSecretOk.addEventListener('click', () => hideModal(oauthSecretModal));
+    // 关闭时立即从 DOM 清空密钥，缩短明文驻留时间（避免 devtools/截图/缓存侧泄露）
+    const hideSecretModal = (): void => {
+      if (oauthSecretValue) { oauthSecretValue.textContent = ''; }
+      hideModal(oauthSecretModal);
+    };
+    oauthSecretClose.addEventListener('click', hideSecretModal);
+    oauthSecretOk.addEventListener('click', hideSecretModal);
     copySecretBtn.addEventListener('click', copySecret);
   }
 }

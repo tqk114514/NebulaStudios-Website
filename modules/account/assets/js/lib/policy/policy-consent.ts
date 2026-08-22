@@ -54,7 +54,20 @@ function translate(t: TranslateFunction, key: string, fallback: string): string 
  * @param t 翻译函数
  * @returns true 表示已同意（或无需同意），可继续；false 表示拒绝（已登出并跳转登录页）
  */
+/** 进行中的检查 promise：多个入口（登录成功/OAuth 页/dashboard）并发调用时共享，避免叠出重复弹窗 */
+let consentCheckInFlight: Promise<boolean> | null = null;
+
 export async function checkPolicyConsent(t: TranslateFunction): Promise<boolean> {
+  if (consentCheckInFlight) {
+    return consentCheckInFlight;
+  }
+  consentCheckInFlight = doCheckPolicyConsent(t).finally(() => {
+    consentCheckInFlight = null;
+  });
+  return consentCheckInFlight;
+}
+
+async function doCheckPolicyConsent(t: TranslateFunction): Promise<boolean> {
   let pending: PendingConsentPolicy[] = [];
 
   try {

@@ -487,6 +487,27 @@ func (r *OAuthRefreshTokenRepository) Delete(ctx context.Context, id int64) erro
 	return nil
 }
 
+// Consume 原子消费刷新令牌：仅当该行仍存在时删除并返回 nil。
+// 影响行数为 0（令牌已被并发请求消费）时返回 ErrOAuthTokenNotFound，
+// 用于刷新令牌轮换的单次使用（single-use）语义。
+func (r *OAuthRefreshTokenRepository) Consume(ctx context.Context, id int64) error {
+	if err := r.checkDB(); err != nil {
+		return err
+	}
+
+	result, err := r.pool.Exec(ctx, "DELETE FROM oauth_refresh_tokens WHERE id = $1", id)
+	if err != nil {
+		return utils.LogError("OAUTH_REFRESH_TOKEN", "Consume", err, "id", id)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrOAuthTokenNotFound
+	}
+
+	utils.LogInfo("OAUTH_REFRESH_TOKEN", "Refresh token consumed", "id", id)
+	return nil
+}
+
 // DeleteByTokenHash 根据 Token Hash 删除
 func (r *OAuthRefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
 	if err := r.checkDB(); err != nil {

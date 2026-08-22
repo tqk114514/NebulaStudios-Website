@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -176,7 +177,7 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 	offset := (page - 1) * pageSize
 
 	var total int64
-	var rows interface{ Close() }
+	var rows pgx.Rows
 	var err error
 
 	if search == "" {
@@ -223,23 +224,21 @@ func (r *OAuthClientRepository) FindAll(ctx context.Context, page, pageSize int,
 	defer rows.Close()
 
 	clients := make([]*OAuthClient, 0)
-	pgxRows := rows.(interface {
-		Next() bool
-		Scan(dest ...any) error
-	})
-
-	for pgxRows.Next() {
+	for rows.Next() {
 		client := &OAuthClient{}
-		err := pgxRows.Scan(
+		err := rows.Scan(
 			&client.ID, &client.ClientID, &client.ClientSecretHash, &client.Name,
 			&client.Description, &client.RedirectURI, &client.IsEnabled,
 			&client.CreatedAt, &client.UpdatedAt,
 		)
 		if err != nil {
-			utils.LogError("OAUTH_CLIENT", "List", err, "Failed to scan client")
-			continue
+			// 扫描失败属于编程错误（列序/类型不匹配），静默丢行会以部分数据伪装成功
+			return nil, 0, fmt.Errorf("failed to scan client: %w", err)
 		}
 		clients = append(clients, client)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate clients: %w", err)
 	}
 
 	return clients, total, nil

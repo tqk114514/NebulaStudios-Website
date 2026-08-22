@@ -355,6 +355,11 @@ html, body {
 .cookie-consent-banner.cookie-consent-hidden {
   opacity: 0;
   transform: translateY(20px);
+  /* 不可见后立即停止拦截点击（fixed + z-index 3000 会持续遮挡右下区域），
+     visibility 延迟到淡出结束后再隐藏，保留过渡动画 */
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.3s, transform 0.3s, visibility 0s linear 0.3s;
 }
 
 .cookie-consent-text {

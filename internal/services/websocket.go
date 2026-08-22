@@ -171,7 +171,8 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 
 	// 前端传入的是加密 token，需解密为原始 token 后再哈希查库
 	originalToken, err := decrypter(token)
-	if err != nil {				utils.LogWarn("WS", "Failed to decrypt QR token for WebSocket", "error", err)
+	if err != nil {
+		utils.LogWarn("WS", "Failed to decrypt QR token for WebSocket", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
@@ -180,23 +181,27 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 	defer cancel()
 
 	qrToken, err := ws.qrLoginRepo.FindByToken(ctx, utils.HashToken(originalToken))
-	if err != nil {				utils.LogWarn("WS", "Invalid QR token for WebSocket", "token", utils.TruncateIdentifier(token), "error", err)
+	if err != nil {
+		utils.LogWarn("WS", "Invalid QR token for WebSocket", "token", utils.TruncateIdentifier(token), "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
 	now := time.Now().UnixMilli()
-	if qrToken.ExpireTime > 0 && now > qrToken.ExpireTime {				utils.LogWarn("WS", "Expired QR token for WebSocket", "token", utils.TruncateIdentifier(token))
+	if qrToken.ExpireTime > 0 && now > qrToken.ExpireTime {
+		utils.LogWarn("WS", "Expired QR token for WebSocket", "token", utils.TruncateIdentifier(token))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "token expired"})
 		return
 	}
 
-	if qrToken.Status != models.QRStatusPending && qrToken.Status != models.QRStatusScanned {				utils.LogWarn("WS", "QR token in invalid state for WebSocket", "token", utils.TruncateIdentifier(token), "status", qrToken.Status)
+	if qrToken.Status != models.QRStatusPending && qrToken.Status != models.QRStatusScanned {
+		utils.LogWarn("WS", "QR token in invalid state for WebSocket", "token", utils.TruncateIdentifier(token), "status", qrToken.Status)
 		c.JSON(http.StatusConflict, gin.H{"error": "token already consumed"})
 		return
 	}
 
-	if atomic.LoadInt32(&ws.connCount) >= maxConnections {				utils.LogWarn("WS", "Max connections reached, rejecting new client", "max", maxConnections)
+	if atomic.LoadInt32(&ws.connCount) >= maxConnections {
+		utils.LogWarn("WS", "Max connections reached, rejecting new client", "max", maxConnections)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "too many connections"})
 		return
 	}
@@ -214,7 +219,8 @@ func (ws *WebSocketService) HandleQRLogin(c *gin.Context) {
 		createdAt: time.Now(),
 	}
 
-	if !ws.register(client) {			utils.LogWarn("WS", "Failed to register client", "token", utils.TruncateIdentifier(token))
+	if !ws.register(client) {
+		utils.LogWarn("WS", "Failed to register client", "token", utils.TruncateIdentifier(token))
 		_ = conn.Close()
 		return
 	}
@@ -384,7 +390,9 @@ func (ws *WebSocketService) unregister(client *WSClient) {
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
-	if _, ok := shard.clients[client.token]; ok {
+	// 同 token 重连时 register 会用新客户端替换 map 条目；
+	// 旧客户端的收尾 unregister 不能误删新客户端，必须校验指针同一
+	if current, ok := shard.clients[client.token]; ok && current == client {
 		delete(shard.clients, client.token)
 		ws.closeClient(client)
 		atomic.AddInt32(&ws.connCount, -1)

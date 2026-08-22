@@ -395,9 +395,19 @@ func (s *OAuthService) RefreshAccessToken(ctx context.Context, refreshToken, cli
 		return nil, "", ErrOAuthInvalidGrant
 	}
 
-	_ = s.refreshTokenRepo.Delete(ctx, token.ID)
+	// 原子消费旧刷新令牌：DELETE 影响行数为 0 说明已被并发请求消费（重放），
+	// 拒绝签发新对；删除失败同样中止，避免旧令牌残留可重放
+	if err := s.refreshTokenRepo.Consume(ctx, token.ID); err != nil {
+		if errors.Is(err, models.ErrOAuthTokenNotFound) {
+			return nil, "", ErrOAuthTokenNotFound
+		}
+		return nil, "", err
+	}
 	if token.AccessTokenID > 0 {
-		_ = s.accessTokenRepo.Delete(ctx, token.AccessTokenID)
+		// 配对的 Access Token 清理失败不阻断轮换（其自身 1 小时过期，风险有限），仅记录
+		if err := s.accessTokenRepo.Delete(ctx, token.AccessTokenID); err != nil {
+			utils.LogWarn("OAUTH", "Failed to delete paired access token during rotation", "id", token.AccessTokenID, "error", err)
+		}
 	}
 
 	tokenResp, err := s.createTokenPair(ctx, token.ClientID, token.UserUID, token.Scope)

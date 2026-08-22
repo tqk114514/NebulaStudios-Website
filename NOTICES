@@ -68,7 +68,7 @@ License: MIT
   github.com/evanw/esbuild
     https://github.com/evanw/esbuild/blob/v0.28.1/LICENSE.md
   github.com/evanw/esbuild/internal/xxhash
-    https://github.com/evanw/esbuild/blob/v0.27.4/internal/xxhash/LICENSE.txt
+    https://github.com/evanw/esbuild/blob/v0.28.1/internal/xxhash/LICENSE.txt
   github.com/gabriel-vasile/mimetype
     https://github.com/gabriel-vasile/mimetype/blob/v1.4.13/LICENSE
   github.com/gin-contrib/sse
@@ -108,7 +108,7 @@ License: MIT
   github.com/ugorji/go/codec
     https://github.com/ugorji/go/blob/codec/v1.3.1/LICENSE
   github.com/wneessen/go-mail
-    https://github.com/wneessen/go-mail/blob/v0.7.2/LICENSE
+    https://github.com/wneessen/go-mail/blob/v0.8.1/LICENSE
   go.uber.org/multierr
     https://github.com/uber-go/multierr/blob/v1.11.0/LICENSE.txt
   go.uber.org/zap

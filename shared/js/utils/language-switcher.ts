@@ -78,7 +78,19 @@ export function initLanguageSwitcher(onLanguageChange?: (lang: string) => void):
 
       // 切换语言
       if (window.switchLanguage) {
-        await window.switchLanguage(selectedLang);
+        try {
+          await window.switchLanguage(selectedLang);
+        } catch (err) {
+          // 切换失败：保持原语言的显示与激活状态，避免 UI 与实际语言脱节
+          console.warn('[I18N] WARN: Language switch failed:', err);
+          updateCurrentDisplay(window.currentLanguage || 'zh-CN');
+          languageOptions.forEach(opt => {
+            const isActive = opt.getAttribute('data-lang') === (window.currentLanguage || 'zh-CN');
+            opt.classList.toggle('active', isActive);
+            opt.setAttribute('aria-selected', String(isActive));
+          });
+          return;
+        }
       }
 
       // 更新显示

@@ -189,8 +189,9 @@ async function switchLanguage(lang: string): Promise<void> {
     return;
   }
 
-  // 先加载翻译文件
-  await loadTranslation(lang);
+  // 先加载翻译文件。回写缓存：loadTranslation 对缺失语言返回的是
+  // zh-CN 回退数据但不写回 map，不回写会导致 t() 查不到而输出原始键
+  translations[lang] = await loadTranslation(lang);
 
   // 更新当前语言
   currentLanguage = lang;
@@ -240,8 +241,8 @@ function updatePageTranslations(): void {
  * DOM 加载完成后初始化翻译
  */
 async function initializeTranslations(): Promise<void> {
-  // 加载当前语言的翻译文件
-  await loadTranslation(currentLanguage);
+  // 加载当前语言的翻译文件（回写缓存以固化回退结果，见 switchLanguage 内说明）
+  translations[currentLanguage] = await loadTranslation(currentLanguage);
 
   // 执行翻译
   updatePageTranslations();

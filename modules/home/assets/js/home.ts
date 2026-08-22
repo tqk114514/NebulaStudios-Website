@@ -48,6 +48,8 @@ if (isMobile) {
   ring?.remove();
   document.body.classList.add('no-custom-cursor');
 } else {
+  // 桌面端：JS 光标就绪后才隐藏系统光标（配合 CSS 的渐进增强门控）
+  document.body.classList.add('has-custom-cursor');
   document.addEventListener('mousemove', (e) => {
     mouseX = e.clientX;
     mouseY = e.clientY;

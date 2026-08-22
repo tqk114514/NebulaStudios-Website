@@ -254,16 +254,19 @@ func replaceAssetRefs(html string) string {
 
 		attr := parts[1]
 		original := parts[2]
-		_ = parts[3] // css 或 js
 
-		for originalPath, hashedName := range assetManifest {
-			originalBase := filepath.Base(originalPath)
-			if strings.HasSuffix(original, originalBase) {
-				newPath := strings.Replace(original, filepath.Base(originalPath), hashedName, 1)
-				return fmt.Sprintf(`%s="%s"`, attr, newPath)
-			}
+		// 精确匹配：页面引用均为 "/<模块>/…/<文件>" 形式，与 manifest 的
+		// 相对路径键逐一对应。此前的 basename 后缀匹配在多个资源共享 basename
+		// 时（如各模块的 common.css）会随 map 随机遍历改写到错误文件
+		if !strings.HasPrefix(original, "/") {
+			return match
 		}
-
-		return match
+		relPath := strings.TrimPrefix(original, "/")
+		hashedName, ok := assetManifest[relPath]
+		if !ok {
+			return match
+		}
+		newPath := "/" + filepath.ToSlash(filepath.Dir(relPath)) + "/" + hashedName
+		return fmt.Sprintf(`%s="%s"`, attr, newPath)
 	})
 }

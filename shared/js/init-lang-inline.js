@@ -32,6 +32,9 @@ function getCookie(name) {
   }
 
   document.documentElement.lang = lang;
+  // 标记 JS 可用：CSS 依据 html.js 做"仅 JS 时隐藏待揭示内容"等渐进增强门控，
+  // JS 禁用时内容保持默认可见
+  document.documentElement.classList.add('js');
   if (lang !== 'zh-CN') {
     document.documentElement.style.visibility = 'hidden';
   }

@@ -115,7 +115,8 @@ func (s *ExportTokenService) cleanupExpired() {
 			count++
 		}
 	}
-	if count > 0 {			utils.LogInfo("EXPORT_TOKEN", "Cleanup completed", "expired", count)
+	if count > 0 {
+		utils.LogInfo("EXPORT_TOKEN", "Cleanup completed", "expired", count)
 	}
 }
 
