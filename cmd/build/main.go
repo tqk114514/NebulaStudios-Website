@@ -88,6 +88,11 @@ func run() error {
 		return fmt.Errorf("setup dist dir failed: %w", err)
 	}
 
+	// 生成内嵌库的版本无关导出入口（业务代码 import vendor.ts，升级无需改业务代码）
+	if err := syncVendorLibs(); err != nil {
+		return fmt.Errorf("vendor libs sync failed: %w", err)
+	}
+
 	if err := buildBackendData(); err != nil {
 		return fmt.Errorf("backend data build failed: %w", err)
 	}

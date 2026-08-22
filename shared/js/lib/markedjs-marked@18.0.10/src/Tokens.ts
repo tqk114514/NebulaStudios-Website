@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* eslint-disable no-use-before-define */
 
 export type MarkedToken = (

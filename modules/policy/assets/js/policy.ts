@@ -11,8 +11,7 @@
 
 import { initLanguageSwitcher, updatePageTitle, waitForTranslations, getCurrentLanguage } from '../../../../shared/js/utils/language-switcher.ts';
 import { escapeHtml } from '../../../../shared/js/utils/escape-html.ts';
-import { marked } from '../../../../shared/js/lib/markedjs-marked@18.0.5/src/marked.ts';
-import DOMPurify from '../../../../shared/js/lib/cure53-DOMPurify@3.4.11/src/purify.ts';
+import { marked, DOMPurify } from '../../../../shared/js/lib/vendor.ts';
 
 // ==================== 类型定义 ====================
 

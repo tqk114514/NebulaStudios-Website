@@ -111,7 +111,7 @@ func buildJSModule(entries []string, outdir, moduleName, injectData string) erro
 		Write:       true,
 		LogLevel:    api.LogLevelWarning,
 		Define: map[string]string{
-			"VERSION": `"3.4.11"`,
+			"VERSION": dompurifyVersionDefine(),
 		},
 	}
 
@@ -370,4 +370,19 @@ func buildCookieConsent() error {
 	atomic.AddInt64(&stats.FilesProcessed, 1)
 	log.Printf("[BUILD] Built cookie-consent.js -> %s", hashedName)
 	return nil
+}
+
+// dompurifyVersionDefine 从内嵌库目录名（cure53-DOMPurify@x.y.z）提取版本，
+// 构建期注入 DOMPurify 的 VERSION 常量，避免硬编码随手动升级漂移
+func dompurifyVersionDefine() string {
+	matches, err := filepath.Glob(filepath.Join(sharedDir, "js", "lib", "cure53-DOMPurify@*"))
+	if err != nil || len(matches) == 0 {
+		log.Printf("[BUILD] WARN: DOMPurify vendor dir not found, VERSION define falls back to unknown")
+		return `"unknown"`
+	}
+	name := filepath.Base(matches[len(matches)-1])
+	if i := strings.IndexByte(name, '@'); i >= 0 {
+		return `"` + name[i+1:] + `"`
+	}
+	return `"unknown"`
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { MarkedOptions } from './MarkedOptions.ts';
 
 /**

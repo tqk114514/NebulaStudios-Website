@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Tokens } from './Tokens.ts';
 
 /**

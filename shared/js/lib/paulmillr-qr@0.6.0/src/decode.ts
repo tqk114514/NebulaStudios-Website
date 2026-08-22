@@ -1,3 +1,4 @@
+// @ts-nocheck
 /*!
 Copyright (c) 2023 Paul Miller (paulmillr.com)
 The library paulmillr-qr is dual-licensed under the Apache 2.0 OR MIT license.

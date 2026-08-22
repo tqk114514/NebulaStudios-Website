@@ -1,3 +1,4 @@
+// @ts-nocheck
 const noopTest = { exec: () => null } as unknown as RegExp;
 
 function cachedIndentRegex(createRegex: (indent: number) => RegExp) {
@@ -115,7 +116,7 @@ const lheading = edit(lheadingCore)
   .replace(/blockCode/g, /(?: {4}| {0,3}\t)/) // indented code blocks can interrupt
   .replace(/fences/g, / {0,3}(?:`{3,}|~{3,})/) // fenced code blocks can interrupt
   .replace(/blockquote/g, / {0,3}>/) // blockquote can interrupt
-  .replace(/heading/g, / {0,3}#{1,6}/) // ATX heading can interrupt
+  .replace(/heading/g, / {0,3}#{1,6}(?:\s|$)/) // ATX heading can interrupt
   .replace(/html/g, / {0,3}<[^\n>]+>\n/) // block html can interrupt
   .replace(/\|table/g, '') // table not in commonmark
   .getRegex();
@@ -124,11 +125,11 @@ const lheadingGfm = edit(lheadingCore)
   .replace(/blockCode/g, /(?: {4}| {0,3}\t)/) // indented code blocks can interrupt
   .replace(/fences/g, / {0,3}(?:`{3,}|~{3,})/) // fenced code blocks can interrupt
   .replace(/blockquote/g, / {0,3}>/) // blockquote can interrupt
-  .replace(/heading/g, / {0,3}#{1,6}/) // ATX heading can interrupt
+  .replace(/heading/g, / {0,3}#{1,6}(?:\s|$)/) // ATX heading can interrupt
   .replace(/html/g, / {0,3}<[^\n>]+>\n/) // block html can interrupt
   .replace(/table/g, / {0,3}\|?(?:[:\- ]*\|)+[\:\- ]*\n/) // table can interrupt
   .getRegex();
-const _paragraph = /^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table| +\n)[^\n]+)*)/;
+const _paragraph = /^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table|[ \t]+\n)[^\n]+)*)/;
 const blockText = /^[^\n]+/;
 const _blockLabel = /(?!\s*\])(?:\\[\s\S]|[^\[\]\\])+/;
 const def = edit(/^ {0,3}\[(label)\]: *(?:\n[ \t]*)?([^<\s][^\s]*|<.*?>)(?:(?: +(?:\n[ \t]*)?| *\n[ \t]*)(title))? *(?:\n+|$)/)
@@ -149,11 +150,11 @@ const _tag = 'address|article|aside|base|basefont|blockquote|body|caption'
 const _comment = /<!--(?:-?>|[\s\S]*?(?:-->|$))/;
 const html = edit(
   '^ {0,3}(?:' // optional indentation
-+ '<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n+|$)' // (1)
++ '<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n*|$)' // (1)
 + '|comment[^\\n]*(\\n+|$)' // (2)
-+ '|<\\?[\\s\\S]*?(?:\\?>\\n*|$)' // (3)
-+ '|<![A-Z][\\s\\S]*?(?:>\\n*|$)' // (4)
-+ '|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>\\n*|$)' // (5)
++ '|<\\?[\\s\\S]*?(?:\\?>[^\\n]*\\n*|$)' // (3)
++ '|<![A-Z][\\s\\S]*?(?:>[^\\n]*\\n*|$)' // (4)
++ '|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>[^\\n]*\\n*|$)' // (5)
 + '|</?(tag)(?: +|\\n|/?>)[\\s\\S]*?(?:(?:\\n[ \t]*)+\\n|$)' // (6)
 + '|<(?!script|pre|style|textarea)([a-z][\\w-]*)(?:attribute)*? */?>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n[ \t]*)+\\n|$)' // (7) open tag
 + '|</(?!script|pre|style|textarea)[a-z][\\w-]*\\s*>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n[ \t]*)+\\n|$)' // (7) closing tag
@@ -163,20 +164,27 @@ const html = edit(
   .replace('attribute', / +[a-zA-Z:_][\w.:-]*(?: *= *"[^"\n]*"| *= *'[^'\n]*'| *= *[^\s"'=<>`]+)?/)
   .getRegex();
 
-const paragraph = edit(_paragraph)
+const createParagraph = (listInterrupt: RegExp) => edit(_paragraph)
   .replace('hr', hr)
   .replace('heading', ' {0,3}#{1,6}(?:\\s|$)')
   .replace('|lheading', '') // setext headings don't interrupt commonmark paragraphs
   .replace('|table', '')
   .replace('blockquote', ' {0,3}>')
-  .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
-  .replace('list', ' {0,3}(?:[*+-]|1[.)])[ \\t]+[^ \\t\\n]') // only non-empty lists starting from 1 can interrupt
+  .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*(?:\\n|$))|~~~)[^\\n]*(?:\\n|$)')
+  .replace('list', listInterrupt)
   .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
   .replace('tag', _tag) // pars can be interrupted by type (6) html blocks
   .getRegex();
 
+// only non-empty lists starting from 1 can interrupt paragraphs
+const paragraph = createParagraph(/ {0,3}(?:[*+-]|1[.)])[ \t]+[^ \t\n]/);
+// inside a blockquote a bare list marker (any number) starts a sibling list,
+// so it must not be lazily continued as paragraph text (unlike a top level
+// paragraph, where an empty list cannot interrupt)
+const blockquoteParagraph = createParagraph(/ {0,3}(?:[*+-]|\d{1,9}[.)])(?:[ \t]|\n|$)/);
+
 const blockquote = edit(/^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/)
-  .replace('paragraph', paragraph)
+  .replace('paragraph', blockquoteParagraph)
   .getRegex();
 
 /**
@@ -213,7 +221,7 @@ const gfmTable = edit(
   .replace('heading', ' {0,3}#{1,6}(?:\\s|$)')
   .replace('blockquote', ' {0,3}>')
   .replace('code', '(?: {4}| {0,3}\t)[^\\n]')
-  .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
+  .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*(?:\\n|$))|~~~)[^\\n]*(?:\\n|$)')
   .replace('list', ' {0,3}(?:[*+-]|1[.)])[ \\t]') // any bullet ends the table rows
   .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
   .replace('tag', _tag) // tables can be interrupted by type (6) html blocks
@@ -229,7 +237,7 @@ const blockGfm: Record<BlockKeys, RegExp> = {
     .replace('|lheading', '') // setext headings don't interrupt commonmark paragraphs
     .replace('table', gfmTable) // interrupt paragraphs with table
     .replace('blockquote', ' {0,3}>')
-    .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
+    .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*(?:\\n|$))|~~~)[^\\n]*(?:\\n|$)')
     .replace('list', ' {0,3}(?:[*+-]|1[.)])[ \\t]+[^ \\t\\n]') // only non-empty lists starting from 1 can interrupt
     .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
     .replace('tag', _tag) // pars can be interrupted by type (6) html blocks
@@ -285,6 +293,12 @@ const _notPunctuationOrSpace = /[^\s\p{P}\p{S}]/u;
 const punctuation = edit(/^((?![*_])punctSpace)/, 'u')
   .replace(/punctSpace/g, _punctuationOrSpace).getRegex();
 
+/**
+ * Opening punct/quotes excluded from pedantic LDelim nextChar so
+ * `aa**"A"**bb` / `aa**(A)**bb` can start strong (Pi + Ps + ASCII straight quotes).
+ */
+const _openQuote = /[\p{Pi}\p{Ps}"']/u;
+
 // GFM allows ~ inside strong and em for strikethrough
 const _punctuationGfmStrongEm = /(?!~)[\p{P}\p{S}]/u;
 const _punctuationOrSpaceGfmStrongEm = /(?!~)[\s\p{P}\p{S}]/u;
@@ -306,6 +320,14 @@ const emStrongLDelim = edit(emStrongLDelimCore, 'u')
 
 const emStrongLDelimGfm = edit(emStrongLDelimCore, 'u')
   .replace(/punct/g, _punctuationGfmStrongEm)
+  .getRegex();
+
+// Pedantic: do not treat opening punct/quotes as left-delim punct (e.g. **( / **").
+const emStrongLDelimPedanticCore = /^(?:\*+(?:((?!\*)(?!openQuote)punct)|([^\s*]))?)|^_+(?:((?!_)(?!openQuote)punct)|([^\s_]))?/;
+
+const emStrongLDelimPedantic = edit(emStrongLDelimPedanticCore, 'u')
+  .replace(/openQuote/g, _openQuote)
+  .replace(/punct/g, _punctuation)
   .getRegex();
 
 const emStrongRDelimAstCore =
@@ -330,7 +352,24 @@ const emStrongRDelimAstGfm = edit(emStrongRDelimAstCore, 'gu')
   .replace(/punct/g, _punctuationGfmStrongEm)
   .getRegex();
 
-// (6) Not allowed for _
+// Pedantic: rule 3 requires whitespace before left delim; rule 6 allows punct before close (e.g. `:**bar`).
+const emStrongRDelimAstPedanticCore =
+  '^[^_*]*?__[^_*]*?\\*[^_*]*?(?=__)' // Skip orphan inside strong
++ '|[^*]+(?=[^*])' // Consume to delim
++ '|(?!\\*)punct(\\*+)(?=[\\s]|$)' // (1) #*** can only be a Right Delimiter
++ '|notPunctSpace(\\*+)(?!\\*)(?=punctSpace|$)' // (2) a***#, a*** can only be a Right Delimiter
++ '|(?!\\*)[\\s](\\*+)(?=notPunctSpace)' // (3) ***a can only be Left Delimiter (whitespace required; not #***a)
++ '|[\\s](\\*+)(?!\\*)(?=punct)' // (4) ***# can only be Left Delimiter
++ '|(?!\\*)punct(\\*+)(?!\\*)(?=punct)' // (5) #***# can be either Left or Right Delimiter
++ '|(?:(?!\\*)punct|notPunctSpace)(\\*+)(?!\\*)(?=notPunctSpace)'; // (6) a***a, #***a, and :** (e.g. **foo:**bar)
+
+const emStrongRDelimAstPedantic = edit(emStrongRDelimAstPedanticCore, 'gu')
+  .replace(/notPunctSpace/g, _notPunctuationOrSpace)
+  .replace(/punctSpace/g, _punctuationOrSpace)
+  .replace(/punct/g, _punctuation)
+  .getRegex();
+
+// Normal: no rule 6 for _ (a___a cannot close as emphasis).
 const emStrongRDelimUnd = edit(
   '^[^_*]*?\\*\\*[^_*]*?_[^_*]*?(?=\\*\\*)' // Skip orphan inside strong
 + '|[^_]+(?=[^_])' // Consume to delim
@@ -339,6 +378,23 @@ const emStrongRDelimUnd = edit(
 + '|(?!_)punctSpace(_+)(?=notPunctSpace)' // (3) #___a, ___a can only be Left Delimiter
 + '|[\\s](_+)(?!_)(?=punct)' // (4) ___# can only be Left Delimiter
 + '|(?!_)punct(_+)(?!_)(?=punct)', 'gu') // (5) #___# can be either Left or Right Delimiter
+  .replace(/notPunctSpace/g, _notPunctuationOrSpace)
+  .replace(/punctSpace/g, _punctuationOrSpace)
+  .replace(/punct/g, _punctuation)
+  .getRegex();
+
+// Pedantic: same rule 3/6 adjustments as emStrongRDelimAstPedantic (e.g. `_foo:_bar`).
+const emStrongRDelimUndPedanticCore =
+  '^[^_*]*?\\*\\*[^_*]*?_[^_*]*?(?=\\*\\*)' // Skip orphan inside strong
++ '|[^_]+(?=[^_])' // Consume to delim
++ '|(?!_)punct(_+)(?=[\\s]|$)' // (1) #___ can only be a Right Delimiter
++ '|notPunctSpace(_+)(?!_)(?=punctSpace|$)' // (2) a___#, a___ can only be a Right Delimiter
++ '|(?!_)[\\s](_+)(?=notPunctSpace)' // (3) ___a can only be Left Delimiter (whitespace required; not #___a)
++ '|[\\s](_+)(?!_)(?=punct)' // (4) ___# can only be Left Delimiter
++ '|(?!_)punct(_+)(?!_)(?=punct)' // (5) #___# can be either Left or Right Delimiter
++ '|(?:(?!_)punct|notPunctSpace)(_+)(?!_)(?=notPunctSpace)'; // (6) a___a, #___a, and :__ (e.g. _foo:_bar)
+
+const emStrongRDelimUndPedantic = edit(emStrongRDelimUndPedanticCore, 'gu')
   .replace(/notPunctSpace/g, _notPunctuationOrSpace)
   .replace(/punctSpace/g, _punctuationOrSpace)
   .replace(/punct/g, _punctuation)
@@ -390,7 +446,7 @@ const _inlineLabel = /(?:\[(?:\\[\s\S]|[^\[\]\\])*\]|\\[\s\S]|`+(?!`)[^`]*?`+(?!
 
 const link = edit(/^!?\[(label)\]\(\s*(href)(?:(?:[ \t]+(?:\n[ \t]*)?|\n[ \t]*)(title))?\s*\)/)
   .replace('label', _inlineLabel)
-  .replace('href', /<(?:\\.|[^\n<>\\])+>|[^ \t\n\x00-\x1f]*/)
+  .replace('href', /<(?:\\.|[^\n<>\\])+>|[^ \t\n\x00-\x1f]+|(?=\))/)
   .replace('title', /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/)
   .getRegex();
 
@@ -446,6 +502,9 @@ type InlineKeys = keyof typeof inlineNormal;
 
 const inlinePedantic: Record<InlineKeys, RegExp> = {
   ...inlineNormal,
+  emStrongLDelim: emStrongLDelimPedantic,
+  emStrongRDelimAst: emStrongRDelimAstPedantic,
+  emStrongRDelimUnd: emStrongRDelimUndPedantic,
   link: edit(/^!?\[(label)\]\((.*?)\)/)
     .replace('label', _inlineLabel)
     .getRegex(),
@@ -470,7 +529,7 @@ const inlineGfm: Record<InlineKeys, RegExp> = {
     .getRegex(),
   _backpedal: /(?:[^?!.,:;*_'"~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_'"~)]+(?!$))+/,
   del: /^(~~?)(?=[^\s~])((?:\\[\s\S]|[^\\])*?(?:\\[\s\S]|[^\s~\\]))\1(?=[^~]|$)/,
-  text: edit(/^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|protocol:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/)
+  text: edit(/^(`+|~+|[^`~])(?:(?=[`~])|(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|protocol:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/)
     .replace('protocol', _caseInsensitiveProtocol)
     .getRegex(),
 };

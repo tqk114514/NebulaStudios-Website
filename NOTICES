@@ -10,7 +10,7 @@ License: Apache-2.0
   go.mongodb.org/mongo-driver/v2
     https://github.com/mongodb/mongo-go-driver/blob/v2.8.0/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
-    https://github.com/cure53/DOMPurify/blob/3.4.11/LICENSE
+    https://github.com/cure53/DOMPurify/blob/3.4.14/LICENSE
   github.com/bytedance/gopkg
     https://github.com/bytedance/gopkg/blob/v0.1.4/LICENSE
   github.com/bytedance/sonic
@@ -114,7 +114,7 @@ License: MIT
   go.uber.org/zap
     https://github.com/uber-go/zap/blob/v1.28.0/LICENSE
   github.com/markedjs/marked
-    https://github.com/markedjs/marked/blob/v18.0.5/LICENSE
+    https://github.com/markedjs/marked/blob/v18.0.10/LICENSE
   github.com/faisalman/ua-parser-js
     https://github.com/faisalman/ua-parser-js/blob/1.0.41/license.md
   github.com/goccy/go-json

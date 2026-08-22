@@ -2,7 +2,7 @@
  * 设备检测工具（基于 UAParser.js）
  */
 
-import UAParser from '../lib/faisalman-ua-parser-js@1.0.41/src/ua-parser.js';
+import { UAParser } from '../lib/vendor.ts';
 
 let cachedParser: UAParserConstructor | null = null;
 

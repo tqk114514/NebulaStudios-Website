@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Token, Tokens, TokensList } from './Tokens.ts';
 import type { _Parser } from './Parser.ts';
 import type { _Lexer } from './Lexer.ts';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { _defaults } from './defaults.ts';
 import { _Lexer } from './Lexer.ts';
 import { _Parser } from './Parser.ts';
