@@ -26,12 +26,12 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - "发送验证邮件 -> 点击链接 -> 输入验证码 -> 完成"的标准验证流程
 - 密码重置、已登录状态下修改密码
 - 账户注销（需邮件验证码确认）
-- 会话基于 JWT（ES256 / ECDSA P-256），默认有效期 60 天，通过 HttpOnly Secure SameSite Cookie 存储，同时支持 Authorization Header
-- 用户数据导出（打包为 JSON，需邮件验证码确认，24 小时内限导出 1 次）
+- 会话基于 JWT Access Token + Refresh Token 双令牌：Access Token 使用 ES256 / ECDSA P-256（默认 1 小时），Refresh Token 以 SHA-256 哈希存库（默认 30 天），支持轮转刷新，检测到重放时撤销整个 token 家族；通过 HttpOnly Secure SameSite Cookie 存储，同时支持 Authorization Header
+- 用户数据导出（打包为 JSON，生成一次性下载令牌，5 分钟有效、单次使用，24 小时内限导出 1 次）
 
 ### 安全机制
 
-- **分片限流器**：基于 IP 的令牌桶限流，16 个分片降低锁竞争，LRU 淘汰策略防止内存增长。覆盖登录（5次/分钟）、注册（3次/分钟）、密码重置（3次/分钟）、OAuth Token 端点（10次/20秒）、验证码失效（2次/60秒）
+- **分片限流器**：基于 IP 的令牌桶限流，16 个分片降低锁竞争，LRU 淘汰策略防止内存增长。覆盖登录（burst 5，每 12 秒补充 1 个）、注册（burst 3，每 20 秒补充 1 个）、密码重置（burst 3，每 20 秒补充 1 个）、验证码校验（burst 5，每 10 秒补充 1 个）、扫码登录生成（burst 3，每 10 秒补充 1 个）、OAuth Token 端点（burst 10，每 2 秒补充 1 个）、数据导出（同一用户 24 小时限 1 次）
 - **邮件限流器**：同一邮箱 60 秒内只能发送一封邮件，16 分片 LRU
 - **封禁系统**：支持临时封禁和永久封禁，BanCheckMiddleware 拦截所有需要登录的接口
 - **CSRF 防护**：Double Submit Cookie 模式，状态变更请求需提供 X-CSRF-Token 头或表单字段，使用恒定时间比较防止时序攻击
@@ -44,7 +44,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 **作为 Provider（允许第三方接入）：**
 
-- 支持标准 Authorization Code 流程，强制 PKCE（S256）
+- 支持标准 Authorization Code 流程，强制 PKCE（code_challenge_method 支持 S256 与 plain）
 - client_secret 使用 Argon2id 哈希存储
 - Access Token / Refresh Token 使用 SHA-256 哈希存储，只返回明文一次
 - redirect_uri 精确匹配，不支持通配符
@@ -56,11 +56,11 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 **作为 Client（Microsoft / Google 登录）：**
 
-- 支持 Microsoft 账号登录和绑定
-- 已有账号绑定 Microsoft 时需邮件验证确认
-- 支持解绑 Microsoft 账号
-- PKCE 流程保护
-- 支持 Google 账号登录和绑定
+- 支持 Microsoft 账号登录、绑定、解绑
+- 已有账号绑定 Microsoft 或 Google 时，需邮件验证确认（待绑定数据存内存，限时确认）
+- Microsoft 支持头像自动同步（登录/绑定时异步转存为 WebP 并更新头像，可关闭）
+- Google 通过 Cloudflare Worker 代理调用 API（解决国内无法直连），id_token 由 Worker 现场验签后以 Ed25519 背书
+- 均使用 PKCE 流程保护
 
 ### 扫码登录
 
@@ -85,12 +85,13 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - 邮箱白名单管理：配置允许注册的邮箱域名及对应注册链接
 - 操作日志：所有管理操作均记录审计日志（admin_id、action、target_uid、details JSONB）
 - 数据面板：总用户数、今日新增、管理员数、封禁数
+- 数据导出/导入：数据导出打包为加密 JSON（OTAC 一次性授权码下载），导入支持合并 / 覆盖两种策略，可撤销 OTAC
 
 ### 验证码
 
 通过 `CAPTCHA_ENABLED` 开关控制（必填配置）：
 
-- `true`：启用 Cloudflare Turnstile 人机验证，登录、注册发码、密码重置发码、修改密码、注销账户等动作均需通过验证，前端展示验证组件
+- `true`：启用 Cloudflare Turnstile 人机验证，登录、注册发码、密码重置发码、修改密码、修改用户名、注销账户等动作均需通过验证，前端展示验证组件
 - `false`：上述动作全部跳过人机验证，前端不展示验证组件（登录等页面直接提交）
 
 ### 图片处理
@@ -120,15 +121,16 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 构建流程：
 
 1. 清理并创建 `dist/` 目录结构
-2. 复制后端数据文件（邮件模板、文案 JSON）
-3. 合并 i18n 为 `translations.js`
-4. 构建 cookie-consent.js
-5. esbuild 打包各模块 TypeScript 入口（home、account、admin、policy 完全独立）
-6. 压缩 CSS（去空白和注释）
-7. 压缩 HTML（去空白和注释）
-8. 复制政策 Markdown 文件
-9. 保存资源清单（asset-manifest.json）
-10. 对整个 `dist/` 目录做 Brotli 预压缩（生产模式）
+2. 同步内嵌第三方库的版本无关导出入口（`vendor.ts`，升级库无需改业务代码）
+3. 复制后端数据文件（邮件模板、文案 JSON）
+4. 合并 i18n 为 `translations.js`
+5. 构建 cookie-consent.js
+6. esbuild 打包各模块 TypeScript 入口（home、account、admin、policy 完全独立）
+7. 压缩 CSS（去空白和注释）
+8. 压缩 HTML（去空白和注释）
+9. 复制政策 Markdown 文件
+10. 保存资源清单（asset-manifest.json）
+11. 对整个 `dist/` 目录做 Brotli 预压缩（生产模式）
 
 页面路由按模块分组：
 
@@ -173,7 +175,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 │   ├── paths/             # 路由路径常量
 │   ├── services/          # 业务服务（token、session、captcha、email、websocket、localstorage、imgprocessor、oauth）
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
-│   └── version/           # 版本信息（ldflags 注入 + GitHub API）
+│   └── version/           # 版本信息（ldflags 注入 Git commit）
 ├── modules/               # 前端模块（home、account、admin、policy）
 │   ├── */assets/          # CSS + TypeScript
 │   └── */pages/           # HTML 页面
@@ -182,9 +184,11 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 │   ├── css/               # 全局样式
 │   ├── i18n/              # 翻译 JSON + 政策 Markdown（按语言和日期组织）
 │   └── js/                # 共享 TypeScript（类型、工具函数、翻译加载器）
-├── data/                  # 后端数据文件（邮件模板、文案）
+├── data/                  # 后端数据文件（邮件模板、文案）+ 本地头像存储（avatars/）
 ├── docs/                  # 文档
 ├── dist/                  # 构建输出（前端编译后 + Brotli 预压缩 .br 文件）
+├── build.ps1              # 一键构建脚本（前端 + Zig 交叉编译 + 后端）
+├── google-oauth-proxy.js  # Google OAuth 代理 Worker（Cloudflare，Ed25519 背书）
 ├── go.mod / go.sum        # Go 依赖
 └── tsconfig.json          # TypeScript 配置
 ```
@@ -199,7 +203,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 ### 配置环境变量
 
-项目通过环境变量配置，支持 `.env` 文件（优先读取 `/var/www/.env`，其次当前目录 `.env`）。以下是主要配置项：
+项目通过环境变量配置，支持当前目录下的 `.env` 文件（服务端无法读取其他路径，需自行放置或直接注入系统环境变量）。以下是主要配置项：
 
 **必需配置：**
 
@@ -207,6 +211,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 DATABASE_URL="postgres://user:password@localhost:5432/dbname"  # PostgreSQL 连接字符串
 JWT_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----..."              # ECDSA P-256 PEM 私钥（用于 JWT ES256 签名）
 QR_KEY_DERIVATION_SALT="your-salt"                             # 扫码登录密钥派生 Salt
+EMAIL_WHITELIST_DOMAINS="example.com"                          # 允许注册的邮箱域名白名单（逗号分隔，必需）
 
 # SMTP 邮件（必需，未配置时服务拒绝启动；网易 163 邮箱默认使用 SSL 465 端口 + LOGIN 认证）
 SMTP_HOST="smtp.163.com"
@@ -234,10 +239,9 @@ CORS_ALLOW_ORIGINS="https://your-domain.com"                   # 允许的跨域
 LOG_ENCODING="json"                                            # 日志编码（json，开发时可设为 console）
 LOG_LEVEL="info"                                               # 日志级别（debug/info/warn/error）
 
-# Microsoft OAuth 登录
+# Microsoft OAuth 登录（回调地址由 BASE_URL 派生，无需单独配置）
 MICROSOFT_CLIENT_ID="your-client-id"
 MICROSOFT_CLIENT_SECRET="your-client-secret"
-MICROSOFT_REDIRECT_URI="https://your-domain.com/api/auth/microsoft/callback"
 
 # Google OAuth 登录
 GOOGLE_CLIENT_ID="your-client-id"
@@ -258,10 +262,14 @@ QR_ENCRYPTION_KEY="your-encryption-key"
 AVATAR_DIR="./data/avatars"        # 本地头像存储目录（默认 ./data/avatars）
 CDN_URL="https://your-cdn-domain"  # CDN 域名（用于 CSP img-src 白名单，可选）
 
-# JWT 签发配置（可选）
+# JWT / 会话配置（可选）
 JWT_ISSUER="your-issuer"
 JWT_AUDIENCE="your-audience"
-JWT_EXPIRES_IN="1440h"      # 过期时间，支持 Go duration 格式，默认 60 天
+ACCESS_TOKEN_EXPIRY="1h"     # Access Token 有效期，默认 1 小时（1 分钟 ~ 24 小时）
+REFRESH_TOKEN_EXPIRY="720h"  # Refresh Token 有效期，默认 30 天（1 ~ 90 天）
+
+# 管理后台数据导出加密盐（可选）
+DATA_EXPORT_SALT="your-export-salt"
 
 # 数据库连接池（可选）
 DB_MAX_CONNS=10              # 最大连接数
@@ -282,7 +290,7 @@ go run ./cmd/build/
 go run ./cmd/build/ -dev
 ```
 
-构建产物输出到 `dist/` 目录。生产模式下所有静态文件会额外生成 `.br`（Brotli）预压缩版本，服务端根据浏览器 `Accept-Encoding` 头决定返回压缩版还是原始文件。对于支持 Brotli 的现代浏览器，这会显著降低流量消耗，但某些老旧浏览器可能无法访问。
+构建产物输出到 `dist/` 目录。生产模式下所有静态文件会额外生成 `.br`（Brotli）预压缩版本，服务端根据浏览器 `Accept-Encoding` 头决定返回压缩版还是原始文件——支持 Brotli 的浏览器零开销直接拿到压缩版，不支持的浏览器自动回退到原始文件。
 
 **2. 编译图片处理服务**
 
