@@ -179,7 +179,7 @@ func (h *MicrosoftHandler) logUnlink(ctx context.Context, userUID, id, displayNa
 	return h.UserLogRepo.LogUnlinkMicrosoft(ctx, userUID, id, displayName)
 }
 
-// linkFields Microsoft 头像不走字段更新：图片文件经 AfterLink 异步转存到本地存储/R2，
+// linkFields Microsoft 头像不走字段更新：图片文件经 AfterLink 异步转存到本地存储，
 // 数据库中的 microsoft_avatar_url 由 processAvatarAsync 更新
 func (h *MicrosoftHandler) linkFields(identity oauth.ProviderIdentity) map[string]any {
 	return map[string]any{
@@ -228,7 +228,7 @@ func (h *MicrosoftHandler) afterLogin(ctx context.Context, user *models.User, id
 	go h.processAvatarAsync(user.UID, oldAvatarHash, identity.AvatarData, identity.AvatarCT)
 }
 
-// afterUnlink 解绑成功后删除已存储的头像文件（本地存储/R2）
+// afterUnlink 解绑成功后删除已存储的头像文件（本地存储）
 func (h *MicrosoftHandler) afterUnlink(ctx context.Context, userUID string, user *models.User) {
 	oldAvatarURL := ""
 	if user.MicrosoftAvatarURL.Valid {
@@ -243,9 +243,9 @@ func (h *MicrosoftHandler) afterUnlink(ctx context.Context, userUID string, user
 			deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.StorageService.DeleteAvatar(deleteCtx, uid); err != nil {
-				utils.LogWarn("OAUTH-MS", "Failed to delete avatar from R2", "user_uid", uid)
+				utils.LogWarn("OAUTH-MS", "Failed to delete avatar from storage", "user_uid", uid)
 			} else {
-				utils.LogInfo("OAUTH-MS", "Avatar deleted from R2", "user_uid", uid)
+				utils.LogInfo("OAUTH-MS", "Avatar deleted from storage", "user_uid", uid)
 			}
 		}
 	}(userUID)

@@ -142,7 +142,7 @@ func (h *UserHandler) DeleteAccount(c *gin.Context) {
 
 	if h.storageService != nil && h.storageService.IsConfigured() {
 		if err := h.storageService.DeleteAvatar(ctx, userUID); err != nil {
-			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to delete R2 avatar", "user_uid", userUID)
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to delete avatar", "user_uid", userUID)
 		}
 	}
 

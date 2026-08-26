@@ -17,7 +17,7 @@ import (
 // ErrStorageNotInitialized 存储服务未初始化
 var ErrStorageNotInitialized = errors.New("storage service not initialized")
 
-// LocalStorageService 本地文件存储服务（替代 R2）
+// LocalStorageService 本地文件存储服务
 type LocalStorageService struct {
 	dir          string
 	baseURL      string

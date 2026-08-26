@@ -13,7 +13,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 | 数据库 | PostgreSQL（pgx 驱动，连接池管理） |
 | 图片处理 | Zig 0.16.0（调用 libwebp + stb_image） |
 | 前端语言 | TypeScript（esbuild 打包） |
-| 对象存储 | Cloudflare R2（AWS S3 兼容 API） |
+| 头像存储 | 本地文件系统（./data/avatars） |
 | 缓存 | hashicorp/golang-lru/v2（分片 LRU） |
 | 日志 | go.uber.org/zap |
 
@@ -99,7 +99,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 - 接收任意格式图片（PNG、JPG、BMP 等，通过 stb_image 解码）
 - 转码为 WebP（libwebp，质量 85，压缩方法 6）
-- 头像上传流程：用户上传 -> Zig 转 WebP -> 上传到 Cloudflare R2
+- 头像上传流程：用户上传 -> Zig 转 WebP -> 保存到本地文件系统，由 `/avatars/` 路由直接提供（同时生成 Brotli 压缩副本）
 - 二进制文件通过 `//go:embed` 嵌入 Go 编译产物，无需单独部署
 - 支持自动重启（进程崩溃或 Socket 断开时）
 - 每连接一个线程并发处理，信号量限制最多 2 张图同时处理（超出排队，防连接洪泛）；图片大小限制 10MB
@@ -171,7 +171,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 │   ├── middleware/        # Gin 中间件（auth、admin、ban、compress、cors、ratelimit、security）
 │   ├── models/            # 数据库模型（CRUD、Schema 定义、golang-migrate 版本化迁移）
 │   ├── paths/             # 路由路径常量
-│   ├── services/          # 业务服务（token、session、captcha、email、websocket、r2、imgprocessor、oauth）
+│   ├── services/          # 业务服务（token、session、captcha、email、websocket、localstorage、imgprocessor、oauth）
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
 │   └── version/           # 版本信息（ldflags 注入 + GitHub API）
 ├── modules/               # 前端模块（home、account、admin、policy）
@@ -254,12 +254,9 @@ WORKER_SIGNING_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-
 # 扫码登录加密
 QR_ENCRYPTION_KEY="your-encryption-key"
 
-# Cloudflare R2 对象存储（头像上传）
-R2_URL="https://your-r2-url"
-R2_ENDPOINT="https://your-account-id.r2.cloudflarestorage.com"
-R2_ACCESS_KEY="your-access-key"
-R2_SECRET_KEY="your-secret-key"
-R2_BUCKET="your-bucket"
+# 头像存储与 CDN（可选）
+AVATAR_DIR="./data/avatars"        # 本地头像存储目录（默认 ./data/avatars）
+CDN_URL="https://your-cdn-domain"  # CDN 域名（用于 CSP img-src 白名单，可选）
 
 # JWT 签发配置（可选）
 JWT_ISSUER="your-issuer"

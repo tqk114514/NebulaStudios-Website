@@ -292,8 +292,8 @@ func (h *MicrosoftHandler) parseDataURL(dataURL string) ([]byte, string) {
 	return imageData, contentType
 }
 
-// uploadAvatarToR2 上传头像到 R2，如果 R2 未配置则返回 base64 data URL
-func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string, imageData []byte, contentType string) string {
+// uploadAvatar 上传头像到本地存储，如果存储未初始化则返回 base64 data URL
+func (h *MicrosoftHandler) uploadAvatar(ctx context.Context, userUID string, imageData []byte, contentType string) string {
 	if len(imageData) == 0 {
 		return ""
 	}
@@ -301,7 +301,7 @@ func (h *MicrosoftHandler) uploadAvatarToR2(ctx context.Context, userUID string,
 	if h.StorageService != nil && h.StorageService.IsConfigured() {
 		avatarURL, err := h.StorageService.UploadAvatar(ctx, userUID, imageData)
 		if err != nil {
-			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to R2, falling back to base64", "user_uid", userUID)
+			utils.LogWarn("OAUTH-MS", "Failed to upload avatar to storage, falling back to base64", "user_uid", userUID)
 		} else {
 			return avatarURL
 		}
@@ -338,7 +338,7 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	newAvatarHash := h.calculateAvatarHash(avatarData)
 
 	if newAvatarHash != "" && newAvatarHash != oldAvatarHash {
-		microsoftAvatarURL := h.uploadAvatarToR2(ctx, userUID, avatarData, avatarContentType)
+		microsoftAvatarURL := h.uploadAvatar(ctx, userUID, avatarData, avatarContentType)
 
 		err := h.UserRepo.Update(ctx, userUID, map[string]any{
 			"microsoft_avatar_url":  microsoftAvatarURL,
