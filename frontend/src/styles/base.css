@@ -1,0 +1,81 @@
+/**
+ * 基础重置与全局状态类
+ * 迁移自原站 shared/css/general.css（reset / 状态类 / 页脚）
+ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  overflow-x: hidden;
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: var(--text-md);
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+}
+
+html {
+  overflow-y: auto;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html, body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==================== 链接基础 ==================== */
+
+/* 链接重置的唯一全局出处（迁移自原站 admin common.css 的 a 重置，值不变）。
+   去除浏览器默认下划线；组件内需要下划线链接（如政策正文内链）显式覆盖 text-decoration。 */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ==================== 通用状态类 ==================== */
+
+.is-hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==================== 页面底部 ==================== */
+
+.page-footer {
+  margin-top: 16px;
+  margin-bottom: 40px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.18em;
+  color: var(--mid);
+  text-align: center;
+}

@@ -1,4 +1,4 @@
-﻿# Build script
+# Build script
 # Usage:
 #   .\build.ps1              # Build backend + frontend
 #   .\build.ps1 -Backend     # Backend only
@@ -58,30 +58,54 @@ if ($Backend) {
 }
 
 if ($Frontend) {
-    # 确保依赖已安装（npm ci 需要 package-lock.json，与 CI 一致）。
-    # 不要依赖 npx 自动下载——本地没有 tsc 时 npx 会拉到抢注的废弃包 tsc@2.0.4。
-    if (-not (Test-Path "node_modules\.bin\tsc")) {
-        Write-Host "=== Installing frontend dependencies (npm ci) ===" -ForegroundColor Cyan
-        npm ci
-        if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+    # 构建 SPA 前端（Vue 3 + Vite）：vue-tsc 类型检查 + vite build，
+    # 产物输出到项目根 dist/（含 index.html/assets/data/policy，供 server 二进制同目录部署）
+
+    Push-Location frontend
+    try {
+        if (-not (Test-Path "node_modules")) {
+            Write-Host "=== Installing frontend dependencies (npm ci) ===" -ForegroundColor Cyan
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+        }
+
+        # 从 src/i18n/sources/ 重新生成 locale 文件（幂等；改文案后无需手动执行）
+        Write-Host "=== Generating i18n locales ===" -ForegroundColor Cyan
+        node scripts/gen-locales.mjs
+        if ($LASTEXITCODE -ne 0) { throw "gen-locales failed" }
+
+        Write-Host "=== Building frontend (Vite) ===" -ForegroundColor Cyan
+        npm run build
+        if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+    } finally {
+        Pop-Location
     }
 
-    # 先构建再类型检查：cmd/build 会依据 shared/js/lib 目录重新生成 vendor.ts
-    # 并补齐 ts-nocheck 头，tsc 必须在生成之后跑才能校验到最新引用
-    Write-Host "=== Building frontend ===" -ForegroundColor Cyan
-    # go run 的 log.Printf 输出到 stderr，PowerShell 的 Stop 策略会误判为终止错误，
-    # 临时放宽策略，通过 LASTEXITCODE 判断真实结果
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    go run ./cmd/build
-    $buildExit = $LASTEXITCODE
-    $ErrorActionPreference = $prevEAP
-    if ($buildExit -ne 0) { throw "Frontend build failed" }
-    Write-Host "Frontend build OK" -ForegroundColor Green
-
-    Write-Host "=== Type-checking frontend (tsc --noEmit) ===" -ForegroundColor Cyan
-    # --no-install：npx 只使用本地已装的包，绝不联网下载
-    npx --no-install tsc --noEmit
-    if ($LASTEXITCODE -ne 0) { throw "TypeScript type-check failed" }
-    Write-Host "Type-check OK" -ForegroundColor Green
+    # Brotli 预压缩：服务端 PreCompressedStatic 对 /assets/* 与 /policy-content/* 优先服务 .br 副本
+    # （中间件已支持无 .br 时回退原文件，此步骤保证压缩收益）
+    Write-Host "=== Pre-compressing dist (Brotli) ===" -ForegroundColor Cyan
+    Add-Type -AssemblyName System.IO.Compression
+    $brCount = 0
+    $compressible = "*.js", "*.css", "*.svg", "*.json", "*.md", "*.html", "*.woff", "*.woff2"
+    Get-ChildItem -Path (Join-Path (Get-Location) "dist") -Recurse -File | Where-Object {
+        $compressible -contains ("*" + $_.Extension)
+    } | ForEach-Object {
+        $src = $_.FullName
+        $dst = "$src.br"
+        if (-not (Test-Path $dst)) {
+            $in = [System.IO.File]::OpenRead($src)
+            $out = [System.IO.File]::Create($dst)
+            try {
+                $br = [System.IO.Compression.BrotliStream]::new($out, [System.IO.Compression.CompressionLevel]::Optimal)
+                $in.CopyTo($br)
+                $br.Dispose()
+                $script:brCount++
+            } finally {
+                $in.Dispose()
+                $out.Dispose()
+            }
+        }
+    }
+    Write-Host "Brotli pre-compressed: $brCount files" -ForegroundColor Green
+    Write-Host "Frontend build OK -> dist/" -ForegroundColor Green
 }

@@ -65,7 +65,8 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 		return
 	}
 
-	verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
+	// SPA 前端用 query 传 token（vue-router route.query 原生支持，hash 会被路由重写丢失）
+	verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
 
 	language := req.Language
 	if language == "" {
@@ -195,8 +196,8 @@ func (h *UserHandler) GetLogs(c *gin.Context) {
 
 	totalPages := (int(total) + pageSize - 1) / pageSize
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
+	// data 嵌套返回（前端 api client 统一读 payload.data）
+	utils.RespondSuccessWithData(c, gin.H{
 		"logs":       logs,
 		"total":      total,
 		"page":       page,
@@ -227,9 +228,9 @@ func (h *UserHandler) GetOAuthGrants(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"grants":  grants,
+	// data 嵌套返回（前端 api client 统一读 payload.data）
+	utils.RespondSuccessWithData(c, gin.H{
+		"grants": grants,
 	})
 }
 
@@ -333,9 +334,9 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 	}
 
 	utils.LogInfoCtx(c.Request.Context(), "USER", "Data export token generated", "user_uid", userUID)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"token":   token,
+	// data 嵌套返回（前端 api client 统一读 payload.data）
+	utils.RespondSuccessWithData(c, gin.H{
+		"token": token,
 	})
 }
 

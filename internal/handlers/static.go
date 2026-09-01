@@ -23,34 +23,28 @@ var (
 )
 
 const (
-	DistHomePages         = "dist/home/pages"
-	DistAccountPages      = "dist/account/pages"
-	DistPolicyPages       = "dist/policy/pages"
-	DistAdminPages        = "dist/admin/pages"
+	SpaDistRoot           = "dist" // 构建产物根（server 二进制旁，含 index.html/assets/data/policy）
 	ContentTypeHTML       = "text/html; charset=utf-8"
 	ContentEncodingBrotli = "br"
 	CacheControlNoCache   = "no-cache"
 	CacheControlNoStore   = "no-store, no-cache, must-revalidate, max-age=0"
+	defaultSPAIndex       = "index.html"
 )
 
 // StaticHandler 静态文件 Handler，处理静态文件服务和配置 API
 type StaticHandler struct {
 	cfg            *config.Config
 	userCache      services.UserCacheStore
-	wsService      services.WebSocketManager
 	captchaService services.CaptchaVerifier
 }
 
 // NewStaticHandler 创建静态文件 Handler，验证所有必需依赖后初始化
-func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsService services.WebSocketManager, captchaService services.CaptchaVerifier) (*StaticHandler, error) {
+func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, captchaService services.CaptchaVerifier) (*StaticHandler, error) {
 	if cfg == nil {
 		return nil, errors.New("cfg is required")
 	}
 	if userCache == nil {
 		return nil, errors.New("userCache is required")
-	}
-	if wsService == nil {
-		return nil, errors.New("wsService is required")
 	}
 	if captchaService == nil {
 		return nil, errors.New("captchaService is required")
@@ -61,7 +55,6 @@ func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, wsS
 	return &StaticHandler{
 		cfg:            cfg,
 		userCache:      userCache,
-		wsService:      wsService,
 		captchaService: captchaService,
 	}, nil
 }
@@ -122,122 +115,75 @@ func serveBrotliOrDecompressed(c *gin.Context, brPath, contentType, cacheControl
 	serve404Fallback(c)
 }
 
-// serveHTML 服务 HTML 页面，优先读取原文件用于 CSP nonce 替换
-func serveHTML(c *gin.Context, basePath, pageName string) {
-	origPath := filepath.Join(basePath, pageName)
-
-	cacheControl := CacheControlNoCache
-	if c.Writer.Header().Get("Cache-Control") != "" {
-		cacheControl = c.Writer.Header().Get("Cache-Control")
-	}
+// serveSPA 服务 SPA 应用入口 index.html。SPA 由 Vite 构建，脚本样式均为外链，
+// CSP 由中间件注入，无需 nonce 替换 HTML 占位符。
+func serveSPA(c *gin.Context, status int) {
+	origPath := filepath.Join(SpaDistRoot, defaultSPAIndex)
 
 	htmlData, err := os.ReadFile(origPath)
 	if err != nil {
-		utils.LogErrorCtx(c.Request.Context(), "STATIC", "serveHTML", err, "path", origPath)
+		utils.LogErrorCtx(c.Request.Context(), "STATIC", "serveSPA", err, "path", origPath)
 		serve404Fallback(c)
 		return
 	}
 
-	html := string(htmlData)
-	nonce := middleware.GetCSPNonce(c)
-	if nonce != "" {
-		html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
+	if c.Writer.Header().Get("Cache-Control") == "" {
+		c.Header("Cache-Control", CacheControlNoStore)
 	}
-
 	c.Header("Content-Type", ContentTypeHTML)
-	if cacheControl != "" {
-		c.Header("Cache-Control", cacheControl)
+	c.Data(status, ContentTypeHTML, htmlData)
+}
+
+// ServeSpaApp 服务 SPA 应用入口，供显式页面路由（/ 、/account/*、/admin、/policy）使用。
+func ServeSpaApp(c *gin.Context) {
+	serveSPA(c, http.StatusOK)
+}
+
+// SPAFallbackHandler 兜底路由：history 路由深层路径未命中具体路由时返回 SPA 入口，
+// 由前端 vue-router 接管。仅对 GET 且非 API/OAuth/静态资源/头像的请求 fallback。
+func SPAFallbackHandler(cdnURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		method := c.Request.Method
+
+		isPageRequest := method == http.MethodGet &&
+			!strings.HasPrefix(path, "/api") &&
+			!strings.HasPrefix(path, "/oauth") &&
+			!strings.HasPrefix(path, "/admin/api") &&
+			!strings.HasPrefix(path, "/avatars/") &&
+			!strings.HasPrefix(path, "/policy-content/") &&
+			!isStaticAsset(path)
+
+		if isPageRequest {
+			middleware.SetHTMLPageCSP(c, cdnURL)
+			serveSPA(c, http.StatusOK)
+			return
+		}
+
+		NotFoundHandler(cdnURL)(c)
 	}
-	// 保留调用方已设置的状态码（如 NotFoundHandler 设置的 404），
-	// 避免被 c.Data 默认的 200 覆盖，从而掩盖真实状态。
-	statusCode := c.Writer.Status()
-	if statusCode == 0 {
-		statusCode = http.StatusOK
+}
+
+// NotFoundHandler 404 处理：记录日志、设置完整 CSP，返回 SPA 入口（前端渲染 404 页）。
+// 也用于 AdminPageMiddleware 伪装后台入口为 404（隐藏后台存在）。
+func NotFoundHandler(cdnURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if !isStaticAsset(path) {
+			utils.LogInfoCtx(c.Request.Context(), "STATIC", "404", "method", c.Request.Method, "path", path)
+		}
+
+		middleware.SetHTMLPageCSP(c, cdnURL)
+		c.Header("Cache-Control", CacheControlNoStore)
+		c.Header("Pragma", "no-cache")
+		serveSPA(c, http.StatusNotFound)
 	}
-	c.Data(statusCode, ContentTypeHTML, []byte(html))
 }
 
 func serve404Fallback(c *gin.Context) {
 	c.Header("Content-Security-Policy", "frame-ancestors 'self'")
-	c.Status(http.StatusNotFound)
-
-	origPath := filepath.Join(DistAccountPages, "404.html")
-	htmlData, err := os.ReadFile(origPath)
-	if err == nil {
-		html := string(htmlData)
-		nonce := middleware.GetCSPNonce(c)
-		if nonce != "" {
-			html = strings.ReplaceAll(html, "{{CSP_NONCE}}", nonce)
-		}
-		c.Header("Content-Type", ContentTypeHTML)
-		c.Data(http.StatusNotFound, ContentTypeHTML, []byte(html))
-		return
-	}
-
 	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.String(http.StatusNotFound, "404 Not Found")
-}
-
-// ServeHomePage 服务首页
-// GET /
-func ServeHomePage(c *gin.Context) {
-	serveHTML(c, DistHomePages, "index.html")
-}
-
-// ServeLoginPage 服务登录页面
-// GET /account/login
-func ServeLoginPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "login.html")
-}
-
-// ServeRegisterPage 服务注册页面
-// GET /account/register
-func ServeRegisterPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "register.html")
-}
-
-// ServeVerifyPage 服务验证页面
-// GET /account/verify
-func ServeVerifyPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "verify.html")
-}
-
-// ServeForgotPasswordPage 服务忘记密码页面
-// GET /account/forgot
-func ServeForgotPasswordPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "forgot.html")
-}
-
-// ServeDashboardPage 服务仪表盘页面
-// GET /account/dashboard
-func ServeDashboardPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "dashboard.html")
-}
-
-// ServeLinkConfirmPage 服务链接确认页面
-// GET /account/link
-func ServeLinkConfirmPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "link.html")
-}
-
-// ServeOAuthPage 服务 OAuth 授权页面
-// GET /account/oauth
-func ServeOAuthPage(c *gin.Context) {
-	serveHTML(c, DistAccountPages, "oauth.html")
-}
-
-// ServePolicyPage 服务政策中心 SPA 页面
-// GET /policy
-// 支持 hash 路由：/policy#privacy, /policy#terms, /policy#cookies
-func ServePolicyPage(c *gin.Context) {
-	serveHTML(c, DistPolicyPages, "policy.html")
-}
-
-// ServeAdminPage 服务管理后台 SPA 页面，完全禁止缓存
-func ServeAdminPage(c *gin.Context) {
-	c.Header("Cache-Control", CacheControlNoStore)
-	c.Header("Pragma", "no-cache")
-	serveHTML(c, DistAdminPages, "index.html")
+	c.String(http.StatusNotFound, "Not Found")
 }
 
 // ServeAvatar 服务本地头像文件，支持 Brotli 压缩协商（与 dist 静态资源一致）
@@ -295,32 +241,7 @@ func (h *StaticHandler) ServeAvatar(c *gin.Context) {
 	c.File(path)
 }
 
-// NotFoundHandler 404 处理，过滤静态资源请求后记录日志，返回 404 页面。
-// cdnURL 用于构建与正常页面一致的完整 CSP（含 CDN 域名白名单）——
-// 未知路径不经过 SecurityHeaders 的 CSP 分支，此前仅设 frame-ancestors
-// 且 nonce 从未生成，导致页面输出字面量 {{CSP_NONCE}} 且无 script-src 约束
-func NotFoundHandler(cdnURL string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 记录 404 请求（仅记录非静态资源请求）
-		path := c.Request.URL.Path
-		if !isStaticAsset(path) {
-			utils.LogInfoCtx(c.Request.Context(), "STATIC", "404", "method", c.Request.Method, "path", path)
-		}
-
-		// 生成 nonce 并设置完整 CSP（nonce 写入 context，serveHTML 据此替换占位符）
-		middleware.SetHTMLPageCSP(c, cdnURL)
-
-		// 完全禁止缓存，确保权限变更后立即生效
-		c.Header("Cache-Control", CacheControlNoStore)
-		c.Header("Pragma", "no-cache")
-		c.Status(http.StatusNotFound)
-
-		// 服务 404 页面
-		serveHTML(c, DistAccountPages, "404.html")
-	}
-}
-
-// isStaticAsset 检查路径是否为静态资源，用于过滤 404 日志
+// isStaticAsset 检查路径是否为静态资源，用于过滤 404 日志与 fallback（避免把资源请求当页面返回 index.html）
 func isStaticAsset(path string) bool {
 	staticExtensions := []string{
 		".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",

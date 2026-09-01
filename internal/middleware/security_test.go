@@ -154,21 +154,25 @@ func TestBodySizeLimitSkipsGet(t *testing.T) {
 
 func TestIsHTMLPage(t *testing.T) {
 	cases := []struct {
-		path string
-		want bool
+		path   string
+		method string
+		want   bool
 	}{
-		{"/", true},
-		{"/account/login", true},
-		{"/account/login.html", true},
-		{"/admin", true},
-		{"/shared/js/app.js", false},
-		{"/account/assets/css/app.css", false},
-		{"/api/auth/login", false},
-		{"", false},
+		{"/", http.MethodGet, true},
+		{"/account/login", http.MethodGet, true},
+		{"/account/login.html", http.MethodGet, true},
+		{"/admin", http.MethodGet, true},
+		{"/shared/js/app.js", http.MethodGet, false},
+		{"/account/assets/css/app.css", http.MethodGet, false},
+		{"/assets/app.js", http.MethodGet, false},
+		{"/policy-content/privacy/zh-CN/2026-03-24.md", http.MethodGet, false},
+		{"/api/auth/login", http.MethodGet, false},
+		{"/account/login", http.MethodPost, false}, // 非 GET 不算页面
+		{"", http.MethodGet, false},
 	}
 	for _, c := range cases {
-		if got := isHTMLPage(c.path); got != c.want {
-			t.Errorf("isHTMLPage(%q) = %v, want %v", c.path, got, c.want)
+		if got := isHTMLPage(c.path, c.method); got != c.want {
+			t.Errorf("isHTMLPage(%q, %q) = %v, want %v", c.path, c.method, got, c.want)
 		}
 	}
 }
@@ -206,6 +210,10 @@ func TestBuildCSPWithNonce(t *testing.T) {
 	// nonce 只注入 script-src 与 style-src，且各一次
 	if strings.Count(csp, "'nonce-ABC123'") != 2 {
 		t.Errorf("want nonce exactly twice (script+style), got %s", csp)
+	}
+	// 自定义头像来自任意第三方 https 图床（隐私政策 2.2.1），img-src 须放行 https:
+	if !strings.Contains(csp, "img-src 'self' data: blob: https:") {
+		t.Errorf("want https: allowed in img-src for custom avatar URLs, got %s", csp)
 	}
 }
 

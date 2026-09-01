@@ -85,7 +85,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
+	// SPA 前端用 query 传 token（vue-router route.query 原生支持，hash 会被路由重写丢失）
+	verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
 	language := h.getLanguage(req.Language)
 
 	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
@@ -129,7 +130,8 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	}
 
 	utils.LogInfoCtx(c.Request.Context(), "AUTH", "Token verified successfully", "email", result.Email)
-	utils.RespondSuccess(c, gin.H{
+	// data 嵌套返回（前端 api client 统一读 payload.data）
+	utils.RespondSuccessWithData(c, gin.H{
 		"code":  result.Code,
 		"email": result.Email,
 	})

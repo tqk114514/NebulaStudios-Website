@@ -32,6 +32,11 @@ func NewPolicyHandler(pool *pgxpool.Pool) (*PolicyHandler, error) {
 	return &PolicyHandler{pool: pool}, nil
 }
 
+// policyManifestPath 政策版本清单（manifest.json）路径，位于 dist/policy 下
+func policyManifestPath() string {
+	return filepath.Join("dist", "policy", "manifest.json")
+}
+
 // PolicyVersionResponse /api/policy/versions 响应中的单个版本条目
 // 在 manifest 原始字段基础上附加 status，由服务器端基于当前时间计算
 type PolicyVersionResponse struct {
@@ -43,12 +48,12 @@ type PolicyVersionResponse struct {
 }
 
 // GetPolicyVersions 获取政策版本清单
-// 读取 dist/shared/i18n/policy/manifest.json，基于服务器时间给每个版本标记 status，
+// 读取 dist/policy/manifest.json，基于服务器时间给每个版本标记 status，
 // 返回扁平结构：{ policyType: { filename: { update_date, effective_date, languages, status } } }
 // 前端直接用 status 字段判断生效/公示状态，无需自己计算时间
 // GET /api/policy/versions
 func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+	manifestPath := policyManifestPath()
 
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
@@ -86,7 +91,7 @@ func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 // GetPublicNoticePolicies 返回当前在公示期的政策版本
 // GET /api/policy/public-notice
 func (h *PolicyHandler) GetPublicNoticePolicies(c *gin.Context) {
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+	manifestPath := policyManifestPath()
 
 	policies, err := services.GetPublicNoticePolicies(manifestPath)
 	if err != nil {
@@ -121,7 +126,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 		return
 	}
 
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+	manifestPath := policyManifestPath()
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "path", manifestPath)
@@ -193,7 +198,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 		return
 	}
 
-	manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+	manifestPath := policyManifestPath()
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "path", manifestPath)

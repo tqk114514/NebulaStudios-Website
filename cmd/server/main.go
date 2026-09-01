@@ -19,7 +19,6 @@ import (
 	"auth-system/internal/handlers/oauth"
 	googleauth "auth-system/internal/handlers/oauth/google"
 	msauth "auth-system/internal/handlers/oauth/microsoft"
-	"auth-system/internal/handlers/qrlogin"
 	userhandler "auth-system/internal/handlers/user"
 	"auth-system/internal/middleware"
 	"auth-system/internal/models"
@@ -135,7 +134,6 @@ type Repos struct {
 	UserRepo           models.UserStore
 	UserLogRepo        models.UserLogStore
 	UserConsentRepo    models.UserConsentStore
-	QRLoginRepo        models.QRLoginStore
 	AdminLogRepo       models.AdminLogStore
 	EmailWhitelistRepo models.EmailWhitelistStore
 	DataExportRepo     models.DataExportImportStore
@@ -146,7 +144,6 @@ type Services struct {
 	TokenService       services.TokenManager
 	SessionService     services.SessionManager
 	CaptchaService     services.CaptchaVerifier
-	WSService          services.WebSocketManager
 	EmailService       services.EmailSender
 	UserCache          services.UserCacheStore
 	StorageService     services.StorageService
@@ -163,7 +160,6 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	repos.UserRepo = models.NewUserRepository(pool, cfg.DefaultAvatarURL)
 	repos.UserLogRepo = models.NewUserLogRepository(pool)
 	repos.UserConsentRepo = models.NewUserConsentRepository(pool)
-	repos.QRLoginRepo = models.NewQRLoginRepository(pool)
 	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
 	repos.AdminLogRepo = models.NewAdminLogRepository(pool)
 	repos.DataExportRepo = models.NewDataExportImportRepository(pool)
@@ -196,7 +192,6 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 		return nil, utils.LogError("SERVICES", "initServices", fmt.Errorf("captcha service init failed: %w", err))
 	}
 	svcs.CaptchaService = captchaSvc
-	svcs.WSService = services.NewWebSocketService(cfg, models.NewQRLoginRepository(pool))
 	svcs.OAuthService = services.NewOAuthService(pool)
 	svcs.ExportService = services.NewExportService()
 	svcs.LimiterMgr = middleware.NewRateLimiterManager()
@@ -248,15 +243,15 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 
 // Handlers Handler 容器，持有所有 Handler 实例
 type Handlers struct {
-	authHandler          *auth.AuthHandler
-	userHandler          *userhandler.UserHandler
-	microsoftHandler     *msauth.MicrosoftHandler
-	googleHandler        *googleauth.GoogleHandler
-	oauthProviderHandler *oauth.OAuthProviderHandler
-	qrLoginHandler       *qrlogin.QRLoginHandler
-	staticHandler        *handlers.StaticHandler
-	policyHandler        *handlers.PolicyHandler
-	adminHandler         *admin.AdminHandler
+	authHandler           *auth.AuthHandler
+	userHandler           *userhandler.UserHandler
+	microsoftHandler      *msauth.MicrosoftHandler
+	googleHandler         *googleauth.GoogleHandler
+	pendingLinkDispatcher *oauth.PendingLinkDispatcher
+	oauthProviderHandler  *oauth.OAuthProviderHandler
+	staticHandler         *handlers.StaticHandler
+	policyHandler         *handlers.PolicyHandler
+	adminHandler          *admin.AdminHandler
 }
 
 func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, error) {
@@ -304,23 +299,20 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	}
 	utils.LogInfo("HANDLERS", "GoogleHandler initialized")
 
+	hdlrs.pendingLinkDispatcher = oauth.NewPendingLinkDispatcher(
+		hdlrs.microsoftHandler.ExternalProviderHandler,
+		hdlrs.googleHandler.ExternalProviderHandler,
+	)
+	utils.LogInfo("HANDLERS", "PendingLinkDispatcher initialized")
+
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
 		svcs.OAuthService, repos.UserRepo, repos.UserLogRepo,
 		svcs.UserCache, svcs.SessionService, cfg.BaseURL,
 	)
 	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 
-	hdlrs.qrLoginHandler, err = qrlogin.NewQRLoginHandler(
-		svcs.SessionService, svcs.WSService, repos.QRLoginRepo,
-		cfg.QREncryptionKey, cfg.QRKeyDerivationSalt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("QRLoginHandler: %w", err)
-	}
-	utils.LogInfo("HANDLERS", "QRLoginHandler initialized")
-
 	hdlrs.staticHandler, err = handlers.NewStaticHandler(
-		cfg, svcs.UserCache, svcs.WSService, svcs.CaptchaService,
+		cfg, svcs.UserCache, svcs.CaptchaService,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("StaticHandler: %w", err)
@@ -386,14 +378,6 @@ func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
 	svcs.ExportTokenService.Stop()
 
 	svcs.LimiterMgr.StopAll()
-
-	if svcs.WSService != nil {
-		utils.LogInfo("SERVER", "Closing WebSocket connections...")
-		wsCtx, wsCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer wsCancel()
-		svcs.WSService.Shutdown(wsCtx)
-		utils.LogInfo("SERVER", "WebSocket connections closed")
-	}
 
 	utils.LogInfo("SERVER", "Shutting down HTTP server...")
 	httpCtx, httpCancel := context.WithTimeout(context.Background(), shutdownTimeout)

@@ -50,8 +50,11 @@ jobs:
         run: go build ./...
 
   frontend:
-    name: Frontend (tsc + esbuild bundle)
+    name: Frontend (Vue 3 + Vite build)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -59,19 +62,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
+          cache-dependency-path: frontend/package-lock.json
 
       - name: npm ci
         run: npm ci
 
-      - name: TypeScript typecheck (tsc --noEmit)
-        run: npx tsc --noEmit
-
-      - name: Full frontend build (cmd/build)
-        run: go run ./cmd/build
+      - name: Frontend build (vue-tsc + vite build)
+        run: npm run build
 
   img-processor:
     name: Zig (img-processor tests)

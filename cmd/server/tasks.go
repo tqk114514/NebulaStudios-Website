@@ -132,9 +132,8 @@ func loggerMiddleware() gin.HandlerFunc {
 func shouldSkipLog(path string) bool {
 	skipPrefixes := []string{
 		"/assets",
-		"/shared",
-		"/account/assets",
-		"/policy/assets",
+		"/policy-content",
+		"/avatars",
 	}
 
 	for _, prefix := range skipPrefixes {

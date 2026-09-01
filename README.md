@@ -12,7 +12,8 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 | Web 框架 | Gin |
 | 数据库 | PostgreSQL（pgx 驱动，连接池管理） |
 | 图片处理 | Zig 0.16.0（调用 libwebp + stb_image） |
-| 前端语言 | TypeScript（esbuild 打包） |
+| 前端框架 | Vue 3（Composition API + TypeScript） |
+| 前端构建 | Vite |
 | 头像存储 | 本地文件系统（./data/avatars） |
 | 缓存 | hashicorp/golang-lru/v2（分片 LRU） |
 | 日志 | go.uber.org/zap |
@@ -31,7 +32,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 ### 安全机制
 
-- **分片限流器**：基于 IP 的令牌桶限流，16 个分片降低锁竞争，LRU 淘汰策略防止内存增长。覆盖登录（burst 5，每 12 秒补充 1 个）、注册（burst 3，每 20 秒补充 1 个）、密码重置（burst 3，每 20 秒补充 1 个）、验证码校验（burst 5，每 10 秒补充 1 个）、扫码登录生成（burst 3，每 10 秒补充 1 个）、OAuth Token 端点（burst 10，每 2 秒补充 1 个）、数据导出（同一用户 24 小时限 1 次）
+- **分片限流器**：基于 IP 的令牌桶限流，16 个分片降低锁竞争，LRU 淘汰策略防止内存增长。覆盖登录（burst 5，每 12 秒补充 1 个）、注册（burst 3，每 20 秒补充 1 个）、密码重置（burst 3，每 20 秒补充 1 个）、验证码校验（burst 5，每 10 秒补充 1 个）、OAuth Token 端点（burst 10，每 2 秒补充 1 个）、数据导出（同一用户 24 小时限 1 次）
 - **邮件限流器**：同一邮箱 60 秒内只能发送一封邮件，16 分片 LRU
 - **封禁系统**：支持临时封禁和永久封禁，BanCheckMiddleware 拦截所有需要登录的接口
 - **CSRF 防护**：Double Submit Cookie 模式，状态变更请求需提供 X-CSRF-Token 头或表单字段，使用恒定时间比较防止时序攻击
@@ -61,14 +62,6 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 - Microsoft 支持头像自动同步（登录/绑定时异步转存为 WebP 并更新头像，可关闭）
 - Google 通过 Cloudflare Worker 代理调用 API（解决国内无法直连），id_token 由 Worker 现场验签后以 Ed25519 背书
 - 均使用 PKCE 流程保护
-
-### 扫码登录
-
-- PC 端生成加密二维码（AES-256-GCM），有效期 3 分钟
-- 加密密钥通过环境变量 `QR_ENCRYPTION_KEY` 和 `QR_KEY_DERIVATION_SALT` 派生
-- 移动端扫描后在手机端确认登录，PC 端通过 WebSocket 实时收到状态推送
-- WebSocket 服务采用 8 分片设计，最大 1000 连接，Ping/Pong 心跳保活，5 分钟超时自动清理
-- 支持设备信息展示（浏览器、操作系统）
 
 ### 管理后台
 
@@ -110,34 +103,30 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 支持 5 种语言：简体中文、繁体中文、英语、日语、韩语。
 
-- 前端翻译在构建时合并为 `translations.js`，按语言懒加载
+- 前端使用 vue-i18n，5 语言文案按语言组织，支持运行时切换与偏好持久化
 - 邮件模板支持多语言，文案从 `email-texts.json` 读取
-- 政策文档（隐私政策、服务条款、Cookie 政策）支持多语言多版本，前端按日期选择
+- 政策文档（隐私政策、服务条款、Cookie 政策）支持多语言多版本，前端按生效日期展示
 
 ### 前端
 
-纯 TypeScript + HTML + CSS，没有前端框架。使用 esbuild 打包 TypeScript，构建系统本身也是 Go 写的（`cmd/build/`）。
+Vue 3（Composition API + TypeScript）+ Vite 构建的纯 SPA，路由由 `frontend/` 下的 vue-router 管理。组件化开发（`AppModal`/`ConfirmDialog`/`Toast`/`FormField` 等原子组件全局复用）。
 
 构建流程：
 
-1. 清理并创建 `dist/` 目录结构
-2. 同步内嵌第三方库的版本无关导出入口（`vendor.ts`，升级库无需改业务代码）
-3. 复制后端数据文件（邮件模板、文案 JSON）
-4. 合并 i18n 为 `translations.js`
-5. 构建 cookie-consent.js
-6. esbuild 打包各模块 TypeScript 入口（home、account、admin、policy 完全独立）
-7. 压缩 CSS（去空白和注释）
-8. 压缩 HTML（去空白和注释）
-9. 复制政策 Markdown 文件
-10. 保存资源清单（asset-manifest.json）
-11. 对整个 `dist/` 目录做 Brotli 预压缩（生产模式）
+```bash
+cd frontend
+npm ci
+npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 dist/
+```
 
-页面路由按模块分组：
+`dist/` 包含 `index.html`、`assets/`（前端编译产物）以及后端运行时依赖 `data/`（邮件模板）、`policy/`（政策文档与 manifest），随 server 二进制同目录部署。
+
+页面路由（history 模式，服务端对未匹配路由做 SPA fallback 返回 `index.html`）：
 
 - `/` -- 首页
 - `/account/login`、`/account/register`、`/account/verify`、`/account/forgot`、`/account/dashboard`、`/account/link`、`/account/oauth`
-- `/policy` -- 政策中心 SPA（hash 路由切换隐私政策/服务条款/Cookie 政策）
-- `/admin` -- 管理后台 SPA（需管理员权限）
+- `/policy` -- 政策中心
+- `/admin` -- 管理后台（需管理员权限）
 
 旧版路由（如 `/login`、`/register` 等）通过 301 重定向到新版路径。
 
@@ -159,8 +148,10 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 ```
 .
 ├── cmd/
-│   ├── server/            # 后端服务入口（main.go、routes.go、tasks.go）
-│   └── build/             # 前端构建工具（JS/CSS/HTML 压缩，Brotli 预压缩）
+│   └── server/            # 后端服务入口（main.go、routes.go、tasks.go）
+├── frontend/              # 前端（Vue 3 + Vite SPA）
+│   ├── src/               # 源码（components 原子组件、pages、router、stores、i18n）
+│   └── vite.config.ts     # Vite 配置（产物输出到项目根 dist/）
 ├── img-processor/         # Zig 图片处理服务
 │   ├── src/main.zig       # 主逻辑（Socket 监听、图片编解码）
 │   ├── src/stb_impl.c     # stb_image 实现
@@ -169,28 +160,20 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 ├── internal/
 │   ├── cache/             # 用户 LRU 缓存
 │   ├── config/            # 配置加载（环境变量、验证）
-│   ├── handlers/          # HTTP Handler（auth、user、admin、oauth、qrlogin、static）
+│   ├── handlers/          # HTTP Handler（auth、user、admin、oauth、static）
 │   ├── middleware/        # Gin 中间件（auth、admin、ban、compress、cors、ratelimit、security）
 │   ├── models/            # 数据库模型（CRUD、Schema 定义、golang-migrate 版本化迁移）
 │   ├── paths/             # 路由路径常量
-│   ├── services/          # 业务服务（token、session、captcha、email、websocket、localstorage、imgprocessor、oauth）
+│   ├── services/          # 业务服务（token、session、captcha、email、localstorage、imgprocessor、oauth）
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
 │   └── version/           # 版本信息（ldflags 注入 Git commit）
-├── modules/               # 前端模块（home、account、admin、policy）
-│   ├── */assets/          # CSS + TypeScript
-│   └── */pages/           # HTML 页面
-├── shared/                # 前端共享资源
-│   ├── components/        # 共享 HTML 组件（header）
-│   ├── css/               # 全局样式
-│   ├── i18n/              # 翻译 JSON + 政策 Markdown（按语言和日期组织）
-│   └── js/                # 共享 TypeScript（类型、工具函数、翻译加载器）
-├── data/                  # 后端数据文件（邮件模板、文案）+ 本地头像存储（avatars/）
+├── data/                  # 后端数据文件（邮件模板、文案）→ 构建时复制到 dist/data
+├── shared/                # 政策文档源（i18n/policy Markdown + manifest）→ 构建时复制到 dist/policy
 ├── docs/                  # 文档
-├── dist/                  # 构建输出（前端编译后 + Brotli 预压缩 .br 文件）
-├── build.ps1              # 一键构建脚本（前端 + Zig 交叉编译 + 后端）
+├── dist/                  # 构建产物（server 二进制同目录部署：index.html/assets/data/policy）
+├── build.ps1              # 一键构建脚本（Zig 交叉编译 + 后端 + 前端）
 ├── google-oauth-proxy.js  # Google OAuth 代理 Worker（Cloudflare，Ed25519 背书）
-├── go.mod / go.sum        # Go 依赖
-└── tsconfig.json          # TypeScript 配置
+└── go.mod / go.sum        # Go 依赖
 ```
 
 ## 快速开始
@@ -210,7 +193,6 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 ```bash
 DATABASE_URL="postgres://user:password@localhost:5432/dbname"  # PostgreSQL 连接字符串
 JWT_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----..."              # ECDSA P-256 PEM 私钥（用于 JWT ES256 签名）
-QR_KEY_DERIVATION_SALT="your-salt"                             # 扫码登录密钥派生 Salt
 EMAIL_WHITELIST_DOMAINS="example.com"                          # 允许注册的邮箱域名白名单（逗号分隔，必需）
 
 # SMTP 邮件（必需，未配置时服务拒绝启动；网易 163 邮箱默认使用 SSL 465 端口 + LOGIN 认证）
@@ -255,9 +237,6 @@ GOOGLE_PROXY_ACCESS_CLIENT_SECRET="your-access-client-secret"
 # Google id_token 验签（代理 Worker 签名背书的 Ed25519 验签公钥，PEM 全文，与 JWT_PRIVATE_KEY 配置方式一致）
 WORKER_SIGNING_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 
-# 扫码登录加密
-QR_ENCRYPTION_KEY="your-encryption-key"
-
 # 头像存储与 CDN（可选）
 AVATAR_DIR="./data/avatars"        # 本地头像存储目录（默认 ./data/avatars）
 CDN_URL="https://your-cdn-domain"  # CDN 域名（用于 CSP img-src 白名单，可选）
@@ -285,12 +264,14 @@ DEFAULT_AVATAR_URL="https://cdn.example.com/default-avatar.svg"
 **1. 编译前端**
 
 ```bash
-go run ./cmd/build/
-# 开发模式（不压缩，保留 sourcemap）：
-go run ./cmd/build/ -dev
+cd frontend
+npm ci
+npm run build   # vue-tsc 类型检查 + vite build
 ```
 
-构建产物输出到 `dist/` 目录。生产模式下所有静态文件会额外生成 `.br`（Brotli）预压缩版本，服务端根据浏览器 `Accept-Encoding` 头决定返回压缩版还是原始文件——支持 Brotli 的浏览器零开销直接拿到压缩版，不支持的浏览器自动回退到原始文件。
+构建产物输出到项目根 `dist/` 目录，含 `index.html`、`assets/`（前端编译产物）以及后端运行时依赖 `data/`、`policy/`。开发模式可运行 `npm run dev`（Vite dev server，代理 `/api`、`/oauth` 到 Go 后端）。
+
+部署时需要把构建产物复制到 server 二进制同目录下的 `dist/`。
 
 **2. 编译图片处理服务**
 
@@ -317,7 +298,7 @@ go run ./cmd/server/
 # 编译（可注入版本信息）
 go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=$(git rev-parse --short HEAD)" -o server ./cmd/server/
 
-# 运行编译后的二进制
+# 运行编译后的二进制（dist/ 需与二进制同目录）
 ./server
 ```
 
@@ -325,9 +306,9 @@ go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=
 
 ### 静态文件服务
 
-服务端通过 `PreCompressedStatic` 中间件服务 `dist/` 目录下的静态文件。对于支持 Brotli 的浏览器，直接返回预压缩的 `.br` 文件（零运行时开销），`Content-Encoding: br`。对于不支持的浏览器，返回原始未压缩文件。
+服务端通过 `PreCompressedStatic` 中间件服务 `dist/` 目录下 `assets/` 中的静态资源。对于支持 Brotli 的浏览器，直接返回预压缩的 `.br` 文件（零运行时开销），`Content-Encoding: br`；不支持的浏览器自动回退到原始文件。
 
-HTML 页面由 `serveHTML` 函数处理，支持 CSP nonce 注入（模板中的 `{{CSP_NONCE}}` 会在运行时替换为随机 nonce）。
+页面为纯 SPA：`/`、`/account/*`、`/admin`、`/policy` 等路由统一返回 `index.html`，由 vue-router 接管；未命中的 history 深层路径同样 fallback 到 `index.html`。所有页面响应均注入 CSP nonce。
 
 ## 注意事项
 
@@ -337,9 +318,9 @@ HTML 页面由 `serveHTML` 函数处理，支持 CSP nonce 注入（模板中的
 
 3. **安全性**：项目中包含限流、CSRF 防护、CSP、封禁等安全机制，但作为个人项目未经过专业安全审计。在生产环境使用请自行评估风险。
 
-4. **前端框架**：前端未使用 Vue/React 等框架，是纯 TypeScript + HTML + CSS 的方案。每个模块的 JS 完全独立打包，页面之间不共享运行时状态（通过 Cookie 中的 JWT 维护登录态）。
+4. **前端框架**：前端使用 Vue 3 + Vite 构建的纯 SPA，组件化开发。登录态通过 Cookie 中 JWT 维护，vue-router 守卫控制页面访问，服务端对 `/admin` 等敏感路径仍做鉴权与伪装（未授权返回 404）。
 
-5. **i18n 构建**：前端翻译在构建时被打包进 `translations.js`（含所有语言），运行时根据用户选择的语言动态切换。这意味着翻译内容变更后需要重新执行前端构建。
+5. **i18n 配置**：前端文案存储在 `frontend/src/i18n/locales/`，由 `scripts/gen-locales.mjs` 从 `frontend/src/i18n/sources/` 各语言 JSON 自动生成。政策 Markdown 位于 `frontend/policy/`，构建时复制进 `dist/policy/`。改动文案后需重新执行 `npm run build`。
 
 6. **数据库迁移**：由 golang-migrate 管理，迁移 SQL 由 `getTableSchemas()` / `getIndexDefinitions()` 动态生成并作为版本 1 应用，仅执行一次。**对已有表新增列不会自动应用**（`CREATE TABLE IF NOT EXISTS` 对已存在的表是空操作）——需要手动执行 `ALTER TABLE ... ADD COLUMN`，或在迁移中追加新版本。删除列、修改类型、约束变更同样需要手动 SQL。
 

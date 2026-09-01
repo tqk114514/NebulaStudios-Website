@@ -45,7 +45,6 @@ const (
 	passwordMinLength      = 16
 	passwordMaxLength      = 64
 	urlMaxLength           = 2048
-	dataURLMaxLength       = 500000
 	verificationCodeLength = 6
 )
 
@@ -62,7 +61,6 @@ var (
 	specialRegex = regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?` + "`~]")
 	upperRegex   = regexp.MustCompile(`[A-Z]`)
 	lowerRegex   = regexp.MustCompile(`[a-z]`)
-	dataURLRegex = regexp.MustCompile(`^data:image/(jpeg|jpg|png|gif|webp);base64,[A-Za-z0-9+/]+=*$`)
 	codeRegex    = regexp.MustCompile(`^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz]{6}$`)
 )
 
@@ -189,13 +187,15 @@ func ValidatePassword(password string) ValidationResult {
 // ValidateAvatarURL 验证头像 URL
 // 支持：
 // - http/https URL（必须以图片扩展名结尾，除特殊域名外）
-// - data URL（base64 编码的图片）
+// - "microsoft"/"google" 特殊值（使用对应第三方头像）
+//
+// 不支持 data URL：自定义头像按隐私政策 2.2.1 仅存储第三方图床 URL 字符串，
+// 不接收、不存储、不处理图片本体，base64 内联等价于直接存图
 //
 // 安全检查：
 // - 禁止内网地址（防止 SSRF）
 // - 限制 URL 长度
 // - 限制允许的图片格式
-// - 支持 "microsoft" 特殊值（使用微软头像）
 func ValidateAvatarURL(avatarURL string) ValidationResult {
 	if avatarURL == "" {
 		LogDebug("VALIDATOR", "Avatar URL validation failed: empty URL")
@@ -216,26 +216,7 @@ func ValidateAvatarURL(avatarURL string) ValidationResult {
 		return ValidationResult{Valid: true, Value: "google"}
 	}
 
-	if strings.HasPrefix(trimmed, "data:") {
-		return validateDataURL(trimmed)
-	}
-
 	return validateHTTPURL(trimmed)
-}
-
-// validateDataURL 验证 data URL
-func validateDataURL(dataURL string) ValidationResult {
-	if len(dataURL) > dataURLMaxLength {
-		LogDebug("VALIDATOR", "Data URL validation failed: too long", "bytes", len(dataURL))
-		return ValidationResult{Valid: false, ErrorCode: ErrURLTooLong}
-	}
-
-	if !dataURLRegex.MatchString(dataURL) {
-		LogDebug("VALIDATOR", "Data URL validation failed: invalid format")
-		return ValidationResult{Valid: false, ErrorCode: ErrInvalidURL}
-	}
-
-	return ValidationResult{Valid: true, Value: dataURL}
 }
 
 // validateHTTPURL 验证 HTTP/HTTPS URL

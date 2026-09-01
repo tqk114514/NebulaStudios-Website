@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"auth-system/internal/paths"
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -18,13 +17,15 @@ const (
 	headerXContentTypeOptions = "nosniff"
 	headerReferrerPolicy      = "strict-origin-when-cross-origin"
 	headerPermissionsPolicy   = "geolocation=(), microphone=(), camera=()"
-	// defaultCSPTemplate CSP 模板，%s 占位符由 CDN_URL 注入
+	// defaultCSPTemplate CSP 模板，%s 占位符由 CDN_URL 注入。
+	// img-src 放行 https:：自定义头像是用户提供的第三方图床 URL（隐私政策 2.2.1），主机无法枚举白名单；
+	// 图片请求无脚本执行面，且后端 ValidateAvatarURL 已限制仅 https + 图片扩展名，泄露面可接受
 	defaultCSPTemplate = "default-src 'none'; " +
 		"script-src 'self' %s https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
 		"style-src 'self' %s; " +
 		"font-src 'self' %s; " +
 		"connect-src 'self' https://static.cloudflareinsights.com %s; " +
-		"img-src 'self' data: blob: %s https://*.googleusercontent.com; " +
+		"img-src 'self' data: blob: https: %s; " +
 		"frame-ancestors 'self'; " +
 		"frame-src 'self' https://challenges.cloudflare.com; " +
 		"base-uri 'self'; " +
@@ -49,28 +50,6 @@ type SecurityConfig struct {
 	EnablePermissionsPolicy bool
 	CustomCSP               string
 	CDNURL                  string
-}
-
-// htmlPages HTML 页面路径映射
-// 用于判断是否需要添加 CSP 头（实际页面 + 旧版别名 + 模块根路径）
-var htmlPages = map[string]bool{
-	paths.PathHome:             true,
-	paths.PathAdmin:            true,
-	paths.PathPolicy:           true,
-	paths.AliasPathLogin:       true,
-	paths.AliasPathRegister:    true,
-	paths.AliasPathVerify:      true,
-	paths.AliasPathForgot:      true,
-	paths.AliasPathDashboard:   true,
-	paths.AliasPathLink:        true,
-	paths.PathAccount:          true,
-	paths.PathAccountLogin:     true,
-	paths.PathAccountRegister:  true,
-	paths.PathAccountVerify:    true,
-	paths.PathAccountForgot:    true,
-	paths.PathAccountDashboard: true,
-	paths.PathAccountLink:      true,
-	paths.PathAccountOAuth:     true,
 }
 
 // SecurityHeaders 安全头中间件（使用默认配置：启用 CSP、ReferrerPolicy、PermissionsPolicy）
@@ -98,7 +77,7 @@ func SecurityHeadersWithConfig(config SecurityConfig) gin.HandlerFunc {
 
 		path := c.Request.URL.Path
 
-		if config.EnableCSP && isHTMLPage(path) {
+		if config.EnableCSP && isHTMLPage(path, c.Request.Method) {
 			nonce, err := GenerateCSPNonce(c)
 			if err != nil {
 				c.AbortWithStatusJSON(500, gin.H{"error": "Internal server error"})
@@ -225,27 +204,41 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 	}
 }
 
-// isHTMLPage 判断路径是否为 HTML 页面（预定义映射、.html 后缀或 /account/ 模块路由）
-func isHTMLPage(path string) bool {
+// isHTMLPage 判断请求是否渲染 SPA 页面（需加 CSP head）。
+// SPA 下所有非 API/OAuth/静态资源/头像 的 GET 请求都会返回 index.html，
+// 均为"页面"，统一施加 CSP。
+func isHTMLPage(path string, method string) bool {
 	if path == "" {
 		return false
 	}
-
-	if htmlPages[path] {
-		return true
+	if method != http.MethodGet {
+		return false
 	}
-
-	if strings.HasSuffix(path, ".html") {
-		return true
+	if strings.HasPrefix(path, "/api/") ||
+		strings.HasPrefix(path, "/admin/api/") ||
+		strings.HasPrefix(path, "/oauth") ||
+		strings.HasPrefix(path, "/avatars/") ||
+		strings.HasPrefix(path, "/assets/") ||
+		strings.HasPrefix(path, "/policy-content/") {
+		return false
 	}
-
-	if strings.HasPrefix(path, "/account/") &&
-		!strings.Contains(path, "/assets/") &&
-		!strings.Contains(path, "/data/") &&
-		!strings.Contains(path, "/api/") {
-		return true
+	if isStaticAssetPath(path) {
+		return false
 	}
+	return true
+}
 
+// isStaticAssetPath 判断是否为静态资源路径（含扩展名的资源请求，不应作为页面加 CSP）
+func isStaticAssetPath(path string) bool {
+	staticExtensions := []string{
+		".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+		".woff", ".woff2", ".ttf", ".eot", ".map", ".json",
+	}
+	for _, ext := range staticExtensions {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -275,7 +268,7 @@ func isValidMaxAge(maxAge string) bool {
 // AddSecurityHeader 添加单个安全头，空上下文或空键值会记录错误
 func AddSecurityHeader(c *gin.Context, key, value string) {
 	if c == nil {
-		utils.LogErrorCtx(c.Request.Context(), "SECURITY", "AddSecurityHeader", fmt.Errorf("context is nil"))
+		utils.LogError("SECURITY", "AddSecurityHeader", fmt.Errorf("gin context is nil"))
 		return
 	}
 	if key == "" || value == "" {

@@ -381,6 +381,14 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 		return
 	}
 
+	// 一致性守卫：pending 数据的发起 Provider 必须与当前 handler 一致，
+	// 防止 Microsoft 端点消费 Google 流程的数据（会把身份写错字段）
+	if pendingData.Provider != h.Spec.NameLower {
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link provider mismatch", "token", utils.TruncateIdentifier(token), "expected", h.Spec.NameLower, "actual", pendingData.Provider)
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	user, err := h.UserRepo.FindByUID(ctx, pendingData.UserUID)
@@ -435,6 +443,14 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link expired in ConfirmLink", "token", utils.TruncateIdentifier(token))
 		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		return
+	}
+
+	// 一致性守卫：pending 数据的发起 Provider 必须与当前 handler 一致，
+	// 防止 Microsoft 端点消费 Google 流程的数据（会把身份写错字段）
+	if pendingData.Provider != h.Spec.NameLower {
+		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link provider mismatch in ConfirmLink", "token", utils.TruncateIdentifier(token), "expected", h.Spec.NameLower, "actual", pendingData.Provider)
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
 		return
 	}
 
@@ -587,6 +603,7 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 
 			SavePendingLink(linkToken, &PendingLink{
 				UserUID:           existingUser.UID,
+				Provider:          h.Spec.NameLower,
 				ProviderID:        identity.ProviderID,
 				DisplayName:       identity.DisplayName,
 				ProviderAvatarURL: identity.AvatarURL,
@@ -631,4 +648,44 @@ func (h *ExternalProviderHandler) handleLoginAction(c *gin.Context, ctx context.
 	} else {
 		c.Redirect(http.StatusFound, h.BaseURL+paths.PathAccountDashboard)
 	}
+}
+
+// PendingLinkDispatcher Provider 无关的待绑定确认处理器。
+// 待绑定数据的发起 Provider 是服务端 pending 状态的一部分（随一次性 link_token 存储），
+// 分发器据此把请求路由到对应 Provider 的 handler：前端无需感知 Provider、URL 不携带，
+// 避免跨 Provider 参数篡改导致身份写入错误字段。
+type PendingLinkDispatcher struct {
+	providers map[string]*ExternalProviderHandler
+}
+
+// NewPendingLinkDispatcher 创建分发器，注册各 Provider 的底层 handler
+func NewPendingLinkDispatcher(providers ...*ExternalProviderHandler) *PendingLinkDispatcher {
+	m := make(map[string]*ExternalProviderHandler, len(providers))
+	for _, h := range providers {
+		m[h.Spec.NameLower] = h
+	}
+	return &PendingLinkDispatcher{providers: m}
+}
+
+// resolve 按 pending 状态中的 Provider 返回对应 handler；无有效待绑定数据时返回 nil
+func (d *PendingLinkDispatcher) resolve(c *gin.Context) *ExternalProviderHandler {
+	return d.providers[PendingLinkProvider(c)]
+}
+
+// GetPendingLinkInfo 获取待绑定信息，按 pending 状态分发到对应 Provider handler
+func (d *PendingLinkDispatcher) GetPendingLinkInfo(c *gin.Context) {
+	if h := d.resolve(c); h != nil {
+		h.GetPendingLinkInfo(c)
+		return
+	}
+	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, "INVALID_TOKEN", "No pending link for token")
+}
+
+// ConfirmLink 确认绑定，按 pending 状态分发到对应 Provider handler
+func (d *PendingLinkDispatcher) ConfirmLink(c *gin.Context) {
+	if h := d.resolve(c); h != nil {
+		h.ConfirmLink(c)
+		return
+	}
+	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, "INVALID_TOKEN", "No pending link for token")
 }

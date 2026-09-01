@@ -352,7 +352,6 @@ func (f *FakeLimiter) RegisterRateLimit() gin.HandlerFunc      { return noopHand
 func (f *FakeLimiter) ResetPasswordRateLimit() gin.HandlerFunc { return noopHandler }
 func (f *FakeLimiter) OAuthTokenRateLimit() gin.HandlerFunc    { return noopHandler }
 func (f *FakeLimiter) VerifyCodeRateLimit() gin.HandlerFunc    { return noopHandler }
-func (f *FakeLimiter) QRLoginRateLimit() gin.HandlerFunc       { return noopHandler }
 func (f *FakeLimiter) EmailAllow(string) bool                  { return f.EmailAllowed }
 func (f *FakeLimiter) EmailWaitTime(string) int                { return f.EmailWait }
 func (f *FakeLimiter) DataExportAllow(string) bool             { return true }
@@ -589,69 +588,3 @@ func (f *FakeOAuthProvider) RevokeToken(_ context.Context, token string) error {
 	f.Revoked = append(f.Revoked, token)
 	return nil
 }
-
-// ---------- FakeQRLoginStore: models.QRLoginStore ----------
-
-// FakeQRLoginStore 扫码登录仓库 fake，记录创建/删除并支持行为注入
-type FakeQRLoginStore struct {
-	Created        []*models.QRLoginToken
-	Deleted        []string
-	FindResult     *models.QRLoginToken
-	FindErr        error
-	CreateErr      error
-	UpdateSuccess  bool
-	UpdateErr      error
-	UpdateCalls    []QRStatusTransition // UpdateStatusWithCondition 的 from/to 记录
-	ConsumeUserUID string
-	ConsumeErr     error
-	ConfirmSuccess bool
-	ConfirmErr     error
-}
-
-// QRStatusTransition 记录一次条件状态迁移调用的 from/to
-type QRStatusTransition struct {
-	From string
-	To   string
-}
-
-func (f *FakeQRLoginStore) Create(_ context.Context, t *models.QRLoginToken) error {
-	f.Created = append(f.Created, t)
-	return f.CreateErr
-}
-func (f *FakeQRLoginStore) FindByToken(context.Context, string) (*models.QRLoginToken, error) {
-	return f.FindResult, f.FindErr
-}
-func (f *FakeQRLoginStore) UpdateStatus(context.Context, string, string, *int64) error { return nil }
-func (f *FakeQRLoginStore) UpdateStatusWithCondition(_ context.Context, _ string, fromStatus, toStatus string, _ *int64) (bool, error) {
-	f.UpdateCalls = append(f.UpdateCalls, QRStatusTransition{From: fromStatus, To: toStatus})
-	return f.UpdateSuccess, f.UpdateErr
-}
-func (f *FakeQRLoginStore) ConfirmLogin(context.Context, string, string, string) error { return nil }
-func (f *FakeQRLoginStore) ConfirmLoginWithCondition(context.Context, string, string, string) (bool, error) {
-	return f.ConfirmSuccess, f.ConfirmErr
-}
-func (f *FakeQRLoginStore) Delete(_ context.Context, tokenHash string) error {
-	f.Deleted = append(f.Deleted, tokenHash)
-	return nil
-}
-func (f *FakeQRLoginStore) ConsumeAndSetSession(context.Context, string, string) (string, error) {
-	return f.ConsumeUserUID, f.ConsumeErr
-}
-
-// ---------- FakeWebSocket: services.WebSocketManager ----------
-
-// FakeWebSocket WebSocket 服务 fake，仅记录通知调用
-type FakeWebSocket struct {
-	Notifications []map[string]any // {token, status, data}
-	Decrypter     func(string) (string, error)
-}
-
-func (f *FakeWebSocket) HandleQRLogin(*gin.Context) {}
-func (f *FakeWebSocket) NotifyStatusChange(token, status string, data map[string]string) {
-	f.Notifications = append(f.Notifications, map[string]any{"token": token, "status": status, "data": data})
-}
-func (f *FakeWebSocket) GetConnectionCount() int                           { return 0 }
-func (f *FakeWebSocket) IsShutdown() bool                                  { return false }
-func (f *FakeWebSocket) Shutdown(context.Context)                          {}
-func (f *FakeWebSocket) GetStats() map[string]any                          { return map[string]any{} }
-func (f *FakeWebSocket) SetTokenDecrypter(fn func(string) (string, error)) { f.Decrypter = fn }

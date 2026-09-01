@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/hex"
 	"strings"
 	"testing"
@@ -123,78 +122,6 @@ func TestVerifyPasswordInvalidHash(t *testing.T) {
 		if _, err := VerifyPassword("Abcdef1!@#ghijklmn", c); err == nil {
 			t.Errorf("VerifyPassword with %q should return error", c)
 		}
-	}
-}
-
-func TestEncryptDecryptAESGCM(t *testing.T) {
-	key := bytes.Repeat([]byte{0x42}, 32)
-	plaintext := []byte("sensitive-data-123")
-
-	enc, err := EncryptAESGCM(plaintext, key)
-	if err != nil {
-		t.Fatalf("EncryptAESGCM() error = %v", err)
-	}
-	if !strings.Contains(enc, ".") || strings.Count(enc, ".") != 2 {
-		t.Errorf("ciphertext %q should be iv.tag.data (2 dots)", enc)
-	}
-
-	dec, err := DecryptAESGCM(enc, key)
-	if err != nil {
-		t.Fatalf("DecryptAESGCM() error = %v", err)
-	}
-	if !bytes.Equal(dec, plaintext) {
-		t.Errorf("roundtrip mismatch: got %q, want %q", dec, plaintext)
-	}
-
-	// 篡改密文 → 解密失败
-	tampered := enc[:len(enc)-1] + string(enc[len(enc)-1]^1)
-	if _, err := DecryptAESGCM(tampered, key); err == nil {
-		t.Error("tampered ciphertext should fail decryption")
-	}
-	// 错误 key → 解密失败
-	badKey := bytes.Repeat([]byte{0x24}, 32)
-	if _, err := DecryptAESGCM(enc, badKey); err == nil {
-		t.Error("wrong key should fail decryption")
-	}
-}
-
-func TestEncryptAESGCMErrors(t *testing.T) {
-	key := bytes.Repeat([]byte{0x42}, 32)
-	if _, err := EncryptAESGCM([]byte{}, key); err != ErrEmptyPlaintext {
-		t.Errorf("empty plaintext error = %v, want ErrEmptyPlaintext", err)
-	}
-	if _, err := EncryptAESGCM([]byte("x"), []byte("short")); err == nil {
-		t.Error("short key should error")
-	}
-	if _, err := DecryptAESGCM("", key); err != ErrEmptyCiphertext {
-		t.Errorf("empty ciphertext error = %v, want ErrEmptyCiphertext", err)
-	}
-	if _, err := DecryptAESGCM("only-two.parts", key); err != ErrInvalidCiphertextFormat {
-		t.Errorf("bad format error = %v, want ErrInvalidCiphertextFormat", err)
-	}
-}
-
-func TestDeriveKeyFromString(t *testing.T) {
-	k1, err := DeriveKeyFromString("secret", "salt")
-	if err != nil {
-		t.Fatalf("DeriveKeyFromString() error = %v", err)
-	}
-	if len(k1) != 32 {
-		t.Errorf("key length = %d, want 32", len(k1))
-	}
-	k2, _ := DeriveKeyFromString("secret", "salt")
-	if !bytes.Equal(k1, k2) {
-		t.Error("same input should derive same key")
-	}
-	k3, _ := DeriveKeyFromString("secret", "other-salt")
-	if bytes.Equal(k1, k3) {
-		t.Error("different salt should derive different key")
-	}
-	if _, err := DeriveKeyFromString("", "salt"); err == nil {
-		t.Error("empty key string should error")
-	}
-	if _, err := DeriveKeyFromString("secret", ""); err == nil {
-		t.Error("empty salt should error")
 	}
 }
 

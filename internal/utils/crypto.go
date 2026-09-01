@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -10,25 +8,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/hkdf"
 )
 
 var (
-	ErrInvalidKeyLength        = errors.New("invalid key length, must be 32 bytes")
-	ErrDecryptionFailed        = errors.New("decryption failed")
 	ErrInvalidHash             = errors.New("invalid hash format")
 	ErrRandomGeneration        = errors.New("failed to generate random bytes")
 	ErrEmptyPassword           = errors.New("password cannot be empty")
-	ErrEmptyPlaintext          = errors.New("plaintext cannot be empty")
-	ErrEmptyCiphertext         = errors.New("ciphertext cannot be empty")
-	ErrInvalidCiphertextFormat = errors.New("invalid ciphertext format")
-	ErrCipherCreation          = errors.New("failed to create AES cipher")
-	ErrGCMCreation             = errors.New("failed to create GCM mode")
 )
 
 const codeChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
@@ -44,7 +33,6 @@ const (
 const (
 	aesKeySize   = 32
 	gcmNonceSize = 12
-	gcmTagSize   = 16
 )
 
 const (
@@ -213,151 +201,6 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	LogDebug("CRYPTO", "Password verification result", "match", match)
 
 	return match, nil
-}
-
-// EncryptAESGCM 使用 AES-256-GCM 加密数据
-// key 必须是 32 字节（256 位）
-// 返回格式：iv.authTag.ciphertext（三段 base64 URLEncoding，URL 安全）
-func EncryptAESGCM(plaintext []byte, key []byte) (string, error) {
-	if len(plaintext) == 0 {
-		LogWarn("CRYPTO", "Attempted to encrypt empty plaintext")
-		return "", ErrEmptyPlaintext
-	}
-
-	if len(key) != aesKeySize {
-		err := fmt.Errorf("invalid key length: got %d, expected %d", len(key), aesKeySize)
-		return "", LogError("CRYPTO", "EncryptAESGCM", err)
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to create AES cipher")
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to create GCM mode")
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	n, err := io.ReadFull(rand.Reader, nonce)
-	if err != nil {
-		return "", LogError("CRYPTO", "EncryptAESGCM", err, "failed to generate nonce")
-	}
-	if n != gcm.NonceSize() {
-		err := fmt.Errorf("incomplete nonce generation")
-		return "", LogError("CRYPTO", "EncryptAESGCM", err)
-	}
-
-	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
-
-	tagSize := gcm.Overhead()
-	if len(ciphertext) < tagSize {
-		err := fmt.Errorf("ciphertext too short")
-		return "", LogError("CRYPTO", "EncryptAESGCM", err)
-	}
-
-	actualCiphertext := ciphertext[:len(ciphertext)-tagSize]
-	authTag := ciphertext[len(ciphertext)-tagSize:]
-
-	result := base64.URLEncoding.EncodeToString(nonce) + "." +
-		base64.URLEncoding.EncodeToString(authTag) + "." +
-		base64.URLEncoding.EncodeToString(actualCiphertext)
-
-	LogDebug("CRYPTO", "Data encrypted successfully", "plaintext_size", len(plaintext), "ciphertext_size", len(result))
-	return result, nil
-}
-
-// DecryptAESGCM 使用 AES-256-GCM 解密数据
-// key 必须是 32 字节（256 位）
-// 输入格式：iv.authTag.ciphertext（三段 base64 URLEncoding，URL 安全）
-func DecryptAESGCM(ciphertextB64 string, key []byte) ([]byte, error) {
-	if ciphertextB64 == "" {
-		LogWarn("CRYPTO", "Attempted to decrypt empty ciphertext")
-		return nil, ErrEmptyCiphertext
-	}
-
-	if len(key) != aesKeySize {
-		err := fmt.Errorf("invalid key length: got %d, expected %d", len(key), aesKeySize)
-		return nil, LogError("CRYPTO", "DecryptAESGCM", err)
-	}
-
-	parts := strings.Split(ciphertextB64, ".")
-	if len(parts) != 3 {
-		LogWarn("CRYPTO", "Invalid ciphertext format", "expected_parts", 3, "got", len(parts))
-		return nil, ErrInvalidCiphertextFormat
-	}
-
-	nonce, err := base64.URLEncoding.DecodeString(parts[0])
-	if err != nil {
-		LogWarn("CRYPTO", "Failed to decode nonce", "error", err)
-		return nil, fmt.Errorf("%w: invalid nonce", ErrDecryptionFailed)
-	}
-
-	if len(nonce) != gcmNonceSize {
-		LogWarn("CRYPTO", "Invalid nonce size", "got", len(nonce), "expected", gcmNonceSize)
-		return nil, fmt.Errorf("%w: invalid nonce size", ErrDecryptionFailed)
-	}
-
-	authTag, err := base64.URLEncoding.DecodeString(parts[1])
-	if err != nil {
-		LogWarn("CRYPTO", "Failed to decode authTag", "error", err)
-		return nil, fmt.Errorf("%w: invalid authTag", ErrDecryptionFailed)
-	}
-
-	if len(authTag) != gcmTagSize {
-		LogWarn("CRYPTO", "Invalid authTag size", "got", len(authTag), "expected", gcmTagSize)
-		return nil, fmt.Errorf("%w: invalid authTag size", ErrDecryptionFailed)
-	}
-
-	ciphertext, err := base64.URLEncoding.DecodeString(parts[2])
-	if err != nil {
-		LogWarn("CRYPTO", "Failed to decode ciphertext", "error", err)
-		return nil, fmt.Errorf("%w: invalid ciphertext", ErrDecryptionFailed)
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, LogError("CRYPTO", "DecryptAESGCM", err, "failed to create AES cipher")
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, LogError("CRYPTO", "DecryptAESGCM", err, "failed to create GCM mode")
-	}
-
-	combined := append(ciphertext, authTag...)
-
-	plaintext, err := gcm.Open(nil, nonce, combined, nil)
-	if err != nil {
-		LogWarn("CRYPTO", "Decryption failed", "error", err)
-		return nil, ErrDecryptionFailed
-	}
-
-	LogDebug("CRYPTO", "Data decrypted successfully", "ciphertext_size", len(ciphertextB64), "plaintext_size", len(plaintext))
-	return plaintext, nil
-}
-
-// DeriveKeyFromString 使用 HKDF-SHA256 从字符串确定性派生 32 字节密钥
-// 相同输入始终产生相同输出，确保服务器重启后密钥一致
-func DeriveKeyFromString(keyStr string, derivationSalt string) ([]byte, error) {
-	if keyStr == "" {
-		LogWarn("CRYPTO", "Attempted to derive key from empty string")
-		return nil, errors.New("key string cannot be empty")
-	}
-	if derivationSalt == "" {
-		LogWarn("CRYPTO", "Attempted to derive key with empty derivation salt")
-		return nil, errors.New("derivation salt cannot be empty")
-	}
-
-	reader := hkdf.New(sha256.New, []byte(keyStr), []byte(derivationSalt), []byte("nebula-qrlogin-v1"))
-	key := make([]byte, 32)
-	if _, err := io.ReadFull(reader, key); err != nil {
-		return nil, fmt.Errorf("hkdf key derivation failed: %w", err)
-	}
-
-	LogDebug("CRYPTO", "Key derived using HKDF-SHA256", "key_len", len(key))
-	return key, nil
 }
 
 // HashToken 计算 token 的 SHA-256 哈希（hex 编码），用于 token 的数据库存储与查询

@@ -63,9 +63,6 @@ type Config struct {
 	// Google id_token 验证：代理 Worker 签名背书的 Ed25519 验签公钥（PEM 全文）
 	WorkerSigningPublicKey string
 
-	QREncryptionKey     string
-	QRKeyDerivationSalt string
-
 	AvatarDir        string
 	DefaultAvatarURL string
 	DataExportSalt   string
@@ -150,9 +147,6 @@ func Load() (*Config, error) {
 	newCfg.ProxyAccessClientSecret = getEnv("GOOGLE_PROXY_ACCESS_CLIENT_SECRET", "")
 	newCfg.WorkerSigningPublicKey = getEnv("WORKER_SIGNING_PUBLIC_KEY", "")
 
-	newCfg.QREncryptionKey = getEnv("QR_ENCRYPTION_KEY", "")
-	newCfg.QRKeyDerivationSalt = getEnv("QR_KEY_DERIVATION_SALT", "")
-
 	newCfg.AvatarDir = getEnv("AVATAR_DIR", "./data/avatars")
 	newCfg.CDNURL = getEnv("CDN_URL", "")
 
@@ -181,10 +175,6 @@ func validateConfig(c *Config) error {
 		missingKeys = append(missingKeys, "JWT_PRIVATE_KEY")
 	}
 
-	if c.QRKeyDerivationSalt == "" {
-		missingKeys = append(missingKeys, "QR_KEY_DERIVATION_SALT")
-	}
-
 	if c.EmailWhitelistDomains == "" {
 		missingKeys = append(missingKeys, "EMAIL_WHITELIST_DOMAINS")
 	}
@@ -197,10 +187,6 @@ func validateConfig(c *Config) error {
 
 	if c.SMTPUser == "" || c.SMTPPassword == "" {
 		warnings = append(warnings, "SMTP credentials incomplete (email sending will fail)")
-	}
-
-	if c.QREncryptionKey == "" {
-		warnings = append(warnings, "QR_ENCRYPTION_KEY is empty (QR login will fail)")
 	}
 
 	for _, w := range warnings {
@@ -242,10 +228,6 @@ func (c *Config) GoogleProxyURLs() []string {
 		}
 	}
 	return urls
-}
-
-func (c *Config) IsQRLoginConfigured() bool {
-	return c.QREncryptionKey != ""
 }
 
 func getEnv(key, defaultValue string) string {

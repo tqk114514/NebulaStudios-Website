@@ -1,0 +1,15 @@
+{
+  "nav.dashboard": "仪表盘",
+  "nav.users": "用户管理",
+  "nav.logs": "操作日志",
+  "nav.oauth": "OAuth 应用",
+  "nav.whitelist": "邮箱白名单",
+  "nav.data": "数据管理",
+  "nav.backToAccount": "返回账户",
+  "nav.logout": "退出登录",
+  "stats.totalUsers": "总用户数",
+  "stats.todayNewUsers": "今日新增",
+  "stats.adminCount": "管理员数",
+  "stats.bannedCount": "封禁用户",
+  "stats.loadFailed": "统计数据加载失败"
+}

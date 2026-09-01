@@ -1,0 +1,27 @@
+/* 全局样式入口。
+ * 架构：
+ * - tokens.css  设计令牌（颜色/字体/字号/动效）
+ * - base.css    reset + body 排版 + 全局状态类
+ * - 其余样式全部下沉到各 Vue 组件的 scoped 样式中（组件自治，无全局页面级 CSS）
+ */
+@import './tokens.css';
+@import './base.css';
+
+/* AppModal 过渡类（Vue Transition 作用于 Teleport 根节点，需全局声明） */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+.modal-fade-enter-active .modal-container,
+.modal-fade-leave-active .modal-container {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+.modal-fade-enter-from .modal-container,
+.modal-fade-leave-to .modal-container {
+  transform: scale(0.9);
+  opacity: 0;
+}

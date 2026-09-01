@@ -32,9 +32,7 @@ func setupRouter(cfg *config.Config, hdlrs *Handlers, repos *Repos, svcs *Servic
 
 	setupAPIRoutes(r, hdlrs, repos, svcs)
 
-	setupWebSocketRoutes(r, svcs)
-
-	r.NoRoute(handlers.NotFoundHandler(cfg.CDNURL))
+	r.NoRoute(handlers.SPAFallbackHandler(cfg.CDNURL))
 
 	utils.LogInfo("ROUTER", "Routes configured successfully")
 	return r
@@ -63,7 +61,7 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 		c.Status(http.StatusNoContent)
 	})
 
-	r.Use(middleware.PreCompressedStatic("./dist"))
+	r.Use(middleware.PreCompressedStatic())
 	utils.LogInfo("STATIC", "Serving pre-compressed static files from ./dist")
 
 	// 本地头像存储目录
@@ -72,28 +70,30 @@ func setupStaticFiles(r *gin.Engine, cfg *config.Config, hdlrs *Handlers) {
 }
 
 func setupPageRoutes(r *gin.Engine, cfg *config.Config, repos *Repos, svcs *Services) {
-	r.GET("/", handlers.ServeHomePage)
+	// SPA：所有页面路由统一返回前端应用入口 index.html，
+	// 由前端 vue-router 接管具体页面；服务端中间件仍负责鉴权与伪装（Admin 页 404）。
+	r.GET("/", handlers.ServeSpaApp)
 
 	accountPages := r.Group("/account")
 	{
 		accountPages.GET("", func(c *gin.Context) {
 			c.Redirect(http.StatusFound, paths.PathAccountLogin)
 		})
-		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeLoginPage)
-		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeRegisterPage)
-		accountPages.GET("/verify", handlers.ServeVerifyPage)
-		accountPages.GET("/forgot", handlers.ServeForgotPasswordPage)
-		accountPages.GET("/dashboard", handlers.ServeDashboardPage)
-		accountPages.GET("/link", handlers.ServeLinkConfirmPage)
-		accountPages.GET("/oauth", handlers.ServeOAuthPage)
+		accountPages.GET("/login", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeSpaApp)
+		accountPages.GET("/register", middleware.GuestOnlyMiddleware(svcs.SessionService, svcs.UserCache, repos.UserRepo), handlers.ServeSpaApp)
+		accountPages.GET("/verify", handlers.ServeSpaApp)
+		accountPages.GET("/forgot", handlers.ServeSpaApp)
+		accountPages.GET("/dashboard", handlers.ServeSpaApp)
+		accountPages.GET("/link", handlers.ServeSpaApp)
+		accountPages.GET("/oauth", handlers.ServeSpaApp)
 	}
 
-	r.GET("/policy", handlers.ServePolicyPage)
+	r.GET("/policy", handlers.ServeSpaApp)
 
 	adminPage := r.Group("/admin")
 	adminPage.Use(adminmw.AdminPageMiddleware(repos.UserRepo, svcs.SessionService, cfg.CDNURL))
 	{
-		adminPage.GET("", handlers.ServeAdminPage)
+		adminPage.GET("", handlers.ServeSpaApp)
 	}
 
 	setupLegacyRedirects(r)
@@ -140,8 +140,6 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services
 	setupAuthAPI(apiGroup, hdlrs, repos, svcs)
 
 	setupUserAPI(apiGroup, hdlrs, repos, svcs)
-
-	setupQRLoginAPI(apiGroup, hdlrs, repos, svcs)
 
 	setupAdminAPI(apiGroup, r, hdlrs, repos, svcs)
 
@@ -224,6 +222,10 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.GET("/google/pending-link", hdlrs.googleHandler.GetPendingLinkInfo)
 		authAPI.POST("/google/confirm-link",
 			hdlrs.googleHandler.ConfirmLink)
+
+		// Provider 无关的绑定确认端点，按服务端 pending 状态分发（见 oauth.PendingLinkDispatcher）
+		authAPI.GET("/pending-link", hdlrs.pendingLinkDispatcher.GetPendingLinkInfo)
+		authAPI.POST("/confirm-link", hdlrs.pendingLinkDispatcher.ConfirmLink)
 	}
 }
 
@@ -242,21 +244,6 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 	}
 
 	r.GET("/api/user/export/:token", hdlrs.userHandler.DownloadUserData)
-}
-
-func setupQRLoginAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) {
-	qrAPI := r.Group("/api/qr-login")
-	{
-		qrAPI.POST("", svcs.LimiterMgr.QRLoginRateLimit(), hdlrs.qrLoginHandler.Generate)
-		qrAPI.DELETE("/:token", hdlrs.qrLoginHandler.Cancel)
-		qrAPI.POST("/scan", hdlrs.qrLoginHandler.Scan)
-		qrAPI.POST("/confirm",
-			middleware.AuthMiddleware(svcs.SessionService),
-			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
-			hdlrs.qrLoginHandler.MobileConfirm)
-		qrAPI.POST("/cancel", hdlrs.qrLoginHandler.MobileCancel)
-		qrAPI.PATCH("/:token/session", hdlrs.qrLoginHandler.SetSession)
-	}
 }
 
 func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services) {
@@ -345,9 +332,4 @@ func setupOAuthProviderAPI(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *S
 	}
 
 	utils.LogInfo("ROUTER", "OAuth Provider API routes configured")
-}
-
-func setupWebSocketRoutes(r *gin.Engine, svcs *Services) {
-	r.GET("/ws/qr-login", svcs.WSService.HandleQRLogin)
-	utils.LogInfo("ROUTER", "WebSocket routes configured")
 }

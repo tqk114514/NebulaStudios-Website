@@ -179,12 +179,16 @@ func (h *MicrosoftHandler) logUnlink(ctx context.Context, userUID, id, displayNa
 	return h.UserLogRepo.LogUnlinkMicrosoft(ctx, userUID, id, displayName)
 }
 
-// linkFields Microsoft 头像不走字段更新：图片文件经 AfterLink 异步转存到本地存储，
+// linkFields 绑定即开启头像自动同步：隐私政策 2.2.2 定义"绑定时收集头像"（合法性基础
+// 为 OAuth 授权页的明确同意），重绑定视为新的同意行为，同步回到默认开启，与 DB 默认值
+// 及 logLink 记录的 enable_avatar_sync 隐私事件保持一致。解绑时由 unlinkFields 置 false。
+// Microsoft 头像不走字段更新：图片文件经 AfterLink 异步转存到本地存储，
 // 数据库中的 microsoft_avatar_url 由 processAvatarAsync 更新
 func (h *MicrosoftHandler) linkFields(identity oauth.ProviderIdentity) map[string]any {
 	return map[string]any{
-		"microsoft_id":   identity.ProviderID,
-		"microsoft_name": identity.DisplayName,
+		"microsoft_id":          identity.ProviderID,
+		"microsoft_name":        identity.DisplayName,
+		"microsoft_avatar_sync": true,
 	}
 }
 

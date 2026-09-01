@@ -268,7 +268,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// 写入政策同意记录（注册即同意当前生效的隐私政策和服务条款）
 	if h.userConsentRepo != nil {
-		manifestPath := filepath.Join("dist", "shared", "i18n", "policy", "manifest.json")
+		manifestPath := filepath.Join("dist", "policy", "manifest.json")
 		manifest, err := services.LoadPolicyManifest(manifestPath)
 		if err != nil {
 			utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to load policy manifest for consent", "user_uid", user.UID, "error", err)

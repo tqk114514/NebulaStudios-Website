@@ -1,0 +1,33 @@
+/**
+ * 设计令牌：颜色 / 字体 / 字号 / 动效曲线
+ * 迁移自原站 shared/css/general.css 的 :root（原站 CDN 字体已由 main.ts 的 @fontsource 替代）
+ */
+
+:root {
+  --bg:   #0d0d0d;
+  --fg:   #f0ede8;
+  --dim:  #2a2a2a;
+  --mid:  #555;
+  --line: #1a1a1a;
+
+  --success: #4a8a6a;
+  --error: #7a2020;
+  --error-bright: #aa3030;
+  --warning: #8a6a20;
+  --danger: #8a4a4a;
+
+  --fg-hover: #e0ddd8;
+
+  --dur:  0.8s;
+  --ease: cubic-bezier(0.76, 0, 0.24, 1);
+
+  --font-display: 'Unbounded', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Azeret Mono', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
+  --font-serif: 'Newsreader', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
+
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 20px;
+}

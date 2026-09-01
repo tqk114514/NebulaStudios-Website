@@ -6,8 +6,6 @@ import (
 
 	"auth-system/internal/cache"
 	"auth-system/internal/models"
-
-	"github.com/gin-gonic/gin"
 )
 
 // SessionManager Session 服务接口
@@ -87,17 +85,6 @@ type OAuthClientManager interface {
 	OAuthProviderStore
 	OAuthAdminManager
 	OAuthGrantManager
-}
-
-// WebSocketManager WebSocket 服务接口
-type WebSocketManager interface {
-	HandleQRLogin(c *gin.Context)
-	NotifyStatusChange(token, status string, data map[string]string)
-	GetConnectionCount() int
-	IsShutdown() bool
-	Shutdown(ctx context.Context)
-	GetStats() map[string]any
-	SetTokenDecrypter(fn func(string) (string, error))
 }
 
 // ImageProcessor 图像处理服务接口

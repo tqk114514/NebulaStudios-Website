@@ -53,6 +53,7 @@ type State struct {
 // PendingLink 待确认绑定数据，当用户通过 OAuth 登录但邮箱已存在时需要确认绑定
 type PendingLink struct {
 	UserUID           string // 已存在用户的 UID
+	Provider          string // 发起绑定的 Provider（"microsoft"/"google"），确认时据此分发
 	ProviderID        string // 第三方账户 ID
 	DisplayName       string // 第三方显示名称
 	ProviderAvatarURL string // 第三方头像 URL
@@ -152,6 +153,22 @@ func GetAndDeletePendingLink(token string) (*PendingLink, bool) {
 		delete(pendingIndex, token)
 	}
 	return data, exists
+}
+
+// PendingLinkProvider 读取 link_token 对应待绑定数据的发起 Provider（"microsoft"/"google"）。
+// provider 是服务端 pending 状态的一部分，随一次性 token 存取，供 Provider 无关端点分发，
+// 不从 URL/请求参数读取，杜绝跨 Provider 篡改。无有效待绑定数据时返回空串。
+func PendingLinkProvider(c *gin.Context) string {
+	token, err := utils.GetLinkTokenCookie(c)
+	token = strings.TrimSpace(token)
+	if err != nil || token == "" {
+		return ""
+	}
+	data, exists := GetPendingLink(token)
+	if !exists || data == nil {
+		return ""
+	}
+	return data.Provider
 }
 
 // GenerateState 生成随机 state 用于防止 CSRF 攻击

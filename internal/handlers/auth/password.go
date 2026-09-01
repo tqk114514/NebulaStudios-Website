@@ -62,7 +62,8 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 			return
 		}
 
-		verifyURL := h.baseURL + paths.PathAccountVerify + "#token=" + token
+		// SPA 前端用 query 传 token（vue-router route.query 原生支持，hash 会被路由重写丢失）
+		verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
 		language := h.getLanguage(req.Language)
 
 		h.emailService.SendVerificationEmailAsync(normalizedEmail, "reset_password", language, verifyURL, "AUTH")

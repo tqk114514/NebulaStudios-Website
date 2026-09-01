@@ -92,22 +92,6 @@ func getTableSchemas() []TableSchema {
 				{Name: "verified_at", Type: "BIGINT", Nullable: true},
 			},
 		},
-		// qr_login_tokens 表
-		{
-			Name: "qr_login_tokens",
-			Columns: []ColumnDefinition{
-				{Name: "token_hash", Type: "VARCHAR(64)", Nullable: false, IsPrimary: true},
-				{Name: "status", Type: "VARCHAR(20)", Nullable: true, Default: "'pending'"},
-				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: true},
-				{Name: "pc_ip", Type: "VARCHAR(45)", Nullable: true},
-				{Name: "pc_user_agent", Type: "TEXT", Nullable: true},
-				{Name: "created_at", Type: "BIGINT", Nullable: false},
-				{Name: "expire_time", Type: "BIGINT", Nullable: false},
-				{Name: "scanned_at", Type: "BIGINT", Nullable: true},
-				{Name: "confirmed_at", Type: "BIGINT", Nullable: true},
-				{Name: "pc_session_token_hash", Type: "VARCHAR(64)", Nullable: true},
-			},
-		},
 		// admin_logs 表
 		{
 			Name: "admin_logs",
@@ -264,7 +248,6 @@ func getIndexDefinitions() []struct {
 		{"idx_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_tokens_expire ON tokens(expire_time)"},
 		{"idx_codes_email_type", "CREATE INDEX IF NOT EXISTS idx_codes_email_type ON codes(email, type)"},
 		{"idx_codes_expire", "CREATE INDEX IF NOT EXISTS idx_codes_expire ON codes(expire_time)"},
-		{"idx_qr_tokens_expire", "CREATE INDEX IF NOT EXISTS idx_qr_tokens_expire ON qr_login_tokens(expire_time)"},
 		{"idx_admin_logs_admin_uid", "CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_uid ON admin_logs(admin_uid)"},
 		{"idx_admin_logs_created_at", "CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC)"},
 		{"idx_user_logs_user_uid", "CREATE INDEX IF NOT EXISTS idx_user_logs_user_uid ON user_logs(user_uid)"},
