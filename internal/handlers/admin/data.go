@@ -32,8 +32,12 @@ type importExecuteRequest struct {
 }
 
 type importExecuteResponse struct {
-	UsersImported int `json:"usersImported"`
-	LogsImported  int `json:"logsImported"`
+	UsersImported        int `json:"usersImported"`
+	LogsImported         int `json:"logsImported"`
+	UsersFailed          int `json:"usersFailed"`
+	LogsFailed           int `json:"logsFailed"`
+	UsersPasswordSkipped int `json:"usersPasswordSkipped"`
+	UsersRoleDowngraded  int `json:"usersRoleDowngraded"`
 }
 
 // RequestExport 生成 OTAC（一次性授权码）
@@ -45,9 +49,9 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 	// OTAC 明文入日志：5 分钟一次性且绑定生成者 userUID，日志泄露无利用价值
 	utils.LogInfoCtx(c.Request.Context(), "DATA-EXPORT", "Data export download requested", "otac", otac, "request_id", requestID, "user", operatorUID)
 
-	utils.RespondSuccess(c, gin.H{
-		"requestId": requestID,
-		"expiresIn": int(time.Until(expiresAt).Seconds()),
+	utils.RespondSuccessWithData(c, exportRequestResponse{
+		RequestID: requestID,
+		ExpiresIn: int(time.Until(expiresAt).Seconds()),
 	})
 }
 
@@ -162,12 +166,12 @@ func (h *AdminHandler) PreviewImport(c *gin.Context) {
 
 	fileToken := h.exportService.StoreFile(data, header.Filename)
 
-	utils.RespondSuccess(c, gin.H{
-		"fileToken":  fileToken,
-		"usersCount": exportHeader.UsersCount,
-		"logsCount":  exportHeader.LogsCount,
-		"exportedAt": exportHeader.ExportedAt,
-		"exportedBy": exportHeader.ExportedBy,
+	utils.RespondSuccessWithData(c, importPreviewResponse{
+		FileToken:  fileToken,
+		UsersCount: exportHeader.UsersCount,
+		LogsCount:  exportHeader.LogsCount,
+		ExportedAt: exportHeader.ExportedAt,
+		ExportedBy: exportHeader.ExportedBy,
 	})
 }
 
@@ -238,13 +242,13 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "Failed to log import", "error", err)
 	}
 
-	utils.RespondSuccess(c, gin.H{
-		"usersImported":        usersResult.Imported,
-		"usersFailed":          usersResult.Failed,
-		"usersPasswordSkipped": usersResult.PasswordSkipped,
-		"usersRoleDowngraded":  usersResult.RoleDowngraded,
-		"logsImported":         logsImported,
-		"logsFailed":           logsFailed,
+	utils.RespondSuccessWithData(c, importExecuteResponse{
+		UsersImported:        usersResult.Imported,
+		UsersFailed:          usersResult.Failed,
+		UsersPasswordSkipped: usersResult.PasswordSkipped,
+		UsersRoleDowngraded:  usersResult.RoleDowngraded,
+		LogsImported:         logsImported,
+		LogsFailed:           logsFailed,
 	})
 }
 
