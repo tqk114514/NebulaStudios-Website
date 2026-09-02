@@ -102,7 +102,8 @@ export interface WhitelistListResponse {
 /** POST /admin/api/data/export/request 响应（data.go RequestExport） */
 export interface ExportRequestResponse {
   requestId: string
-  expiresIn: number
+  /** OTAC 过期时间（Unix 秒） */
+  expiresAt: number
 }
 
 /** POST /admin/api/data/import/preview 响应 */

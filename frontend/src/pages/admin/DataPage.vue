@@ -19,8 +19,14 @@ const exportBusy = ref(false)
 const exportRequestId = ref('')
 const otacOpen = ref(false)
 const otac = ref('')
+/** OTAC 过期时间（Unix 秒），剩余时长每秒据此重算，规避本地计时漂移 */
+const otacExpiresAt = ref(0)
 const otacRemaining = ref(0)
 let otacTimer: ReturnType<typeof setInterval> | null = null
+
+function otacRemainingSeconds(): number {
+  return Math.max(0, Math.ceil(otacExpiresAt.value - Date.now() / 1000))
+}
 
 const otacTimerText = computed(() => {
   const mins = Math.floor(otacRemaining.value / 60)
@@ -54,11 +60,12 @@ async function startExport(): Promise<void> {
     const data = await post<ExportRequestResponse>('/admin/api/data/export/request')
     exportRequestId.value = data.requestId
     otac.value = ''
-    otacRemaining.value = data.expiresIn
+    otacExpiresAt.value = data.expiresAt
+    otacRemaining.value = otacRemainingSeconds()
     otacOpen.value = true
     stopOtacTimer()
     otacTimer = setInterval(() => {
-      otacRemaining.value -= 1
+      otacRemaining.value = otacRemainingSeconds()
       if (otacRemaining.value <= 0) {
         closeOtac(false)
         toast.error(t('admin.data.otac.expired'))

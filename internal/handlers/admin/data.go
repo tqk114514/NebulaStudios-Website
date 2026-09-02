@@ -15,7 +15,8 @@ import (
 
 type exportRequestResponse struct {
 	RequestID string `json:"requestId"`
-	ExpiresIn int    `json:"expiresIn"`
+	// ExpiresAt OTAC 过期时间（Unix 秒）；剩余时长由前端据此自行计算，避免传输耗时造成偏差
+	ExpiresAt int64 `json:"expiresAt"`
 }
 
 type importPreviewResponse struct {
@@ -51,7 +52,7 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 
 	utils.RespondSuccessWithData(c, exportRequestResponse{
 		RequestID: requestID,
-		ExpiresIn: int(time.Until(expiresAt).Seconds()),
+		ExpiresAt: expiresAt.Unix(),
 	})
 }
 
