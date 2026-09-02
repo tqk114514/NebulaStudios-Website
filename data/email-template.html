@@ -3,67 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
   <title>{{PAGE_TITLE}}</title>
+  <style>
+    @media only screen and (max-width: 620px) {
+      .em-pad { padding-left: 24px !important; padding-right: 24px !important; }
+    }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Azeret Mono', 'Courier New', Consolas, 'Microsoft YaHei', monospace; background-color: #0d0d0d; color: #f0ede8;">
+<body style="margin: 0; padding: 0; background-color: #0a0a0a;">
 
-  <div style="width: 100%; padding: 40px 20px; background-color: #0d0d0d;">
-    <div style="max-width: 600px; margin: 0 auto; background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color: #0a0a0a;">
+    <tr>
+      <td align="center" style="padding: 44px 16px;">
 
-      <!-- 头部 -->
-      <div style="padding: 32px 28px; text-align: center; border-bottom: 1px solid #1a1a1a; background: #101010;">
-        <h1 style="margin: 0; color: #f0ede8; font-family: 'Unbounded', 'Azeret Mono', 'Courier New', monospace; font-size: 20px; font-weight: 600; letter-spacing: 0.14em;">NEBULA&nbsp;STUDIOS</h1>
-      </div>
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width: 600px; max-width: 600px; background-color: #121212; border: 1px solid #232323; border-radius: 12px;">
 
-      <!-- 内容区 -->
-      <div style="padding: 36px 28px;">
+          <!-- 头部：字标 + 星云辉光（无 webfont 依赖，系统字体渲染锐利；Outlook 无渐变时降级为纯色背景） -->
+          <tr>
+            <td align="center" bgcolor="#0d0d0d" style="background-color: #0d0d0d; background-image: linear-gradient(215deg, rgba(126, 94, 224, 0.26) 0%, rgba(126, 94, 224, 0) 44%), linear-gradient(35deg, rgba(72, 52, 150, 0.32) 0%, rgba(72, 52, 150, 0) 46%); border-radius: 11px 11px 0 0; padding: 42px 24px 38px;">
+              <div style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 0.46em; text-indent: 0.46em; color: #f0ede8;">NEBULA&nbsp;STUDIOS</div>
+            </td>
+          </tr>
 
-        <p style="margin: 0 0 20px 0; color: #f0ede8; font-size: 15px; letter-spacing: 0.06em;">{{GREETING}}</p>
-        <p style="margin: 0 0 32px 0; color: #8a8a8a; font-size: 13px; line-height: 1.7; letter-spacing: 0.04em;">
-          {{DESCRIPTION}}
-        </p>
+          <!-- 问候 + 说明 -->
+          <tr>
+            <td class="em-pad" style="padding: 38px 40px 0;">
+              <p style="margin: 0 0 16px 0; font-family: Georgia, 'Times New Roman', 'Microsoft YaHei', serif; font-size: 24px; color: #f0ede8;">{{GREETING}}</p>
+              <p style="margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 15px; line-height: 1.85; color: #a8a29a;">{{DESCRIPTION}}</p>
+            </td>
+          </tr>
 
-        <!-- 按钮 -->
-        <div style="text-align: center; margin: 40px 0;">
-          <a href="{{VERIFY_URL}}" style="display: inline-block; padding: 13px 42px; background: #f0ede8; color: #0d0d0d; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 600; letter-spacing: 0.12em;">
-            {{BUTTON_TEXT}}
-          </a>
-        </div>
+          <!-- CTA 按钮（防弹表格写法） -->
+          <tr>
+            <td class="em-pad" align="center" style="padding: 34px 40px 6px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td bgcolor="#f0ede8" style="background-color: #f0ede8; border-radius: 7px;">
+                    <a href="{{VERIFY_URL}}" style="display: inline-block; padding: 15px 54px; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.12em; color: #0d0d0d; text-decoration: none;">{{BUTTON_TEXT}}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-        <!-- 备用链接 -->
-        <p style="margin: 20px 0; color: #555; font-size: 11px; text-align: center; letter-spacing: 0.04em;">
-          {{LINK_HINT}}
-        </p>
-        <p style="margin: 10px 0 0 0; padding: 12px; background: #101010; border: 1px solid #1a1a1a; border-radius: 4px; color: #f0ede8; font-size: 11px; word-break: break-all; text-align: center;">
-          {{VERIFY_URL}}
-        </p>
+          <!-- 备用链接 -->
+          <tr>
+            <td class="em-pad" style="padding: 30px 40px 0;">
+              <p style="margin: 0 0 10px 0; text-align: center; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 12px; color: #6b6560;">{{LINK_HINT}}</p>
+              <div style="border: 1px dashed #2e2e2e; border-radius: 6px; padding: 11px 14px; text-align: center; font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.6; color: #8a857e; word-break: break-all;">{{VERIFY_URL}}</div>
+            </td>
+          </tr>
 
-        <!-- 有效期 -->
-        <p style="margin: 32px 0 20px 0; color: #8a8a8a; font-size: 13px; text-align: center;">
-          {{EXPIRE_NOTICE}}
-        </p>
+          <!-- 有效期 -->
+          <tr>
+            <td class="em-pad" align="center" style="padding: 26px 40px 0;">
+              <p style="margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 13px; color: #a8a29a;">{{EXPIRE_NOTICE}}</p>
+            </td>
+          </tr>
 
-        <!-- 分割线 -->
-        <div style="border-top: 1px solid #1a1a1a; margin: 32px 0;"></div>
+          <!-- 安全提示 -->
+          <tr>
+            <td class="em-pad" align="center" style="padding: 28px 40px 0;">
+              <p style="margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 12px; line-height: 1.8; color: #7d776f;">{{SECURITY_TIP}}</p>
+            </td>
+          </tr>
 
-        <!-- 安全提示 -->
-        <div style="background: #101010; border-left: 2px solid #f0ede8; padding: 14px; margin: 20px 0;">
-          <p style="margin: 0; color: #8a8a8a; font-size: 12px; line-height: 1.7;">
-            {{SECURITY_TIP}}
-          </p>
-        </div>
+          <!-- 页脚 -->
+          <tr>
+            <td class="em-pad" align="center" style="padding: 34px 40px 26px;">
+              <div style="border-top: 1px solid #1f1f1f; padding-top: 18px;">
+                <p style="margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif; font-size: 11px; letter-spacing: 0.14em; color: #5d5852;">{{FOOTER}}</p>
+              </div>
+            </td>
+          </tr>
 
-      </div>
+        </table>
 
-      <!-- 页脚 -->
-      <div style="padding: 20px; text-align: center; border-top: 1px solid #1a1a1a; background: #101010;">
-        <p style="margin: 0; color: #555; font-size: 11px; letter-spacing: 0.08em;">
-          {{FOOTER}}
-        </p>
-      </div>
-
-    </div>
-  </div>
+      </td>
+    </tr>
+  </table>
 
 </body>
 </html>
