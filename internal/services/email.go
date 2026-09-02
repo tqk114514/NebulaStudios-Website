@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	defaultLanguage   = "zh-CN"
+	defaultLanguage   = "en"
 	defaultEmailType  = "register"
 	smtpTimeout       = 15 * time.Second
 	smtpPort465       = 465

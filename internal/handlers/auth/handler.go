@@ -29,7 +29,7 @@ var (
 const (
 	CookieMaxAge       = int(60 * 24 * time.Hour / time.Second)
 	TokenExpireMinutes = 10
-	DefaultLanguage    = "zh-CN"
+	DefaultLanguage    = "en"
 )
 
 // AuthHandler 认证 Handler，处理所有认证相关的 HTTP 请求

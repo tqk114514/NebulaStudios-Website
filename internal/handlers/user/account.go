@@ -72,7 +72,7 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 
 	language := req.Language
 	if language == "" {
-		language = "zh-CN"
+		language = "en"
 	}
 
 	h.emailService.SendVerificationEmailAsync(user.Email, "delete_account", language, verifyURL, "USER")

@@ -82,40 +82,13 @@ func ClearTokenCookie(w http.ResponseWriter) {
 	})
 }
 
-// SetLanguageCookie 设置语言偏好 Cookie
-func SetLanguageCookie(w http.ResponseWriter, language string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     LanguageCookieName,
-		Value:    language,
-		Path:     DefaultCookiePath,
-		Domain:   cookieDomain,
-		MaxAge:   int(365 * 24 * time.Hour / time.Second),
-		Secure:   IsSecure(),
-		HttpOnly: false,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-// ClearLanguageCookie 清除语言偏好 Cookie
-func ClearLanguageCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     LanguageCookieName,
-		Value:    "",
-		Path:     DefaultCookiePath,
-		Domain:   cookieDomain,
-		MaxAge:   -1,
-		Secure:   IsSecure(),
-		HttpOnly: false,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
 // GetTokenCookie 从 Gin Context 获取 Token Cookie
 func GetTokenCookie(c *gin.Context) (string, error) {
 	return c.Cookie(TokenCookieName)
 }
 
 // GetLanguageCookie 从 Gin Context 获取语言偏好 Cookie
+// （由前端 JS 写入 selectedLanguage，后端仅在数据导出等无法携带请求体的场景读取）
 func GetLanguageCookie(c *gin.Context) string {
 	lang, _ := c.Cookie(LanguageCookieName)
 	return lang
@@ -173,11 +146,6 @@ func SetRefreshTokenCookieGin(c *gin.Context, token string) {
 // ClearRefreshTokenCookieGin 清除 Refresh Token Cookie（GIN 版本）
 func ClearRefreshTokenCookieGin(c *gin.Context) {
 	ClearRefreshTokenCookie(c.Writer)
-}
-
-// SetLanguageCookieGin 设置语言偏好 Cookie（GIN 版本）
-func SetLanguageCookieGin(c *gin.Context, language string) {
-	SetLanguageCookie(c.Writer, language)
 }
 
 // SetLinkTokenCookie 设置微软账户绑定确认 Token Cookie
