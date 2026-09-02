@@ -46,7 +46,7 @@ const confirmDanger = ref(false)
 let confirmAction: (() => Promise<void>) | null = null
 
 function statusBadge(enabled: boolean): string {
-  return enabled ? 'adm-badge enabled' : 'adm-badge disabled'
+  return enabled ? 'adm-tag adm-tag--success' : 'adm-tag'
 }
 
 async function loadWhitelist(): Promise<void> {
@@ -213,12 +213,12 @@ onMounted(loadWhitelist)
 
 <template>
   <div>
-    <div class="adm-page-header">
+    <div class="adm-toolbar">
       <span></span>
-      <button type="button" class="adm-create-btn" @click="openCreate">{{ $t('admin.whitelist.create') }}</button>
+      <button type="button" class="adm-btn adm-btn--primary" @click="openCreate">{{ $t('admin.whitelist.create') }}</button>
     </div>
 
-    <div class="adm-table-wrap">
+    <div class="adm-card adm-card--table">
       <table class="adm-table">
         <thead>
           <tr>
@@ -226,35 +226,37 @@ onMounted(loadWhitelist)
             <th>{{ $t('admin.whitelist.col.logo') }}</th>
             <th>{{ $t('admin.whitelist.col.signupUrl') }}</th>
             <th>{{ $t('admin.whitelist.col.status') }}</th>
-            <th>{{ $t('admin.whitelist.col.createdAt') }}</th>
-            <th>{{ $t('admin.whitelist.col.actions') }}</th>
+            <th class="adm-num">{{ $t('admin.whitelist.col.createdAt') }}</th>
+            <th class="adm-end">{{ $t('admin.whitelist.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
-            <td colspan="6" class="adm-loading-cell">...</td>
-          </tr>
+          <template v-if="loading">
+            <tr v-for="i in 5" :key="i" class="adm-tr--skel" aria-hidden="true">
+              <td v-for="j in 6" :key="j"><span class="adm-skel"></span></td>
+            </tr>
+          </template>
           <tr v-else-if="forbidden">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.common.forbidden') }}</td>
+            <td colspan="6" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
           </tr>
           <tr v-else-if="loadFailed">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.common.loadFailed') }}</td>
+            <td colspan="6" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
           </tr>
           <tr v-else-if="entries.length === 0">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.common.noData') }}</td>
+            <td colspan="6" class="adm-state">{{ $t('admin.common.noData') }}</td>
           </tr>
           <template v-else>
             <tr v-for="e in entries" :key="e.id">
-              <td>{{ e.domain }}</td>
+              <td class="adm-strong">{{ e.domain }}</td>
               <td>
-                <img v-if="e.logo_url" :src="e.logo_url" class="adm-whitelist-logo" alt="" width="24" height="24" />
-                <span v-else class="adm-whitelist-no-logo">{{ $t('admin.whitelist.noLogo') }}</span>
+                <img v-if="e.logo_url" :src="e.logo_url" class="adm-thumb" alt="" width="24" height="24" />
+                <span v-else class="adm-thumb-empty">{{ $t('admin.whitelist.noLogo') }}</span>
               </td>
-              <td class="adm-url-cell" :title="e.signup_url">{{ e.signup_url }}</td>
+              <td class="adm-clip" :title="e.signup_url">{{ e.signup_url }}</td>
               <td><span :class="statusBadge(e.is_enabled)">{{ $t(e.is_enabled ? 'admin.common.enabled' : 'admin.common.disabled') }}</span></td>
-              <td>{{ formatDate(e.created_at) }}</td>
-              <td>
-                <button type="button" class="adm-action-btn view" @click="openDetail(e.id)">
+              <td class="adm-num">{{ formatDate(e.created_at) }}</td>
+              <td class="adm-end">
+                <button type="button" class="adm-row-btn" @click="openDetail(e.id)">
                   {{ $t('admin.common.view') }}
                 </button>
               </td>
@@ -270,9 +272,9 @@ onMounted(loadWhitelist)
     <AppModal v-model:open="detailOpen" :title="$t('admin.whitelist.detail.title')" width="520px">
       <template v-if="detailLoading || !detailEntry">
         <div class="adm-detail">
-          <div v-for="i in 6" :key="i" class="adm-detail-row">
-            <span class="adm-detail-label">-</span>
-            <span class="adm-detail-value">...</span>
+          <div v-for="i in 6" :key="i" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-skel"></span>
+            <span class="adm-skel"></span>
           </div>
         </div>
       </template>
@@ -284,18 +286,18 @@ onMounted(loadWhitelist)
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.whitelist.detail.logoUrl') }}</span>
-            <span class="adm-detail-value mono">{{ detailEntry.logo_url || $t('admin.whitelist.detail.notSet') }}</span>
+            <span class="adm-detail-value adm-mono">{{ detailEntry.logo_url || $t('admin.whitelist.detail.notSet') }}</span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.whitelist.detail.logoPreview') }}</span>
             <span class="adm-detail-value">
-              <img v-if="detailEntry.logo_url" :src="detailEntry.logo_url" class="adm-whitelist-logo" alt="" style="max-width: 48px; max-height: 48px" />
-              <span v-else class="adm-whitelist-no-logo">{{ $t('admin.whitelist.detail.notSet') }}</span>
+              <img v-if="detailEntry.logo_url" :src="detailEntry.logo_url" class="adm-thumb" alt="" style="width: 48px; height: 48px" />
+              <span v-else class="adm-thumb-empty">{{ $t('admin.whitelist.detail.notSet') }}</span>
             </span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.whitelist.detail.signupUrl') }}</span>
-            <span class="adm-detail-value mono">{{ detailEntry.signup_url }}</span>
+            <span class="adm-detail-value adm-mono">{{ detailEntry.signup_url }}</span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.whitelist.col.status') }}</span>
@@ -321,12 +323,7 @@ onMounted(loadWhitelist)
             {{ $t('admin.common.close') }}
           </button>
           <template v-if="detailEntry">
-            <button
-              type="button"
-              class="adm-btn"
-              :class="detailEntry.is_enabled ? 'adm-btn--warning' : 'adm-btn--success'"
-              @click="confirmToggle(detailEntry)"
-            >
+            <button type="button" class="adm-btn adm-btn--secondary" @click="confirmToggle(detailEntry)">
               {{ $t(detailEntry.is_enabled ? 'admin.whitelist.confirm.disable' : 'admin.whitelist.confirm.enable') }}
             </button>
             <button type="button" class="adm-btn adm-btn--primary" @click="openEdit(detailEntry)">
@@ -342,17 +339,17 @@ onMounted(loadWhitelist)
 
     <!-- 添加/编辑表单 -->
     <AppModal v-model:open="formOpen" :title="$t(editingId !== null ? 'admin.whitelist.form.editTitle' : 'admin.whitelist.form.addTitle')" width="480px">
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.whitelist.form.domain') }} <span class="adm-required">*</span></label>
-        <input v-model="formDomain" type="text" class="adm-form-input" :placeholder="$t('admin.whitelist.form.domainPlaceholder')" />
+        <input v-model="formDomain" type="text" class="adm-input" :placeholder="$t('admin.whitelist.form.domainPlaceholder')" />
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.whitelist.form.signupUrl') }} <span class="adm-required">*</span></label>
-        <input v-model="formSignupUrl" type="text" class="adm-form-input" :placeholder="$t('admin.whitelist.form.signupUrlPlaceholder')" />
+        <input v-model="formSignupUrl" type="text" class="adm-input" :placeholder="$t('admin.whitelist.form.signupUrlPlaceholder')" />
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.whitelist.form.logoUrl') }}</label>
-        <input v-model="formLogoUrl" type="text" class="adm-form-input" :placeholder="$t('admin.whitelist.form.logoUrlPlaceholder')" />
+        <input v-model="formLogoUrl" type="text" class="adm-input" :placeholder="$t('admin.whitelist.form.logoUrlPlaceholder')" />
       </div>
       <template #footer>
         <div class="adm-modal-actions">
@@ -378,9 +375,3 @@ onMounted(loadWhitelist)
     />
   </div>
 </template>
-
-<style scoped>
-.adm-required {
-  color: #ef4444;
-}
-</style>

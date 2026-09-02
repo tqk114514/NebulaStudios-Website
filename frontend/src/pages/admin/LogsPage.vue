@@ -98,35 +98,37 @@ onMounted(loadLogs)
 
 <template>
   <div>
-    <div class="adm-table-wrap">
+    <div class="adm-card adm-card--table">
       <table class="adm-table">
         <thead>
           <tr>
             <th>{{ $t('admin.logs.col.admin') }}</th>
             <th>{{ $t('admin.logs.col.action') }}</th>
             <th>{{ $t('admin.logs.col.details') }}</th>
-            <th>{{ $t('admin.logs.col.time') }}</th>
+            <th class="adm-num">{{ $t('admin.logs.col.time') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
-            <td colspan="4" class="adm-loading-cell">...</td>
-          </tr>
+          <template v-if="loading">
+            <tr v-for="i in 5" :key="i" class="adm-tr--skel" aria-hidden="true">
+              <td v-for="j in 4" :key="j"><span class="adm-skel"></span></td>
+            </tr>
+          </template>
           <tr v-else-if="forbidden">
-            <td colspan="4" class="adm-loading-cell">{{ $t('admin.common.forbidden') }}</td>
+            <td colspan="4" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
           </tr>
           <tr v-else-if="loadFailed">
-            <td colspan="4" class="adm-loading-cell">{{ $t('admin.common.loadFailed') }}</td>
+            <td colspan="4" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
           </tr>
           <tr v-else-if="logs.length === 0">
-            <td colspan="4" class="adm-loading-cell">{{ $t('admin.logs.noData') }}</td>
+            <td colspan="4" class="adm-state">{{ $t('admin.logs.noData') }}</td>
           </tr>
           <template v-else>
             <tr v-for="log in logs" :key="log.id">
-              <td>{{ log.admin_username }}</td>
+              <td class="adm-strong">{{ log.admin_username }}</td>
               <td>{{ actionText(log.action) }}</td>
               <td>{{ formatDetails(log) }}</td>
-              <td>{{ formatDate(log.created_at) }}</td>
+              <td class="adm-num">{{ formatDate(log.created_at) }}</td>
             </tr>
           </template>
         </tbody>

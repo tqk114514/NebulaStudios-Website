@@ -60,7 +60,7 @@ const BAN_REASONS = ['violation', 'abuse', 'malicious', 'spam'] as const
 const BAN_DURATIONS = ['1', '3', '7', '30', '90', '365', '0'] as const
 
 function roleBadgeClass(role: number): string {
-  return role === 2 ? 'adm-badge role-super-admin' : role === 1 ? 'adm-badge role-admin' : 'adm-badge role-user'
+  return role === 2 ? 'adm-tag adm-tag--danger' : role === 1 ? 'adm-tag adm-tag--warning' : 'adm-tag'
 }
 
 function roleText(role: number): string {
@@ -223,7 +223,7 @@ onMounted(loadUsers)
 
 <template>
   <div>
-    <div class="adm-page-header">
+    <div class="adm-toolbar">
       <div class="adm-search">
         <input
           v-model="searchInput"
@@ -239,7 +239,7 @@ onMounted(loadUsers)
       </div>
     </div>
 
-    <div class="adm-table-wrap">
+    <div class="adm-card adm-card--table">
       <table class="adm-table">
         <thead>
           <tr>
@@ -247,32 +247,34 @@ onMounted(loadUsers)
             <th>{{ $t('admin.users.col.username') }}</th>
             <th>{{ $t('admin.users.col.email') }}</th>
             <th>{{ $t('admin.users.col.role') }}</th>
-            <th>{{ $t('admin.users.col.createdAt') }}</th>
-            <th>{{ $t('admin.users.col.actions') }}</th>
+            <th class="adm-num">{{ $t('admin.users.col.createdAt') }}</th>
+            <th class="adm-end">{{ $t('admin.users.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
-            <td colspan="6" class="adm-loading-cell">...</td>
-          </tr>
+          <template v-if="loading">
+            <tr v-for="i in 5" :key="i" class="adm-tr--skel" aria-hidden="true">
+              <td v-for="j in 6" :key="j"><span class="adm-skel"></span></td>
+            </tr>
+          </template>
           <tr v-else-if="forbidden">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.common.forbidden') }}</td>
+            <td colspan="6" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
           </tr>
           <tr v-else-if="loadFailed">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.common.loadFailed') }}</td>
+            <td colspan="6" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
           </tr>
           <tr v-else-if="users.length === 0">
-            <td colspan="6" class="adm-loading-cell">{{ $t('admin.users.noData') }}</td>
+            <td colspan="6" class="adm-state">{{ $t('admin.users.noData') }}</td>
           </tr>
           <template v-else>
             <tr v-for="u in users" :key="u.uid">
               <td class="adm-mono">{{ u.uid }}</td>
-              <td>{{ u.username }}</td>
+              <td class="adm-strong">{{ u.username }}</td>
               <td>{{ u.email }}</td>
               <td><span :class="roleBadgeClass(u.role)">{{ roleText(u.role) }}</span></td>
-              <td>{{ formatDate(u.created_at) }}</td>
-              <td>
-                <button type="button" class="adm-action-btn view" @click="openDetail(u.uid)">
+              <td class="adm-num">{{ formatDate(u.created_at) }}</td>
+              <td class="adm-end">
+                <button type="button" class="adm-row-btn" @click="openDetail(u.uid)">
                   {{ $t('admin.common.view') }}
                 </button>
               </td>
@@ -288,9 +290,9 @@ onMounted(loadUsers)
     <AppModal v-model:open="detailOpen" :title="$t('admin.users.detail.title')" width="480px">
       <template v-if="detailLoading || !detailUser">
         <div class="adm-detail">
-          <div v-for="i in 6" :key="i" class="adm-detail-row">
-            <span class="adm-detail-label">-</span>
-            <span class="adm-detail-value">...</span>
+          <div v-for="i in 6" :key="i" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-skel"></span>
+            <span class="adm-skel"></span>
           </div>
         </div>
       </template>
@@ -298,7 +300,7 @@ onMounted(loadUsers)
         <div class="adm-detail">
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.users.col.uid') }}</span>
-            <span class="adm-detail-value mono">{{ detailUser.uid }}</span>
+            <span class="adm-detail-value adm-mono">{{ detailUser.uid }}</span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.users.col.username') }}</span>
@@ -323,7 +325,7 @@ onMounted(loadUsers)
           <template v-if="isTargetBanned(detailUser)">
             <div class="adm-detail-row adm-detail-banned">
               <span class="adm-detail-label">{{ $t('admin.users.detail.banStatus') }}</span>
-              <span class="adm-detail-value"><span class="adm-badge banned">{{ $t('admin.users.detail.banned') }}</span></span>
+              <span class="adm-detail-value"><span class="adm-tag adm-tag--danger">{{ $t('admin.users.detail.banned') }}</span></span>
             </div>
             <div class="adm-detail-row">
               <span class="adm-detail-label">{{ $t('admin.users.detail.banReason') }}</span>
@@ -335,7 +337,7 @@ onMounted(loadUsers)
             </div>
             <div class="adm-detail-row">
               <span class="adm-detail-label">{{ $t('admin.users.detail.unbanTime') }}</span>
-              <span class="adm-detail-value" :class="{ 'adm-permanent-ban': !detailUser.unban_at }">
+              <span class="adm-detail-value" :class="{ 'adm-permanent': !detailUser.unban_at }">
                 {{ detailUser.unban_at ? formatDate(detailUser.unban_at) : $t('admin.users.detail.permanentBan') }}
               </span>
             </div>
@@ -352,12 +354,12 @@ onMounted(loadUsers)
               <button v-if="isTargetBanned(detailUser)" type="button" class="adm-btn adm-btn--success" @click="confirmUnban(detailUser)">
                 {{ $t('admin.users.action.unban') }}
               </button>
-              <button v-else type="button" class="adm-btn adm-btn--warning" @click="openBanModal">
+              <button v-else type="button" class="adm-btn adm-btn--danger" @click="openBanModal">
                 {{ $t('admin.users.action.ban') }}
               </button>
             </template>
             <template v-if="currentRole >= 2 && detailUser.role < 2">
-              <button v-if="detailUser.role === 0 && !isTargetBanned(detailUser)" type="button" class="adm-btn adm-btn--warning" @click="confirmPromote(detailUser)">
+              <button v-if="detailUser.role === 0 && !isTargetBanned(detailUser)" type="button" class="adm-btn adm-btn--secondary" @click="confirmPromote(detailUser)">
                 {{ $t('admin.users.action.promote') }}
               </button>
               <button v-if="detailUser.role === 1" type="button" class="adm-btn adm-btn--secondary" @click="confirmDemote(detailUser)">
@@ -374,16 +376,16 @@ onMounted(loadUsers)
 
     <!-- 封禁弹窗 -->
     <AppModal v-model:open="banOpen" :title="$t('admin.users.ban.title')" width="420px" :z-index="210">
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.users.ban.reason') }}</label>
-        <select v-model="banReason" class="adm-form-select">
+        <select v-model="banReason" class="adm-select">
           <option value="">{{ $t('admin.users.ban.reasonPlaceholder') }}</option>
           <option v-for="r in BAN_REASONS" :key="r" :value="r">{{ $t(`admin.users.ban.reason.${r}`) }}</option>
         </select>
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.users.ban.duration') }}</label>
-        <select v-model="banDuration" class="adm-form-select">
+        <select v-model="banDuration" class="adm-select">
           <option v-for="d in BAN_DURATIONS" :key="d" :value="d">{{ $t(`admin.users.ban.duration.${d}`) }}</option>
         </select>
       </div>

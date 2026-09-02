@@ -6,8 +6,8 @@
 // 六个区块全部静态导入，随主包加载，切换零延迟。
 // 角色门控：操作日志所有管理员可见；OAuth/白名单/数据仅超管（与后端 SuperAdminMiddleware 对应，
 // 页面入口显隐只是体验层，权限以后端中间件为准）。
-// 设计令牌：老版后台独立配色（common.css :root，靛蓝 accent 系）桥接在 .admin-layout 上，
-// 子页面沿用同一套变量名，CSS 值迁移保持不变。
+// 样式：adm- 命名空间，令牌定义在 body.adm-page-open（见 pages/admin/admin-shared.css），
+// 本组件的 scoped 样式直接引用这些变量，与前台样式完全解耦。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Component } from 'vue'
@@ -110,8 +110,8 @@ function onHashChange(): void {
 onMounted(() => {
   applyHash()
   window.addEventListener('hashchange', onHashChange)
-  // 后台挂载期间给 body 打标记：弹窗 Teleport 到 body 外，
-  // admin-shared.css 据此把弹窗字体也还原为系统默认
+  // 后台挂载期间给 body 打标记：令牌作用域 + 弹窗/Toast Teleport 到 body 外，
+  // admin-shared.css 据此把共享组件也重绘为后台外观
   document.body.classList.add('adm-page-open')
 })
 
@@ -140,37 +140,41 @@ async function handleLogout(): Promise<void> {
 </script>
 
 <template>
-  <div class="admin-layout">
+  <div class="adm-shell">
     <!-- 侧边栏 -->
-    <aside class="admin-sidebar" :class="{ 'is-open': sidebarOpen }">
-      <div class="admin-sidebar-header">
-        <h1 class="admin-sidebar-title">Nebula Admin</h1>
+    <aside class="adm-side" :class="{ 'is-open': sidebarOpen }">
+      <div class="adm-side-head">
+        <h1 class="adm-brand">
+          <span class="adm-brand-mark" aria-hidden="true"></span>
+          <span class="adm-brand-name">Nebula</span>
+          <span class="adm-brand-sub">Admin</span>
+        </h1>
       </div>
-      <nav class="admin-sidebar-nav">
+      <nav class="adm-nav">
         <!-- hash 锚点：浏览器原生写 hash，hashchange 监听器负责切换（与旧版交互一致） -->
         <a
           v-for="item in visibleNav"
           :key="item.name"
           :href="`#${item.name}`"
-          class="admin-nav-item"
+          class="adm-nav-item"
           :class="{ active: currentPage === item.name }"
           @click="sidebarOpen = false"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path :d="item.icon" />
           </svg>
           <span>{{ $t(item.key) }}</span>
         </a>
       </nav>
-      <div class="admin-sidebar-footer">
-        <RouterLink to="/account/dashboard" class="admin-nav-item" @click="sidebarOpen = false">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <div class="adm-side-foot">
+        <RouterLink to="/account/dashboard" class="adm-nav-item" @click="sidebarOpen = false">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
           </svg>
           <span>{{ $t('admin.nav.backToAccount') }}</span>
         </RouterLink>
-        <button type="button" class="admin-nav-item admin-logout-btn" @click="handleLogout">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <button type="button" class="adm-nav-item adm-logout" @click="handleLogout">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
           </svg>
           <span>{{ $t('admin.nav.logout') }}</span>
@@ -179,26 +183,27 @@ async function handleLogout(): Promise<void> {
     </aside>
 
     <!-- 主内容区 -->
-    <div class="admin-main">
+    <div class="adm-main">
       <!-- 顶栏 -->
-      <header class="admin-topbar">
+      <header class="adm-topbar">
         <button
           type="button"
-          class="admin-sidebar-toggle"
+          class="adm-toggle"
+          :aria-label="$t('admin.nav.dashboard')"
           @click="sidebarOpen = !sidebarOpen"
         >
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
           </svg>
         </button>
-        <div class="admin-topbar-title">{{ $t(pageTitle) }}</div>
-        <div class="admin-topbar-avatar">
+        <div class="adm-topbar-title">{{ $t(pageTitle) }}</div>
+        <div class="adm-avatar">
           <img v-if="avatarSrc" :src="avatarSrc" :alt="auth.user?.username ?? ''" />
         </div>
       </header>
 
       <!-- 页面内容 -->
-      <div class="admin-page-container" @click="sidebarOpen = false">
+      <div class="adm-content" @click="sidebarOpen = false">
         <component :is="activeComponent" />
       </div>
     </div>
@@ -206,202 +211,264 @@ async function handleLogout(): Promise<void> {
 </template>
 
 <style scoped>
-/* ---- 设计令牌桥接（迁移自 common.css :root，值不变；子页面沿用同一套变量名） ---- */
-.admin-layout {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-card: #1a1a24;
-  --bg-hover: #22222e;
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0b0;
-  --text-muted: #606070;
-  --border: #2a2a3a;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --sidebar-width: 240px;
-  --topbar-height: 60px;
-  --transition: 0.2s ease;
-
-  /* 系统默认字体：还原 base.css 的自定义字体/字距设置（与旧版后台一致） */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-weight: 400;
-  letter-spacing: normal;
-
+/* ---- 壳层（令牌来自 body.adm-page-open，见 admin-shared.css） ---- */
+.adm-shell {
   display: flex;
   align-items: stretch;
   min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--adm-canvas);
+  color: var(--adm-ink);
+  font-family: var(--adm-font);
+  font-weight: 400;
+  letter-spacing: normal;
 }
 
-/* ---- 侧边栏（迁移自 admin.css .sidebar，值不变） ---- */
-.admin-sidebar {
+/* ---- 侧边栏 ---- */
+.adm-side {
   position: fixed;
   top: 0;
   bottom: 0;
   left: 0;
-  width: var(--sidebar-width);
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
+  width: var(--adm-side-w);
+  background: var(--adm-surface);
+  border-right: 1px solid var(--adm-line);
   display: flex;
   flex-direction: column;
   z-index: 100;
-  transition: transform var(--transition);
+  transition: transform 0.25s ease;
 }
 
-.admin-sidebar-header {
-  height: var(--topbar-height);
+.adm-side-head {
+  height: var(--adm-header-h);
   padding: 0 20px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--adm-line);
   flex-shrink: 0;
 }
 
-.admin-sidebar-title {
-  font-size: 1.25rem;
+/* 品牌：墨色方块标记 + 字重对比 */
+.adm-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  color: var(--adm-ink);
 }
 
-.admin-sidebar-nav {
+.adm-brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--adm-ink);
+}
+
+.adm-brand-sub {
+  font-weight: 400;
+  color: var(--adm-ink-3);
+}
+
+.adm-nav {
   flex: 1;
-  padding: 12px;
+  padding: 8px;
   overflow-y: auto;
   scrollbar-width: none;
 }
 
-.admin-sidebar-nav::-webkit-scrollbar {
+.adm-nav::-webkit-scrollbar {
   display: none;
 }
 
-.admin-nav-item {
+.adm-nav-item {
+  position: relative;
   width: 100%;
-  background: none;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 12px;
   border: none;
-  cursor: pointer;
+  border-radius: var(--adm-radius-s);
+  background: none;
+  color: var(--adm-ink-2);
   font-family: inherit;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  transition: all var(--transition);
-  margin-bottom: 4px;
-  font-size: 0.9375rem;
+  font-size: 13px;
+  font-weight: 400;
   text-align: left;
+  cursor: pointer;
+  transition: background var(--adm-dur), color var(--adm-dur);
 }
 
-.admin-nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.admin-nav-item.active {
-  background: var(--accent);
-  color: var(--text-primary);
-}
-
-.admin-nav-item svg {
+.adm-nav-item svg {
   flex-shrink: 0;
+  color: var(--adm-ink-3);
+  transition: color var(--adm-dur);
 }
 
-.admin-sidebar-footer {
-  padding: 12px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.adm-nav-item:hover {
+  background: var(--adm-surface-2);
+  color: var(--adm-ink);
 }
 
-.admin-logout-btn {
-  width: 100%;
-  color: var(--danger);
+.adm-nav-item:hover svg {
+  color: var(--adm-ink-2);
 }
 
-.admin-logout-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger);
-}
-
-/* ---- 主内容区 ---- */
-.admin-main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  min-width: 0;
-  min-height: 100vh;
-}
-
-/* ---- 顶栏（迁移自 admin.css .topbar，值不变） ---- */
-.admin-topbar {
-  position: sticky;
-  top: 0;
-  height: var(--topbar-height);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  gap: 16px;
-  z-index: 50;
-}
-
-.admin-sidebar-toggle {
-  display: none;
-  padding: 8px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  transition: all var(--transition);
-}
-
-.admin-sidebar-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.admin-topbar-title {
-  font-size: 1.125rem;
+.adm-nav-item.active {
+  background: var(--adm-surface-3);
+  color: var(--adm-ink);
   font-weight: 500;
 }
 
-.admin-topbar-avatar {
+.adm-nav-item.active svg {
+  color: var(--adm-ink);
+}
+
+/* 激活项左侧的墨色指示条 */
+.adm-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--adm-ink);
+}
+
+.adm-side-foot {
+  padding: 8px;
+  border-top: 1px solid var(--adm-line);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 登出：默认与导航同级的弱化项，hover 才浮出危险色 */
+.adm-logout {
+  color: var(--adm-ink-3);
+}
+
+.adm-logout:hover {
+  background: var(--adm-danger-bg);
+  color: var(--adm-danger);
+}
+
+.adm-logout:hover svg {
+  color: var(--adm-danger);
+}
+
+/* ---- 主内容区 ---- */
+.adm-main {
+  flex: 1;
+  margin-left: var(--adm-side-w);
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 顶栏 ---- */
+.adm-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--adm-header-h);
+  background: var(--adm-surface);
+  border-bottom: 1px solid var(--adm-line);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+}
+
+/* 标题前的墨色方块：与品牌标记同一节奏 */
+.adm-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--adm-ink);
+}
+
+.adm-topbar-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--adm-ink);
+}
+
+.adm-toggle {
+  display: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--adm-radius-s);
+  background: none;
+  color: var(--adm-ink-2);
+  cursor: pointer;
+  transition: background var(--adm-dur), color var(--adm-dur);
+}
+
+.adm-toggle:hover {
+  background: var(--adm-surface-2);
+  color: var(--adm-ink);
+}
+
+.adm-avatar {
   margin-left: auto;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   overflow: hidden;
+  border: 1px solid var(--adm-line);
+  background: var(--adm-surface-2);
   flex-shrink: 0;
 }
 
-.admin-topbar-avatar img {
+.adm-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* ---- 页面容器 ---- */
-.admin-page-container {
-  padding: 24px;
+/* ---- 页面容器：限宽居中，超宽屏不无限拉伸 ---- */
+.adm-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
 }
 
-/* ---- 响应式（迁移自 admin.css @media，值不变） ---- */
+/* ---- 响应式：移动端抽屉 ---- */
 @media (max-width: 768px) {
-  .admin-sidebar {
+  .adm-side {
     transform: translateX(-100%);
   }
 
-  .admin-sidebar.is-open {
+  .adm-side.is-open {
     transform: translateX(0);
   }
 
-  .admin-main {
+  .adm-main {
     margin-left: 0;
   }
 
-  .admin-sidebar-toggle {
-    display: block;
+  .adm-toggle {
+    display: flex;
+  }
+
+  .adm-content {
+    padding: 16px 16px 40px;
   }
 }
 </style>

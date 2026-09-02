@@ -54,7 +54,7 @@ const confirmDanger = ref(false)
 let confirmAction: (() => Promise<void>) | null = null
 
 function statusBadge(enabled: boolean): string {
-  return enabled ? 'adm-badge enabled' : 'adm-badge disabled'
+  return enabled ? 'adm-tag adm-tag--success' : 'adm-tag'
 }
 
 async function loadClients(): Promise<void> {
@@ -274,7 +274,7 @@ onMounted(loadClients)
 
 <template>
   <div>
-    <div class="adm-page-header">
+    <div class="adm-toolbar">
       <div class="adm-search">
         <input
           v-model="searchInput"
@@ -288,44 +288,46 @@ onMounted(loadClients)
           </svg>
         </button>
       </div>
-      <button type="button" class="adm-create-btn" @click="openCreate">{{ $t('admin.oauth.create') }}</button>
+      <button type="button" class="adm-btn adm-btn--primary" @click="openCreate">{{ $t('admin.oauth.create') }}</button>
     </div>
 
-    <div class="adm-table-wrap">
+    <div class="adm-card adm-card--table">
       <table class="adm-table">
         <thead>
           <tr>
             <th>{{ $t('admin.oauth.col.name') }}</th>
             <th>{{ $t('admin.oauth.col.clientId') }}</th>
             <th>{{ $t('admin.oauth.col.status') }}</th>
-            <th>{{ $t('admin.oauth.col.createdAt') }}</th>
-            <th>{{ $t('admin.oauth.col.actions') }}</th>
+            <th class="adm-num">{{ $t('admin.oauth.col.createdAt') }}</th>
+            <th class="adm-end">{{ $t('admin.oauth.col.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
-            <td colspan="5" class="adm-loading-cell">...</td>
-          </tr>
+          <template v-if="loading">
+            <tr v-for="i in 5" :key="i" class="adm-tr--skel" aria-hidden="true">
+              <td v-for="j in 5" :key="j"><span class="adm-skel"></span></td>
+            </tr>
+          </template>
           <tr v-else-if="forbidden">
-            <td colspan="5" class="adm-loading-cell">{{ $t('admin.common.forbidden') }}</td>
+            <td colspan="5" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
           </tr>
           <tr v-else-if="loadFailed">
-            <td colspan="5" class="adm-loading-cell">{{ $t('admin.common.loadFailed') }}</td>
+            <td colspan="5" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
           </tr>
           <tr v-else-if="clients.length === 0">
-            <td colspan="5" class="adm-loading-cell">{{ $t('admin.common.noData') }}</td>
+            <td colspan="5" class="adm-state">{{ $t('admin.common.noData') }}</td>
           </tr>
           <template v-else>
             <tr v-for="c in clients" :key="c.id">
               <td>
-                <div class="adm-client-name">{{ c.name }}</div>
-                <div v-if="c.description" class="adm-client-desc">{{ c.description }}</div>
+                <div class="adm-cell-main">{{ c.name }}</div>
+                <div v-if="c.description" class="adm-cell-sub">{{ c.description }}</div>
               </td>
-              <td><code class="adm-client-id">{{ c.client_id }}</code></td>
+              <td><code class="adm-code">{{ c.client_id }}</code></td>
               <td><span :class="statusBadge(c.is_enabled)">{{ $t(c.is_enabled ? 'admin.common.enabled' : 'admin.common.disabled') }}</span></td>
-              <td>{{ formatDate(c.created_at) }}</td>
-              <td>
-                <button type="button" class="adm-action-btn view" @click="openDetail(c.id)">
+              <td class="adm-num">{{ formatDate(c.created_at) }}</td>
+              <td class="adm-end">
+                <button type="button" class="adm-row-btn" @click="openDetail(c.id)">
                   {{ $t('admin.common.view') }}
                 </button>
               </td>
@@ -341,9 +343,9 @@ onMounted(loadClients)
     <AppModal v-model:open="detailOpen" :title="$t('admin.oauth.detail.title')" width="520px">
       <template v-if="detailLoading || !detailClient">
         <div class="adm-detail">
-          <div v-for="i in 7" :key="i" class="adm-detail-row">
-            <span class="adm-detail-label">-</span>
-            <span class="adm-detail-value">...</span>
+          <div v-for="i in 7" :key="i" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-skel"></span>
+            <span class="adm-skel"></span>
           </div>
         </div>
       </template>
@@ -359,11 +361,11 @@ onMounted(loadClients)
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.oauth.col.clientId') }}</span>
-            <span class="adm-detail-value mono">{{ detailClient.client_id }}</span>
+            <span class="adm-detail-value adm-mono">{{ detailClient.client_id }}</span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.oauth.detail.redirectUri') }}</span>
-            <span class="adm-detail-value mono">{{ detailClient.redirect_uri }}</span>
+            <span class="adm-detail-value adm-mono">{{ detailClient.redirect_uri }}</span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.oauth.col.status') }}</span>
@@ -389,18 +391,13 @@ onMounted(loadClients)
             {{ $t('admin.common.close') }}
           </button>
           <template v-if="detailClient">
-            <button
-              type="button"
-              class="adm-btn"
-              :class="detailClient.is_enabled ? 'adm-btn--warning' : 'adm-btn--success'"
-              @click="confirmToggle(detailClient)"
-            >
+            <button type="button" class="adm-btn adm-btn--secondary" @click="confirmToggle(detailClient)">
               {{ $t(detailClient.is_enabled ? 'admin.oauth.confirm.disable' : 'admin.oauth.confirm.enable') }}
             </button>
             <button type="button" class="adm-btn adm-btn--secondary" @click="openEdit(detailClient)">
               {{ $t('admin.oauth.action.edit') }}
             </button>
-            <button type="button" class="adm-btn adm-btn--warning" @click="confirmRegenerate(detailClient)">
+            <button type="button" class="adm-btn adm-btn--secondary" @click="confirmRegenerate(detailClient)">
               {{ $t('admin.oauth.action.regenerate') }}
             </button>
             <button type="button" class="adm-btn adm-btn--danger" @click="confirmDelete(detailClient)">
@@ -413,18 +410,18 @@ onMounted(loadClients)
 
     <!-- 创建/编辑表单 -->
     <AppModal v-model:open="formOpen" :title="$t(editingId !== null ? 'admin.oauth.form.editTitle' : 'admin.oauth.form.createTitle')" width="480px">
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.oauth.form.name') }} <span class="adm-required">*</span></label>
-        <input v-model="formName" type="text" class="adm-form-input" :placeholder="$t('admin.oauth.form.namePlaceholder')" />
+        <input v-model="formName" type="text" class="adm-input" :placeholder="$t('admin.oauth.form.namePlaceholder')" />
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.oauth.form.description') }}</label>
-        <textarea v-model="formDescription" class="adm-form-textarea" :placeholder="$t('admin.oauth.form.descriptionPlaceholder')"></textarea>
+        <textarea v-model="formDescription" class="adm-textarea" :placeholder="$t('admin.oauth.form.descriptionPlaceholder')"></textarea>
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.oauth.form.redirectUri') }} <span class="adm-required">*</span></label>
-        <input v-model="formRedirect" type="text" class="adm-form-input" :placeholder="$t('admin.oauth.form.redirectUriPlaceholder')" />
-        <span class="adm-form-hint">{{ $t('admin.oauth.form.redirectHint') }}</span>
+        <input v-model="formRedirect" type="text" class="adm-input" :placeholder="$t('admin.oauth.form.redirectUriPlaceholder')" />
+        <span class="adm-hint">{{ $t('admin.oauth.form.redirectHint') }}</span>
       </div>
       <template #footer>
         <div class="adm-modal-actions">
@@ -440,13 +437,13 @@ onMounted(loadClients)
 
     <!-- 密钥展示 -->
     <AppModal v-model:open="secretOpen" :title="$t('admin.oauth.secret.title')" width="480px" :z-index="210" @close="closeSecret">
-      <div class="adm-secret-warning">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <div class="adm-notice">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
         </svg>
         <span>{{ $t('admin.oauth.secret.warning') }}</span>
       </div>
-      <div class="adm-secret-display">
+      <div class="adm-secret">
         <code>{{ secretValue }}</code>
         <button type="button" class="adm-btn adm-btn--secondary" @click="copySecret">
           {{ $t('admin.oauth.secret.copy') }}
@@ -473,9 +470,3 @@ onMounted(loadClients)
     />
   </div>
 </template>
-
-<style scoped>
-.adm-required {
-  color: #ef4444;
-}
-</style>

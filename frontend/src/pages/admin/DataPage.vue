@@ -211,25 +211,25 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <div class="adm-cards">
-      <div class="adm-card">
-        <div class="adm-card-header">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+    <div class="adm-panel-grid">
+      <div class="adm-panel">
+        <div class="adm-panel-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M5 20h14v-2H5v2zm0-10h4v6h6v-6h4l-7-7-7 7z" />
           </svg>
         </div>
-        <p class="adm-card-desc">{{ $t('admin.data.export.desc') }}</p>
-        <button type="button" class="adm-create-btn" :disabled="exportBusy" @click="startExport">
+        <p class="adm-panel-desc">{{ $t('admin.data.export.desc') }}</p>
+        <button type="button" class="adm-btn adm-btn--primary" :disabled="exportBusy" @click="startExport">
           {{ $t('admin.data.export.button') }}
         </button>
       </div>
-      <div class="adm-card">
-        <div class="adm-card-header">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+      <div class="adm-panel">
+        <div class="adm-panel-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
           </svg>
         </div>
-        <p class="adm-card-desc">{{ $t('admin.data.import.desc') }}</p>
+        <p class="adm-panel-desc">{{ $t('admin.data.import.desc') }}</p>
         <button type="button" class="adm-btn adm-btn--secondary" @click="pickImportFile">
           {{ $t('admin.data.import.button') }}
         </button>
@@ -238,23 +238,23 @@ onBeforeUnmount(() => {
 
     <!-- 导出授权 -->
     <AppModal v-model:open="otacOpen" :title="$t('admin.data.otac.title')" width="420px" :z-index="210" @close="closeOtac(true)">
-      <div class="adm-secret-warning">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <div class="adm-notice">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
         </svg>
         <span>{{ $t('admin.data.otac.warning') }}</span>
       </div>
-      <div class="adm-form-group">
+      <div class="adm-field">
         <label>{{ $t('admin.data.otac.label') }}</label>
         <input
           v-model="otac"
           type="text"
-          class="adm-form-input"
+          class="adm-input"
           :placeholder="$t('admin.data.otac.placeholder')"
           maxlength="16"
           autocomplete="off"
         />
-        <span class="adm-form-hint">{{ $t('admin.data.otac.remaining', { time: otacTimerText }) }}</span>
+        <span class="adm-hint">{{ $t('admin.data.otac.remaining', { time: otacTimerText }) }}</span>
       </div>
       <template #footer>
         <div class="adm-modal-actions">
@@ -284,17 +284,17 @@ onBeforeUnmount(() => {
           <span class="adm-detail-value">{{ previewExportedAt }}</span>
         </div>
       </div>
-      <div class="adm-form-group" style="margin-top: 16px">
-        <label class="adm-radio-group">
+      <div style="margin-top: 16px">
+        <label class="adm-choice">
           <input v-model="strategy" type="radio" value="merge" />
-          <span>
+          <span class="adm-choice-text">
             <strong>{{ $t('admin.data.preview.strategy.merge') }}</strong>
             <small>{{ $t('admin.data.preview.strategy.mergeDesc') }}</small>
           </span>
         </label>
-        <label class="adm-radio-group">
+        <label class="adm-choice">
           <input v-model="strategy" type="radio" value="overwrite" />
-          <span>
+          <span class="adm-choice-text">
             <strong>{{ $t('admin.data.preview.strategy.overwrite') }}</strong>
             <small>{{ $t('admin.data.preview.strategy.overwriteDesc') }}</small>
           </span>
