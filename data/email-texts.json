@@ -91,5 +91,67 @@
       "pageTitle": "Delete Account - Nebula Studios",
       "description": "You are requesting to delete your Nebula Studios account. Please click the button below to get your verification code:"
     }
+  },
+  "ja": {
+    "common": {
+      "greeting": "こんにちは！",
+      "buttonText": "認証コードを取得",
+      "textBody": "以下のリンクをクリックして、認証コードを取得してください：\n\n{{VERIFY_URL}}\n\nリンクの有効期限は5分です。",
+      "linkHint": "ボタンがクリックできない場合は、以下のリンクをブラウザに貼り付けてください：",
+      "expireNotice": "このリンクの有効期限は <strong style=\"color: #f0ede8;\">5分</strong> です",
+      "securityTip": "<strong>セキュリティに関する注意：</strong>心当たりのない場合は、このメールを無視してください。リンクを他人と共有しないでください。",
+      "footer": "&copy; 2025 Nebula Studios 無断転載禁止"
+    },
+    "register": {
+      "subject": "【Nebula Studios】ご登録用の認証コード",
+      "pageTitle": "認証コード - Nebula Studios",
+      "description": "Nebula Studios アカウントに登録しています。下のボタンをクリックして認証コードを取得してください："
+    },
+    "reset_password": {
+      "subject": "【Nebula Studios】パスワードリセット",
+      "pageTitle": "パスワードリセット - Nebula Studios",
+      "description": "Nebula Studios アカウントのパスワードをリセットしています。下のボタンをクリックして認証コードを取得してください："
+    },
+    "change_password": {
+      "subject": "【Nebula Studios】パスワード変更の認証",
+      "pageTitle": "パスワード変更 - Nebula Studios",
+      "description": "Nebula Studios アカウントのパスワードを変更しています。下のボタンをクリックして認証コードを取得してください："
+    },
+    "delete_account": {
+      "subject": "【Nebula Studios】アカウント削除の確認",
+      "pageTitle": "アカウント削除 - Nebula Studios",
+      "description": "Nebula Studios アカウントの削除を申請しています。下のボタンをクリックして認証コードを取得してください："
+    }
+  },
+  "ko": {
+    "common": {
+      "greeting": "안녕하세요!",
+      "buttonText": "인증 코드 받기",
+      "textBody": "아래 링크를 클릭하여 인증 코드를 받으세요:\n\n{{VERIFY_URL}}\n\n이 링크는 5분간 유효합니다.",
+      "linkHint": "버튼을 클릭할 수 없는 경우, 아래 링크를 브라우저에 붙여넣으세요:",
+      "expireNotice": "이 링크는 <strong style=\"color: #f0ede8;\">5분</strong>간 유효합니다",
+      "securityTip": "<strong>보안 안내:</strong> 본인이 요청한 작업이 아니라면 이 이메일을 무시하세요. 링크를 다른 사람과 공유하지 마세요.",
+      "footer": "&copy; 2025 Nebula Studios 모든 권리 보유"
+    },
+    "register": {
+      "subject": "[Nebula Studios] 회원가입 인증 코드",
+      "pageTitle": "인증 코드 - Nebula Studios",
+      "description": "Nebula Studios 계정에 가입하고 있습니다. 아래 버튼을 클릭하여 인증 코드를 받으세요:"
+    },
+    "reset_password": {
+      "subject": "[Nebula Studios] 비밀번호 재설정",
+      "pageTitle": "비밀번호 재설정 - Nebula Studios",
+      "description": "Nebula Studios 계정의 비밀번호를 재설정하고 있습니다. 아래 버튼을 클릭하여 인증 코드를 받으세요:"
+    },
+    "change_password": {
+      "subject": "[Nebula Studios] 비밀번호 변경 인증",
+      "pageTitle": "비밀번호 변경 - Nebula Studios",
+      "description": "Nebula Studios 계정의 비밀번호를 변경하고 있습니다. 아래 버튼을 클릭하여 인증 코드를 받으세요:"
+    },
+    "delete_account": {
+      "subject": "[Nebula Studios] 계정 삭제 확인",
+      "pageTitle": "계정 삭제 - Nebula Studios",
+      "description": "Nebula Studios 계정 삭제를 요청하고 있습니다. 아래 버튼을 클릭하여 인증 코드를 받으세요:"
+    }
   }
 }
