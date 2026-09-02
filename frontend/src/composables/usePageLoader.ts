@@ -1,6 +1,7 @@
 // 页面加载遮罩状态（全局单例，PageLoader.vue 仅负责渲染）。
 // 每次路由跳转都走完整遮罩流程：渐显（ENTER_MS 保底）→ 切换页面 → 渐隐，
 // 保证用户永远看不到路由切换本身——切页只发生在遮罩完全不透明时：
+// - 同路径导航（admin 单页内 hash 区块切换）组件不变、无可见切换，跳过遮罩
 // - 懒加载 chunk 在渐显期间并行预热（warmComponents），加载赶在渐显内完成则不额外等待，
 //   否则遮罩保持不透明直到组件就绪
 // - enterDeadline 以"遮罩首次出现"为基准：守卫重定向、快速连点、渐隐中再次导航
@@ -53,7 +54,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
+  // 同路径导航（如 admin 单页内 hash 区块切换）：组件不变、无可见切换，跳过遮罩
+  if (to.path === from.path) return
   show()
   warmComponents(to)
   // 守卫内等待渐显期结束（auth bootstrap 等守卫逻辑与此并行执行）

@@ -115,6 +115,7 @@ function goExternal(): void {
   border: none;
   cursor: default;
   font-family: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 12px;

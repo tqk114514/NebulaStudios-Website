@@ -64,12 +64,6 @@ const labelClass = computed(() => (props.visibleLabel ? 'field-label' : 'field-l
   border-color: var(--fg);
 }
 
-/* 键盘导航时给出明确焦点环（鼠标点击仅有下边框变色） */
-.form-field :deep(input:focus-visible) {
-  outline: 1px solid var(--fg);
-  outline-offset: 4px;
-}
-
 .form-field--error :deep(input) {
   border-color: var(--error);
 }
