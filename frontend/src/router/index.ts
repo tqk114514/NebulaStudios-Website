@@ -3,8 +3,8 @@
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-
-// 骨架路由：先占位，页面迁移后逐个填充
+// admin 布局与页面静态导入（独立全屏后台，切换零延迟）；
+// 整个后台（布局 + 六个区块）单独打成一个懒加载 chunk，公共主包不含后台代码。
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -28,15 +28,6 @@ const routes: RouteRecordRaw[] = [
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
-    children: [
-      {
-        path: '',
-        name: 'admin',
-        component: () => import('@/pages/admin/AdminHomePage.vue'),
-        meta: { title: 'admin.nav.dashboard' },
-      },
-      // 后续阶段：users/logs（所有管理员）、oauth/whitelist/data（超管，meta.requiresSuper）
-    ],
   },
   {
     path: '/policy',
@@ -67,7 +58,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // 管理后台需要 role>=1
+  // 管理后台需要 role>=1（区块级超管门控在 AdminLayout 内，权限以后端中间件为准）
   if (to.meta.requiresAdmin && auth.role < 1) {
     return { name: 'dashboard' }
   }

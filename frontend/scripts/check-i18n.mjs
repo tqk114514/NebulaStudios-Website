@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const srcDir = join(root, 'src')
-const localePath = join(root, 'src', 'i18n', 'locales', 'zh-CN.ts')
+const localePath = join(root, 'src', 'i18n', 'locales', 'zh-CN.json')
 
 // 读取 locale 内容，提取已定义的 key
 const localeSrc = readFileSync(localePath, 'utf-8')

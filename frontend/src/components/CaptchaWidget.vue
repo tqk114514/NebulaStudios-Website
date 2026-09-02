@@ -31,5 +31,6 @@ watch(captchaEnabled, (v) => v && tryRender())
 <style scoped>
 .captcha-wrapper {
   margin-top: 16px;
+  width: 100%;
 }
 </style>

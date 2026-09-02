@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 页面加载遮罩（迁移自原站 .page-loader：fixed 顶栏以下全覆盖 + 居中 spinner）。
+// 页面加载遮罩（迁移自原站 .page-loader：fixed 全屏覆盖 + 居中 spinner）。
+// 全覆盖含顶栏区域：/admin 无全局站头，且切换期间必须完全遮住页面本身。
 // 显示/隐藏逻辑见 composables/usePageLoader.ts（路由懒加载 + 页面数据 + 字体就绪）。
 import { pageLoaderVisible } from '@/composables/usePageLoader'
 
@@ -17,7 +18,7 @@ const visible = pageLoaderVisible()
 <style scoped>
 .page-loader {
   position: fixed;
-  inset: 60px 0 0;
+  inset: 0;
   background: var(--bg);
   display: flex;
   justify-content: center;

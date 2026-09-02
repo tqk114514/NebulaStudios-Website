@@ -7,9 +7,13 @@ import AppToast from '@/components/AppToast.vue'
 import PageLoader from '@/components/PageLoader.vue'
 import PolicyConsentModal from '@/components/PolicyConsentModal.vue'
 
-// 管理后台是独立全屏页面（老版即无站头），不渲染全局 SiteHeader
+// 管理后台是独立全屏页面（老版即无站头），不渲染全局 SiteHeader。
+// 初始导航完成前 route.path 恒为 '/'，刷新 /admin 会闪现公共站头，
+// 因此以当前 URL 兜底（history 模式下路由跳转会同步 location）。
 const route = useRoute()
-const showSiteHeader = computed(() => !route.path.startsWith('/admin'))
+const showSiteHeader = computed(
+  () => !(route.path.startsWith('/admin') || window.location.pathname.startsWith('/admin')),
+)
 </script>
 
 <template>

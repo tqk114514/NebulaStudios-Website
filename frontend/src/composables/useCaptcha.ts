@@ -117,7 +117,8 @@ export async function initCaptcha(container: HTMLElement): Promise<void> {
   window.turnstile.render(container, {
     sitekey: siteKey.value,
     theme: 'dark',
-    size: 'normal',
+    // flexible：宽度自适应容器（最小 300px），与所在表单同宽
+    size: 'flexible',
     callback: (t: string) => {
       token.value = t
       instanceToken.value = t
