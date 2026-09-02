@@ -20,10 +20,19 @@ export const LOCALES = [
 
 export type LocaleCode = (typeof LOCALES)[number]['code']
 
-const STORAGE_KEY = 'nebula-lang'
+// 语言偏好按 Cookie 政策存 cookie selectedLanguage（365 天 / 非 HttpOnly / Lax）
+const LANG_COOKIE = 'selectedLanguage'
+const LANG_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+function readLangCookie(): string | null {
+  const entry = document.cookie
+    .split('; ')
+    .find((s) => s.startsWith(LANG_COOKIE + '='))
+  return entry ? decodeURIComponent(entry.slice(LANG_COOKIE.length + 1)) : null
+}
 
 export function resolveInitialLocale(): LocaleCode {
-  const saved = localStorage.getItem(STORAGE_KEY)
+  const saved = readLangCookie()
   if (saved && LOCALES.some((l) => l.code === saved)) return saved as LocaleCode
   const nav = navigator.language.toLowerCase()
   const match = LOCALES.find((l) => l.code.toLowerCase() === nav || nav.startsWith(l.code.split('-')[0]))
@@ -31,7 +40,8 @@ export function resolveInitialLocale(): LocaleCode {
 }
 
 export function persistLocale(code: LocaleCode): void {
-  localStorage.setItem(STORAGE_KEY, code)
+  const secure = location.protocol === 'https:' ? '; secure' : ''
+  document.cookie = `${LANG_COOKIE}=${encodeURIComponent(code)}; path=/; max-age=${LANG_COOKIE_MAX_AGE}; samesite=lax${secure}`
   document.documentElement.lang = code
 }
 
@@ -44,9 +54,12 @@ const messages = {
   ko,
 }
 
+// 初始语言写入 <html lang>（发码接口以此判断邮件语言）
+document.documentElement.lang = resolveInitialLocale()
+
 export const i18n = createI18n({
   legacy: false,
-  locale: resolveInitialLocale(),
+  locale: document.documentElement.lang,
   fallbackLocale: 'zh-CN',
   messages,
   missingWarn: false,

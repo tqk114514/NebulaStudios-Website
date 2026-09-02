@@ -89,7 +89,7 @@ async function handleSendCode() {
     await post('/api/auth/send-code', {
       email,
       captchaToken: getCaptchaToken(),
-      language: 'zh-CN',
+      language: document.documentElement.lang || 'zh-CN',
     })
     countdown.start('register', email)
     resetCaptchaToken() // token 一次性，发送后清除避免复用

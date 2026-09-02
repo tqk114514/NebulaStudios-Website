@@ -3,6 +3,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
+import { persistLocale, type LocaleCode } from '@/i18n'
 
 const { locale } = useI18n()
 
@@ -30,12 +31,8 @@ const current = computed(() => LANGS.find((l) => l.code === locale.value) ?? LAN
 
 function setLang(code: string) {
   locale.value = code
+  persistLocale(code as LocaleCode)
   open.value = false
-  try {
-    localStorage.setItem('preferred-language', code)
-  } catch {
-    /* 忽略存储失败 */
-  }
 }
 </script>
 
