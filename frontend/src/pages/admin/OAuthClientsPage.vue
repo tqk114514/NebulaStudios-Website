@@ -57,6 +57,17 @@ function statusBadge(enabled: boolean): string {
   return enabled ? 'adm-tag adm-tag--success' : 'adm-tag'
 }
 
+/** 详情弹窗加载态：左侧固定标签，值区显示加载动画 */
+const DETAIL_KEYS = [
+  'admin.oauth.col.name',
+  'admin.oauth.detail.description',
+  'admin.oauth.col.clientId',
+  'admin.oauth.detail.redirectUri',
+  'admin.oauth.col.status',
+  'admin.oauth.col.createdAt',
+  'admin.oauth.detail.updatedAt',
+] as const
+
 async function loadClients(): Promise<void> {
   loading.value = true
   loadFailed.value = false
@@ -343,9 +354,9 @@ onMounted(loadClients)
     <AppModal v-model:open="detailOpen" :title="$t('admin.oauth.detail.title')" width="520px">
       <template v-if="detailLoading || !detailClient">
         <div class="adm-detail">
-          <div v-for="i in 7" :key="i" class="adm-detail-row adm-detail-row--skel">
-            <span class="adm-skel"></span>
-            <span class="adm-skel"></span>
+          <div v-for="key in DETAIL_KEYS" :key="key" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-detail-label">{{ $t(key) }}</span>
+            <span class="adm-skel" aria-hidden="true"></span>
           </div>
         </div>
       </template>

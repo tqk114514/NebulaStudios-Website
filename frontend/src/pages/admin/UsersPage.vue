@@ -59,6 +59,16 @@ let confirmAction: (() => Promise<void>) | null = null
 const BAN_REASONS = ['violation', 'abuse', 'malicious', 'spam'] as const
 const BAN_DURATIONS = ['1', '3', '7', '30', '90', '365', '0'] as const
 
+/** 详情弹窗加载态：左侧固定标签，值区显示加载动画（封禁相关行等数据到达后再渲染） */
+const DETAIL_KEYS = [
+  'admin.users.col.uid',
+  'admin.users.col.username',
+  'admin.users.col.email',
+  'admin.users.col.role',
+  'admin.users.detail.microsoftAccount',
+  'admin.users.col.createdAt',
+] as const
+
 function roleBadgeClass(role: number): string {
   return role === 2 ? 'adm-tag adm-tag--danger' : role === 1 ? 'adm-tag adm-tag--warning' : 'adm-tag'
 }
@@ -290,9 +300,9 @@ onMounted(loadUsers)
     <AppModal v-model:open="detailOpen" :title="$t('admin.users.detail.title')" width="480px">
       <template v-if="detailLoading || !detailUser">
         <div class="adm-detail">
-          <div v-for="i in 6" :key="i" class="adm-detail-row adm-detail-row--skel">
-            <span class="adm-skel"></span>
-            <span class="adm-skel"></span>
+          <div v-for="key in DETAIL_KEYS" :key="key" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-detail-label">{{ $t(key) }}</span>
+            <span class="adm-skel" aria-hidden="true"></span>
           </div>
         </div>
       </template>

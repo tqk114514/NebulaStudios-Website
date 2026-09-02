@@ -390,16 +390,12 @@ body.adm-page-open :is(a, button, input, select, textarea):focus-visible {
   margin-left: auto;
 }
 
-/* 弹窗详情骨架行：左标签右值的等宽条 */
+/* 弹窗详情加载行：左侧固定标签真实显示，右侧值区为加载动画 */
 .adm-detail-row--skel {
   align-items: center;
 }
 
-.adm-detail-row--skel .adm-skel:first-child {
-  width: 28%;
-}
-
-.adm-detail-row--skel .adm-skel:last-child {
+.adm-detail-row--skel .adm-skel {
   width: 48%;
   margin-left: auto;
 }

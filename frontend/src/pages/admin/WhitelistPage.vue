@@ -49,6 +49,17 @@ function statusBadge(enabled: boolean): string {
   return enabled ? 'adm-tag adm-tag--success' : 'adm-tag'
 }
 
+/** 详情弹窗加载态：左侧固定标签，值区显示加载动画 */
+const DETAIL_KEYS = [
+  'admin.whitelist.col.domain',
+  'admin.whitelist.detail.logoUrl',
+  'admin.whitelist.detail.logoPreview',
+  'admin.whitelist.detail.signupUrl',
+  'admin.whitelist.col.status',
+  'admin.whitelist.col.createdAt',
+  'admin.oauth.detail.updatedAt',
+] as const
+
 async function loadWhitelist(): Promise<void> {
   loading.value = true
   loadFailed.value = false
@@ -272,9 +283,9 @@ onMounted(loadWhitelist)
     <AppModal v-model:open="detailOpen" :title="$t('admin.whitelist.detail.title')" width="520px">
       <template v-if="detailLoading || !detailEntry">
         <div class="adm-detail">
-          <div v-for="i in 6" :key="i" class="adm-detail-row adm-detail-row--skel">
-            <span class="adm-skel"></span>
-            <span class="adm-skel"></span>
+          <div v-for="key in DETAIL_KEYS" :key="key" class="adm-detail-row adm-detail-row--skel">
+            <span class="adm-detail-label">{{ $t(key) }}</span>
+            <span class="adm-skel" aria-hidden="true"></span>
           </div>
         </div>
       </template>
