@@ -28,6 +28,7 @@ import {
   type UserLogItem,
   type OAuthGrant,
 } from '@/api/dashboard'
+import { ApiClientError } from '@/api/client'
 import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled, resetCaptchaToken } from '@/composables/useCaptcha'
 import { useCountdown } from '@/composables/useCountdown'
 import { usePolicyConsent } from '@/composables/usePolicyConsent'
@@ -520,6 +521,10 @@ async function sendDeleteCode() {
     deleteCountdown.start('delete_account', user.value?.email ?? '')
     setAlert('account.dashboard.codeSent')
   } catch (e) {
+    // 限流命中：以服务端返回的限制结束时间戳启动倒计时（后端按邮箱 60s 限流）
+    if (e instanceof ApiClientError && e.errorCode === 'RATE_LIMIT' && e.retryAt) {
+      deleteCountdown.start('delete_account', user.value?.email ?? '', Math.ceil(e.retryAt - Date.now() / 1000))
+    }
     deleteError.value = mapSendCodeError(e)
   } finally {
     deleteSending.value = false

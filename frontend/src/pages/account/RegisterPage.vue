@@ -12,7 +12,7 @@ import FormField from '@/components/FormField.vue'
 import PolicyFooter from '@/components/PolicyFooter.vue'
 import CaptchaWidget from '@/components/CaptchaWidget.vue'
 import SupportedEmailsModal from '@/components/SupportedEmailsModal.vue'
-import { post } from '@/api/client'
+import { post, ApiClientError } from '@/api/client'
 import { errorKey } from '@/api/errorCodes'
 import { loadEmailWhitelist, validateEmail } from '@/composables/useEmailWhitelist'
 import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled, resetCaptchaToken } from '@/composables/useCaptcha'
@@ -86,7 +86,7 @@ async function handleSendCode() {
 
   sendingCode.value = true
   try {
-    await post<{ expireTime?: number }>('/api/auth/send-code', {
+    await post('/api/auth/send-code', {
       email,
       captchaToken: getCaptchaToken(),
       language: 'zh-CN',
@@ -95,6 +95,10 @@ async function handleSendCode() {
     resetCaptchaToken() // token 一次性，发送后清除避免复用
     alert('account.register.codeSent')
   } catch (e) {
+    // 限流命中：以服务端返回的限制结束时间戳启动倒计时（后端按邮箱 60s 限流，本地计时可能不准）
+    if (e instanceof ApiClientError && e.errorCode === 'RATE_LIMIT' && e.retryAt) {
+      countdown.start('register', email, Math.ceil(e.retryAt - Date.now() / 1000))
+    }
     alert(errorKey(e))
   } finally {
     sendingCode.value = false

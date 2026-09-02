@@ -40,10 +40,12 @@ export function useCountdown(seconds = 60) {
     }
   }
 
-  /** 开始倒计时。通过 localStorage 持久化到期时间，刷新后自动恢复。 */
-  function start(partial: 'register' | 'forgot' | 'change_password' | 'delete_account', email: string) {
-    expiresAt = Date.now() + seconds * 1000
-    remaining.value = seconds
+  /** 开始倒计时。seconds 用于 429 时以服务端返回的真实剩余等待时间校正（本地默认 60s）。
+   *  通过 localStorage 持久化到期时间，刷新后自动恢复。 */
+  function start(partial: 'register' | 'forgot' | 'change_password' | 'delete_account', email: string, secondsOverride?: number) {
+    const total = secondsOverride && secondsOverride > 0 ? secondsOverride : seconds
+    expiresAt = Date.now() + total * 1000
+    remaining.value = total
     running.value = true
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ partial, expiresAt, email } satisfies Stored))

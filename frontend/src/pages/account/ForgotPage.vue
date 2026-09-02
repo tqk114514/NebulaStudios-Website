@@ -12,10 +12,11 @@ import FormField from '@/components/FormField.vue'
 import PolicyFooter from '@/components/PolicyFooter.vue'
 import CaptchaWidget from '@/components/CaptchaWidget.vue'
 import SupportedEmailsModal from '@/components/SupportedEmailsModal.vue'
-import { post } from '@/api/client'
+import { post, ApiClientError } from '@/api/client'
 import { errorKey } from '@/api/errorCodes'
 import { loadEmailWhitelist, validateEmail } from '@/composables/useEmailWhitelist'
 import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled, resetCaptchaToken } from '@/composables/useCaptcha'
+import { useCountdown } from '@/composables/useCountdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,7 @@ const emailError = ref('')
 const emailSendable = computed(() => validateEmail(email.value.trim()).valid)
 const sendingCode = ref(false)
 const resetting = ref(false)
+const countdown = useCountdown(60)
 const showAlert = ref(false)
 const alertMessage = ref('')
 const showSupportedEmails = ref(false)
@@ -82,21 +84,27 @@ async function handleSendCode() {
     alert(v.errorKey)
     return
   }
+  if (countdown.running.value) return
   if (isCaptchaEnabled() && !getCaptchaToken()) {
     alert('account.login.humanVerifyFailed')
     return
   }
   sendingCode.value = true
   try {
-    await post<{ expireTime?: number }>('/api/auth/send-reset-code', {
+    await post('/api/auth/send-reset-code', {
       email: e,
       captchaToken: getCaptchaToken(),
       language: document.documentElement.lang || 'zh-CN',
     })
     resetCaptchaToken()
+    countdown.start('forgot', e)
     alert('account.forgotPassword.codeSent')
     step.value = 'reset'
   } catch (er) {
+    // 限流命中：以服务端返回的限制结束时间戳启动倒计时（后端按邮箱 60s 限流）
+    if (er instanceof ApiClientError && er.errorCode === 'RATE_LIMIT' && er.retryAt) {
+      countdown.start('forgot', e, Math.ceil(er.retryAt - Date.now() / 1000))
+    }
     alert(errorKey(er))
   } finally {
     sendingCode.value = false
@@ -136,6 +144,7 @@ async function handleReset() {
 onMounted(async () => {
   await loadEmailWhitelist()
   await loadCaptchaConfig()
+  countdown.restoreOnMount('forgot', email.value)
 })
 </script>
 
@@ -163,8 +172,9 @@ onMounted(async () => {
       </FormField>
 
       <FormField>
-        <AppButton type="submit" variant="secondary" :disabled="sendingCode || !emailSendable">
-          {{ $t('account.forgotPassword.sendCode') }}
+        <AppButton type="submit" variant="secondary" :disabled="sendingCode || countdown.running.value || !emailSendable">
+          <template v-if="countdown.running.value">{{ countdown.remaining }}s</template>
+          <template v-else>{{ $t('account.forgotPassword.sendCode') }}</template>
         </AppButton>
         <CaptchaWidget />
       </FormField>

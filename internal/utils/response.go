@@ -15,6 +15,15 @@ func RespondError(c *gin.Context, status int, errorCode string) {
 	})
 }
 
+// RespondRateLimit 返回 429 限流响应，retryAt 为限制结束时间戳（Unix 秒），供前端计算剩余等待
+func RespondRateLimit(c *gin.Context, retryAt int64) {
+	c.JSON(http.StatusTooManyRequests, gin.H{
+		"success":   false,
+		"errorCode": "RATE_LIMIT",
+		"retryAt":   retryAt,
+	})
+}
+
 // RespondSuccess 返回成功响应（gin.H 格式，键值对展开）
 func RespondSuccess(c *gin.Context, data gin.H) {
 	response := gin.H{"success": true}

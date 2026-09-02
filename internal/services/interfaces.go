@@ -25,8 +25,6 @@ type TokenManager interface {
 	IsCodeVerified(ctx context.Context, codeStr, email string) (bool, error)
 	UseCode(ctx context.Context, codeStr, email string) error
 	InvalidateCodeByEmail(ctx context.Context, email string, tokenType *string) error
-	GetCodeExpiry(ctx context.Context, codeStr, email string) (int64, error)
-	GetCodeExpiryByEmail(ctx context.Context, email string) (bool, int64, error)
 	CleanupExpired(ctx context.Context)
 	GetTokenExpiry() time.Duration
 }

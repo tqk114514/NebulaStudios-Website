@@ -46,14 +46,16 @@ func (h *AuthHandler) SendResetCode(c *gin.Context) {
 
 	if !h.limiterMgr.EmailAllow(normalizedEmail) {
 		waitTime := h.limiterMgr.EmailWaitTime(normalizedEmail)
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded for reset: email=%s, wait=%ds", normalizedEmail, waitTime))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", fmt.Sprintf("Email rate limit exceeded for reset: email=%s, wait=%ds", normalizedEmail, waitTime))
+		utils.RespondRateLimit(c, time.Now().Add(time.Duration(waitTime)*time.Second).Unix())
 		return
 	}
 
 	_, err := h.userRepo.FindByEmail(ctx, normalizedEmail)
 	emailExists := err == nil
 
-	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
+	// expireTime 单位为 Unix 秒（HTTP 层统一秒，DB 内部仍为毫秒）
+	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).Unix()
 
 	if emailExists {
 		token, _, err := h.tokenService.CreateToken(ctx, normalizedEmail, services.TokenTypeResetPassword)

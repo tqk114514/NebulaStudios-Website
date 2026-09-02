@@ -55,7 +55,9 @@ func (h *UserHandler) SendDeleteCode(c *gin.Context) {
 	}
 
 	if !h.limiterMgr.EmailAllow(user.Email) {
-		utils.HTTPErrorResponse(c, "USER", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded for delete: email=%s", user.Email))
+		waitTime := h.limiterMgr.EmailWaitTime(user.Email)
+		utils.LogWarnCtx(c.Request.Context(), "USER", fmt.Sprintf("Email rate limit exceeded for delete: email=%s, wait=%ds", user.Email, waitTime))
+		utils.RespondRateLimit(c, time.Now().Add(time.Duration(waitTime)*time.Second).Unix())
 		return
 	}
 
@@ -318,11 +320,7 @@ func (h *UserHandler) RequestDataExport(c *gin.Context) {
 	if !h.limiterMgr.DataExportAllow(userUID) {
 		waitTime := h.limiterMgr.DataExportWaitTime(userUID)
 		utils.LogWarnCtx(c.Request.Context(), "USER", "Data export rate limit exceeded", "user_uid", userUID, "wait_time", waitTime)
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"success":   false,
-			"errorCode": "RATE_LIMIT",
-			"waitTime":  waitTime,
-		})
+		utils.RespondRateLimit(c, time.Now().Add(time.Duration(waitTime)*time.Second).Unix())
 		return
 	}
 

@@ -285,50 +285,6 @@ func (s *TokenService) InvalidateCodeByEmail(ctx context.Context, email string, 
 	return s.codeRepo.DeleteByEmail(ctx, normalizedEmail, tokenType)
 }
 
-// GetCodeExpiry 获取验证码过期时间
-func (s *TokenService) GetCodeExpiry(ctx context.Context, codeStr, email string) (int64, error) {
-	if codeStr == "" {
-		return 0, models.ErrInvalidCode
-	}
-	if email == "" {
-		return 0, errors.New("email is empty")
-	}
-
-	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-
-	code, err := s.codeRepo.FindByCode(ctx, codeStr)
-	if err != nil {
-		return 0, models.ErrInvalidCode
-	}
-
-	if code.Email != normalizedEmail {
-		return 0, models.ErrEmailMismatch
-	}
-
-	return code.ExpireTime, nil
-}
-
-// GetCodeExpiryByEmail 根据邮箱获取最新验证码的过期时间
-func (s *TokenService) GetCodeExpiryByEmail(ctx context.Context, email string) (bool, int64, error) {
-	if email == "" {
-		return true, 0, errors.New("email is empty")
-	}
-
-	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-
-	now := time.Now().UnixMilli()
-	expireTime, err := s.codeRepo.GetLatestExpiryByEmail(ctx, normalizedEmail, now)
-	if err != nil {
-		return true, 0, err
-	}
-
-	if expireTime == 0 {
-		return true, 0, nil
-	}
-
-	return false, expireTime, nil
-}
-
 // CleanupExpired 清理过期数据
 // 所有清理操作并行执行，提高效率
 func (s *TokenService) CleanupExpired(ctx context.Context) {

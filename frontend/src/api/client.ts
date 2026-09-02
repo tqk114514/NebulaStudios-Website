@@ -8,7 +8,8 @@ export interface ApiSuccess<T = Record<string, never>> {
 export interface ApiError {
   success: false
   errorCode: string
-  waitTime?: number
+  /** 限流结束时间戳（Unix 秒），仅 RATE_LIMIT 时存在 */
+  retryAt?: number
 }
 
 export type ApiResponse<T = Record<string, never>> = ApiSuccess<T> | ApiError
@@ -18,7 +19,7 @@ export class ApiClientError extends Error {
   constructor(
     public readonly errorCode: string,
     public readonly httpStatus: number,
-    public readonly waitTime?: number,
+    public readonly retryAt?: number,
   ) {
     super(errorCode)
     this.name = 'ApiClientError'
@@ -78,8 +79,8 @@ export async function request<T = Record<string, never>>(
 
   if (!res.ok || !payload.success) {
     const code = payload.success === false ? payload.errorCode : 'HTTP_' + res.status
-    const waitTime = payload.success === false ? payload.waitTime : undefined
-    throw new ApiClientError(code, res.status, waitTime)
+    const retryAt = payload.success === false ? payload.retryAt : undefined
+    throw new ApiClientError(code, res.status, retryAt)
   }
 
   // success=true 时 data 可能缺失（如 login 返回 {message} 无 data）

@@ -58,7 +58,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 限流检查在邮箱存在性检查之前，防止攻击者在被限流前枚举邮箱
 	if !h.limiterMgr.EmailAllow(validatedEmail) {
 		waitTime := h.limiterMgr.EmailWaitTime(validatedEmail)
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusTooManyRequests, "RATE_LIMIT", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
+		utils.LogWarnCtx(c.Request.Context(), "AUTH", fmt.Sprintf("Email rate limit exceeded: email=%s, wait=%ds", validatedEmail, waitTime))
+		utils.RespondRateLimit(c, time.Now().Add(time.Duration(waitTime)*time.Second).Unix())
 		return
 	}
 
@@ -72,8 +73,9 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		_, _, _ = h.tokenService.CreateToken(ctx, "timing-constant-dummy@invalid", services.TokenTypeRegister)
 		utils.LogInfoCtx(c.Request.Context(), "AUTH", "SendCode requested for already-registered email (suppressed)", "email", validatedEmail)
 		utils.RespondSuccess(c, gin.H{
-			"message":    "Code sent",
-			"expireTime": time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli(),
+			"message": "Code sent",
+			// expireTime 单位为 Unix 秒（HTTP 层统一秒，DB 内部仍为毫秒）
+			"expireTime": time.Now().Add(TokenExpireMinutes * time.Minute).Unix(),
 			"email":      validatedEmail,
 		})
 		return
@@ -89,7 +91,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	verifyURL := h.baseURL + paths.PathAccountVerify + "?token=" + token
 	language := h.getLanguage(req.Language)
 
-	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).UnixMilli()
+	// expireTime 单位为 Unix 秒（HTTP 层统一秒，DB 内部仍为毫秒）
+	expireTime := time.Now().Add(TokenExpireMinutes * time.Minute).Unix()
 
 	h.emailService.SendVerificationEmailAsync(validatedEmail, "register", language, verifyURL, "AUTH")
 
@@ -135,29 +138,6 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		"code":  result.Code,
 		"email": result.Email,
 	})
-}
-
-// CheckCodeExpiry 检查验证码是否已过期
-// GET /api/auth/code-expiry?email=xxx
-func (h *AuthHandler) CheckCodeExpiry(c *gin.Context) {
-	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
-	if email == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty email in CheckCodeExpiry request")
-		return
-	}
-
-	ctx := c.Request.Context()
-	expired, expireTime, err := h.tokenService.GetCodeExpiryByEmail(ctx, email)
-	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("GetCodeExpiryByEmail failed: email=%s", email))
-		return
-	}
-
-	if expired {
-		utils.RespondSuccess(c, gin.H{"expired": true})
-	} else {
-		utils.RespondSuccess(c, gin.H{"expired": false, "expireTime": expireTime})
-	}
 }
 
 // VerifyCode 验证用户输入的验证码

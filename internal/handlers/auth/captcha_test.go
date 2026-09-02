@@ -147,48 +147,6 @@ func TestVerifyEmailNilResult(t *testing.T) {
 	}
 }
 
-// ---------- CheckCodeExpiry ----------
-
-func TestCheckCodeExpiryNotExpired(t *testing.T) {
-	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.CodeExpired = false
-	deps.tokenMgr.CodeExpireTime = 1234567890
-
-	w := getQuery(h.CheckCodeExpiry, "/api/auth/code-expiry?email=a@b.c")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, `"expired":false`) || !strings.Contains(body, "1234567890") {
-		t.Errorf("want expired:false + expireTime, got %s", body)
-	}
-}
-
-func TestCheckCodeExpiryExpired(t *testing.T) {
-	h, deps := newTestAuthHandler(t, false)
-	deps.tokenMgr.CodeExpired = true
-
-	w := getQuery(h.CheckCodeExpiry, "/api/auth/code-expiry?email=a@b.c")
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), `"expired":true`) {
-		t.Errorf("want expired:true, got %s", w.Body.String())
-	}
-}
-
-func TestCheckCodeExpiryEmptyEmail(t *testing.T) {
-	h, _ := newTestAuthHandler(t, false)
-
-	w := getQuery(h.CheckCodeExpiry, "/api/auth/code-expiry")
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "MISSING_PARAMETERS") {
-		t.Errorf("want MISSING_PARAMETERS, got %s", w.Body.String())
-	}
-}
-
 // ---------- VerifyCode ----------
 
 func TestVerifyCodeSuccess(t *testing.T) {

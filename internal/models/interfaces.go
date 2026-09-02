@@ -149,6 +149,5 @@ type CodeStore interface {
 	DeleteByCode(ctx context.Context, codeStr string) error
 	ConsumeVerifiedByCode(ctx context.Context, codeStr, email string) (bool, error)
 	DeleteByEmail(ctx context.Context, email string, tokenType *string) error
-	GetLatestExpiryByEmail(ctx context.Context, email string, now int64) (int64, error)
 	DeleteExpired(ctx context.Context, now int64) (int64, error)
 }

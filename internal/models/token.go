@@ -354,35 +354,6 @@ func (r *CodeRepository) DeleteByEmail(ctx context.Context, email string, tokenT
 	return nil
 }
 
-// GetLatestExpiryByEmail 获取指定邮箱最新验证码的过期时间
-func (r *CodeRepository) GetLatestExpiryByEmail(ctx context.Context, email string, now int64) (int64, error) {
-	if email == "" {
-		return 0, errors.New("email is empty")
-	}
-
-	if r.pool == nil {
-		return 0, errors.New("database not ready")
-	}
-
-	var expireTime int64
-	err := r.pool.QueryRow(ctx, `
-		SELECT expire_time FROM codes 
-		WHERE email = $1 AND expire_time > $2 
-		ORDER BY expire_time DESC LIMIT 1
-	`, email, now).Scan(&expireTime)
-
-	if err != nil {
-		// 仅"无有效验证码"是正常业务结果；其它数据库错误必须传播，
-		// 否则瞬时故障会被上层当作"无验证码可重发"静默放行
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil
-		}
-		return 0, utils.LogError("TOKEN", "GetLatestExpiryByEmail", err, "email", email)
-	}
-
-	return expireTime, nil
-}
-
 // DeleteExpired 删除过期的验证码
 func (r *CodeRepository) DeleteExpired(ctx context.Context, now int64) (int64, error) {
 	if r.pool == nil {
