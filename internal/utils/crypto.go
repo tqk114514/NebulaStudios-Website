@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	ErrInvalidHash             = errors.New("invalid hash format")
-	ErrRandomGeneration        = errors.New("failed to generate random bytes")
-	ErrEmptyPassword           = errors.New("password cannot be empty")
+	ErrInvalidHash      = errors.New("invalid hash format")
+	ErrRandomGeneration = errors.New("failed to generate random bytes")
+	ErrEmptyPassword    = errors.New("password cannot be empty")
 )
 
 const codeChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
