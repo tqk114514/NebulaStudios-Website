@@ -42,7 +42,8 @@ func (h *AdminHandler) RequestExport(c *gin.Context) {
 	operatorUID, _ := middleware.GetUID(c)
 	requestID, otac, expiresAt := h.exportService.GenerateOTAC(operatorUID)
 
-	utils.LogInfoCtx(c.Request.Context(), "DATA-EXPORT", "Data export download requested", "otac", utils.TruncateIdentifier(otac), "request_id", requestID, "user", operatorUID)
+	// OTAC 明文入日志：5 分钟一次性且绑定生成者 userUID，日志泄露无利用价值
+	utils.LogInfoCtx(c.Request.Context(), "DATA-EXPORT", "Data export download requested", "otac", otac, "request_id", requestID, "user", operatorUID)
 
 	utils.RespondSuccess(c, gin.H{
 		"requestId": requestID,
