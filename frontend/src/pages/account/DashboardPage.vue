@@ -16,6 +16,7 @@ import { errorKey } from '@/api/errorCodes'
 import type { Me } from '@/api/auth'
 import {
   updateAvatar,
+  updateUsername,
   unlinkMicrosoft,
   unlinkGoogle,
   changePassword,
@@ -484,6 +485,75 @@ function mapPasswordError(e: unknown): string {
   return errorKey(e) === 'account.login.failed' ? 'account.dashboard.changePasswordFailed' : errorKey(e)
 }
 
+// ==================== 修改用户名 ====================
+const usernameOpen = ref(false)
+const usernameInput = ref('')
+const usernameError = ref('')
+const usernameSubmitting = ref(false)
+const usernameCaptchaKey = ref(0)
+
+function openUsernameModal() {
+  usernameInput.value = user.value?.username ?? ''
+  usernameError.value = ''
+  usernameSubmitting.value = false
+  usernameCaptchaKey.value++
+  usernameOpen.value = true
+}
+
+// 与后端 ValidateUsername 一致：按 Unicode 字符数（rune）计数 1-15
+function usernameRuneLength(name: string): number {
+  return Array.from(name.trim()).length
+}
+
+// 用户名有实际变更且长度合规时才可提交（与旧前端 isChanged 逻辑一致）
+const usernameCanSubmit = computed(() => {
+  const len = usernameRuneLength(usernameInput.value)
+  return len >= 1 && len <= 15 && usernameInput.value.trim() !== (user.value?.username ?? '')
+})
+
+function onUsernameInput() {
+  usernameError.value = usernameRuneLength(usernameInput.value) > 15 ? 'account.register.usernameTooLong' : ''
+}
+
+async function submitUsername() {
+  const name = usernameInput.value.trim()
+  if (usernameRuneLength(name) < 1 || usernameRuneLength(name) > 15) {
+    usernameError.value = 'account.register.usernameLength'
+    return
+  }
+  if (isCaptchaEnabled() && !getCaptchaToken()) {
+    usernameError.value = 'account.register.humanVerifyFailed'
+    return
+  }
+  usernameSubmitting.value = true
+  usernameError.value = ''
+  try {
+    await updateUsername({ username: name, captchaToken: getCaptchaToken() })
+    usernameOpen.value = false
+    setAlert('account.dashboard.usernameUpdateSuccess')
+    user.value = await fetchMe()
+  } catch (e) {
+    usernameError.value = mapUsernameError(e)
+  } finally {
+    usernameSubmitting.value = false
+    // 后端会消费验证码 token，提交后（无论成败）重置并重挂组件供重试
+    resetCaptchaToken()
+    usernameCaptchaKey.value++
+  }
+}
+
+function mapUsernameError(e: unknown): string {
+  if (typeof e === 'object' && e && 'errorCode' in e) {
+    const code = (e as { errorCode: string }).errorCode
+    if (code === 'USERNAME_ALREADY_EXISTS') return 'account.register.usernameExists'
+    if (code === 'USERNAME_TOO_LONG') return 'account.register.usernameTooLong'
+    if (code === 'USERNAME_TOO_SHORT') return 'account.register.usernameTooShort'
+    if (code === 'INVALID_USERNAME') return 'account.register.usernameInvalid'
+    if (code === 'CAPTCHA_FAILED') return 'account.register.humanVerifyFailed'
+  }
+  return 'account.dashboard.usernameUpdateFailed'
+}
+
 // ==================== 删除账户 ====================
 const deleteOpen = ref(false)
 const deleteCode = ref('')
@@ -520,16 +590,20 @@ async function sendDeleteCode() {
     })
     deleteCountdown.start('delete_account', user.value?.email ?? '')
     setAlert('account.dashboard.codeSent')
+    // token 一次性，发送后清除避免复用（与注册/忘记密码一致）；
+    // 不重挂组件——删除确认无需验证码，避免发送成功后又走一遍人机验证
+    resetCaptchaToken()
   } catch (e) {
     // 限流命中：以服务端返回的限制结束时间戳启动倒计时（后端按邮箱 60s 限流）
     if (e instanceof ApiClientError && e.errorCode === 'RATE_LIMIT' && e.retryAt) {
       deleteCountdown.start('delete_account', user.value?.email ?? '', Math.ceil(e.retryAt - Date.now() / 1000))
     }
     deleteError.value = mapSendCodeError(e)
-  } finally {
-    deleteSending.value = false
+    // 失败时 token 可能已被服务端消费，重置并重挂组件以便重试时重新验证
     resetCaptchaToken()
     deleteCaptchaKey.value++
+  } finally {
+    deleteSending.value = false
   }
 }
 
@@ -550,10 +624,7 @@ const deleteCanSubmit = computed(
 )
 
 async function submitDelete() {
-  if (isCaptchaEnabled() && !getCaptchaToken()) {
-    deleteError.value = 'account.register.humanVerifyFailed'
-    return
-  }
+  // 后端删除账户接口不校验验证码，无需 token
   deleteSubmitting.value = true
   deleteError.value = ''
   try {
@@ -570,8 +641,6 @@ async function submitDelete() {
     deleteError.value = mapDeleteError(e)
   } finally {
     deleteSubmitting.value = false
-    resetCaptchaToken()
-    deleteCaptchaKey.value++
   }
 }
 
@@ -852,7 +921,7 @@ onMounted(async () => {
       <section class="dash-section">
         <h2 class="dash-section-title">{{ $t('account.dashboard.accountInfo') }}</h2>
         <div class="dash-list">
-          <div class="dash-item">
+          <button type="button" class="dash-item clickable" @click="openUsernameModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
             </div>
@@ -860,7 +929,8 @@ onMounted(async () => {
               <span class="dash-item-label">{{ $t('account.dashboard.username') }}</span>
               <span class="dash-item-value">{{ user.username }}</span>
             </div>
-          </div>
+            <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
+          </button>
           <div class="dash-item">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
@@ -1086,6 +1156,22 @@ onMounted(async () => {
       <AppButton variant="secondary" :arrow="false" @click="passwordOpen = false">{{ $t('modal.cancel') }}</AppButton>
       <AppButton :arrow="false" :disabled="!passCanSubmit || passwordSubmitting" @click="submitPassword">
         {{ passwordSubmitting ? $t('account.register.registering') : $t('modal.confirm') }}
+      </AppButton>
+    </template>
+  </AppModal>
+
+  <!-- 修改用户名弹窗 -->
+  <AppModal v-model:open="usernameOpen" :title="$t('account.dashboard.changeUsername')" :width="'420px'">
+    <FormField :label="$t('account.dashboard.newUsernamePlaceholder')">
+      <input v-model="usernameInput" type="text" autocomplete="username" :placeholder="$t('account.dashboard.newUsernamePlaceholder')"
+        @input="onUsernameInput" />
+    </FormField>
+    <CaptchaWidget :key="usernameCaptchaKey" />
+    <p v-if="usernameError" class="dash-form-error">{{ $t(usernameError) }}</p>
+    <template #footer>
+      <AppButton variant="secondary" :arrow="false" @click="usernameOpen = false">{{ $t('modal.cancel') }}</AppButton>
+      <AppButton :arrow="false" :disabled="!usernameCanSubmit || usernameSubmitting" @click="submitUsername">
+        {{ usernameSubmitting ? $t('account.register.registering') : $t('modal.confirm') }}
       </AppButton>
     </template>
   </AppModal>

@@ -52,9 +52,19 @@ export interface DeleteAccountRequest {
   password: string
 }
 
+export interface UpdateUsernameRequest {
+  username: string
+  captchaToken?: string
+}
+
 /** 更新头像（值可为 http(s) 图片 URL / data: base64 / "microsoft" / "google" / 空串表示移除） */
 export function updateAvatar(avatarUrl: string) {
   return patch<AvatarResult>('/api/user/avatar', { avatar_url: avatarUrl })
+}
+
+/** 修改用户名（后端校验验证码，captchaToken 必传——人机验证启用时） */
+export function updateUsername(body: UpdateUsernameRequest) {
+  return patch<{ username: string }>('/api/user/username', body)
 }
 
 export function unlinkMicrosoft() {
