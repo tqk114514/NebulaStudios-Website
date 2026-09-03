@@ -893,7 +893,7 @@ onMounted(async () => {
       <section class="dash-section">
         <h2 class="dash-section-title">{{ $t('account.dashboard.accountInfo') }}</h2>
         <div class="dash-list">
-          <button type="button" class="dash-item clickable" @click="openUsernameModal">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openUsernameModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
             </div>
@@ -912,7 +912,7 @@ onMounted(async () => {
               <span class="dash-item-value">{{ user.email }}</span>
             </div>
           </div>
-          <button type="button" class="dash-item clickable" @click="handleMicrosoftToggle">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="handleMicrosoftToggle">
             <div class="dash-item-icon">
               <img :src="CDN_URL + '/images/logo/microsoft/Symbol.svg'" alt="Microsoft" width="24" height="24" />
             </div>
@@ -922,7 +922,7 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
-          <button type="button" class="dash-item clickable" @click="handleGoogleToggle">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="handleGoogleToggle">
             <div class="dash-item-icon">
               <img :src="CDN_URL + '/images/logo/google/Symbol.svg'" alt="Google" width="24" height="24" />
             </div>
@@ -932,7 +932,7 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
-          <button type="button" class="dash-item clickable" @click="openAvatarModal">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openAvatarModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
             </div>
@@ -949,7 +949,7 @@ onMounted(async () => {
       <section class="dash-section">
         <h2 class="dash-section-title">{{ $t('account.dashboard.oauthGrants') }}</h2>
         <div class="dash-list">
-          <button type="button" class="dash-item clickable" @click="openGrantsModal">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openGrantsModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
             </div>
@@ -966,7 +966,7 @@ onMounted(async () => {
       <section class="dash-section">
         <h2 class="dash-section-title">{{ $t('account.dashboard.security') }}</h2>
         <div class="dash-list">
-          <button type="button" class="dash-item clickable" @click="openPasswordModal">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openPasswordModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
             </div>
@@ -976,7 +976,7 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
-          <button type="button" class="dash-item clickable" @click="openLogsModal">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openLogsModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
             </div>
@@ -986,7 +986,7 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
-          <button type="button" class="dash-item clickable" @click="handleDataExport">
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="handleDataExport">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
             </div>
@@ -1006,7 +1006,7 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
-          <button type="button" class="dash-item clickable delete-account-item" @click="openDeleteModal">
+          <button type="button" class="dash-item clickable delete-account-item" :disabled="banned" @click="openDeleteModal">
             <div class="dash-item-icon delete-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
             </div>
@@ -1464,6 +1464,12 @@ onMounted(async () => {
 
 .dash-item.clickable:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+/* 封禁状态下除退出登录外的操作项禁用（后端 BanCheckMiddleware 亦拦截） */
+.dash-item:disabled {
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 .dash-item.logout-item:hover,
