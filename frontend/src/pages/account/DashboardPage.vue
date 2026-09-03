@@ -12,7 +12,7 @@ import FormField from '@/components/FormField.vue'
 import CaptchaWidget from '@/components/CaptchaWidget.vue'
 import { i18n } from '@/i18n'
 import { fetchMe, logout as logoutApi } from '@/api/auth'
-import { errorKey } from '@/api/errorCodes'
+import { errorKey, GENERIC_ERROR_KEY } from '@/api/errorCodes'
 import type { Me } from '@/api/auth'
 import {
   updateAvatar,
@@ -143,10 +143,10 @@ function resolveConfirm(v: boolean) {
 
 // ==================== 验证器（迁移自 lib/validators.ts）====================
 function validatePassword(pw: string): string | null {
-  if (pw.length < 16 || pw.length > 64) return 'account.register.passwordLength'
-  if (!/\d/.test(pw)) return 'account.register.passwordNumber'
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw)) return 'account.register.passwordSpecial'
-  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw)) return 'account.register.passwordCase'
+  if (pw.length < 16 || pw.length > 64) return 'error.passwordLength'
+  if (!/\d/.test(pw)) return 'error.passwordNumber'
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw)) return 'error.passwordSpecial'
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw)) return 'error.passwordCase'
   return null
 }
 
@@ -444,7 +444,7 @@ async function submitPassword() {
     return
   }
   if (isCaptchaEnabled() && !getCaptchaToken()) {
-    passwordError.value = 'account.register.humanVerifyFailed'
+    passwordError.value = 'error.humanVerifyFailed'
     return
   }
   passwordSubmitting.value = true
@@ -476,13 +476,8 @@ async function submitPassword() {
 }
 
 function mapPasswordError(e: unknown): string {
-  if (typeof e === 'object' && e && 'errorCode' in e) {
-    const code = (e as { errorCode: string }).errorCode
-    if (code === 'WRONG_PASSWORD') return 'account.dashboard.wrongPassword'
-    if (code === 'SAME_PASSWORD') return 'account.dashboard.samePassword'
-    if (code === 'CAPTCHA_FAILED') return 'account.register.humanVerifyFailed'
-  }
-  return errorKey(e) === 'account.login.failed' ? 'account.dashboard.changePasswordFailed' : errorKey(e)
+  const key = errorKey(e)
+  return key === GENERIC_ERROR_KEY ? 'account.dashboard.changePasswordFailed' : key
 }
 
 // ==================== 修改用户名 ====================
@@ -512,7 +507,7 @@ const usernameCanSubmit = computed(() => {
 })
 
 function onUsernameInput() {
-  usernameError.value = usernameRuneLength(usernameInput.value) > 15 ? 'account.register.usernameTooLong' : ''
+  usernameError.value = usernameRuneLength(usernameInput.value) > 15 ? 'error.usernameTooLong' : ''
 }
 
 async function submitUsername() {
@@ -522,7 +517,7 @@ async function submitUsername() {
     return
   }
   if (isCaptchaEnabled() && !getCaptchaToken()) {
-    usernameError.value = 'account.register.humanVerifyFailed'
+    usernameError.value = 'error.humanVerifyFailed'
     return
   }
   usernameSubmitting.value = true
@@ -543,15 +538,8 @@ async function submitUsername() {
 }
 
 function mapUsernameError(e: unknown): string {
-  if (typeof e === 'object' && e && 'errorCode' in e) {
-    const code = (e as { errorCode: string }).errorCode
-    if (code === 'USERNAME_ALREADY_EXISTS') return 'account.register.usernameExists'
-    if (code === 'USERNAME_TOO_LONG') return 'account.register.usernameTooLong'
-    if (code === 'USERNAME_TOO_SHORT') return 'account.register.usernameTooShort'
-    if (code === 'INVALID_USERNAME') return 'account.register.usernameInvalid'
-    if (code === 'CAPTCHA_FAILED') return 'account.register.humanVerifyFailed'
-  }
-  return 'account.dashboard.usernameUpdateFailed'
+  const key = errorKey(e)
+  return key === GENERIC_ERROR_KEY ? 'account.dashboard.usernameUpdateFailed' : key
 }
 
 // ==================== 删除账户 ====================
@@ -578,7 +566,7 @@ function openDeleteModal() {
 async function sendDeleteCode() {
   if (deleteSending.value || deleteCountdown.running.value) return
   if (isCaptchaEnabled() && !getCaptchaToken()) {
-    deleteError.value = 'account.register.humanVerifyFailed'
+    deleteError.value = 'error.humanVerifyFailed'
     return
   }
   deleteSending.value = true
@@ -608,12 +596,8 @@ async function sendDeleteCode() {
 }
 
 function mapSendCodeError(e: unknown): string {
-  if (typeof e === 'object' && e && 'errorCode' in e) {
-    const code = (e as { errorCode: string }).errorCode
-    if (code === 'CAPTCHA_FAILED') return 'account.register.humanVerifyFailed'
-    if (code === 'RATE_LIMIT') return 'error.rateLimitExceeded'
-  }
-  return 'account.dashboard.sendCodeFailed'
+  const key = errorKey(e)
+  return key === GENERIC_ERROR_KEY ? 'account.dashboard.sendCodeFailed' : key
 }
 
 const deleteCanSubmit = computed(
@@ -645,13 +629,8 @@ async function submitDelete() {
 }
 
 function mapDeleteError(e: unknown): string {
-  if (typeof e === 'object' && e && 'errorCode' in e) {
-    const code = (e as { errorCode: string }).errorCode
-    if (code === 'INVALID_CODE') return 'account.dashboard.invalidCode'
-    if (code === 'CODE_EXPIRED') return 'account.dashboard.codeExpired'
-    if (code === 'WRONG_PASSWORD') return 'account.dashboard.wrongPassword'
-  }
-  return 'account.dashboard.deleteFailed'
+  const key = errorKey(e)
+  return key === GENERIC_ERROR_KEY ? 'account.dashboard.deleteFailed' : key
 }
 
 onBeforeUnmount(() => {
@@ -829,10 +808,10 @@ const BIND_SUCCESS: Record<string, string> = {
   google_linked: 'account.dashboard.linkSuccessGoogle',
 }
 const BIND_ERROR: Record<string, string> = {
-  microsoft_already_linked: 'account.dashboard.microsoftAlreadyLinked',
-  google_already_linked: 'account.dashboard.googleAlreadyLinked',
+  microsoft_already_linked: 'error.microsoftAlreadyLinked',
+  google_already_linked: 'error.googleAlreadyLinked',
   session_expired: 'error.sessionExpired',
-  user_banned: 'account.error.userBanned',
+  user_banned: 'error.userBanned',
 }
 
 // ==================== 初始化 ====================
@@ -876,7 +855,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="dash-main" :class="{ 'is-banned': banned }">
+  <div class="dash-main">
     <template v-if="user">
       <!-- 封禁信息卡片 -->
       <section v-if="banned" class="dash-banned-info">
@@ -897,13 +876,6 @@ onMounted(async () => {
           <span class="dash-banned-info-value">{{ user.unban_at ? formatDateTime(user.unban_at) : $t('account.dashboard.permanentBan') }}</span>
         </div>
       </section>
-
-      <!-- 封禁盖章 -->
-      <div v-if="banned" class="dash-banned-stamp">
-        <div class="dash-banned-stamp-inner">
-          <span class="dash-banned-stamp-text">BANNED</span>
-        </div>
-      </div>
 
       <!-- 头像与欢迎 -->
       <section class="dash-profile">
@@ -1277,11 +1249,6 @@ onMounted(async () => {
   animation: dash-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dash-main.is-banned {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 @keyframes dash-enter {
   from {
     opacity: 0;
@@ -1349,7 +1316,7 @@ onMounted(async () => {
   text-align: center;
 }
 
-/* ==================== 封禁标识（原 .banned-info / .banned-stamp，值不变） ==================== */
+/* ==================== 封禁信息卡片（原 .banned-info，值不变） ==================== */
 .dash-banned-info {
   margin-bottom: 32px;
   padding: 20px;
@@ -1398,32 +1365,6 @@ onMounted(async () => {
   color: var(--fg);
   text-align: right;
   font-family: var(--font-mono);
-}
-
-.dash-banned-stamp {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 100;
-}
-
-.dash-banned-stamp-inner {
-  transform: rotate(-15deg);
-  border: 4px solid var(--error);
-  padding: 16px 32px;
-  opacity: 0.8;
-}
-
-.dash-banned-stamp-text {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 32px;
-  color: var(--error);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
 }
 
 /* ==================== 用户头部（原 .profile-header / .avatar-large，值不变） ==================== */
