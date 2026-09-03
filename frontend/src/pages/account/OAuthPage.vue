@@ -5,8 +5,9 @@
 // 通过 URL query 携带授权参数，拉取 /oauth/authorize/info 展示应用与权限，
 // 用户在允许/拒绝后 POST /oauth/authorize，成功则跳转 redirect_url。
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePolicyConsent } from '@/composables/usePolicyConsent'
 import AuthCard from '@/components/AuthCard.vue'
 import AppButton from '@/components/AppButton.vue'
 import PolicyFooter from '@/components/PolicyFooter.vue'
@@ -25,7 +26,9 @@ interface AuthorizeResult {
 }
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
+const { check: checkConsent } = usePolicyConsent()
 
 const loading = ref(true)
 const info = ref<AuthorizeInfo | null>(null)
@@ -56,6 +59,13 @@ async function loadInfo() {
     if (data.success && data.data) {
       info.value = data.data
       await auth.bootstrap()
+
+      // 政策强制同意：拒绝则弹窗组件已登出，跳转登录页（与登录/dashboard 入口一致）
+      const consented = await checkConsent()
+      if (!consented) {
+        router.replace('/account/login')
+        return
+      }
     } else {
       errorKey.value = mapError(data.errorCode ?? '')
     }
