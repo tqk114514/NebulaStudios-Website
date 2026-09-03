@@ -28,8 +28,8 @@ for (const lang of languages) {
     let data = {}
     try {
       data = JSON.parse(readFileSync(file, 'utf-8'))
-    } catch (e) {
-      console.warn(`skip ${file}: ${e.message}`)
+    } catch {
+      // 缺失文件静默跳过：admin 组按设计仅维护 zh-CN，其余语言经 fallbackLocale 回落中文
       continue
     }
     const prefix = noPrefix.has(type) ? '' : type + '.'

@@ -69,10 +69,7 @@ if ($Frontend) {
             if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
         }
 
-        # 从 src/i18n/sources/ 重新生成 locale 文件（幂等；改文案后无需手动执行）
-        Write-Host "=== Generating i18n locales ===" -ForegroundColor Cyan
-        node scripts/gen-locales.mjs
-        if ($LASTEXITCODE -ne 0) { throw "gen-locales failed" }
+        # locales 由 package.json 的 prebuild 钩子生成（npm run build 前自动执行，无需在此调用）
 
         Write-Host "=== Building frontend (Vite) ===" -ForegroundColor Cyan
         npm run build
