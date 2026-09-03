@@ -6,6 +6,7 @@ import SiteHeader from '@/components/SiteHeader.vue'
 import AppToast from '@/components/AppToast.vue'
 import PageLoader from '@/components/PageLoader.vue'
 import PolicyConsentModal from '@/components/PolicyConsentModal.vue'
+import CookieConsentBanner from '@/components/CookieConsentBanner.vue'
 
 // 管理后台是独立全屏页面（老版即无站头），不渲染全局 SiteHeader。
 // 初始导航完成前 route.path 恒为 '/'，刷新 /admin 会闪现公共站头，
@@ -24,4 +25,6 @@ const showSiteHeader = computed(
   <PageLoader />
   <AppToast />
   <PolicyConsentModal />
+  <!-- Cookie 同意横幅：与站头同门控（管理后台不展示，与旧版一致） -->
+  <CookieConsentBanner v-if="showSiteHeader" />
 </template>
