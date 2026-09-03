@@ -2,6 +2,9 @@
 dist/
 *.exe
 
+# 构建时生成（scripts/gen-locales.mjs，dev/build/typecheck 前自动执行）
+frontend/src/i18n/locales/
+
 # 依赖
 node_modules/
 

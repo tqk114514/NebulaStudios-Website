@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node scripts/gen-locales.mjs",
     "build": "vue-tsc --noEmit && vite build",
+    "prebuild": "node scripts/gen-locales.mjs",
     "preview": "vite preview",
+    "pretypecheck": "node scripts/gen-locales.mjs",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

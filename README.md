@@ -320,7 +320,7 @@ go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=
 
 4. **前端框架**：前端使用 Vue 3 + Vite 构建的纯 SPA，组件化开发。登录态通过 Cookie 中 JWT 维护，vue-router 守卫控制页面访问，服务端对 `/admin` 等敏感路径仍做鉴权与伪装（未授权返回 404）。
 
-5. **i18n 配置**：前端文案存储在 `frontend/src/i18n/locales/`，由 `scripts/gen-locales.mjs` 从 `frontend/src/i18n/sources/` 各语言 JSON 自动生成。政策 Markdown 位于 `frontend/policy/`，构建时复制进 `dist/policy/`。改动文案后需重新执行 `npm run build`。
+5. **i18n 配置**：前端文案源存储在 `frontend/src/i18n/sources/`，由 `scripts/gen-locales.mjs` 生成 `frontend/src/i18n/locales/`（不入库；`npm run dev/build/typecheck` 前自动生成）。政策 Markdown 位于 `frontend/policy/`，构建时复制进 `dist/policy/`。改动文案后需重新执行 `npm run build`。
 
 6. **数据库迁移**：由 golang-migrate 管理，迁移 SQL 由 `getTableSchemas()` / `getIndexDefinitions()` 动态生成并作为版本 1 应用，仅执行一次。**对已有表新增列不会自动应用**（`CREATE TABLE IF NOT EXISTS` 对已存在的表是空操作）——需要手动执行 `ALTER TABLE ... ADD COLUMN`，或在迁移中追加新版本。删除列、修改类型、约束变更同样需要手动 SQL。
 
