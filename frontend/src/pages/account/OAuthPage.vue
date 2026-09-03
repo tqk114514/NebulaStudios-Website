@@ -44,7 +44,7 @@ function scopeName(scope: string): string {
 async function loadInfo() {
   const q = route.query
   if (!q.client_id || !q.redirect_uri || !q.scope) {
-    errorKey.value = 'account.oauth.error.invalidRequest'
+    errorKey.value = 'error.invalidRequest'
     loading.value = false
     return
   }
@@ -70,7 +70,7 @@ async function loadInfo() {
       errorKey.value = mapError(data.errorCode ?? '')
     }
   } catch {
-    errorKey.value = 'account.oauth.error.serverError'
+    errorKey.value = 'error.serverError'
   } finally {
     loading.value = false
   }
@@ -100,22 +100,23 @@ async function submitDecision(decision: 'approve' | 'deny') {
     errorKey.value = mapError(data.errorCode ?? 'accessDenied')
     submitting.value = false
   } catch {
-    errorKey.value = 'account.oauth.error.serverError'
+    errorKey.value = 'error.serverError'
     submitting.value = false
   }
 }
 
 function mapError(code: string): string {
   const map: Record<string, string> = {
-    invalid_request: 'account.oauth.error.invalidRequest',
-    invalid_client: 'account.oauth.error.invalidClient',
-    invalid_scope: 'account.oauth.error.invalidScope',
-    access_denied: 'account.oauth.error.accessDenied',
-    unauthorized: 'account.oauth.error.unauthorized',
-    server_error: 'account.oauth.error.serverError',
-    unsupported_response_type: 'account.oauth.error.unsupportedResponseType',
+    invalid_request: 'error.invalidRequest',
+    invalid_client: 'error.oauthClientInvalid',
+    invalid_scope: 'error.oauthScopeInvalid',
+    access_denied: 'error.oauthAccessDenied',
+    unauthorized: 'error.oauthUnauthorized',
+    server_error: 'error.serverError',
+    unsupported_response_type: 'error.oauthResponseTypeUnsupported',
+    USER_BANNED: 'error.userBanned',
   }
-  return map[code] ?? 'account.oauth.error.unknown'
+  return map[code] ?? 'error.operationFailed'
 }
 
 onMounted(() => {
