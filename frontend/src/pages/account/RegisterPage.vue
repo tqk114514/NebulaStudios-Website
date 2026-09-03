@@ -80,7 +80,7 @@ async function handleSendCode() {
   }
   if (sendingCode.value || countdown.running.value) return
   if (isCaptchaEnabled() && !getCaptchaToken()) {
-    alert('account.login.humanVerifyFailed')
+    alert('error.humanVerifyFailed')
     return
   }
 
@@ -114,14 +114,14 @@ function onEmailInput() {
     return
   }
   const v = validateEmail(email)
-  emailError.value = v.errorKey === 'account.register.emailNotSupported' ? v.errorKey : ''
+  emailError.value = v.errorKey === 'error.emailNotSupported' ? v.errorKey : ''
 }
 
 // 用户名：长度校验
 function onUsernameInput() {
   const u = form.username.trim()
   if (u.length > 15) {
-    usernameError.value = 'account.register.usernameTooLong'
+    usernameError.value = 'error.usernameTooLong'
   } else {
     usernameError.value = ''
   }
@@ -139,7 +139,7 @@ function validateForm(): string | null {
     return 'account.register.fillAllFields'
   }
   if (form.password !== form.passwordConfirm) return 'account.register.passwordMismatch'
-  if (!passReq.length || !passReq.number || !passReq.special || !passReq.ccase) return 'account.register.passwordInvalid'
+  if (!passReq.length || !passReq.number || !passReq.special || !passReq.ccase) return 'error.passwordInvalid'
   const ev = validateEmail(form.email.trim())
   if (!ev.valid) return ev.errorKey
   return null

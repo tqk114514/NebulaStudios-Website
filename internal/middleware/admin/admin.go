@@ -28,7 +28,7 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
-				"errorCode": "INTERNAL_ERROR",
+				"errorCode": utils.ErrCodeInternalError,
 			})
 			c.Abort()
 		}
@@ -40,7 +40,7 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		userUID, ok := middleware.GetUID(c)
 		if !ok {
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			respondForbidden(c, "UNAUTHORIZED")
+			respondForbidden(c, utils.ErrCodeUnauthorized)
 			return
 		}
 
@@ -50,13 +50,13 @@ func AdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "ADMIN-MW", "AdminMiddleware", err, "ip", clientIP)
-			respondForbidden(c, "USER_NOT_FOUND")
+			respondForbidden(c, utils.ErrCodeUserNotFound)
 			return
 		}
 
 		if user == nil {
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			respondForbidden(c, "USER_NOT_FOUND")
+			respondForbidden(c, utils.ErrCodeUserNotFound)
 			return
 		}
 
@@ -78,7 +78,7 @@ func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
-				"errorCode": "INTERNAL_ERROR",
+				"errorCode": utils.ErrCodeInternalError,
 			})
 			c.Abort()
 		}
@@ -90,7 +90,7 @@ func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		userUID, ok := middleware.GetUID(c)
 		if !ok {
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			respondForbidden(c, "UNAUTHORIZED")
+			respondForbidden(c, utils.ErrCodeUnauthorized)
 			return
 		}
 
@@ -100,13 +100,13 @@ func SuperAdminMiddleware(userRepo models.UserReader) gin.HandlerFunc {
 		user, err := userRepo.FindByUID(ctx, userUID)
 		if err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "ADMIN-MW", "SuperAdminMiddleware", err, "ip", clientIP)
-			respondForbidden(c, "USER_NOT_FOUND")
+			respondForbidden(c, utils.ErrCodeUserNotFound)
 			return
 		}
 
 		if user == nil {
 			utils.LogWarnCtx(c.Request.Context(), "ADMIN-MW", "Unauthorized access attempt", "ip", clientIP)
-			respondForbidden(c, "USER_NOT_FOUND")
+			respondForbidden(c, utils.ErrCodeUserNotFound)
 			return
 		}
 

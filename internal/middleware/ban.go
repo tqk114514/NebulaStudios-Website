@@ -14,10 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	ErrCodeUserBanned = "USER_BANNED"
-)
-
 // autoUnbanWg 跟踪自动解封 goroutine，确保服务关闭时等待完成
 var autoUnbanWg sync.WaitGroup
 
@@ -37,7 +33,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
-				"errorCode": "INTERNAL_ERROR",
+				"errorCode": utils.ErrCodeInternalError,
 			})
 			c.Abort()
 		}
@@ -47,7 +43,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 		return func(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success":   false,
-				"errorCode": "INTERNAL_ERROR",
+				"errorCode": utils.ErrCodeInternalError,
 			})
 			c.Abort()
 		}
@@ -81,7 +77,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 			utils.LogErrorCtx(c.Request.Context(), "BAN-MW", "BanCheckMiddleware", err, "user_uid", userUID)
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"success":   false,
-				"errorCode": "SERVICE_UNAVAILABLE",
+				"errorCode": utils.ErrCodeServiceUnavailable,
 			})
 			c.Abort()
 			return
@@ -92,7 +88,7 @@ func BanCheckMiddleware(userCache services.UserCacheStore, userRepo interface {
 
 			response := gin.H{
 				"success":   false,
-				"errorCode": ErrCodeUserBanned,
+				"errorCode": utils.ErrCodeUserBanned,
 			}
 
 			if user.BanReason.Valid {

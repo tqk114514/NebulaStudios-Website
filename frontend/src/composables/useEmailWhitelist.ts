@@ -30,8 +30,8 @@ export function getEmailProviders(): EmailProviders {
 /** 校验邮箱：格式 + 白名单。返回 i18n key 或 null(有效) */
 export function validateEmail(email: string): { valid: boolean; errorKey: string } {
   if (!email || email.trim() === '') return { valid: false, errorKey: 'account.register.emailRequired' }
-  if (!isValidEmailFormat(email)) return { valid: false, errorKey: 'account.register.emailInvalid' }
-  if (!isEmailInWhitelist(email)) return { valid: false, errorKey: 'account.register.emailNotSupported' }
+  if (!isValidEmailFormat(email)) return { valid: false, errorKey: 'error.emailInvalid' }
+  if (!isEmailInWhitelist(email)) return { valid: false, errorKey: 'error.emailNotSupported' }
   return { valid: true, errorKey: '' }
 }
 

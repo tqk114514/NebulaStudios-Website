@@ -491,7 +491,7 @@ func RateLimitMiddleware(limiter *ShardedRateLimiter) gin.HandlerFunc {
 			utils.LogWarnCtx(c.Request.Context(), "RATELIMIT", "Rate limit exceeded", "ip", ip, "path", c.Request.URL.Path)
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success":   false,
-				"errorCode": "RATE_LIMIT",
+				"errorCode": utils.ErrCodeRateLimit,
 			})
 			c.Abort()
 			return

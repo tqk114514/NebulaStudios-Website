@@ -59,7 +59,7 @@ type toggleOAuthClientRequest struct {
 // 权限：超级管理员
 func (h *AdminHandler) GetOAuthClients(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (h *AdminHandler) GetOAuthClients(c *gin.Context) {
 
 	clients, total, err := h.oauthService.GetClients(ctx, page, pageSize, search)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -103,13 +103,13 @@ func (h *AdminHandler) GetOAuthClients(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) GetOAuthClient(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidClientID)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *AdminHandler) GetOAuthClient(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "CLIENT_NOT_FOUND", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeClientNotFound, err.Error())
 		return
 	}
 
@@ -131,14 +131,14 @@ func (h *AdminHandler) GetOAuthClient(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
 	operatorUID, _ := middleware.GetUID(c)
 
 	var req createOAuthClientRequest
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -148,7 +148,7 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 	client, clientSecret, err := h.oauthService.CreateClient(ctx, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
 		if errors.Is(err, services.ErrOAuthInvalidRedirect) {
-			utils.RespondError(c, http.StatusBadRequest, "INVALID_REDIRECT_URI")
+			utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRedirectURI)
 			return
 		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "CREATE_FAILED", err.Error())
@@ -173,7 +173,7 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
@@ -181,12 +181,12 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidClientID)
 		return
 	}
 
 	var req updateOAuthClientRequest
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -195,17 +195,17 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeClientNotFound)
 		return
 	}
 
 	err = h.oauthService.UpdateClient(ctx, clientID, req.Name, req.Description, req.RedirectURI)
 	if err != nil {
 		if errors.Is(err, services.ErrOAuthInvalidRedirect) {
-			utils.RespondError(c, http.StatusBadRequest, "INVALID_REDIRECT_URI")
+			utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRedirectURI)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, err.Error())
 		return
 	}
 
@@ -224,7 +224,7 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
@@ -232,7 +232,7 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidClientID)
 		return
 	}
 
@@ -241,13 +241,13 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeClientNotFound)
 		return
 	}
 
 	err = h.oauthService.DeleteClient(ctx, clientID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeDeleteFailed, err.Error())
 		return
 	}
 
@@ -266,7 +266,7 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
@@ -274,7 +274,7 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidClientID)
 		return
 	}
 
@@ -283,13 +283,13 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeClientNotFound)
 		return
 	}
 
 	newSecret, err := h.oauthService.RegenerateSecret(ctx, clientID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "REGENERATE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeRegenerateFailed, err.Error())
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 // 权限：超级管理员
 func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 	if h.oauthService == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "OAUTH_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeOAuthNotConfigured)
 		return
 	}
 
@@ -318,12 +318,12 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 
 	clientID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || clientID <= 0 {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_CLIENT_ID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidClientID)
 		return
 	}
 
 	var req toggleOAuthClientRequest
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -332,7 +332,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 
 	client, err := h.oauthService.GetClient(ctx, clientID)
 	if err != nil {
-		utils.RespondError(c, http.StatusNotFound, "CLIENT_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeClientNotFound)
 		return
 	}
 
@@ -347,7 +347,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 
 	err = h.oauthService.ToggleClient(ctx, clientID, req.Enabled)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "TOGGLE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeToggleFailed, err.Error())
 		return
 	}
 

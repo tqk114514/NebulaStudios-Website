@@ -55,7 +55,7 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 
 	users, total, err := h.userRepo.FindAll(ctx, page, pageSize, search)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	userUID := c.Param("uid")
 	if userUID == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
 		return
 	}
 
@@ -95,10 +95,10 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	user, err := h.userRepo.FindByUID(ctx, userUID)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -115,22 +115,22 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 
 	targetUserUID := c.Param("uid")
 	if targetUserUID == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
 		return
 	}
 
 	if targetUserUID == operatorUID {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_MODIFY_SELF", "Attempted to modify own role")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeCannotModifySelf, "Attempted to modify own role")
 		return
 	}
 
 	var req setRoleRequest
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
 	if req.Role < models.RoleUser || req.Role > models.RoleAdmin {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_ROLE")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRole)
 		return
 	}
 
@@ -140,20 +140,20 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
 	if targetUser.IsSuperAdmin() {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_MODIFY_SUPER_ADMIN", "Attempted to modify super admin role")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, utils.ErrCodeCannotModifySuperAdmin, "Attempted to modify super admin role")
 		return
 	}
 
 	if req.Role > models.RoleUser && targetUser.CheckBanned() {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_PROMOTE_BANNED_USER", "Attempted to promote banned user")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeCannotPromoteBannedUser, "Attempted to promote banned user")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		"role": req.Role,
 	})
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, err.Error())
 		return
 	}
 
@@ -190,12 +190,12 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	targetUserUID := c.Param("uid")
 	if targetUserUID == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
 		return
 	}
 
 	if targetUserUID == operatorUID {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_DELETE_SELF", "Attempted to delete self")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeCannotDeleteSelf, "Attempted to delete self")
 		return
 	}
 
@@ -205,26 +205,26 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
 	if targetUser.IsSuperAdmin() {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_DELETE_SUPER_ADMIN", "Attempted to delete super admin")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, utils.ErrCodeCannotDeleteSuperAdmin, "Attempted to delete super admin")
 		return
 	}
 
 	if targetUser.IsAdmin() {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_DELETE_ADMIN", "Attempted to delete admin")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, utils.ErrCodeCannotDeleteAdmin, "Attempted to delete admin")
 		return
 	}
 
 	err = h.userRepo.Delete(ctx, targetUserUID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeDeleteFailed, err.Error())
 		return
 	}
 
@@ -248,17 +248,17 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	targetUserUID := c.Param("uid")
 	if targetUserUID == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
 		return
 	}
 
 	if targetUserUID == operatorUID {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "CANNOT_BAN_SELF", "Attempted to ban self")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeCannotBanSelf, "Attempted to ban self")
 		return
 	}
 
 	var req banUserRequest
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -269,11 +269,11 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 		"spam":      true,
 	}
 	if req.Reason == "" {
-		utils.RespondError(c, http.StatusBadRequest, "REASON_REQUIRED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeReasonRequired)
 		return
 	}
 	if !allowedReasons[req.Reason] {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REASON")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidReason)
 		return
 	}
 
@@ -283,15 +283,15 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
 	if targetUser.IsAdmin() {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, "CANNOT_BAN_ADMIN", "Attempted to ban admin")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusForbidden, utils.ErrCodeCannotBanAdmin, "Attempted to ban admin")
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 
 	err = h.userRepo.Ban(ctx, targetUserUID, operatorUID, req.Reason, unbanAt)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "BAN_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeBanFailed, err.Error())
 		return
 	}
 
@@ -337,7 +337,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 
 	targetUserUID := c.Param("uid")
 	if targetUserUID == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_USER_UID")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
 		return
 	}
 
@@ -347,10 +347,10 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
-			utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -361,7 +361,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 
 	err = h.userRepo.Unban(ctx, targetUserUID)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UNBAN_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUnbanFailed, err.Error())
 		return
 	}
 

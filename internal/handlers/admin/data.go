@@ -65,7 +65,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	otac := c.Query("otac")
 
 	if requestID == "" || otac == "" {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRequest)
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	salt1, err := utils.ParseExportSalt1(h.dataExportSalt)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err)
-		utils.RespondError(c, http.StatusInternalServerError, "EXPORT_SALT_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeExportSaltNotConfigured)
 		return
 	}
 
@@ -97,14 +97,14 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	users, err := h.dataExportRepo.QueryAllUsers(ctx)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Failed to query users")
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeQueryFailed)
 		return
 	}
 
 	logs, err := h.dataExportRepo.QueryAllUserLogs(ctx)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Failed to query user logs")
-		utils.RespondError(c, http.StatusInternalServerError, "QUERY_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeQueryFailed)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 	encrypted, err := utils.ExportEncrypt(salt1, salt2, header, payload)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "DATA-EXPORT", "DownloadExport", err, "Encryption failed")
-		utils.RespondError(c, http.StatusInternalServerError, "ENCRYPTION_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeEncryptionFailed)
 		return
 	}
 
@@ -147,21 +147,21 @@ func (h *AdminHandler) DownloadExport(c *gin.Context) {
 func (h *AdminHandler) PreviewImport(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "FILE_REQUIRED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeFileRequired)
 		return
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "FILE_READ_ERROR")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeFileReadError)
 		return
 	}
 
 	exportHeader, err := utils.ExportDecryptHeader(data)
 	if err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "PreviewImport", "error", err)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_FILE_FORMAT")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidFileFormat)
 		return
 	}
 
@@ -183,27 +183,27 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 
 	var req importExecuteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_REQUEST")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRequest)
 		return
 	}
 
 	salt1, err := utils.ParseExportSalt1(h.dataExportSalt)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err)
-		utils.RespondError(c, http.StatusInternalServerError, "EXPORT_SALT_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeExportSaltNotConfigured)
 		return
 	}
 
 	data, _, err := h.exportService.RetrieveFile(req.FileToken)
 	if err != nil {
-		utils.RespondError(c, http.StatusNotFound, "FILE_TOKEN_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeFileTokenNotFound)
 		return
 	}
 
 	payload, err := utils.ExportDecrypt(salt1, data)
 	if err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", "error", err)
-		utils.RespondError(c, http.StatusBadRequest, "DECRYPTION_FAILED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeDecryptionFailed)
 		return
 	}
 
@@ -220,21 +220,21 @@ func (h *AdminHandler) ExecuteImport(c *gin.Context) {
 		usersResult, logsImported, logsFailed, err = h.dataExportRepo.ImportAllInTransaction(txCtx, payload.Users, payload.UserLogs)
 		if err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import data in transaction")
-			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeImportFailed)
 			return
 		}
 	} else {
 		usersResult, err = h.dataExportRepo.ImportUsers(ctx, payload.Users)
 		if err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import users")
-			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeImportFailed)
 			return
 		}
 
 		logsImported, logsFailed, err = h.dataExportRepo.ImportUserLogs(ctx, payload.UserLogs)
 		if err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "DATA-IMPORT", "ExecuteImport", err, "Failed to import user logs")
-			utils.RespondError(c, http.StatusInternalServerError, "IMPORT_FAILED")
+			utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeImportFailed)
 			return
 		}
 	}

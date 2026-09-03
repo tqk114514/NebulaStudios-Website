@@ -19,7 +19,7 @@ func RespondError(c *gin.Context, status int, errorCode string) {
 func RespondRateLimit(c *gin.Context, retryAt int64) {
 	c.JSON(http.StatusTooManyRequests, gin.H{
 		"success":   false,
-		"errorCode": "RATE_LIMIT",
+		"errorCode": ErrCodeRateLimit,
 		"retryAt":   retryAt,
 	})
 }

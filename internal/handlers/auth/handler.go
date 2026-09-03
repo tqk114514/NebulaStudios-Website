@@ -20,9 +20,9 @@ import (
 )
 
 var (
-	ErrInvalidRequest        = errors.New("INVALID_REQUEST")
-	ErrMissingParameters     = errors.New("MISSING_PARAMETERS")
-	ErrUnauthorized          = errors.New("UNAUTHORIZED")
+	ErrInvalidRequest        = errors.New(utils.ErrCodeInvalidRequest)
+	ErrMissingParameters     = errors.New(utils.ErrCodeMissingParameters)
+	ErrUnauthorized          = errors.New(utils.ErrCodeUnauthorized)
 	ErrHandlerNotInitialized = errors.New("HANDLER_NOT_INITIALIZED")
 )
 
@@ -167,7 +167,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		VerificationCode string `json:"verificationCode"`
 	}
 
-	if !utils.BindJSONOrError(c, "AUTH", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "AUTH", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -189,11 +189,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		domain := strings.Split(emailResult.Value, "@")[1]
 		isAllowed, _, err := h.emailWhitelistRepo.IsDomainAllowed(ctx, domain)
 		if err != nil {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "WHITELIST_CHECK_FAILED", fmt.Sprintf("Failed to check email whitelist: %v", err))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeWhitelistCheckFailed, fmt.Sprintf("Failed to check email whitelist: %v", err))
 			return
 		}
 		if !isAllowed {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, "EMAIL_DOMAIN_NOT_ALLOWED", fmt.Sprintf("Email domain %s is not in whitelist", domain))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, utils.ErrCodeEmailDomainNotAllowed, fmt.Sprintf("Email domain %s is not in whitelist", domain))
 			return
 		}
 	}
@@ -206,7 +206,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	code := strings.TrimSpace(req.VerificationCode)
 	if code == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty verification code in Register request")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeMissingParameters, "Empty verification code in Register request")
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", "Password hashing failed")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeRegisterFailed, "Password hashing failed")
 		return
 	}
 
@@ -236,27 +236,27 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		// 预检查失败不阻断注册：唯一性由下方 Create 的 ErrEmailExists 权威校验，DB 故障仅记日志
 		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to check email existence", "email", emailResult.Value, "error", err)
 	} else if existingUser != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, utils.ErrCodeEmailAlreadyExists, fmt.Sprintf("Email already exists: %s", emailResult.Value))
 		return
 	}
 
 	if existingUser, err := h.userRepo.FindByUsername(ctx, usernameResult.Value); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "AUTH", "Failed to check username existence", "username", usernameResult.Value, "error", err)
 	} else if existingUser != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, utils.ErrCodeUsernameAlreadyExists, fmt.Sprintf("Username already exists: %s", usernameResult.Value))
 		return
 	}
 
 	if err := h.userRepo.Create(ctx, user); err != nil {
 		if errors.Is(err, models.ErrEmailExists) {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "EMAIL_ALREADY_EXISTS", fmt.Sprintf("Email already exists: %s", emailResult.Value))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, utils.ErrCodeEmailAlreadyExists, fmt.Sprintf("Email already exists: %s", emailResult.Value))
 			return
 		}
 		if errors.Is(err, models.ErrUsernameExists) {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: %s", usernameResult.Value))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusConflict, utils.ErrCodeUsernameAlreadyExists, fmt.Sprintf("Username already exists: %s", usernameResult.Value))
 			return
 		}
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "REGISTER_FAILED", fmt.Sprintf("User creation failed: username=%s, email=%s", usernameResult.Value, emailResult.Value))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeRegisterFailed, fmt.Sprintf("User creation failed: username=%s, email=%s", usernameResult.Value, emailResult.Value))
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		CaptchaToken string `json:"captchaToken"`
 	}
 
-	if !utils.BindJSONOrError(c, "AUTH", &req, "MISSING_PARAMETERS") {
+	if !utils.BindJSONOrError(c, "AUTH", &req, utils.ErrCodeMissingParameters) {
 		return
 	}
 
@@ -308,13 +308,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	password := req.Password
 
 	if email == "" || password == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in Login: email=%v, password=%v", email != "", password != ""))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeMissingParameters, fmt.Sprintf("Missing parameters in Login: email=%v, password=%v", email != "", password != ""))
 		return
 	}
 
 	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for login: email=%s, ip=%s", email, clientIP))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeCaptchaFailed, fmt.Sprintf("Captcha verification failed for login: email=%s, ip=%s", email, clientIP))
 		return
 	}
 
@@ -326,20 +326,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// 用户不存在时执行 dummy 密码验证，使响应时间与用户存在但密码错误的情况一致，防止时序枚举
 		if utils.IsDatabaseNotFound(err) {
 			_, _ = utils.VerifyPassword(password, h.dummyPasswordHash)
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - user not found: email=%s, ip=%s", email, clientIP))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeInvalidCredentials, fmt.Sprintf("Login failed - user not found: email=%s, ip=%s", email, clientIP))
 			return
 		}
-		utils.HTTPDatabaseError(c, "AUTH", err, "INVALID_CREDENTIALS")
+		utils.HTTPDatabaseError(c, "AUTH", err, utils.ErrCodeInvalidCredentials)
 		return
 	}
 
 	match, err := utils.VerifyPassword(password, user.Password)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "INTERNAL_ERROR", "Password verification error")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeInternalError, "Password verification error")
 		return
 	}
 	if !match {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "INVALID_CREDENTIALS", fmt.Sprintf("Login failed - invalid password: email=%s, userUID=%s", email, user.UID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeInvalidCredentials, fmt.Sprintf("Login failed - invalid password: email=%s, userUID=%s", email, user.UID))
 		return
 	}
 
@@ -350,7 +350,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	isBanned := user.CheckBanned()
 	accessToken, refreshToken, err := h.sessionService.GenerateTokens(c.Request.Context(), user.UID, isBanned)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeTokenGenerationFailed, fmt.Sprintf("Token generation failed: userUID=%s", user.UID))
 		return
 	}
 
@@ -375,12 +375,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", "GetMe called without valid userUID")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, utils.ErrCodeUnauthorized, "GetMe called without valid userUID")
 		return
 	}
 
 	if userUID == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userUID in GetMe: %s", userUID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, utils.ErrCodeUnauthorized, fmt.Sprintf("Invalid userUID in GetMe: %s", userUID))
 		return
 	}
 
@@ -388,7 +388,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 
 	user, err := h.userCache.GetOrLoad(ctx, userUID, h.userRepo.FindByUID)
 	if err != nil {
-		utils.HTTPDatabaseError(c, "AUTH", err, "USER_NOT_FOUND")
+		utils.HTTPDatabaseError(c, "AUTH", err, utils.ErrCodeUserNotFound)
 		return
 	}
 
@@ -396,7 +396,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		utils.LogWarnCtx(c.Request.Context(), "AUTH", "GetMe: valid JWT but user not found in database, clearing cookies", "user_uid", userUID)
 		h.clearAuthCookie(c)
 		utils.ClearRefreshTokenCookieGin(c)
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, "USER_NOT_FOUND", fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusUnauthorized, utils.ErrCodeUserNotFound, fmt.Sprintf("GetOrLoad returned nil user in GetMe: userUID=%s", userUID))
 		return
 	}
 
@@ -428,7 +428,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	refreshToken, err := utils.GetRefreshTokenCookie(c)
 	if err != nil || refreshToken == "" {
-		utils.RespondError(c, http.StatusUnauthorized, "NO_REFRESH_TOKEN")
+		utils.RespondError(c, http.StatusUnauthorized, utils.ErrCodeNoRefreshToken)
 		return
 	}
 
@@ -437,13 +437,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrRefreshTokenExpired):
 			utils.ClearRefreshTokenCookieGin(c)
-			utils.RespondError(c, http.StatusUnauthorized, "REFRESH_TOKEN_EXPIRED")
+			utils.RespondError(c, http.StatusUnauthorized, utils.ErrCodeRefreshTokenExpired)
 		case errors.Is(err, services.ErrRefreshTokenReused):
 			utils.ClearRefreshTokenCookieGin(c)
-			utils.RespondError(c, http.StatusUnauthorized, "REFRESH_TOKEN_REUSED")
+			utils.RespondError(c, http.StatusUnauthorized, utils.ErrCodeRefreshTokenReused)
 		case errors.Is(err, services.ErrRefreshTokenInvalid):
 			utils.ClearRefreshTokenCookieGin(c)
-			utils.RespondError(c, http.StatusBadRequest, "INVALID_REFRESH_TOKEN")
+			utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidRefreshToken)
 		default:
 			utils.RespondError(c, http.StatusInternalServerError, "REFRESH_FAILED")
 		}

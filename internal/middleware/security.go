@@ -179,7 +179,7 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token missing in cookie", "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,
-				"errorCode": "CSRF_TOKEN_MISSING",
+				"errorCode": utils.ErrCodeCSRFTokenMissing,
 				"message":   "CSRF token is missing",
 			})
 			return
@@ -194,7 +194,7 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token mismatch", "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,
-				"errorCode": "CSRF_TOKEN_MISMATCH",
+				"errorCode": utils.ErrCodeCSRFTokenMismatch,
 				"message":   "CSRF token validation failed",
 			})
 			return
@@ -344,7 +344,7 @@ func BodySizeLimit(maxSize int64, exemptPaths ...string) gin.HandlerFunc {
 				utils.LogWarnCtx(c.Request.Context(), "SECURITY", "Request body too large", "path", c.Request.URL.Path, "size", c.Request.ContentLength, "limit", maxSize)
 				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
 					"success":   false,
-					"errorCode": "REQUEST_TOO_LARGE",
+					"errorCode": utils.ErrCodeRequestTooLarge,
 				})
 				return
 			}

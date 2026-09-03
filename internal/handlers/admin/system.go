@@ -52,7 +52,7 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.userRepo.GetStats(ctx)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -79,7 +79,7 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 
 	logs, total, err := h.logRepo.FindAll(ctx, page, pageSize)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 // 权限：仅超级管理员
 func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeEmailWhitelistNotConfigured)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 
 	whitelist, total, err := h.emailWhitelistRepo.FindAllPaginated(ctx, page, pageSize)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeGetFailed, err.Error())
 		return
 	}
 
@@ -146,13 +146,13 @@ func (h *AdminHandler) GetEmailWhitelist(c *gin.Context) {
 // 权限：仅超级管理员
 func (h *AdminHandler) GetEmailWhitelistByID(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeEmailWhitelistNotConfigured)
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidID, "Invalid ID")
 		return
 	}
 
@@ -162,10 +162,10 @@ func (h *AdminHandler) GetEmailWhitelistByID(c *gin.Context) {
 	item, err := h.emailWhitelistRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeNotFound, "Email whitelist entry not found")
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeGetFailed, err.Error())
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *AdminHandler) GetEmailWhitelistByID(c *gin.Context) {
 // 权限：仅超级管理员
 func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeEmailWhitelistNotConfigured)
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 		LogoURL   string `json:"logo_url"`
 	}
 
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 	domain := strings.TrimSpace(req.Domain)
@@ -196,23 +196,23 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	logoURL := strings.TrimSpace(req.LogoURL)
 
 	if domain == "" {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_DOMAIN", "Domain is required")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeMissingDomain, "Domain is required")
 		return
 	}
 	if !validateEmailWhitelistDomain(domain) {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_DOMAIN", "Domain format is invalid")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidDomain, "Domain format is invalid")
 		return
 	}
 	if signupURL == "" {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "MISSING_SIGNUP_URL", "Signup URL is required")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeMissingSignupURL, "Signup URL is required")
 		return
 	}
 	if !validateEmailWhitelistURL(signupURL) {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL scheme is not allowed")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidSignupURL, "Signup URL scheme is not allowed")
 		return
 	}
 	if !validateEmailWhitelistURL(logoURL) {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_LOGO_URL", "Logo URL scheme is not allowed")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidLogoURL, "Logo URL scheme is not allowed")
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 	item, err := h.emailWhitelistRepo.Create(ctx, domain, signupURL, logoURL)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistDomainExists) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, "DOMAIN_EXISTS", fmt.Sprintf("Domain %s already exists", domain))
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, utils.ErrCodeDomainExists, fmt.Sprintf("Domain %s already exists", domain))
 			return
 		}
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "CREATE_FAILED", err.Error())
@@ -244,13 +244,13 @@ func (h *AdminHandler) CreateEmailWhitelist(c *gin.Context) {
 // 权限：仅超级管理员
 func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeEmailWhitelistNotConfigured)
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidID, "Invalid ID")
 		return
 	}
 
@@ -261,7 +261,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		IsEnabled *bool   `json:"is_enabled"`
 	}
 
-	if !utils.BindJSONOrError(c, "ADMIN", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "ADMIN", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -272,10 +272,10 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	existing, err := h.emailWhitelistRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeNotFound, "Email whitelist entry not found")
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "GET_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeGetFailed, err.Error())
 		return
 	}
 
@@ -283,7 +283,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	if req.Domain != nil && *req.Domain != "" {
 		domain = strings.TrimSpace(*req.Domain)
 		if !validateEmailWhitelistDomain(domain) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_DOMAIN", "Domain format is invalid")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidDomain, "Domain format is invalid")
 			return
 		}
 	}
@@ -292,7 +292,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	if req.SignupURL != nil && *req.SignupURL != "" {
 		signupURL = strings.TrimSpace(*req.SignupURL)
 		if !validateEmailWhitelistURL(signupURL) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_SIGNUP_URL", "Signup URL scheme is not allowed")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidSignupURL, "Signup URL scheme is not allowed")
 			return
 		}
 	}
@@ -306,7 +306,7 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	if req.LogoURL != nil {
 		logoURL = strings.TrimSpace(*req.LogoURL)
 		if !validateEmailWhitelistURL(logoURL) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_LOGO_URL", "Logo URL scheme is not allowed")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidLogoURL, "Logo URL scheme is not allowed")
 			return
 		}
 	}
@@ -319,14 +319,14 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 	item, err := h.emailWhitelistRepo.Update(ctx, id, domain, signupURL, logoURL, isEnabled)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeNotFound, "Email whitelist entry not found")
 			return
 		}
 		if errors.Is(err, models.ErrEmailWhitelistDomainExists) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, "DOMAIN_EXISTS", fmt.Sprintf("Domain %s already exists", domain))
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusConflict, utils.ErrCodeDomainExists, fmt.Sprintf("Domain %s already exists", domain))
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "UPDATE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, err.Error())
 		return
 	}
 
@@ -344,13 +344,13 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 // 权限：仅超级管理员
 func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 	if h.emailWhitelistRepo == nil {
-		utils.RespondError(c, http.StatusServiceUnavailable, "EMAIL_WHITELIST_NOT_CONFIGURED")
+		utils.RespondError(c, http.StatusServiceUnavailable, utils.ErrCodeEmailWhitelistNotConfigured)
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, "INVALID_ID", "Invalid ID")
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusBadRequest, utils.ErrCodeInvalidID, "Invalid ID")
 		return
 	}
 
@@ -361,10 +361,10 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 	err = h.emailWhitelistRepo.Delete(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
-			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, "NOT_FOUND", "Email whitelist entry not found")
+			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeNotFound, "Email whitelist entry not found")
 			return
 		}
-		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, "DELETE_FAILED", err.Error())
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeDeleteFailed, err.Error())
 		return
 	}
 

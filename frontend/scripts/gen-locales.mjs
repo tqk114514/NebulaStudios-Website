@@ -5,7 +5,7 @@
 // 输出 JSON 而非 TS：@intlify/unplugin-vue-i18n 构建期预编译消息（CSP 禁 eval），
 // 消息在运行时以函数形式存在，不再需要 new Function。
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))

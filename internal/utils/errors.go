@@ -140,7 +140,7 @@ func HTTPDatabaseError(c *gin.Context, module string, err error, notFoundCode ..
 	}
 
 	if IsDatabaseNotFound(err) {
-		code := "NOT_FOUND"
+		code := ErrCodeNotFound
 		if len(notFoundCode) > 0 && notFoundCode[0] != "" {
 			code = notFoundCode[0]
 		}
@@ -148,5 +148,5 @@ func HTTPDatabaseError(c *gin.Context, module string, err error, notFoundCode ..
 		return
 	}
 
-	HTTPErrorResponse(c, module, http.StatusInternalServerError, "DATABASE_ERROR", err.Error())
+	HTTPErrorResponse(c, module, http.StatusInternalServerError, ErrCodeDatabaseError, err.Error())
 }

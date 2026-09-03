@@ -63,7 +63,7 @@ func NewStaticHandler(cfg *config.Config, userCache services.UserCacheStore, cap
 // GET /api/config/captcha
 func (h *StaticHandler) GetCaptchaConfig(c *gin.Context) {
 	if h.captchaService == nil {
-		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, "CONFIG_NOT_LOADED", "CaptchaService is nil in GetCaptchaConfig")
+		utils.HTTPErrorResponse(c, "STATIC", http.StatusInternalServerError, utils.ErrCodeConfigNotLoaded, "CaptchaService is nil in GetCaptchaConfig")
 		return
 	}
 

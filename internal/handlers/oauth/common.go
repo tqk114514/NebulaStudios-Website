@@ -18,15 +18,15 @@ import (
 )
 
 var (
-	ErrOAuthNotConfigured     = errors.New("OAUTH_NOT_CONFIGURED")
+	ErrOAuthNotConfigured     = errors.New(utils.ErrCodeOAuthNotConfigured)
 	ErrOAuthStateMismatch     = errors.New("OAUTH_STATE_MISMATCH")
 	ErrOAuthStateExpired      = errors.New("OAUTH_STATE_EXPIRED")
 	ErrOAuthTokenExchange     = errors.New("OAUTH_TOKEN_EXCHANGE_FAILED")
 	ErrOAuthUserInfo          = errors.New("OAUTH_USER_INFO_FAILED")
 	ErrMicrosoftAlreadyLinked = errors.New("MICROSOFT_ALREADY_LINKED")
-	ErrNotLinked              = errors.New("NOT_LINKED")
-	ErrInvalidLinkToken       = errors.New("INVALID_LINK_TOKEN")
-	ErrLinkTokenExpired       = errors.New("LINK_TOKEN_EXPIRED")
+	ErrNotLinked              = errors.New(utils.ErrCodeNotLinked)
+	ErrInvalidLinkToken       = errors.New(utils.ErrCodeInvalidLinkToken)
+	ErrLinkTokenExpired       = errors.New(utils.ErrCodeLinkTokenExpired)
 )
 
 const (

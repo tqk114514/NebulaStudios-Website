@@ -167,7 +167,7 @@ func errorMiddleware(err error) gin.HandlerFunc {
 		utils.LogErrorCtx(c.Request.Context(), "AUTH-MW", "errorMiddleware", err, "Middleware initialization error")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success":   false,
-			"errorCode": "INTERNAL_ERROR",
+			"errorCode": utils.ErrCodeInternalError,
 		})
 		c.Abort()
 	}

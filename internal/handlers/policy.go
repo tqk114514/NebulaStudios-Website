@@ -58,7 +58,7 @@ func (h *PolicyHandler) GetPolicyVersions(c *gin.Context) {
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPolicyVersions", err, "path", manifestPath)
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeManifestNotFound, "Policy manifest not found")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (h *PolicyHandler) GetPublicNoticePolicies(c *gin.Context) {
 	policies, err := services.GetPublicNoticePolicies(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPublicNoticePolicies", err, "path", manifestPath)
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeManifestNotFound, "Policy manifest not found")
 		return
 	}
 
@@ -122,7 +122,7 @@ type consentRequestPolicy struct {
 func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusUnauthorized, "UNAUTHORIZED", "GetPendingConsent called without valid userUID")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusUnauthorized, utils.ErrCodeUnauthorized, "GetPendingConsent called without valid userUID")
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "path", manifestPath)
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeManifestNotFound, "Policy manifest not found")
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	consents, err := consentRepo.FindByUserUID(ctx, userUID)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "user_uid", userUID)
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "DATABASE_ERROR", "Failed to query user consents")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeDatabaseError, "Failed to query user consents")
 		return
 	}
 
@@ -182,19 +182,19 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok || userUID == "" {
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusUnauthorized, "UNAUTHORIZED", "RecordConsent called without valid userUID")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusUnauthorized, utils.ErrCodeUnauthorized, "RecordConsent called without valid userUID")
 		return
 	}
 
 	var req struct {
 		Policies []consentRequestPolicy `json:"policies"`
 	}
-	if !utils.BindJSONOrError(c, "POLICY", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "POLICY", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
 	if len(req.Policies) == 0 {
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "MISSING_PARAMETERS", "Empty policies in RecordConsent")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, utils.ErrCodeMissingParameters, "Empty policies in RecordConsent")
 		return
 	}
 
@@ -202,7 +202,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	manifest, err := services.LoadPolicyManifest(manifestPath)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "path", manifestPath)
-		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "MANIFEST_NOT_FOUND", "Policy manifest not found")
+		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeManifestNotFound, "Policy manifest not found")
 		return
 	}
 
@@ -211,12 +211,12 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	validTypes := map[string]bool{models.PolicyTypePrivacy: true, models.PolicyTypeTerms: true}
 	for _, p := range req.Policies {
 		if !validTypes[p.PolicyType] {
-			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "INVALID_POLICY_TYPE", fmt.Sprintf("Invalid policy type: %s", p.PolicyType))
+			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, utils.ErrCodeInvalidPolicyType, fmt.Sprintf("Invalid policy type: %s", p.PolicyType))
 			return
 		}
 		latestEffective := manifest.GetLatestEffectiveVersion(p.PolicyType, now)
 		if latestEffective == "" || p.PolicyVersion != latestEffective {
-			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, "INVALID_POLICY_VERSION", fmt.Sprintf("Policy version mismatch: type=%s, requested=%s, latest=%s", p.PolicyType, p.PolicyVersion, latestEffective))
+			utils.HTTPErrorResponse(c, "POLICY", http.StatusBadRequest, utils.ErrCodeInvalidPolicyVersion, fmt.Sprintf("Policy version mismatch: type=%s, requested=%s, latest=%s", p.PolicyType, p.PolicyVersion, latestEffective))
 			return
 		}
 	}
@@ -226,7 +226,7 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	for _, p := range req.Policies {
 		if err := consentRepo.LogConsent(ctx, userUID, p.PolicyType, p.PolicyVersion); err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "user_uid", userUID, "type", p.PolicyType, "version", p.PolicyVersion)
-			utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, "CONSENT_LOG_FAILED", "Failed to record consent")
+			utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeConsentLogFailed, "Failed to record consent")
 			return
 		}
 	}

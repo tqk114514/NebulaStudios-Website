@@ -73,7 +73,7 @@ function onEmailInput() {
     return
   }
   const v = validateEmail(e)
-  emailError.value = v.errorKey === 'account.register.emailNotSupported' ? v.errorKey : ''
+  emailError.value = v.errorKey === 'error.emailNotSupported' ? v.errorKey : ''
 }
 
 // 发送重置验证码
@@ -86,7 +86,7 @@ async function handleSendCode() {
   }
   if (countdown.running.value) return
   if (isCaptchaEnabled() && !getCaptchaToken()) {
-    alert('account.login.humanVerifyFailed')
+    alert('error.humanVerifyFailed')
     return
   }
   sendingCode.value = true
@@ -119,7 +119,7 @@ async function handleReset() {
   }
   const pv = password.value
   if (!passReq.length || !passReq.number || !passReq.special || !passReq.ccase) {
-    alert('account.register.passwordInvalid')
+    alert('error.passwordInvalid')
     return
   }
   if (pv !== passwordConfirm.value) {

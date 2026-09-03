@@ -27,17 +27,17 @@ type updateAvatarRequest struct {
 func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "USER", http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized access to UpdateUsername")
+		utils.HTTPErrorResponse(c, "USER", http.StatusUnauthorized, utils.ErrCodeUnauthorized, "Unauthorized access to UpdateUsername")
 		return
 	}
 
 	var req updateUsernameRequest
-	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "USER", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
 	if err := h.verifyCaptcha(req.CaptchaToken, utils.GetClientIP(c)); err != nil {
-		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed for username change: userUID=%s", userUID))
+		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, utils.ErrCodeCaptchaFailed, fmt.Sprintf("Captcha verification failed for username change: userUID=%s", userUID))
 		return
 	}
 
@@ -65,16 +65,16 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		}
 	}
 	if existingUser != nil && existingUser.UID != userUID {
-		utils.HTTPErrorResponse(c, "USER", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: username=%s", newUsername))
+		utils.HTTPErrorResponse(c, "USER", http.StatusConflict, utils.ErrCodeUsernameAlreadyExists, fmt.Sprintf("Username already exists: username=%s", newUsername))
 		return
 	}
 
 	if err := h.userRepo.Update(ctx, userUID, map[string]any{"username": newUsername}); err != nil {
 		if errors.Is(err, models.ErrUsernameExists) {
-			utils.HTTPErrorResponse(c, "USER", http.StatusConflict, "USERNAME_ALREADY_EXISTS", fmt.Sprintf("Username already exists: username=%s", newUsername))
+			utils.HTTPErrorResponse(c, "USER", http.StatusConflict, utils.ErrCodeUsernameAlreadyExists, fmt.Sprintf("Username already exists: username=%s", newUsername))
 			return
 		}
-		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to update username: userUID=%s", userUID))
+		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, fmt.Sprintf("Failed to update username: userUID=%s", userUID))
 		return
 	}
 
@@ -95,12 +95,12 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, "USER", http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized access to UpdateAvatar")
+		utils.HTTPErrorResponse(c, "USER", http.StatusUnauthorized, utils.ErrCodeUnauthorized, "Unauthorized access to UpdateAvatar")
 		return
 	}
 
 	var req updateAvatarRequest
-	if !utils.BindJSONOrError(c, "USER", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "USER", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		}
 
 		if err := h.userRepo.Update(ctx, userUID, updates); err != nil {
-			utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to remove avatar: userUID=%s", userUID))
+			utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, fmt.Sprintf("Failed to remove avatar: userUID=%s", userUID))
 			return
 		}
 
@@ -178,7 +178,7 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 	}
 
 	if err := h.userRepo.Update(ctx, userUID, updates); err != nil {
-		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, "UPDATE_FAILED", fmt.Sprintf("Failed to update avatar: userUID=%s", userUID))
+		utils.HTTPErrorResponse(c, "USER", http.StatusInternalServerError, utils.ErrCodeUpdateFailed, fmt.Sprintf("Failed to update avatar: userUID=%s", userUID))
 		return
 	}
 

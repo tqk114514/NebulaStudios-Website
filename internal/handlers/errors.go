@@ -35,5 +35,5 @@ func RespondTokenError(c *gin.Context, module string, err error, logMessage stri
 			return
 		}
 	}
-	utils.HTTPErrorResponse(c, module, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("%s: %v", logMessage, err))
+	utils.HTTPErrorResponse(c, module, http.StatusInternalServerError, utils.ErrCodeInternalError, fmt.Sprintf("%s: %v", logMessage, err))
 }

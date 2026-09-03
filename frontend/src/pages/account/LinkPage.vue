@@ -37,19 +37,19 @@ const userAvatar = computed(() => info.value?.userAvatar)
 
 // 拉取待绑定信息失败的错误码映射（展示后由用户手动返回登录页）
 const LOAD_ERROR_MAP: Record<string, string> = {
-  INVALID_TOKEN: 'account.linkConfirm.invalidLink',
-  TOKEN_EXPIRED: 'account.linkConfirm.linkExpired',
+  INVALID_TOKEN: 'error.linkTokenInvalid',
+  TOKEN_EXPIRED: 'error.linkTokenExpired',
   USER_NOT_FOUND: 'error.sessionError',
 }
 
 // 确认绑定失败 → 留在本页展示原因（按钮恢复可用）
 const CONFIRM_ERROR_MAP: Record<string, string> = {
-  INVALID_TOKEN: 'account.linkConfirm.invalidLink',
-  TOKEN_EXPIRED: 'account.linkConfirm.linkExpired',
-  MICROSOFT_ALREADY_LINKED: 'account.dashboard.microsoftAlreadyLinked',
-  GOOGLE_ALREADY_LINKED: 'account.dashboard.googleAlreadyLinked',
+  INVALID_TOKEN: 'error.linkTokenInvalid',
+  TOKEN_EXPIRED: 'error.linkTokenExpired',
+  MICROSOFT_ALREADY_LINKED: 'error.microsoftAlreadyLinked',
+  GOOGLE_ALREADY_LINKED: 'error.googleAlreadyLinked',
   USER_NOT_FOUND: 'error.sessionError',
-  USER_BANNED: 'account.linkConfirm.userBanned',
+  USER_BANNED: 'error.userBanned',
 }
 
 function initialOf(name: string): string {
@@ -72,7 +72,7 @@ async function confirmLink(): Promise<void> {
     window.location.href = '/account/dashboard'
   } catch (e) {
     const code = e instanceof ApiClientError ? e.errorCode : ''
-    errorKey.value = CONFIRM_ERROR_MAP[code] ?? 'account.linkConfirm.linkFailed'
+    errorKey.value = CONFIRM_ERROR_MAP[code] ?? 'error.linkFailed'
     submitting.value = false
   }
 }
@@ -85,13 +85,13 @@ onMounted(async () => {
   try {
     const data = await get<PendingLinkRaw>('/api/auth/pending-link')
     if (!data?.username) {
-      failToLogin('account.linkConfirm.linkFailed')
+      failToLogin('error.linkFailed')
       return
     }
     info.value = data
   } catch (e) {
     const code = e instanceof ApiClientError ? e.errorCode : ''
-    failToLogin(LOAD_ERROR_MAP[code] ?? 'account.linkConfirm.linkFailed')
+    failToLogin(LOAD_ERROR_MAP[code] ?? 'error.linkFailed')
     return
   }
   loading.value = false

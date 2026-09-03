@@ -113,7 +113,7 @@ func NewExternalProviderHandler(
 // GET /api/auth/{provider}?action=login|link&return=xxx
 func (h *ExternalProviderHandler) Auth(c *gin.Context) {
 	if !h.Spec.IsConfigured() {
-		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusInternalServerError, "OAUTH_NOT_CONFIGURED", h.Spec.Name+" OAuth not configured")
+		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusInternalServerError, utils.ErrCodeOAuthNotConfigured, h.Spec.Name+" OAuth not configured")
 		return
 	}
 
@@ -295,12 +295,12 @@ func (h *ExternalProviderHandler) Callback(c *gin.Context) {
 func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 	userUID, ok := middleware.GetUID(c)
 	if !ok {
-		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusUnauthorized, "UNAUTHORIZED", "Unlink called without valid userUID")
+		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusUnauthorized, utils.ErrCodeUnauthorized, "Unlink called without valid userUID")
 		return
 	}
 
 	if userUID == "" {
-		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusUnauthorized, "UNAUTHORIZED", fmt.Sprintf("Invalid userUID in Unlink: %s", userUID))
+		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusUnauthorized, utils.ErrCodeUnauthorized, fmt.Sprintf("Invalid userUID in Unlink: %s", userUID))
 		return
 	}
 
@@ -309,19 +309,19 @@ func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 	user, err := h.UserRepo.FindByUID(ctx, userUID)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Unlink", err, "user_uid", userUID)
-		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 		return
 	}
 
 	if user == nil {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in Unlink", "user_uid", userUID)
-		utils.RespondError(c, http.StatusNotFound, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
 		return
 	}
 
 	if !h.Spec.IsLinked(user) {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, h.Spec.NotLinkedLog, "user_uid", userUID)
-		utils.RespondError(c, http.StatusBadRequest, "NOT_LINKED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeNotLinked)
 		return
 	}
 
@@ -330,7 +330,7 @@ func (h *ExternalProviderHandler) Unlink(c *gin.Context) {
 	err = h.UserRepo.Update(ctx, userUID, h.Spec.UnlinkFields(user))
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "Unlink", err, "user_uid", userUID)
-		utils.RespondError(c, http.StatusInternalServerError, "UNLINK_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeUnlinkFailed)
 		return
 	}
 
@@ -356,28 +356,28 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 	token, err := utils.GetLinkTokenCookie(c)
 	token = strings.TrimSpace(token)
 	if err != nil || token == "" {
-		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusBadRequest, "INVALID_TOKEN", "Empty token in GetPendingLinkInfo")
+		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusBadRequest, utils.ErrCodeInvalidToken, "Empty token in GetPendingLinkInfo")
 		return
 	}
 
 	pendingData, exists := GetPendingLink(token)
 	if !exists {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link not found", "token", utils.TruncateIdentifier(token))
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
 	if pendingData == nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "GetPendingLinkInfo", fmt.Errorf("pending link data is nil"), "token", utils.TruncateIdentifier(token))
 		DeletePendingLink(token)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link expired", "token", utils.TruncateIdentifier(token))
 		DeletePendingLink(token)
-		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeTokenExpired)
 		return
 	}
 
@@ -385,7 +385,7 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 	// 防止 Microsoft 端点消费 Google 流程的数据（会把身份写错字段）
 	if pendingData.Provider != h.Spec.NameLower {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link provider mismatch", "token", utils.TruncateIdentifier(token), "expected", h.Spec.NameLower, "actual", pendingData.Provider)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
@@ -394,13 +394,13 @@ func (h *ExternalProviderHandler) GetPendingLinkInfo(c *gin.Context) {
 	user, err := h.UserRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "GetPendingLinkInfo", err, "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeUserNotFound)
 		return
 	}
 
 	if user == nil {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in GetPendingLinkInfo", "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeUserNotFound)
 		return
 	}
 
@@ -423,26 +423,26 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	token, err := utils.GetLinkTokenCookie(c)
 	token = strings.TrimSpace(token)
 	if err != nil || token == "" {
-		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusBadRequest, "INVALID_TOKEN", "Empty token in ConfirmLink")
+		utils.HTTPErrorResponse(c, h.Spec.LogModule, http.StatusBadRequest, utils.ErrCodeInvalidToken, "Empty token in ConfirmLink")
 		return
 	}
 
 	pendingData, exists := GetAndDeletePendingLink(token)
 	if !exists {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link not found in ConfirmLink", "token", utils.TruncateIdentifier(token))
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
 	if pendingData == nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", fmt.Errorf("pending link data is nil"), "token", utils.TruncateIdentifier(token))
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
 	if time.Now().UnixMilli()-pendingData.Timestamp > StateExpiryMS {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link expired in ConfirmLink", "token", utils.TruncateIdentifier(token))
-		utils.RespondError(c, http.StatusBadRequest, "TOKEN_EXPIRED")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeTokenExpired)
 		return
 	}
 
@@ -450,7 +450,7 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	// 防止 Microsoft 端点消费 Google 流程的数据（会把身份写错字段）
 	if pendingData.Provider != h.Spec.NameLower {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Pending link provider mismatch in ConfirmLink", "token", utils.TruncateIdentifier(token), "expected", h.Spec.NameLower, "actual", pendingData.Provider)
-		utils.RespondError(c, http.StatusBadRequest, "INVALID_TOKEN")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidToken)
 		return
 	}
 
@@ -470,19 +470,19 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	user, err := h.UserRepo.FindByUID(ctx, pendingData.UserUID)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeUserNotFound)
 		return
 	}
 
 	if user == nil {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "User not found in ConfirmLink", "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusBadRequest, "USER_NOT_FOUND")
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeUserNotFound)
 		return
 	}
 
 	if user.CheckBanned() {
 		utils.LogWarnCtx(c.Request.Context(), h.Spec.LogModule, "Banned user attempted to confirm link", "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusForbidden, "USER_BANNED")
+		utils.RespondError(c, http.StatusForbidden, utils.ErrCodeUserBanned)
 		return
 	}
 
@@ -496,7 +496,7 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	err = h.UserRepo.Update(ctx, pendingData.UserUID, h.Spec.LinkFields(identity))
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", pendingData.UserUID)
-		utils.RespondError(c, http.StatusInternalServerError, "LINK_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeLinkFailed)
 		return
 	}
 
@@ -515,7 +515,7 @@ func (h *ExternalProviderHandler) ConfirmLink(c *gin.Context) {
 	accessToken, refreshToken, err := h.SessionService.GenerateTokens(c.Request.Context(), user.UID, false)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), h.Spec.LogModule, "ConfirmLink", err, "user_uid", user.UID)
-		utils.RespondError(c, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED")
+		utils.RespondError(c, http.StatusInternalServerError, utils.ErrCodeTokenGenerationFailed)
 		return
 	}
 
@@ -678,7 +678,7 @@ func (d *PendingLinkDispatcher) GetPendingLinkInfo(c *gin.Context) {
 		h.GetPendingLinkInfo(c)
 		return
 	}
-	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, "INVALID_TOKEN", "No pending link for token")
+	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, utils.ErrCodeInvalidToken, "No pending link for token")
 }
 
 // ConfirmLink 确认绑定，按 pending 状态分发到对应 Provider handler
@@ -687,5 +687,5 @@ func (d *PendingLinkDispatcher) ConfirmLink(c *gin.Context) {
 		h.ConfirmLink(c)
 		return
 	}
-	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, "INVALID_TOKEN", "No pending link for token")
+	utils.HTTPErrorResponse(c, "OAUTH", http.StatusBadRequest, utils.ErrCodeInvalidToken, "No pending link for token")
 }

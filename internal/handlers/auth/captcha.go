@@ -23,7 +23,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		Language     string `json:"language"`
 	}
 
-	if !utils.BindJSONOrError(c, "AUTH", &req, "INVALID_REQUEST") {
+	if !utils.BindJSONOrError(c, "AUTH", &req, utils.ErrCodeInvalidRequest) {
 		return
 	}
 
@@ -40,18 +40,18 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		domain := strings.Split(validatedEmail, "@")[1]
 		isAllowed, _, err := h.emailWhitelistRepo.IsDomainAllowed(ctx, domain)
 		if err != nil {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "WHITELIST_CHECK_FAILED", fmt.Sprintf("Failed to check email whitelist: %v", err))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeWhitelistCheckFailed, fmt.Sprintf("Failed to check email whitelist: %v", err))
 			return
 		}
 		if !isAllowed {
-			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, "EMAIL_DOMAIN_NOT_ALLOWED", fmt.Sprintf("Email domain %s is not in whitelist", domain))
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusForbidden, utils.ErrCodeEmailDomainNotAllowed, fmt.Sprintf("Email domain %s is not in whitelist", domain))
 			return
 		}
 	}
 
 	clientIP := utils.GetClientIP(c)
 	if err := h.captchaService.Verify(req.CaptchaToken, clientIP); err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "CAPTCHA_FAILED", fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeCaptchaFailed, fmt.Sprintf("Captcha verification failed: email=%s, ip=%s", validatedEmail, clientIP))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 
 	token, _, err := h.tokenService.CreateToken(ctx, validatedEmail, services.TokenTypeRegister)
 	if err != nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_CREATE_FAILED", fmt.Sprintf("Token creation failed: email=%s", validatedEmail))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeTokenCreateFailed, fmt.Sprintf("Token creation failed: email=%s", validatedEmail))
 		return
 	}
 
@@ -111,12 +111,12 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
-	if !utils.BindJSONOrError(c, "AUTH", &req, "NO_TOKEN") {
+	if !utils.BindJSONOrError(c, "AUTH", &req, utils.ErrCodeNoToken) {
 		return
 	}
 
 	if strings.TrimSpace(req.Token) == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "NO_TOKEN", "Empty token in VerifyEmail request")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeNoToken, "Empty token in VerifyEmail request")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	}
 
 	if result == nil {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, "TOKEN_INVALID", "ValidateAndUseToken returned nil result")
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeTokenInvalid, "ValidateAndUseToken returned nil result")
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 		TokenType string `json:"tokenType"`
 	}
 
-	if !utils.BindJSONOrError(c, "AUTH", &req, "MISSING_PARAMETERS") {
+	if !utils.BindJSONOrError(c, "AUTH", &req, utils.ErrCodeMissingParameters) {
 		return
 	}
 
@@ -158,7 +158,7 @@ func (h *AuthHandler) VerifyCode(c *gin.Context) {
 	tokenType := strings.TrimSpace(req.TokenType)
 
 	if code == "" || email == "" || tokenType == "" {
-		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, "MISSING_PARAMETERS", fmt.Sprintf("Missing parameters in VerifyCode: code=%v, email=%v, tokenType=%v", code != "", email != "", tokenType != ""))
+		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeMissingParameters, fmt.Sprintf("Missing parameters in VerifyCode: code=%v, email=%v, tokenType=%v", code != "", email != "", tokenType != ""))
 		return
 	}
 

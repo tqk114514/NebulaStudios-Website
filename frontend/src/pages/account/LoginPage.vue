@@ -63,11 +63,6 @@ function redirectAfterLogin() {
 }
 
 function reactToError(e: unknown) {
-  // 验证码失败单独提示，其余映射错误 key
-  if (typeof e === 'object' && e && 'errorCode' in e && (e as { errorCode: string }).errorCode === 'CAPTCHA_FAILED') {
-    alert('account.login.humanVerifyFailed')
-    return
-  }
   alert(errorKey(e))
 }
 
@@ -80,7 +75,7 @@ async function handleSubmit() {
 
   // 启用验证码时必须先拿到 token
   if (captchaReady.value && isCaptchaEnabled() && !getCaptchaToken()) {
-    alert('account.login.humanVerifyFailed')
+    alert('error.humanVerifyFailed')
     return
   }
 
