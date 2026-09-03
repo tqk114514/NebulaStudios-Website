@@ -151,6 +151,7 @@ npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 d
 │   └── server/            # 后端服务入口（main.go、routes.go、tasks.go）
 ├── frontend/              # 前端（Vue 3 + Vite SPA）
 │   ├── src/               # 源码（components 原子组件、pages、router、stores、i18n）
+│   ├── policy/            # 政策文档源（多语言 Markdown + manifest）→ 构建时复制到 dist/policy
 │   └── vite.config.ts     # Vite 配置（产物输出到项目根 dist/）
 ├── img-processor/         # Zig 图片处理服务
 │   ├── src/main.zig       # 主逻辑（Socket 监听、图片编解码）
@@ -168,9 +169,8 @@ npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 d
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
 │   └── version/           # 版本信息（ldflags 注入 Git commit）
 ├── data/                  # 后端数据文件（邮件模板、文案）→ 构建时复制到 dist/data
-├── shared/                # 政策文档源（i18n/policy Markdown + manifest）→ 构建时复制到 dist/policy
 ├── docs/                  # 文档
-├── dist/                  # 构建产物（server 二进制同目录部署：index.html/assets/data/policy）
+├── dist/                  # 构建产物（不入库；server 二进制同目录部署：index.html/assets/data/policy）
 ├── build.ps1              # 一键构建脚本（Zig 交叉编译 + 后端 + 前端）
 ├── google-oauth-proxy.js  # Google OAuth 代理 Worker（Cloudflare，Ed25519 背书）
 └── go.mod / go.sum        # Go 依赖
