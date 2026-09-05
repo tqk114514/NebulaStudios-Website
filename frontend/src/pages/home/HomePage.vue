@@ -64,37 +64,35 @@ function nebulaStep(ts: number) {
   nebulaAnimId = requestAnimationFrame(nebulaStep)
 }
 
-// ---- Ticker 无限滚动 ----
-let tickerAnimId: number | null = null
-let tickerX = 0
-let tickerTrackW = 0
-let tickerRunner: HTMLElement | null = null
-const tickerSpeed = 0.6
+// ---- Ticker 无缝跑马灯 ----
+// 旧实现（rAF 逐帧位移 + offsetWidth 测量拼接）有接缝缺陷：
+// offsetWidth 取整丢失小数、字体 swap 后不重测、resize 后失效——每循环一次接缝跳一下（"抽搐"）。
+// 现改为模板内双轨道 + CSS translateX(-100%)：位移量恒等于轨道自身宽度，接缝数学上必然对齐；
+// 动画跑在合成器线程，主线程忙（自定义光标/星云环 rAF）也不掉帧，速度与屏幕刷新率无关。
+// JS 只负责按轨道实测宽度折算动画时长，保持与原版 0.6px/帧@60fps（≈36px/s）一致的速度。
+const TICKER_SPEED = 36 // px/s
+const tickerEl = ref<HTMLElement | null>(null)
 
-function tickerStep() {
-  tickerX -= tickerSpeed
-  if (tickerX <= -tickerTrackW) tickerX += tickerTrackW
-  if (tickerRunner) tickerRunner.style.transform = `translateX(${tickerX}px)`
-  tickerAnimId = requestAnimationFrame(tickerStep)
+function applyTickerDuration() {
+  const tracks = tickerEl.value?.querySelectorAll<HTMLElement>('.ticker-track')
+  if (!tracks || tracks.length === 0) return
+  const w = tracks[0].getBoundingClientRect().width
+  if (w > 0) {
+    const dur = `${(w / TICKER_SPEED).toFixed(2)}s`
+    tracks.forEach((t) => {
+      t.style.animationDuration = dur
+    })
+  }
 }
 
-function initTicker() {
-  const inner = document.getElementById('ticker-inner')
-  const seed = inner?.querySelector<HTMLElement>('.ticker-item')
-  if (!inner || !seed) return
-  while (inner.scrollWidth < window.innerWidth + seed.offsetWidth * 2) {
-    inner.appendChild(seed.cloneNode(true))
+async function setupTicker() {
+  applyTickerDuration() // 字体就绪前先按回退字体给近似时长
+  try {
+    await document.fonts.ready
+    applyTickerDuration() // Unbounded 换载完成后按真实轨道宽度校准（仅影响速度，接缝始终精确）
+  } catch {
+    /* 不支持 FontFaceSet 时保持近似时长 */
   }
-  tickerTrackW = inner.offsetWidth
-  const clone = inner.cloneNode(true) as HTMLElement
-  clone.removeAttribute('id')
-  const tickerEl = document.getElementById('ticker')
-  tickerRunner = document.createElement('div')
-  tickerRunner.style.cssText = 'display:inline-flex;will-change:transform;'
-  tickerEl?.appendChild(tickerRunner)
-  tickerRunner.appendChild(inner)
-  tickerRunner.appendChild(clone)
-  tickerAnimId = requestAnimationFrame(tickerStep)
 }
 
 // ---- Reveal 滚动动画 ----
@@ -119,14 +117,13 @@ onMounted(() => {
   if (!isMobile) {
     nebulaAnimId = requestAnimationFrame(nebulaStep)
   }
-  initTicker()
+  setupTicker()
   initReveal()
 })
 
 onBeforeUnmount(() => {
   if (cursorAnimId !== null) cancelAnimationFrame(cursorAnimId)
   if (nebulaAnimId !== null) cancelAnimationFrame(nebulaAnimId)
-  if (tickerAnimId !== null) cancelAnimationFrame(tickerAnimId)
   if (cursorHooks) window.removeEventListener('mousemove', () => {})
 })
 </script>
@@ -176,9 +173,11 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- Ticker -->
-    <div class="ticker" id="ticker">
-      <div id="ticker-inner"><span class="ticker-item" translate="no">NEBULA</span></div>
+    <!-- Ticker：双轨道各含完整副本序列，translateX(-100%) 循环，接缝天然对齐 -->
+    <div class="ticker" ref="tickerEl" aria-hidden="true">
+      <div class="ticker-track" v-for="t in 2" :key="t">
+        <span class="ticker-item" translate="no" v-for="i in 30" :key="i">NEBULA</span>
+      </div>
     </div>
 
     <!-- Features -->
@@ -284,7 +283,7 @@ body.has-custom-cursor .home-root * {
   position: fixed;
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
-  opacity: 0.025;
+  opacity: 0.015;
   pointer-events: none;
   z-index: 1000;
 }
@@ -392,12 +391,12 @@ body.has-custom-cursor .home-root * {
 }
 .hero-desc {
   margin-top: 40px;
-  font-family: var(--font-serif);
-  font-size: 16px;
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-style: normal;
   color: var(--mid);
-  max-width: 340px;
-  line-height: 1.7;
+  max-width: 380px;
+  line-height: 1.8;
   opacity: 0;
   animation: fadeUp 1s var(--ease) 0.6s forwards;
 }
@@ -439,7 +438,7 @@ body.has-custom-cursor .home-root * {
   border: 1px solid var(--dim);
   color: var(--fg);
   font-family: var(--font-mono);
-  font-weight: 300;
+  font-weight: 400;
   font-size: var(--text-base);
   letter-spacing: 0.08em;
 }
@@ -564,10 +563,13 @@ body.has-custom-cursor .home-root * {
   text-transform: uppercase;
 }
 
-/* ---- 滚动 Ticker ---- */
+/* ---- 滚动 Ticker（双轨道无缝循环）----
+ * 每条轨道平移自身宽度的 -100% 后复位，复位点与相邻轨道的起点严格重合，接缝零误差。
+ * 动画时长由 setupTicker() 按实测轨道宽度写入，默认值仅为字体加载前的近似速度。 */
 .ticker {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  display: flex;
   overflow: hidden;
   white-space: nowrap;
   padding: 12px 0;
@@ -575,10 +577,21 @@ body.has-custom-cursor .home-root * {
   position: relative;
   z-index: 2;
 }
-.ticker-inner {
-  display: inline-flex;
-  gap: 0;
+.ticker-track {
+  display: flex;
+  flex-shrink: 0;
   will-change: transform;
+  animation: ticker-scroll 140s linear infinite;
+}
+@keyframes ticker-scroll {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
 }
 .ticker-item {
   font-family: var(--font-display);
@@ -631,12 +644,12 @@ body.has-custom-cursor .home-root * {
   font-weight: 300;
 }
 .section-body {
-  font-family: var(--font-serif);
-  font-size: 15px;
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-style: normal;
   color: var(--mid);
   line-height: 1.8;
-  max-width: 380px;
+  max-width: 400px;
   align-self: end;
 }
 .feature-grid {
@@ -704,11 +717,11 @@ body.has-custom-cursor .home-root * {
   position: relative;
 }
 .feature-desc {
-  font-family: var(--font-serif);
-  font-size: 13px;
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-style: normal;
   color: var(--mid);
-  line-height: 1.7;
+  line-height: 1.75;
   position: relative;
 }
 
@@ -741,9 +754,9 @@ body.has-custom-cursor .home-root * {
   padding-top: 8px;
 }
 .manifesto-text {
-  font-family: var(--font-serif);
-  font-size: 18px;
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-style: normal;
   color: var(--mid);
   line-height: 1.9;
   margin-bottom: 32px;
@@ -751,7 +764,7 @@ body.has-custom-cursor .home-root * {
 .manifesto-text strong {
   color: var(--fg);
   font-style: normal;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 /* ---- CTA 区域 ---- */
@@ -785,11 +798,11 @@ body.has-custom-cursor .home-root * {
   gap: 24px;
 }
 .cta-sub {
-  font-family: var(--font-serif);
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-style: normal;
   color: var(--mid);
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: var(--text-md);
+  line-height: 1.75;
 }
 .cta-actions {
   display: flex;

@@ -47,17 +47,17 @@ const labelClass = computed(() => (props.visibleLabel ? 'field-label' : 'field-l
   border: none;
   border-bottom: 1px solid var(--dim);
   padding: 0 0 12px;
-  font-family: var(--font-mono);
-  font-weight: 300;
+  font-family: var(--font-sans);
+  font-weight: 400;
   font-size: var(--text-md);
   color: var(--fg);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   outline: none;
   transition: border-color 0.2s;
 }
 
 .form-field :deep(input)::placeholder {
-  color: var(--dim);
+  color: var(--faint);
 }
 
 .form-field :deep(input:focus) {

@@ -19,15 +19,45 @@ html, body {
   background: var(--bg);
   color: var(--fg);
   overflow-x: hidden;
-  font-family: var(--font-mono);
-  font-weight: 300;
-  font-size: var(--text-md);
-  letter-spacing: 0.06em;
-  line-height: 1.6;
 }
 
 html {
   overflow-y: auto;
+}
+
+/* ---- 正文排版（前台） ----
+ * 细字重（300）等宽字体在深色底小字号下边缘发虚、锯齿感强；中文更是回落到
+ * 雅黑 Light。改用系统无衬线 + Regular 字重，并打开抗锯齿与合字渲染。
+ * admin 页面由下方钉住规则 + admin-shared.css 完全接管，不受影响。 */
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: var(--text-md);
+  letter-spacing: 0.01em;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- 后台钉住规则 ----
+ * AdminLayout 在 onMounted 才给 body 加 .adm-page-open，令牌层无法完全隔离继承值。
+ * 此处按改版前的值显式钉住 admin 的 body 继承链（admin-shared.css 再覆盖字族/字重/字距），
+ * 保证后台渲染与改版前逐像素一致。 */
+body.adm-page-open {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: auto;
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
 }
 
 html::-webkit-scrollbar,
@@ -75,7 +105,7 @@ a {
   margin-top: 16px;
   margin-bottom: 40px;
   font-size: var(--text-xs);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   color: var(--mid);
   text-align: center;
 }

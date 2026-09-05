@@ -233,7 +233,7 @@ onMounted(async () => {
   border: 1px solid var(--dim);
   color: var(--fg);
   font-family: var(--font-mono);
-  font-weight: 300;
+  font-weight: 400;
   font-size: var(--text-base);
   letter-spacing: 0.08em;
   cursor: pointer;

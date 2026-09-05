@@ -53,8 +53,8 @@ defineProps<{
 }
 
 .auth-card__subtitle {
-  font-size: var(--text-sm);
-  letter-spacing: 0.12em;
+  font-size: var(--text-base);
+  letter-spacing: 0.04em;
   color: var(--mid);
   margin-bottom: 40px;
   line-height: 1.8;

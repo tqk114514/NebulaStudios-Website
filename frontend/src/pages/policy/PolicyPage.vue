@@ -669,7 +669,10 @@ watch(locale, () => {
 }
 
 .policy-doc :deep(em) {
-  font-style: italic;
+  /* 中文没有真斜体字形，合成斜体小字渲染发虚；改为加粗强调 */
+  font-style: normal;
+  font-weight: 600;
+  color: var(--fg);
 }
 
 .policy-doc :deep(hr) {

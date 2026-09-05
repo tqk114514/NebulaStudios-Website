@@ -1,33 +1,55 @@
 /**
  * 设计令牌：颜色 / 字体 / 字号 / 动效曲线
  * 迁移自原站 shared/css/general.css 的 :root（原站 CDN 字体已由 main.ts 的 @fontsource 替代）
+ *
+ * 可读性改版说明（仅影响前台；admin 使用独立的 --adm-* 令牌，不引用本文件）：
+ * - 字号阶梯整体上调一档：正文最小 14px，标签最小 11px，改善深色底小字发虚
+ * - --mid 由 #555 提亮到 #9a968d：深底上的次要文本对比度从 ~3.3:1 提到 ~6.6:1（WCAG AA）
+ * - 新增 --faint：占位符等最弱文本专用（原直接用 --dim，深底上几乎不可见）
+ * - 状态色整体提亮：#7a2020 等深色在深底上达不到可读对比度
+ * - 新增 --font-sans 作为正文可读字体；--font-mono / --font-display 保留品牌观感，
+ *   并补齐 CJK 回退（避免中文落入 YaHei Light / 伪斜体）
  */
 
 :root {
   --bg:   #0d0d0d;
   --fg:   #f0ede8;
   --dim:  #2a2a2a;
-  --mid:  #555;
+  --faint: #6f6b64; /* 最弱文本：输入占位符 */
+  --mid:  #9a968d;
   --line: #1a1a1a;
 
-  --success: #4a8a6a;
-  --error: #7a2020;
-  --error-bright: #aa3030;
-  --warning: #8a6a20;
-  --danger: #8a4a4a;
+  --success: #71b391;
+  --error: #d4635b;
+  --error-bright: #e88b81;
+  --warning: #cfa757;
+  --danger: #c08a8a;
 
   --fg-hover: #e0ddd8;
 
   --dur:  0.8s;
   --ease: cubic-bezier(0.76, 0, 0.24, 1);
 
-  --font-display: 'Unbounded', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Azeret Mono', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
-  --font-serif: 'Newsreader', -apple-system, system-ui, 'Microsoft YaHei', sans-serif;
+  /* 正文可读字体：系统 UI 无衬线（Windows 下 Segoe UI + 微软雅黑 Regular 的
+     ClearType 渲染远好于细字重等宽/衬线），CJK 按平台回退到苹方/思源/雅黑 */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei',
+    sans-serif;
 
-  --text-xs: 10px;
-  --text-sm: 11px;
-  --text-base: 13px;
-  --text-md: 15px;
-  --text-lg: 20px;
+  /* 展示字体：Unbounded 仅有拉丁字形，中文回落到黑体 Regular/Bold */
+  --font-display: 'Unbounded', 'Avenir Next', 'Segoe UI', system-ui,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  /* 等宽字体：仅用于标签/按钮/数字等短文本点缀；中文回退到黑体而非 Courier 系 */
+  --font-mono: 'Azeret Mono', ui-monospace, 'SF Mono', Menlo, Consolas,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', monospace;
+
+  /* 衬线体仅保留给大号拉丁展示斜体（Newsreader 可变字重 200-300，勿用于小号正文） */
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 22px;
 }

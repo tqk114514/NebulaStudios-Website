@@ -135,7 +135,7 @@ function setLang(code: string) {
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: var(--text-base);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -190,7 +190,7 @@ function setLang(code: string) {
   color: var(--mid);
   font-family: var(--font-mono);
   font-size: var(--text-base);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
   text-align: left;
   cursor: pointer;
   transition: color 0.2s, background 0.2s;
