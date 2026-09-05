@@ -38,8 +38,12 @@ function setLang(code: string) {
 
 <template>
   <header class="site-header" translate="no">
-    <RouterLink to="/" class="site-header__brand" role="banner">
-      <span class="brand-full">NEBULA STUDIOS</span><span class="brand-short">NEBULA</span>
+    <RouterLink to="/" class="site-header__brand" role="banner" aria-label="Nebula Studios">
+      <!-- N 字标内联：currentColor 跟随头部前景色（--fg 暖白） -->
+      <svg class="brand-mark" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M56 48H96L144 96L112 128L96 112V208H56V48Z" />
+        <path d="M200 208H160L112 160L144 128L160 144V48H200V208Z" />
+      </svg>
     </RouterLink>
 
     <div ref="langSwitchRef" class="lang-switch" :class="{ 'is-open': open }">
@@ -99,25 +103,16 @@ function setLang(code: string) {
 }
 
 .site-header__brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--text-md);
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
   color: var(--fg);
 }
 
-.brand-short {
-  display: none;
-}
-
-@media (max-width: 600px) {
-  .brand-full {
-    display: none;
-  }
-  .brand-short {
-    display: inline;
-  }
+/* N 字标：28px 匹配 60px 高的头部 */
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  fill: currentColor;
 }
 
 /* ---- 语言切换器 ---- */
