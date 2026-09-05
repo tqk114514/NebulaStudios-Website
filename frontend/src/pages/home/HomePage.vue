@@ -178,12 +178,12 @@ function buildSculpture(compact: boolean) {
   // （aSize 以相机参考距离处的 CSS 像素直径标定。alpha 必须压低——加法混合下
   //   亮度靠叠加累积，单体过亮会让整个 N 字内部大面积越过 Bloom 阈值，
   //   变成"大块中亮区域"喂爆模糊链，产生全屏白雾；宁可粒子多而单体暗）
-  for (const p of sampleLogoParticles(compact ? 720 : 1400)) {
+  for (const p of sampleLogoParticles(compact ? 880 : 1700)) {
     b.add(
       [p.x, p.y, (Math.random() * 2 - 1) * 0.16 * p.t],
       0,
       2.4 + Math.random() * 1.7,
-      0.2 + Math.random() * 0.22,
+      0.18 + Math.random() * 0.2,
       Math.random() * 0.18,
       [Math.random() * Math.PI * 2, 0.6 + Math.random() * 1.4],
     )
@@ -191,9 +191,9 @@ function buildSculpture(compact: boolean) {
 
   // 粒子星环（类土星环）：3 条不同倾角，GPU 轨道运动 + 离面波浪
   const rings = [
-    { r: 1.45, tilt: 0.42, n: compact ? 110 : 190, speed: 0.1 },
-    { r: 1.75, tilt: -0.3, n: compact ? 95 : 160, speed: -0.07 },
-    { r: 2.05, tilt: 0.62, n: compact ? 75 : 130, speed: 0.05 },
+    { r: 1.45, tilt: 0.42, n: compact ? 140 : 230, speed: 0.1 },
+    { r: 1.75, tilt: -0.3, n: compact ? 118 : 195, speed: -0.07 },
+    { r: 2.05, tilt: 0.62, n: compact ? 98 : 160, speed: 0.05 },
   ]
   for (const ring of rings) {
     for (let i = 0; i < ring.n; i++) {
@@ -211,7 +211,7 @@ function buildSculpture(compact: boolean) {
   }
 
   // 雕塑外围星尘：球壳分布
-  const dustN = compact ? 130 : 240
+  const dustN = compact ? 160 : 300
   for (let i = 0; i < dustN; i++) {
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
@@ -232,7 +232,7 @@ function buildSculpture(compact: boolean) {
 // 只做轻微视差倾斜，不随雕塑自旋——保证任何视口下整个 hero 都有星尘而非只有右侧
 function buildField(compact: boolean) {
   const b = new NebulaBuilder()
-  const n = compact ? 150 : 340
+  const n = compact ? 180 : 400
   for (let i = 0; i < n; i++) {
     b.add(
       [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1],
@@ -509,9 +509,9 @@ function setupNebula3D() {
       m.uniforms.uPixelRatio.value = dpr
     }
 
-    // 雕塑定位与缩放：把右侧锚点（老版方块）的中心投影为 z=0 平面上的世界坐标，
-    // 星环外沿直径取锚点宽度的 1.25 倍——比老版更舒展又不出画；
-    // ≤900px 锚点随 .hero-right 隐藏 → 居中、取视口宽 85%、压暗
+    // 雕塑定位与缩放：把右侧锚点（老版方块）的中心投影为 z=0 平面上的世界坐标。
+    // 星环外沿直径取"锚点宽 ×1.7"与"视口高 ×0.85"的较大者——随屏幕撑满 hero；
+    // ≤900px 锚点随 .hero-right 隐藏 → 居中、取视口宽 95%、压暗
     const RING_SPAN = 4.1 // 星环外沿直径（世界单位，缩放前）
     const ar = anchor!.getBoundingClientRect()
     let s: number
@@ -521,14 +521,16 @@ function setupNebula3D() {
     if (ar.width > 1) {
       cx = ar.left + ar.width / 2 - rect.left
       cy = ar.top + ar.height / 2 - rect.top
-      s = (ar.width * 1.25 * worldPerPx) / RING_SPAN
+      s = (Math.max(ar.width * 1.7, h * 0.85) * worldPerPx) / RING_SPAN
     } else {
       cx = w / 2
       cy = h * 0.42
-      s = (w * 0.85 * worldPerPx) / RING_SPAN
+      s = (w * 0.95 * worldPerPx) / RING_SPAN
       alpha = 0.8
     }
     s = Math.min(s, (halfW * 1.9) / RING_SPAN) // 兜底：环直径不超过视口宽的 95%
+    // 右缘出血收束：环最右超出视口的部分 ≤ 30% 环半径，超出则整体左移
+    cx = Math.min(cx, w - 0.7 * ((RING_SPAN / 2) * (s / worldPerPx)))
     sculpture.position.set(((cx / w) * 2 - 1) * halfW, (1 - (cy / h) * 2) * halfH, 0)
     sculpture.scale.setScalar(s)
     // 雕塑粒子尺寸跟随整体缩放（点大小不受对象 scale 影响，需手动折算）
