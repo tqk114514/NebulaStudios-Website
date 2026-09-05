@@ -1,10 +1,12 @@
 <script setup lang="ts">
 // 页面尾部：政策链接行 + 版权（迁移自原站 .policy-links / .page-footer）。
 // 原站用绝对定位让 "|" 精确居中，这里改用 flex 等间距布局，视觉等价。
+// 政策页自身再挂这组链接属于自引用，传入 links=false 隐藏链接行、仅保留版权。
+withDefaults(defineProps<{ links?: boolean }>(), { links: true })
 </script>
 
 <template>
-  <nav class="policy-footer" aria-label="policy">
+  <nav v-if="links" class="policy-footer" aria-label="policy">
     <a href="/policy#privacy" target="_blank">{{ $t('policy.privacyPolicy') }}</a>
     <span>|</span>
     <a href="/policy#terms" target="_blank">{{ $t('policy.termsOfService') }}</a>

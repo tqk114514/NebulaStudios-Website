@@ -393,7 +393,7 @@ watch(locale, () => {
       <div v-else class="policy-doc" v-html="contentHtml"></div>
     </main>
 
-    <PolicyFooter />
+    <PolicyFooter :links="false" />
   </div>
 </template>
 
