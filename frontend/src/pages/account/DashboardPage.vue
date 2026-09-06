@@ -1436,6 +1436,74 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* ==================== 两步验证（TOTP）弹窗 ==================== */
+.totp-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.totp-qr svg {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+/* paulmillr/qr 输出无 fill 属性的黑色 path（透明背景），
+   深色主题下反色为白色模块以保证扫描对比度 */
+.totp-qr svg path {
+  fill: #fff;
+}
+
+.totp-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.totp-secret {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--mid);
+  word-break: break-all;
+}
+
+.totp-copy {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--mid);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.totp-copy:hover {
+  color: var(--fg);
+  border-color: var(--mid);
+}
+
+.totp-hint {
+  margin: 8px 0 12px;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  line-height: 1.8;
+}
+
+.totp-recovery-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+
 /* ==================== 页面布局（原 .dashboard-main / .page-loader，值不变） ==================== */
 .dash-main {
   position: relative;
