@@ -14,8 +14,8 @@ import FormField from '@/components/FormField.vue'
 import PolicyFooter from '@/components/PolicyFooter.vue'
 import CaptchaWidget from '@/components/CaptchaWidget.vue'
 import { RouterLink } from 'vue-router'
-import { post } from '@/api/client'
 import { errorKey } from '@/api/errorCodes'
+import { login, loginTotp } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePolicyConsent } from '@/composables/usePolicyConsent'
 import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled } from '@/composables/useCaptcha'
@@ -32,6 +32,11 @@ const loading = ref(false)
 const showAlert = ref(false)
 const alertMessage = ref('')
 const captchaReady = ref(false)
+
+// TOTP 二步验证状态：密码通过后切换出验证码输入形态
+const totpStep = ref(false)
+const pendingToken = ref('')
+const totpCode = ref('')
 
 const returnUrl = (route.query.return as string) || ''
 
@@ -66,6 +71,15 @@ function reactToError(e: unknown) {
   alert(errorKey(e))
 }
 
+/** 登录成功后的公共收尾：刷新会话态 → 政策同意 → 跳转 */
+async function finishLogin() {
+  await auth.bootstrap()
+  // 政策同意：拒绝则已登出并跳转
+  const consented = await checkConsent()
+  if (!consented) return
+  redirectAfterLogin()
+}
+
 async function handleSubmit() {
   const err = validate()
   if (err) {
@@ -81,20 +95,39 @@ async function handleSubmit() {
 
   loading.value = true
   try {
-    await post<{ message: string }>('/api/auth/login', {
+    const res = await login({
       email: email.value.trim(),
       password: password.value,
       captchaToken: getCaptchaToken(),
     })
 
-    // 登录成功：刷新本地会话态
-    await auth.bootstrap()
+    // 已启用两步验证：切换到 TOTP 输入形态（中转 token 在验证成功前保持有效）
+    if ('totp_required' in res && res.totp_required) {
+      pendingToken.value = res.pending_token
+      totpCode.value = ''
+      totpStep.value = true
+      return
+    }
 
-    // 政策同意：拒绝则已登出并跳转
-    const consented = await checkConsent()
-    if (!consented) return
+    await finishLogin()
+  } catch (e) {
+    reactToError(e)
+  } finally {
+    loading.value = false
+  }
+}
 
-    redirectAfterLogin()
+async function handleTotpSubmit() {
+  const code = totpCode.value.trim()
+  if (!code) {
+    alert('account.totp.enterCode')
+    return
+  }
+
+  loading.value = true
+  try {
+    await loginTotp({ pendingToken: pendingToken.value, code })
+    await finishLogin()
   } catch (e) {
     reactToError(e)
   } finally {
@@ -118,8 +151,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AuthCard num="01" :title="$t('account.login.title')" :subtitle="$t('account.login.subtitle')">
-    <form novalidate @submit.prevent="handleSubmit">
+  <AuthCard
+    num="01"
+    :title="$t(totpStep ? 'account.totp.loginTitle' : 'account.login.title')"
+    :subtitle="$t(totpStep ? 'account.totp.loginSubtitle' : 'account.login.subtitle')"
+  >
+    <form v-if="!totpStep" novalidate @submit.prevent="handleSubmit">
       <FormField :label="$t('account.login.emailPlaceholder')">
         <input
           v-model="email"
@@ -150,6 +187,32 @@ onMounted(async () => {
 
       <!-- 人机验证（系统启用时显示；未启用时不占用空间） -->
       <CaptchaWidget />
+    </form>
+
+    <!-- TOTP 二步验证形态 -->
+    <form v-else novalidate @submit.prevent="handleTotpSubmit">
+      <FormField :label="$t('account.totp.loginCodeLabel')">
+        <input
+          v-model="totpCode"
+          type="text"
+          name="totp"
+          autocomplete="one-time-code"
+          inputmode="numeric"
+          maxlength="8"
+          :placeholder="$t('account.totp.loginCodePlaceholder')"
+          aria-label="totp-code"
+          autofocus
+          required
+        />
+      </FormField>
+
+      <AppButton type="submit" :disabled="loading">
+        {{ loading ? $t('account.login.loggingIn') : $t('account.totp.loginSubmit') }}
+      </AppButton>
+
+      <button type="button" class="totp-back" :disabled="loading" @click="totpStep = false">
+        {{ $t('account.totp.backToLogin') }}
+      </button>
     </form>
 
     <div class="oauth-divider">
@@ -268,6 +331,25 @@ onMounted(async () => {
 
 .footer-links span {
   color: var(--dim);
+}
+
+/* ---- TOTP 二步返回登录链接 ---- */
+.totp-back {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: var(--mid);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.totp-back:hover {
+  color: var(--fg);
 }
 
 /* ---- 提示弹窗文案（迁移自 common.css .modal-message） ---- */

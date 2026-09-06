@@ -25,6 +25,8 @@ const (
 	UserActionUnbanned        = "unbanned"
 	UserActionOAuthAuthorize  = "oauth_authorize"
 	UserActionOAuthRevoke     = "oauth_revoke"
+	UserActionTOTPEnabled     = "totp_enabled"
+	UserActionTOTPDisabled    = "totp_disabled"
 	// 头像同步开关（隐私层面：服务器是否持续存储第三方头像）
 	UserActionEnableAvatarSync  = "enable_avatar_sync"
 	UserActionDisableAvatarSync = "disable_avatar_sync"
@@ -371,6 +373,24 @@ func (r *UserLogRepository) LogOAuthRevoke(ctx context.Context, userUID string, 
 		UserUID: userUID,
 		Action:  UserActionOAuthRevoke,
 		Details: detailsJSON,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogTOTPEnabled 记录启用两步验证
+func (r *UserLogRepository) LogTOTPEnabled(ctx context.Context, userUID string) error {
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionTOTPEnabled,
+	}
+	return r.Create(ctx, log)
+}
+
+// LogTOTPDisabled 记录关闭两步验证
+func (r *UserLogRepository) LogTOTPDisabled(ctx context.Context, userUID string) error {
+	log := &UserLog{
+		UserUID: userUID,
+		Action:  UserActionTOTPDisabled,
 	}
 	return r.Create(ctx, log)
 }

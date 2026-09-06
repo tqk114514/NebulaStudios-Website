@@ -19,6 +19,7 @@ node_modules/
 # 项目特定
 .trae/
 .skill/
+.zcode/
 
 # 日志
 *.log

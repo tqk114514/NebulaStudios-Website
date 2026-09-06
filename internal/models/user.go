@@ -75,6 +75,8 @@ type User struct {
 	BannedAt            sql.NullTime   `json:"banned_at"`  // 封禁时间
 	BannedBy            sql.NullString `json:"banned_by"`  // 封禁操作者 UID
 	UnbanAt             sql.NullTime   `json:"unban_at"`   // 解封时间（NULL 表示永封）
+	TOTPSecret          sql.NullString `json:"-"`          // TOTP 密钥（base32），不序列化
+	TOTPEnabled         bool           `json:"totp_enabled"`
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
 }
@@ -98,6 +100,7 @@ type UserPublic struct {
 	BanReason           *string    `json:"ban_reason,omitempty"`
 	BannedAt            *time.Time `json:"banned_at,omitempty"`
 	UnbanAt             *time.Time `json:"unban_at,omitempty"` // NULL 表示永封
+	TOTPEnabled         bool       `json:"totp_enabled"`
 	CreatedAt           time.Time  `json:"created_at"`
 }
 
@@ -106,6 +109,7 @@ const userColumns = `id, uid, username, email, password, avatar_url, role,
        microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
        google_id, google_name, google_avatar_url, microsoft_avatar_sync,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
+       totp_secret, totp_enabled,
        created_at, updated_at`
 
 // userColumnsPublic 不包含 password，用于管理后台列表等不需要密码哈希的场景
@@ -135,6 +139,7 @@ func (u *User) ToPublic() *UserPublic {
 		AvatarURL:           u.AvatarURL,
 		Role:                u.Role,
 		IsBanned:            u.IsBanned,
+		TOTPEnabled:         u.TOTPEnabled,
 		CreatedAt:           u.CreatedAt,
 		MicrosoftAvatarSync: u.MicrosoftAvatarSync,
 	}
@@ -237,6 +242,7 @@ func (r *UserRepository) FindByUID(ctx context.Context, uid string) (*User, erro
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -268,6 +274,7 @@ func (r *UserRepository) FindByEmailOrUsername(ctx context.Context, identifier s
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -296,6 +303,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*User, 
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -324,6 +332,7 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -352,6 +361,7 @@ func (r *UserRepository) FindByMicrosoftID(ctx context.Context, msID string) (*U
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -380,6 +390,7 @@ func (r *UserRepository) FindByGoogleID(ctx context.Context, googleID string) (*
 		&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 		&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL, &user.MicrosoftAvatarSync,
 		&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+		&user.TOTPSecret, &user.TOTPEnabled,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -803,5 +814,58 @@ func (r *UserRepository) Unban(ctx context.Context, userUID string) error {
 	}
 
 	utils.LogInfo("USER", "User unbanned", "uid", userUID)
+	return nil
+}
+
+// SetTOTPSecret 设置 TOTP 密钥（空字符串表示清除），专用方法避开 Update 白名单
+func (r *UserRepository) SetTOTPSecret(ctx context.Context, uid, secret string) error {
+	if uid == "" {
+		return errors.New("invalid user UID")
+	}
+	if r.pool == nil {
+		return errors.New("database not ready")
+	}
+
+	var secretArg any
+	if secret != "" {
+		secretArg = secret
+	}
+
+	result, err := r.pool.Exec(ctx,
+		"UPDATE users SET totp_secret = $1, updated_at = NOW() WHERE uid = $2",
+		secretArg, uid,
+	)
+	if err != nil {
+		return r.handleWriteError(err, "SetTOTPSecret", uid)
+	}
+	if result.RowsAffected() == 0 {
+		return utils.HandleDatabaseError("USER", "SetTOTPSecret", errors.New("no rows affected"), uid)
+	}
+
+	utils.LogInfo("USER", "TOTP secret updated", "uid", uid, "cleared", secret == "")
+	return nil
+}
+
+// SetTOTPEnabled 设置 TOTP 启用状态
+func (r *UserRepository) SetTOTPEnabled(ctx context.Context, uid string, enabled bool) error {
+	if uid == "" {
+		return errors.New("invalid user UID")
+	}
+	if r.pool == nil {
+		return errors.New("database not ready")
+	}
+
+	result, err := r.pool.Exec(ctx,
+		"UPDATE users SET totp_enabled = $1, updated_at = NOW() WHERE uid = $2",
+		enabled, uid,
+	)
+	if err != nil {
+		return r.handleWriteError(err, "SetTOTPEnabled", uid)
+	}
+	if result.RowsAffected() == 0 {
+		return utils.HandleDatabaseError("USER", "SetTOTPEnabled", errors.New("no rows affected"), uid)
+	}
+
+	utils.LogInfo("USER", "TOTP state updated", "uid", uid, "enabled", enabled)
 	return nil
 }

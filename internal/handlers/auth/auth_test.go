@@ -10,6 +10,7 @@ import (
 
 	"auth-system/internal/config"
 	"auth-system/internal/models"
+	"auth-system/internal/services"
 	"auth-system/internal/testutil"
 	"auth-system/internal/utils"
 
@@ -25,11 +26,17 @@ type testDeps struct {
 	whitelist   *testutil.FakeEmailWhitelist
 	limiter     *testutil.FakeLimiter
 	emailSender *testutil.FakeEmailSender
+	totpSvc     *services.TOTPService
 }
 
 func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDeps) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+
+	totpSvc, err := services.NewTOTPService(&testutil.FakeTOTPRecoveryStore{})
+	if err != nil {
+		t.Fatalf("NewTOTPService() error = %v", err)
+	}
 
 	deps := &testDeps{
 		userRepo:    testutil.NewFakeUserRepo(),
@@ -38,6 +45,7 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 		captcha:     &testutil.FakeCaptcha{},
 		limiter:     &testutil.FakeLimiter{EmailAllowed: true},
 		emailSender: &testutil.FakeEmailSender{},
+		totpSvc:     totpSvc,
 	}
 
 	var whitelist models.EmailWhitelistStore
@@ -59,6 +67,7 @@ func newTestAuthHandler(t *testing.T, useWhitelist bool) (*AuthHandler, *testDep
 		&testutil.FakeUserCache{},
 		whitelist,
 		deps.limiter,
+		deps.totpSvc,
 	)
 	if err != nil {
 		t.Fatalf("NewAuthHandler() error = %v", err)

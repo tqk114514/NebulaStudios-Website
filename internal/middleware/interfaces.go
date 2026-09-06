@@ -9,6 +9,8 @@ type RateLimiterManager interface {
 	ResetPasswordRateLimit() gin.HandlerFunc
 	OAuthTokenRateLimit() gin.HandlerFunc
 	VerifyCodeRateLimit() gin.HandlerFunc
+	TOTPRateLimit() gin.HandlerFunc
+	TOTPLoginRateLimit() gin.HandlerFunc
 	EmailAllow(email string) bool
 	EmailWaitTime(email string) int
 	DataExportAllow(userUID string) bool

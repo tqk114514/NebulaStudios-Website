@@ -151,6 +151,7 @@ type Services struct {
 	OAuthService       services.OAuthClientManager
 	ExportService      services.ExportManager
 	ExportTokenService services.ExportTokenManager
+	TOTPService        services.TOTPManager
 	LimiterMgr         middleware.RateLimiterManager
 }
 
@@ -194,6 +195,10 @@ func initServices(cfg *config.Config, pool *pgxpool.Pool) (*Services, error) {
 	svcs.CaptchaService = captchaSvc
 	svcs.OAuthService = services.NewOAuthService(pool)
 	svcs.ExportService = services.NewExportService()
+	svcs.TOTPService, err = services.NewTOTPService(models.NewTOTPRecoveryRepository(pool))
+	if err != nil {
+		return nil, utils.LogError("SERVICES", "initServices", fmt.Errorf("totp service init failed: %w", err))
+	}
 	svcs.LimiterMgr = middleware.NewRateLimiterManager()
 
 	svcs.SessionService, err = services.NewSessionService(cfg, pool)
@@ -252,6 +257,7 @@ type Handlers struct {
 	staticHandler         *handlers.StaticHandler
 	policyHandler         *handlers.PolicyHandler
 	adminHandler          *admin.AdminHandler
+	totpHandler           *userhandler.TOTPHandler
 }
 
 func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, error) {
@@ -264,11 +270,21 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 		cfg, repos.UserRepo, repos.UserLogRepo, repos.UserConsentRepo, svcs.TokenService,
 		svcs.SessionService, svcs.EmailService, svcs.CaptchaService,
 		svcs.UserCache, repos.EmailWhitelistRepo, svcs.LimiterMgr,
+		svcs.TOTPService,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AuthHandler: %w", err)
 	}
 	utils.LogInfo("HANDLERS", "AuthHandler initialized")
+
+	hdlrs.totpHandler, err = userhandler.NewTOTPHandler(
+		repos.UserRepo, repos.UserLogRepo, svcs.CaptchaService,
+		svcs.SessionService, svcs.UserCache, svcs.TOTPService,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("TOTPHandler: %w", err)
+	}
+	utils.LogInfo("HANDLERS", "TOTPHandler initialized")
 
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
 		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,

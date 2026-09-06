@@ -51,6 +51,8 @@ func getTableSchemas() []TableSchema {
 				{Name: "banned_at", Type: "TIMESTAMPTZ", Nullable: true},
 				{Name: "banned_by", Type: "VARCHAR(16)", Nullable: true},
 				{Name: "unban_at", Type: "TIMESTAMPTZ", Nullable: true},
+				{Name: "totp_secret", Type: "VARCHAR(64)", Nullable: true},
+				{Name: "totp_enabled", Type: "BOOLEAN", Nullable: false, Default: "FALSE"},
 				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
 				{Name: "updated_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
 			},
@@ -205,6 +207,18 @@ func getTableSchemas() []TableSchema {
 				{Name: "used_at", Type: "TIMESTAMPTZ", Nullable: true},
 			},
 		},
+		// totp_recovery_codes 表（TOTP 一次性恢复码，哈希存储）
+		{
+			Name: "totp_recovery_codes",
+			Columns: []ColumnDefinition{
+				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimary: true},
+				{Name: "user_uid", Type: "VARCHAR(16)", Nullable: false, References: "users(uid)", OnDelete: "CASCADE"},
+				{Name: "code_hash", Type: "VARCHAR(64)", Nullable: false, IsUnique: true},
+				{Name: "used", Type: "BOOLEAN", Nullable: false, Default: "FALSE"},
+				{Name: "used_at", Type: "TIMESTAMPTZ", Nullable: true},
+				{Name: "created_at", Type: "TIMESTAMPTZ", Nullable: false, Default: "NOW()"},
+			},
+		},
 		// email_whitelist 表
 		{
 			Name: "email_whitelist",
@@ -257,6 +271,7 @@ func getIndexDefinitions() []IndexDefinition {
 		{"idx_session_tokens_token_hash", "CREATE INDEX IF NOT EXISTS idx_session_tokens_token_hash ON session_tokens(token_hash)"},
 		{"idx_session_tokens_family_id", "CREATE INDEX IF NOT EXISTS idx_session_tokens_family_id ON session_tokens(family_id)"},
 		{"idx_session_tokens_expires_at", "CREATE INDEX IF NOT EXISTS idx_session_tokens_expires_at ON session_tokens(expires_at)"},
+		{"idx_totp_recovery_codes_user_uid", "CREATE INDEX IF NOT EXISTS idx_totp_recovery_codes_user_uid ON totp_recovery_codes(user_uid)"},
 	}
 }
 

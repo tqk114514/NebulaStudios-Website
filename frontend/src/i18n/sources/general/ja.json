@@ -6,7 +6,6 @@
   "page.title.notFound": "ページが見つかりません - Nebula Studios",
   "page.title.policy": "ポリシー - Nebula Studios",
   "page.title.oauthAuthorize": "認可 - Nebula Studios",
-
   "modal.alert": "通知",
   "modal.close": "閉じる",
   "modal.confirm": "確認",
@@ -15,24 +14,19 @@
   "modal.externalLink.message": "移動先：",
   "modal.externalLink.disclaimer": "このサイトはNebula Studiosとは関係ありません。コンテンツについて責任を負いません。",
   "modal.externalLink.continue": "移動",
-
   "notFound.title": "ページが見つかりません",
   "notFound.message": "お探しのページは存在しないか、削除されました",
   "notFound.backToLogin": "ログインに戻る",
-
   "footer.copyright": "© {year} Nebula Studios 無断転載禁止",
-
   "policy.agreeByRegister": "登録することで、以下に同意したものとみなされます：",
   "policy.privacyPolicy": "プライバシーポリシー",
   "policy.termsOfService": "利用規約",
   "policy.cookiePolicy": "Cookie ポリシー",
   "policy.and": "および",
   "policy.versionServer": "サーバーバージョン",
-
   "cookieConsent.message": "当サイトはCookieを使用してユーザー体験を向上させています。拒否してもコア機能は正常に動作しますが、言語設定やログイン状態の保存などのオプショナル機能に影響します。",
   "cookieConsent.accept": "同意",
   "cookieConsent.reject": "拒否",
-
   "error.loadEmailWhitelistFailed": "メールホワイトリストの読み込みに失敗しました。ページを更新してください",
   "error.networkError": "ネットワークエラー。後でもう一度お試しください",
   "error.sessionExpired": "セッションの有効期限が切れました。再度ログインしてください",
@@ -95,5 +89,11 @@
   "error.oauthUnauthorized": "未認証",
   "error.oauthResponseTypeUnsupported": "サポートされていないレスポンスタイプ",
   "error.linkTokenInvalid": "連携リンクが無効です",
-  "error.linkTokenExpired": "連携リンクの有効期限が切れました。再度連携を開始してください"
+  "error.linkTokenExpired": "連携リンクの有効期限が切れました。再度連携を開始してください",
+  "error.totpRequired": "二段階認証が必要です",
+  "error.totpInvalid": "認証コードが正しくありません。もう一度お試しください",
+  "error.totpLocked": "認証の失敗が多すぎます。5 分後に再試行してください",
+  "error.totpPendingInvalid": "ログインセッションの有効期限が切れました。再度ログインしてください",
+  "error.totpAlreadyEnabled": "二段階認証はすでに有効です",
+  "error.totpNotEnabled": "二段階認証が有効でないか、設定が未完了です"
 }

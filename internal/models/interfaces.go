@@ -20,6 +20,8 @@ type UserWriter interface {
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, uid string, updates map[string]any) error
 	UpdatePassword(ctx context.Context, uid, plainPassword string) error
+	SetTOTPSecret(ctx context.Context, uid, secret string) error
+	SetTOTPEnabled(ctx context.Context, uid string, enabled bool) error
 	Delete(ctx context.Context, uid string) error
 }
 
@@ -62,6 +64,8 @@ type UserLogStore interface {
 	LogUnbanned(ctx context.Context, userUID string) error
 	LogOAuthAuthorize(ctx context.Context, userUID string, clientID, clientName, scope string) error
 	LogOAuthRevoke(ctx context.Context, userUID string, clientID, clientName string) error
+	LogTOTPEnabled(ctx context.Context, userUID string) error
+	LogTOTPDisabled(ctx context.Context, userUID string) error
 	FindByUserUID(ctx context.Context, userUID string, page, pageSize int) ([]*UserLog, int64, error)
 	DeleteByUserUID(ctx context.Context, userUID string) error
 	DeleteExpiredLogs(ctx context.Context) (int64, error)

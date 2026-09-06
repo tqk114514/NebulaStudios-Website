@@ -59,6 +59,16 @@ const (
 	ErrCodeInvalidID      = "INVALID_ID"
 )
 
+// 两步验证（TOTP）
+const (
+	ErrCodeTOTPRequired       = "TOTP_REQUIRED"        // 密码正确但用户已启用 TOTP，需要二步验证
+	ErrCodeTOTPInvalid        = "TOTP_INVALID"         // 验证码错误
+	ErrCodeTOTPLocked         = "TOTP_LOCKED"          // 连续失败触发临时锁定
+	ErrCodeTOTPPendingInvalid = "TOTP_PENDING_INVALID" // 登录中转 token 无效或已过期
+	ErrCodeTOTPAlreadyEnabled = "TOTP_ALREADY_ENABLED" // TOTP 已启用
+	ErrCodeTOTPNotEnabled     = "TOTP_NOT_ENABLED"     // TOTP 未启用或未完成 setup
+)
+
 // 用户名
 const (
 	ErrCodeUsernameAlreadyExists = "USERNAME_ALREADY_EXISTS"

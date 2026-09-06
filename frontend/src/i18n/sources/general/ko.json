@@ -6,7 +6,6 @@
   "page.title.notFound": "페이지를 찾을 수 없습니다 - Nebula Studios",
   "page.title.policy": "정책 - Nebula Studios",
   "page.title.oauthAuthorize": "인증 - Nebula Studios",
-
   "modal.alert": "알림",
   "modal.close": "닫기",
   "modal.confirm": "확인",
@@ -15,24 +14,19 @@
   "modal.externalLink.message": "이동할 주소:",
   "modal.externalLink.disclaimer": "이 사이트는 Nebula Studios와 관련이 없습니다. 콘텐츠에 대해 책임지지 않습니다.",
   "modal.externalLink.continue": "이동",
-
   "notFound.title": "페이지를 찾을 수 없습니다",
   "notFound.message": "찾으시는 페이지가 존재하지 않거나 삭제되었습니다",
   "notFound.backToLogin": "로그인으로 돌아가기",
-
   "footer.copyright": "© {year} Nebula Studios 모든 권리 보유",
-
   "policy.agreeByRegister": "가입하면 다음에 동의하는 것으로 간주됩니다:",
   "policy.privacyPolicy": "개인정보 처리방침",
   "policy.termsOfService": "서비스 약관",
   "policy.cookiePolicy": "쿠키 정책",
   "policy.and": "및",
   "policy.versionServer": "서버 버전",
-
   "cookieConsent.message": "당사는 쿠키를 사용하여 사용자 경험을 개선하고 있습니다. 거부해도 핵심 기능은 정상적으로 작동하지만, 언어 설정 및 로그인 상태 저장 등의 선택적 기능에 영향을 미칩니다.",
   "cookieConsent.accept": "동의",
   "cookieConsent.reject": "거부",
-
   "error.loadEmailWhitelistFailed": "이메일 화이트리스트를 로드하지 못했습니다. 페이지를 새로고침하세요",
   "error.networkError": "네트워크 오류. 나중에 다시 시도하세요",
   "error.sessionExpired": "세션이 만료되었습니다. 다시 로그인하세요",
@@ -95,5 +89,11 @@
   "error.oauthUnauthorized": "인증되지 않았습니다",
   "error.oauthResponseTypeUnsupported": "지원되지 않는 응답 유형입니다",
   "error.linkTokenInvalid": "연결 링크가 잘못되었습니다",
-  "error.linkTokenExpired": "연결 링크가 만료되었습니다. 다시 시작하세요"
+  "error.linkTokenExpired": "연결 링크가 만료되었습니다. 다시 시작하세요",
+  "error.totpRequired": "2단계 인증이 필요합니다",
+  "error.totpInvalid": "인증 코드가 올바르지 않습니다. 다시 시도해 주세요",
+  "error.totpLocked": "실패 횟수가 너무 많습니다. 5분 후 다시 시도해 주세요",
+  "error.totpPendingInvalid": "로그인 세션이 만료되었습니다. 다시 로그인해 주세요",
+  "error.totpAlreadyEnabled": "2단계 인증이 이미 사용 중입니다",
+  "error.totpNotEnabled": "2단계 인증이 사용 중이 아니거나 설정이 완료되지 않았습니다"
 }

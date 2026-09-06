@@ -6,7 +6,6 @@
   "page.title.notFound": "页面未找到 - Nebula Studios",
   "page.title.policy": "政策 - Nebula Studios",
   "page.title.oauthAuthorize": "授权登录 - Nebula Studios",
-
   "modal.alert": "提示",
   "modal.close": "关闭",
   "modal.confirm": "确认",
@@ -15,24 +14,19 @@
   "modal.externalLink.message": "即将跳转至：",
   "modal.externalLink.disclaimer": "该网站与 Nebula Studios 无关，我们不对其内容负责。",
   "modal.externalLink.continue": "前往",
-
   "notFound.title": "页面未找到",
   "notFound.message": "您访问的页面不存在或已被移除",
   "notFound.backToLogin": "返回登录",
-
   "footer.copyright": "© {year} Nebula Studios 版权所有",
-
   "policy.agreeByRegister": "注册即表示您同意我们的",
   "policy.privacyPolicy": "隐私政策",
   "policy.termsOfService": "服务条款",
   "policy.cookiePolicy": "Cookie 政策",
   "policy.and": "和",
   "policy.versionServer": "服务器版本",
-
   "cookieConsent.message": "我们使用 Cookie 来改善您的体验。拒绝后仅影响可选功能（如语言偏好和登录状态保存），核心功能仍可正常使用。",
   "cookieConsent.accept": "同意",
   "cookieConsent.reject": "拒绝",
-
   "error.loadEmailWhitelistFailed": "加载邮箱白名单失败，请刷新页面重试",
   "error.networkError": "网络错误，请稍后重试",
   "error.sessionExpired": "登录已过期，请重新登录",
@@ -95,5 +89,11 @@
   "error.oauthUnauthorized": "未授权",
   "error.oauthResponseTypeUnsupported": "不支持的响应类型",
   "error.linkTokenInvalid": "绑定链接无效",
-  "error.linkTokenExpired": "绑定链接已过期，请重新发起绑定"
+  "error.linkTokenExpired": "绑定链接已过期，请重新发起绑定",
+  "error.totpRequired": "需要两步验证",
+  "error.totpInvalid": "验证码错误，请重试",
+  "error.totpLocked": "验证失败次数过多，请 5 分钟后再试",
+  "error.totpPendingInvalid": "登录会话已过期，请重新登录",
+  "error.totpAlreadyEnabled": "两步验证已开启",
+  "error.totpNotEnabled": "两步验证未开启或未完成设置"
 }

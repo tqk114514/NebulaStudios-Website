@@ -182,6 +182,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 
 		authAPI.POST("/register", svcs.LimiterMgr.RegisterRateLimit(), hdlrs.authHandler.Register)
 		authAPI.POST("/login", svcs.LimiterMgr.LoginRateLimit(), hdlrs.authHandler.Login)
+		authAPI.POST("/login/totp", svcs.LimiterMgr.TOTPLoginRateLimit(), hdlrs.authHandler.LoginTOTP)
 		authAPI.POST("/logout", hdlrs.authHandler.Logout)
 		authAPI.POST("/refresh", hdlrs.authHandler.Refresh)
 		authAPI.GET("/me", middleware.AuthMiddleware(svcs.SessionService), hdlrs.authHandler.GetMe)
@@ -240,6 +241,10 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 
 		userAPI.GET("/oauth/grants", hdlrs.userHandler.GetOAuthGrants)
 		userAPI.DELETE("/oauth/grants/:client_id", hdlrs.userHandler.RevokeOAuthGrant)
+
+		userAPI.POST("/totp/setup", svcs.LimiterMgr.TOTPRateLimit(), hdlrs.totpHandler.SetupTOTP)
+		userAPI.POST("/totp/enable", svcs.LimiterMgr.TOTPRateLimit(), hdlrs.totpHandler.EnableTOTP)
+		userAPI.POST("/totp/disable", svcs.LimiterMgr.TOTPRateLimit(), hdlrs.totpHandler.DisableTOTP)
 	}
 
 	r.GET("/api/user/export/:token", hdlrs.userHandler.DownloadUserData)

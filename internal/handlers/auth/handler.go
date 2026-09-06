@@ -44,6 +44,7 @@ type AuthHandler struct {
 	userCache          services.UserCacheStore
 	emailWhitelistRepo models.EmailWhitelistStore
 	limiterMgr         middleware.RateLimiterManager
+	totpService        services.TOTPManager
 	baseURL            string
 	dummyPasswordHash  string // 用于用户不存在时执行 dummy 密码验证，实现恒定时间防枚举
 }
@@ -62,6 +63,7 @@ func NewAuthHandler(
 	userCache services.UserCacheStore,
 	emailWhitelistRepo models.EmailWhitelistStore,
 	limiterMgr middleware.RateLimiterManager,
+	totpService services.TOTPManager,
 ) (*AuthHandler, error) {
 	if userRepo == nil {
 		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userRepo is required"))
@@ -80,6 +82,9 @@ func NewAuthHandler(
 	}
 	if userCache == nil {
 		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("userCache is required"))
+	}
+	if totpService == nil {
+		return nil, utils.LogError("AUTH", "NewAuthHandler", errors.New("totpService is required"))
 	}
 
 	baseURL := cfg.BaseURL
@@ -103,6 +108,7 @@ func NewAuthHandler(
 		userCache:          userCache,
 		emailWhitelistRepo: emailWhitelistRepo,
 		limiterMgr:         limiterMgr,
+		totpService:        totpService,
 		baseURL:            baseURL,
 		dummyPasswordHash:  dummyHash,
 	}, nil
@@ -340,6 +346,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	if !match {
 		utils.HTTPErrorResponse(c, "AUTH", http.StatusBadRequest, utils.ErrCodeInvalidCredentials, fmt.Sprintf("Login failed - invalid password: email=%s, userUID=%s", email, user.UID))
+		return
+	}
+
+	// 已启用 TOTP 的用户不在此处签发会话：返回单次有效的中转 token，
+	// 由前端引导用户完成二步验证（POST /api/auth/login/totp）后再签发
+	if user.TOTPEnabled {
+		pendingToken, err := h.totpService.CreatePendingToken(user.UID)
+		if err != nil {
+			utils.HTTPErrorResponse(c, "AUTH", http.StatusInternalServerError, utils.ErrCodeInternalError, fmt.Sprintf("Pending TOTP token creation failed: userUID=%s", user.UID))
+			return
+		}
+		utils.LogInfoCtx(c.Request.Context(), "AUTH", "Password verified, TOTP second step required", "user_uid", user.UID, "ip", clientIP)
+		utils.RespondSuccessWithData(c, gin.H{
+			"totp_required": true,
+			"pending_token": pendingToken,
+		})
 		return
 	}
 

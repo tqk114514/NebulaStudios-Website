@@ -6,6 +6,7 @@ package testutil
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"auth-system/internal/cache"
@@ -94,6 +95,26 @@ func (f *FakeUserRepo) UpdatePassword(_ context.Context, uid, plainPassword stri
 	return nil
 }
 func (f *FakeUserRepo) Delete(context.Context, string) error { return nil }
+func (f *FakeUserRepo) SetTOTPSecret(_ context.Context, uid, secret string) error {
+	user, ok := f.UIDs[uid]
+	if !ok {
+		return errors.New("user not found")
+	}
+	if secret == "" {
+		user.TOTPSecret = sql.NullString{}
+	} else {
+		user.TOTPSecret = sql.NullString{String: secret, Valid: true}
+	}
+	return nil
+}
+func (f *FakeUserRepo) SetTOTPEnabled(_ context.Context, uid string, enabled bool) error {
+	user, ok := f.UIDs[uid]
+	if !ok {
+		return errors.New("user not found")
+	}
+	user.TOTPEnabled = enabled
+	return nil
+}
 
 // ---- UserAdminStore（管理后台用，FakeUserRepo 同时满足 models.UserStore） ----
 
@@ -179,6 +200,7 @@ type FakeSessionManager struct {
 	RefreshToken string
 	VerifyErr    error
 	VerifyResult *services.Claims
+	RevokedUIDs  map[string]bool
 }
 
 func (f *FakeSessionManager) GenerateTokens(_ context.Context, _ string, _ bool) (string, string, error) {
@@ -196,7 +218,13 @@ func (f *FakeSessionManager) GenerateTokens(_ context.Context, _ string, _ bool)
 func (f *FakeSessionManager) RefreshTokens(context.Context, string) (string, string, error) {
 	return "", "", nil
 }
-func (f *FakeSessionManager) RevokeUserTokens(context.Context, string) error          { return nil }
+func (f *FakeSessionManager) RevokeUserTokens(_ context.Context, uid string) error {
+	if f.RevokedUIDs == nil {
+		f.RevokedUIDs = make(map[string]bool)
+	}
+	f.RevokedUIDs[uid] = true
+	return nil
+}
 func (f *FakeSessionManager) RevokeTokenFamily(context.Context, string, string) error { return nil }
 func (f *FakeSessionManager) VerifyToken(string) (*services.Claims, error) {
 	if f.VerifyErr != nil {
@@ -263,6 +291,8 @@ func (f *FakeUserLogStore) LogOAuthAuthorize(context.Context, string, string, st
 	return nil
 }
 func (f *FakeUserLogStore) LogOAuthRevoke(context.Context, string, string, string) error { return nil }
+func (f *FakeUserLogStore) LogTOTPEnabled(context.Context, string) error                 { return nil }
+func (f *FakeUserLogStore) LogTOTPDisabled(context.Context, string) error                { return nil }
 func (f *FakeUserLogStore) FindByUserUID(context.Context, string, int, int) ([]*models.UserLog, int64, error) {
 	return nil, 0, nil
 }
@@ -340,6 +370,8 @@ func (f *FakeLimiter) RegisterRateLimit() gin.HandlerFunc      { return noopHand
 func (f *FakeLimiter) ResetPasswordRateLimit() gin.HandlerFunc { return noopHandler }
 func (f *FakeLimiter) OAuthTokenRateLimit() gin.HandlerFunc    { return noopHandler }
 func (f *FakeLimiter) VerifyCodeRateLimit() gin.HandlerFunc    { return noopHandler }
+func (f *FakeLimiter) TOTPRateLimit() gin.HandlerFunc          { return noopHandler }
+func (f *FakeLimiter) TOTPLoginRateLimit() gin.HandlerFunc     { return noopHandler }
 func (f *FakeLimiter) EmailAllow(string) bool                  { return f.EmailAllowed }
 func (f *FakeLimiter) EmailWaitTime(string) int                { return f.EmailWait }
 func (f *FakeLimiter) DataExportAllow(string) bool             { return true }
@@ -576,3 +608,85 @@ func (f *FakeOAuthProvider) RevokeToken(_ context.Context, token string) error {
 	f.Revoked = append(f.Revoked, token)
 	return nil
 }
+
+// ---------- FakeTOTPRecoveryStore: models.TOTPRecoveryStore ----------
+
+// FakeTOTPRecoveryStore 内存版 TOTP 恢复码仓库，语义与真实仓库一致（哈希、单次消费、归属校验）
+type FakeTOTPRecoveryStore struct {
+	// uid -> 未使用的恢复码哈希集合
+	Unused map[string]map[string]bool
+}
+
+// NewFakeTOTPRecoveryStore 创建空的内存恢复码仓库
+func NewFakeTOTPRecoveryStore() *FakeTOTPRecoveryStore {
+	return &FakeTOTPRecoveryStore{Unused: make(map[string]map[string]bool)}
+}
+
+func (f *FakeTOTPRecoveryStore) CreateBatch(_ context.Context, userUID string, codeHashes []string) error {
+	if f.Unused == nil {
+		f.Unused = make(map[string]map[string]bool)
+	}
+	f.Unused[userUID] = make(map[string]bool)
+	for _, h := range codeHashes {
+		f.Unused[userUID][h] = true
+	}
+	return nil
+}
+
+func (f *FakeTOTPRecoveryStore) Consume(_ context.Context, codeHash string) (string, bool, error) {
+	for uid, hashes := range f.Unused {
+		if hashes[codeHash] {
+			delete(hashes, codeHash)
+			return uid, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func (f *FakeTOTPRecoveryStore) DeleteByUserUID(_ context.Context, userUID string) error {
+	delete(f.Unused, userUID)
+	return nil
+}
+
+// ---------- FakeTOTPManager: services.TOTPManager ----------
+
+// FakeTOTPManager 可控行为的 TOTP 服务 fake，用于不需要真实算法的测试
+type FakeTOTPManager struct {
+	VerifyCodeResult      bool
+	VerifyLoginCodeResult bool
+	LockedUIDs            map[string]bool
+	ValidPending          map[string]string // token -> uid
+	ConsumedPending       map[string]string // token -> uid
+	ConsumedRecovery      bool
+}
+
+func (f *FakeTOTPManager) GenerateSecret() string { return "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" }
+func (f *FakeTOTPManager) OTPAuthURI(email, secret string) string {
+	return "otpauth://totp/test?secret=" + secret
+}
+func (f *FakeTOTPManager) VerifyCode(string, string) bool { return f.VerifyCodeResult }
+func (f *FakeTOTPManager) VerifyLoginCode(string, string, string) bool {
+	return f.VerifyLoginCodeResult
+}
+func (f *FakeTOTPManager) CreatePendingToken(uid string) (string, error) {
+	return "pending-" + uid, nil
+}
+func (f *FakeTOTPManager) ValidatePendingToken(token string) (string, bool) {
+	uid, ok := f.ValidPending[token]
+	return uid, ok
+}
+func (f *FakeTOTPManager) ConsumePendingToken(token string) (string, bool) {
+	uid, ok := f.ConsumedPending[token]
+	return uid, ok
+}
+func (f *FakeTOTPManager) GenerateRecoveryCodes() []string {
+	return []string{"ABCD-2345", "EFGH-6789"}
+}
+func (f *FakeTOTPManager) StoreRecoveryCodes(context.Context, string, []string) error { return nil }
+func (f *FakeTOTPManager) ConsumeRecoveryCode(context.Context, string, string) (bool, error) {
+	return f.ConsumedRecovery, nil
+}
+func (f *FakeTOTPManager) ClearRecoveryCodes(context.Context, string) error { return nil }
+func (f *FakeTOTPManager) IsLocked(uid string) bool                         { return f.LockedUIDs[uid] }
+func (f *FakeTOTPManager) RecordFailure(string)                             {}
+func (f *FakeTOTPManager) CleanupExpired()                                  {}

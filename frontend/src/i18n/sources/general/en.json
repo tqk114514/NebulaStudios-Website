@@ -6,7 +6,6 @@
   "page.title.notFound": "Page Not Found - Nebula Studios",
   "page.title.policy": "Policy - Nebula Studios",
   "page.title.oauthAuthorize": "Authorize - Nebula Studios",
-
   "modal.alert": "Alert",
   "modal.close": "Close",
   "modal.confirm": "Confirm",
@@ -15,24 +14,19 @@
   "modal.externalLink.message": "You will be redirected to:",
   "modal.externalLink.disclaimer": "This site is not affiliated with Nebula Studios.",
   "modal.externalLink.continue": "Go",
-
   "notFound.title": "Page Not Found",
   "notFound.message": "The page you are looking for does not exist or has been removed",
   "notFound.backToLogin": "Back to Login",
-
   "footer.copyright": "© {year} Nebula Studios All Rights Reserved",
-
   "policy.agreeByRegister": "By registering, you agree to our",
   "policy.privacyPolicy": "Privacy Policy",
   "policy.termsOfService": "Terms of Service",
   "policy.cookiePolicy": "Cookie Policy",
   "policy.and": "and",
   "policy.versionServer": "Server Version",
-
   "cookieConsent.message": "We use cookies to improve your experience. Rejecting will only affect optional features (like language preference and login state), core features will still work normally.",
   "cookieConsent.accept": "Accept",
   "cookieConsent.reject": "Reject",
-
   "error.loadEmailWhitelistFailed": "Failed to load email whitelist, please refresh the page",
   "error.networkError": "Network error, please try again later",
   "error.sessionExpired": "Session expired, please sign in again",
@@ -95,5 +89,11 @@
   "error.oauthUnauthorized": "Unauthorized",
   "error.oauthResponseTypeUnsupported": "Unsupported response type",
   "error.linkTokenInvalid": "Invalid linking link",
-  "error.linkTokenExpired": "Linking link expired, please start again"
+  "error.linkTokenExpired": "Linking link expired, please start again",
+  "error.totpRequired": "Two-factor verification required",
+  "error.totpInvalid": "Invalid verification code, please try again",
+  "error.totpLocked": "Too many failed attempts, try again in 5 minutes",
+  "error.totpPendingInvalid": "Sign-in session expired, please sign in again",
+  "error.totpAlreadyEnabled": "Two-factor authentication is already enabled",
+  "error.totpNotEnabled": "Two-factor authentication is not enabled or setup is incomplete"
 }

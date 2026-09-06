@@ -27,6 +27,9 @@ func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	go runUserLogCleanup(repos.UserLogRepo)
 	utils.LogInfo("TASKS", "User log cleanup task started: interval=24h, retention=6 months")
 
+	go runTOTPCleanup(svcs.TOTPService)
+	utils.LogInfo("TASKS", "TOTP state cleanup task started", "interval", "1m")
+
 	utils.LogInfo("TASKS", "All background tasks started")
 }
 
@@ -99,6 +102,30 @@ func runUserLogCleanup(userLogRepo models.UserLogStore) {
 			} else if count > 0 {
 				utils.LogInfo("TASKS", "User log cleanup completed", "deleted", count)
 			}
+		}()
+	}
+}
+
+// runTOTPCleanup 每分钟清理过期的 TOTP 登录中转 token 与失败锁定状态
+// （中转 token 有效期 5 分钟，锁定 5 分钟，1 分钟的清理粒度足够）
+func runTOTPCleanup(totpService services.TOTPManager) {
+	if totpService == nil {
+		utils.LogWarn("TASKS", "TOTP service is nil, cleanup task disabled")
+		return
+	}
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					utils.LogError("TASKS", "runTOTPCleanup", fmt.Errorf("panic: %v", r))
+				}
+			}()
+
+			totpService.CleanupExpired()
 		}()
 	}
 }

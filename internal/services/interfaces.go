@@ -37,6 +37,24 @@ type CaptchaVerifier interface {
 	GetSiteKey() string
 }
 
+// TOTPManager TOTP 两步验证服务接口（定义见 totp.go）
+type TOTPManager interface {
+	GenerateSecret() string
+	OTPAuthURI(email, secret string) string
+	VerifyCode(secret, code string) bool
+	VerifyLoginCode(secret, uid, code string) bool
+	CreatePendingToken(uid string) (string, error)
+	ValidatePendingToken(token string) (uid string, ok bool)
+	ConsumePendingToken(token string) (uid string, ok bool)
+	GenerateRecoveryCodes() []string
+	StoreRecoveryCodes(ctx context.Context, uid string, codes []string) error
+	ConsumeRecoveryCode(ctx context.Context, uid, code string) (bool, error)
+	ClearRecoveryCodes(ctx context.Context, uid string) error
+	IsLocked(uid string) bool
+	RecordFailure(uid string)
+	CleanupExpired()
+}
+
 // EmailSender 邮件发送服务接口
 type EmailSender interface {
 	VerifyConnection() error

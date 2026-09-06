@@ -26,6 +26,9 @@ import {
   fetchUserLogs,
   fetchOAuthGrants,
   revokeOAuthGrant,
+  setupTotp as setupTotpApi,
+  enableTotp as enableTotpApi,
+  disableTotp as disableTotpApi,
   type UserLogItem,
   type OAuthGrant,
 } from '@/api/dashboard'
@@ -36,6 +39,7 @@ import { usePolicyConsent } from '@/composables/usePolicyConsent'
 import { holdPageLoader, releasePageLoader } from '@/composables/usePageLoader'
 import { CDN_URL } from '@/config/cdn'
 import { useAuthStore } from '@/stores/auth'
+import { encodeQR } from 'qr'
 
 const route = useRoute()
 const router = useRouter()
@@ -478,6 +482,127 @@ async function submitPassword() {
 function mapPasswordError(e: unknown): string {
   const key = errorKey(e)
   return key === GENERIC_ERROR_KEY ? 'account.dashboard.changePasswordFailed' : key
+}
+
+// ==================== 两步验证（TOTP） ====================
+// setup：展示密钥 + 二维码，等待用户输入验证码确认；recovery：展示一次性恢复码；disable：密码 + 验证码
+const totpOpen = ref(false)
+const totpMode = ref<'setup' | 'recovery' | 'disable'>('setup')
+const totpSecret = ref('')
+const totpQrSvg = ref('')
+const totpCodeInput = ref('')
+const totpDisablePassword = ref('')
+const totpError = ref('')
+const totpSubmitting = ref(false)
+const totpCaptchaKey = ref(0)
+const totpRecoveryCodes = ref<string[]>([])
+
+const totpEnabled = computed(() => user.value?.totp_enabled === true)
+const totpCanSubmitSetup = computed(() => /^\d{6}$/.test(totpCodeInput.value.trim()))
+const totpCanSubmitDisable = computed(
+  () => totpDisablePassword.value.length > 0 && totpCodeInput.value.trim().length > 0,
+)
+
+async function openTotpModal() {
+  totpError.value = ''
+  totpCodeInput.value = ''
+  totpDisablePassword.value = ''
+  totpQrSvg.value = ''
+  totpSecret.value = ''
+  totpCaptchaKey.value++
+
+  if (totpEnabled.value) {
+    totpMode.value = 'disable'
+    totpOpen.value = true
+    return
+  }
+
+  totpMode.value = 'setup'
+  totpOpen.value = true
+  totpSubmitting.value = true
+  try {
+    const res = await setupTotpApi()
+    totpSecret.value = res.secret
+    totpQrSvg.value = encodeQR(res.otpauth_uri, 'svg')
+  } catch (e) {
+    totpError.value = mapTotpError(e)
+    totpMode.value = 'disable' // setup 失败时无内容可展示，退回占位（错误提示主导）
+  } finally {
+    totpSubmitting.value = false
+  }
+}
+
+async function submitTotpEnable() {
+  if (isCaptchaEnabled() && !getCaptchaToken()) {
+    totpError.value = 'error.humanVerifyFailed'
+    return
+  }
+  totpSubmitting.value = true
+  totpError.value = ''
+  try {
+    const res = await enableTotpApi({ code: totpCodeInput.value.trim(), captchaToken: getCaptchaToken() })
+    totpRecoveryCodes.value = res.recovery_codes
+    totpMode.value = 'recovery'
+    await refreshUser()
+    resetCaptchaToken()
+    totpCaptchaKey.value++
+  } catch (e) {
+    totpError.value = mapTotpError(e)
+    resetCaptchaToken()
+    totpCaptchaKey.value++
+  } finally {
+    totpSubmitting.value = false
+  }
+}
+
+async function submitTotpDisable() {
+  if (isCaptchaEnabled() && !getCaptchaToken()) {
+    totpError.value = 'error.humanVerifyFailed'
+    return
+  }
+  totpSubmitting.value = true
+  totpError.value = ''
+  try {
+    await disableTotpApi({
+      password: totpDisablePassword.value,
+      code: totpCodeInput.value.trim(),
+      captchaToken: getCaptchaToken(),
+    })
+    totpOpen.value = false
+    await refreshUser()
+    setAlert('account.totp.disableSuccess')
+    // 关闭两步验证时后端会撤销全部会话（与修改密码一致），引导重新登录
+    setTimeout(() => {
+      try {
+        void logoutApi()
+      } catch {
+        // 忽略
+      }
+      router.replace('/account/login')
+    }, 1500)
+  } catch (e) {
+    totpError.value = mapTotpError(e)
+    resetCaptchaToken()
+    totpCaptchaKey.value++
+  } finally {
+    totpSubmitting.value = false
+  }
+}
+
+function copyText(text: string) {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => setAlert('account.totp.copySuccess'))
+    .catch(() => setAlert('error.operationFailed'))
+}
+
+function copyRecoveryCodes() {
+  copyText(totpRecoveryCodes.value.join('\n'))
+}
+
+function mapTotpError(e: unknown): string {
+  const key = errorKey(e)
+  return key === GENERIC_ERROR_KEY ? 'account.totp.failed' : key
 }
 
 // ==================== 修改用户名 ====================
@@ -976,6 +1101,16 @@ onMounted(async () => {
             </div>
             <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
           </button>
+          <button type="button" class="dash-item clickable" :disabled="banned" @click="openTotpModal">
+            <div class="dash-item-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+            </div>
+            <div class="dash-item-content">
+              <span class="dash-item-label">{{ $t('account.totp.itemLabel') }}</span>
+              <span class="dash-item-hint">{{ $t(totpEnabled ? 'account.totp.itemHintOn' : 'account.totp.itemHintOff') }}</span>
+            </div>
+            <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
+          </button>
           <button type="button" class="dash-item clickable" :disabled="banned" @click="openLogsModal">
             <div class="dash-item-icon">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
@@ -1129,6 +1264,71 @@ onMounted(async () => {
       <AppButton :arrow="false" :disabled="!passCanSubmit || passwordSubmitting" @click="submitPassword">
         {{ passwordSubmitting ? $t('account.register.registering') : $t('modal.confirm') }}
       </AppButton>
+    </template>
+  </AppModal>
+
+  <!-- 两步验证弹窗：setup（扫码）/ recovery（恢复码）/ disable（密码+验证码） -->
+  <AppModal v-model:open="totpOpen" :title="$t('account.totp.itemLabel')" :width="'420px'">
+    <!-- 阶段一：展示密钥与二维码，等待验证码确认 -->
+    <template v-if="totpMode === 'setup'">
+      <p class="dash-modal-message">{{ $t('account.totp.setupIntro') }}</p>
+      <div v-if="totpQrSvg" class="totp-qr-wrap">
+        <div class="totp-qr" v-html="totpQrSvg"></div>
+      </div>
+      <div v-if="totpSecret" class="totp-secret-row">
+        <code class="totp-secret">{{ totpSecret }}</code>
+        <button type="button" class="totp-copy" @click="copyText(totpSecret)">{{ $t('account.totp.copy') }}</button>
+      </div>
+      <p class="totp-hint">{{ $t('account.totp.setupManualHint') }}</p>
+      <FormField :label="$t('account.totp.loginCodeLabel')">
+        <input v-model="totpCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code"
+          maxlength="6" :placeholder="$t('account.totp.loginCodePlaceholder')" />
+      </FormField>
+      <CaptchaWidget :key="totpCaptchaKey" />
+      <p v-if="totpError" class="dash-form-error">{{ $t(totpError) }}</p>
+    </template>
+
+    <!-- 阶段二：一次性恢复码 -->
+    <template v-else-if="totpMode === 'recovery'">
+      <p class="dash-modal-message">{{ $t('account.totp.recoveryIntro') }}</p>
+      <div class="totp-recovery-grid">
+        <code v-for="c in totpRecoveryCodes" :key="c" class="totp-secret">{{ c }}</code>
+      </div>
+      <p class="totp-hint">{{ $t('account.totp.recoveryWarn') }}</p>
+    </template>
+
+    <!-- 阶段三：关闭两步验证 -->
+    <template v-else>
+      <p class="dash-modal-message">{{ $t('account.totp.disableIntro') }}</p>
+      <FormField :label="$t('account.dashboard.currentPasswordPlaceholder')">
+        <input v-model="totpDisablePassword" type="password" autocomplete="current-password"
+          :placeholder="$t('account.dashboard.currentPasswordPlaceholder')" />
+      </FormField>
+      <FormField :label="$t('account.totp.loginCodeLabel')">
+        <input v-model="totpCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code"
+          maxlength="8" :placeholder="$t('account.totp.loginCodePlaceholder')" />
+      </FormField>
+      <CaptchaWidget :key="totpCaptchaKey" />
+      <p v-if="totpError" class="dash-form-error">{{ $t(totpError) }}</p>
+    </template>
+
+    <template #footer>
+      <template v-if="totpMode === 'setup'">
+        <AppButton variant="secondary" :arrow="false" @click="totpOpen = false">{{ $t('modal.cancel') }}</AppButton>
+        <AppButton :arrow="false" :disabled="!totpCanSubmitSetup || totpSubmitting" @click="submitTotpEnable">
+          {{ $t('account.totp.enable') }}
+        </AppButton>
+      </template>
+      <template v-else-if="totpMode === 'recovery'">
+        <AppButton variant="secondary" :arrow="false" @click="copyRecoveryCodes">{{ $t('account.totp.copyAll') }}</AppButton>
+        <AppButton :arrow="false" @click="totpOpen = false">{{ $t('modal.close') }}</AppButton>
+      </template>
+      <template v-else>
+        <AppButton variant="secondary" :arrow="false" @click="totpOpen = false">{{ $t('modal.cancel') }}</AppButton>
+        <AppButton :arrow="false" :disabled="!totpCanSubmitDisable || totpSubmitting" @click="submitTotpDisable">
+          {{ $t('account.totp.disable') }}
+        </AppButton>
+      </template>
     </template>
   </AppModal>
 

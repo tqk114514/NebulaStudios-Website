@@ -102,3 +102,37 @@ export function fetchOAuthGrants() {
 export function revokeOAuthGrant(clientId: string) {
   return del<{ message: string }>(`/api/user/oauth/grants/${encodeURIComponent(clientId)}`)
 }
+export interface SetupTotpResult {
+  secret: string
+  otpauth_uri: string
+}
+
+export interface EnableTotpRequest {
+  code: string
+  captchaToken?: string
+}
+
+export interface EnableTotpResult {
+  recovery_codes: string[]
+}
+
+export interface DisableTotpRequest {
+  password: string
+  code: string
+  captchaToken?: string
+}
+
+/** 生成 TOTP 密钥并获取 otpauth:// URI（此时尚未启用，等待验证码确认） */
+export function setupTotp() {
+  return post<SetupTotpResult>('/api/user/totp/setup')
+}
+
+/** 校验验证码并启用两步验证，返回一次性明文恢复码 */
+export function enableTotp(body: EnableTotpRequest) {
+  return post<EnableTotpResult>('/api/user/totp/enable', body)
+}
+
+/** 凭当前密码 + 验证码（TOTP 码或恢复码）关闭两步验证 */
+export function disableTotp(body: DisableTotpRequest) {
+  return post<{ message: string }>('/api/user/totp/disable', body)
+}

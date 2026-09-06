@@ -23,6 +23,8 @@ export interface Me {
   ban_reason?: string | null
   banned_at?: string | null
   unban_at?: string | null
+  // 两步验证
+  totp_enabled?: boolean
 }
 
 export interface LoginRequest {
@@ -35,8 +37,23 @@ export function fetchMe() {
   return get<Me>('/api/auth/me')
 }
 
+export interface LoginTotpRequired {
+  totp_required: true
+  pending_token: string
+}
+
+export interface LoginTotpRequest {
+  pendingToken: string
+  code: string
+}
+
 export function login(body: LoginRequest) {
-  return post<{ message: string }>('/api/auth/login', body)
+  return post<LoginTotpRequired | { message: string }>('/api/auth/login', body)
+}
+
+/** 登录二步验证：中转 token + TOTP 码（或恢复码） */
+export function loginTotp(body: LoginTotpRequest) {
+  return post<{ message: string }>('/api/auth/login/totp', body)
 }
 
 export function logout() {
