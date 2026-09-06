@@ -18,9 +18,11 @@ export const useAuthStore = defineStore('auth', {
     isSuperAdmin: (s) => (s.user?.role ?? 0) >= 2,
   },
   actions: {
-    /** 探测登录态：成功则缓存用户，失败（未认证）则清空。只调用一次。 */
-    async bootstrap(): Promise<boolean> {
-      if (this.bootstrapped) return this.isAuthenticated
+    /** 探测登录态：成功则缓存用户，失败（未认证）则清空。只调用一次。
+     *  登录/登出等会话状态发生变化后，需以 force: true 强制重新探测
+     *  （此前缓存的"未登录"结论已失效）。 */
+    async bootstrap(opts?: { force?: boolean }): Promise<boolean> {
+      if (this.bootstrapped && !opts?.force) return this.isAuthenticated
       this.bootstrapped = true
       try {
         this.user = await fetchMe()

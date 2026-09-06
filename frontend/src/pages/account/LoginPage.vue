@@ -73,7 +73,9 @@ function reactToError(e: unknown) {
 
 /** 登录成功后的公共收尾：刷新会话态 → 政策同意 → 跳转 */
 async function finishLogin() {
-  await auth.bootstrap()
+  // 强制重新探测：同一次页面会话内可能已有过"未登录"的探测缓存
+  // （如登出、会话过期被守卫踢回），登录成功后该结论已失效
+  await auth.bootstrap({ force: true })
   // 政策同意：拒绝则已登出并跳转
   const consented = await checkConsent()
   if (!consented) return
