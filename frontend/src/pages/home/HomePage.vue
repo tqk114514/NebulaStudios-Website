@@ -1439,4 +1439,28 @@ body.has-custom-cursor .home-root * {
     justify-content: center;
   }
 }
+
+/* ---- 手机宽度精修（≤480px）：侧边距收窄、区块留白压缩 ---- */
+@media (max-width: 480px) {
+  .hero-left {
+    padding: 96px 20px 48px;
+  }
+  .features,
+  .manifesto,
+  .cta-section {
+    padding: 64px 20px;
+  }
+  .feature-card {
+    padding: 32px 20px;
+  }
+  .home-footer {
+    padding: 24px 20px;
+  }
+}
+
+/* CTA 按钮组：长文案语言（德语等）下允许折行，不挤压溢出 */
+.hero-cta,
+.cta-actions {
+  flex-wrap: wrap;
+}
 </style>

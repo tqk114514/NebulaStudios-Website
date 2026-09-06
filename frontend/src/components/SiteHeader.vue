@@ -108,6 +108,12 @@ function setLang(code: string) {
   color: var(--fg);
 }
 
+@media (max-width: 640px) {
+  .site-header {
+    padding: 0 20px;
+  }
+}
+
 /* N 字标：28px 匹配 60px 高的头部 */
 .brand-mark {
   width: 28px;
