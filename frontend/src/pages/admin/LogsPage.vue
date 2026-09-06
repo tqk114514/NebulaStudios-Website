@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 操作日志（仅超级管理员可见，路由 + 后端双重控制）。
 // details 为统一信封结构：{ summary: {...}, changes?: { field: {old, new} } }。
-// 变更类动作逐字段渲染 old -> new；旧格式历史日志（无 summary 键）走 legacy 兜底渲染。
+// 变更类动作逐字段渲染 old -> new。
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Pagination from './Pagination.vue'
@@ -33,67 +33,24 @@ function summaryText(log: AdminLogEntry): string {
   const d = log.details as Record<string, any> | undefined
   if (!d || typeof d !== 'object') return '-'
 
-  // 新信封结构
-  if ('summary' in d && d.summary && typeof d.summary === 'object') {
-    const s = d.summary as Record<string, any>
-    const name = s.target_username ?? s.name ?? s.domain ?? ''
-    if (log.action === 'delete_user') {
-      return `${name}（${s.target_email ?? '-'}）`
-    }
-    if (log.action === 'ban_user') {
-      const duration = s.unban_at ? formatDate(String(s.unban_at)) : t('admin.users.detail.permanentBan')
-      return `${name} · ${t('admin.logs.details.banInfo', { reason: String(s.reason ?? ''), duration })}`
-    }
-    if (log.action === 'data_export' || log.action === 'data_import') {
-      const users = Number(s.users_count ?? s.users_imported ?? 0)
-      const logsCount = Number(s.logs_count ?? s.logs_imported ?? 0)
-      return t('admin.logs.details.dataStats', { users, logs: logsCount })
-    }
-    if (s.client_id) return `${name}（${s.client_id}）`
-    return String(name || '-')
-  }
+  const s = d.summary
+  if (!s || typeof s !== 'object') return '-'
 
-  // 旧格式兜底（历史日志）
-  return legacyDetailsText(log, d)
-}
-
-function legacyDetailsText(log: AdminLogEntry, d: Record<string, any>): string {
-  if (log.action === 'set_role') {
-    return t('admin.logs.details.roleChange', {
-      name: String(d.target_username ?? ''),
-      old: roleText(Number(d.old_role)),
-      new: roleText(Number(d.new_role)),
-    })
-  }
+  const name = s.target_username ?? s.name ?? s.domain ?? ''
   if (log.action === 'delete_user') {
-    return t('admin.logs.details.deletedUser', {
-      name: String(d.target_username ?? ''),
-      email: String(d.target_email ?? ''),
-    })
+    return `${name}（${s.target_email ?? '-'}）`
   }
   if (log.action === 'ban_user') {
-    return t('admin.logs.details.banReason', {
-      name: String(d.target_username ?? ''),
-      reason: String(d.reason ?? ''),
-    })
-  }
-  if (log.action === 'unban_user' || log.action === 'reset_user_totp') {
-    return String(d.target_username ?? '')
-  }
-  if (log.action.startsWith('oauth_client_')) {
-    const name = String(d.client_name ?? '')
-    const id = String(d.client_id ?? '')
-    return id ? `${name} (${id})` : name
-  }
-  if (log.action.startsWith('email_whitelist_')) {
-    return String(d.domain ?? '')
+    const duration = s.unban_at ? formatDate(String(s.unban_at)) : t('admin.users.detail.permanentBan')
+    return `${name} · ${t('admin.logs.details.banInfo', { reason: String(s.reason ?? ''), duration })}`
   }
   if (log.action === 'data_export' || log.action === 'data_import') {
-    const users = Number(d.users_count ?? d.usersCount ?? d.users_imported ?? d.usersImported ?? 0)
-    const logsCount = Number(d.logs_count ?? d.logsCount ?? d.logs_imported ?? d.logsImported ?? 0)
+    const users = Number(s.users_count ?? s.users_imported ?? 0)
+    const logsCount = Number(s.logs_count ?? s.logs_imported ?? 0)
     return t('admin.logs.details.dataStats', { users, logs: logsCount })
   }
-  return JSON.stringify(d)
+  if (s.client_id) return `${name}（${s.client_id}）`
+  return String(name || '-')
 }
 
 // ---- changes：字段级变更 old -> new ----
