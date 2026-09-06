@@ -117,6 +117,7 @@ const userColumnsPublic = `id, uid, username, email, avatar_url, role,
        microsoft_id, microsoft_name, microsoft_avatar_url, microsoft_avatar_hash,
        google_id, google_name, google_avatar_url,
        is_banned, ban_reason, banned_at, banned_by, unban_at,
+       totp_enabled,
        created_at, updated_at`
 
 // UserRepository 用户仓库
@@ -125,7 +126,19 @@ type UserRepository struct {
 	defaultAvatarURL string
 }
 
-// ToPublic 转换为公开信息
+// resolveAvatarURL 将头像哨兵值（"microsoft"/"google"）解析为具体的第三方头像 URL
+func (u *User) resolveAvatarURL() string {
+	switch u.AvatarURL {
+	case "microsoft":
+		return u.MicrosoftAvatarURL.String
+	case "google":
+		return u.GoogleAvatarURL.String
+	default:
+		return u.AvatarURL
+	}
+}
+
+// ToPublic 转换为公开信息（avatar_url 已解析为具体 URL，前端无需再做哨兵映射）
 func (u *User) ToPublic() *UserPublic {
 	if u == nil {
 		return nil
@@ -136,7 +149,7 @@ func (u *User) ToPublic() *UserPublic {
 		UID:                 u.UID,
 		Username:            u.Username,
 		Email:               u.Email,
-		AvatarURL:           u.AvatarURL,
+		AvatarURL:           u.resolveAvatarURL(),
 		Role:                u.Role,
 		IsBanned:            u.IsBanned,
 		TOTPEnabled:         u.TOTPEnabled,
@@ -162,6 +175,58 @@ func (u *User) ToPublic() *UserPublic {
 	if u.GoogleAvatarURL.Valid {
 		pub.GoogleAvatarURL = &u.GoogleAvatarURL.String
 	}
+	if u.BanReason.Valid {
+		pub.BanReason = &u.BanReason.String
+	}
+	if u.BannedAt.Valid {
+		pub.BannedAt = &u.BannedAt.Time
+	}
+	if u.UnbanAt.Valid {
+		pub.UnbanAt = &u.UnbanAt.Time
+	}
+
+	return pub
+}
+
+// AdminUserPublic 管理后台的用户信息：只暴露管理所需字段。
+// 第三方绑定只传是否绑定的布尔值，不暴露第三方 ID/昵称/头像与同步开关。
+type AdminUserPublic struct {
+	ID             int64      `json:"id"`
+	UID            string     `json:"uid"`
+	Username       string     `json:"username"`
+	Email          string     `json:"email"`
+	AvatarURL      string     `json:"avatar_url"`
+	Role           int        `json:"role"`
+	MicrosoftBound bool       `json:"microsoft_bound"`
+	GoogleBound    bool       `json:"google_bound"`
+	IsBanned       bool       `json:"is_banned"`
+	BanReason      *string    `json:"ban_reason,omitempty"`
+	BannedAt       *time.Time `json:"banned_at,omitempty"`
+	UnbanAt        *time.Time `json:"unban_at,omitempty"`
+	TOTPEnabled    bool       `json:"totp_enabled"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// ToAdminPublic 转换为管理后台信息（avatar_url 已解析为具体 URL）
+func (u *User) ToAdminPublic() *AdminUserPublic {
+	if u == nil {
+		return nil
+	}
+
+	pub := &AdminUserPublic{
+		ID:             u.ID,
+		UID:            u.UID,
+		Username:       u.Username,
+		Email:          u.Email,
+		AvatarURL:      u.resolveAvatarURL(),
+		Role:           u.Role,
+		MicrosoftBound: u.MicrosoftID.Valid,
+		GoogleBound:    u.GoogleID.Valid,
+		IsBanned:       u.IsBanned,
+		TOTPEnabled:    u.TOTPEnabled,
+		CreatedAt:      u.CreatedAt,
+	}
+
 	if u.BanReason.Valid {
 		pub.BanReason = &u.BanReason.String
 	}
@@ -698,6 +763,7 @@ func (r *UserRepository) FindAll(ctx context.Context, page, pageSize int, search
 			&user.MicrosoftID, &user.MicrosoftName, &user.MicrosoftAvatarURL, &user.MicrosoftAvatarHash,
 			&user.GoogleID, &user.GoogleName, &user.GoogleAvatarURL,
 			&user.IsBanned, &user.BanReason, &user.BannedAt, &user.BannedBy, &user.UnbanAt,
+			&user.TOTPEnabled,
 			&user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {

@@ -345,6 +345,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 		repos.UserRepo, svcs.UserCache, repos.AdminLogRepo,
 		repos.UserLogRepo, svcs.OAuthService, repos.EmailWhitelistRepo,
 		svcs.ExportService, cfg.DataExportSalt, repos.DataExportRepo,
+		svcs.TOTPService, svcs.SessionService,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("AdminHandler: %w", err)

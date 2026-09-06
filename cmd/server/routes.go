@@ -270,6 +270,7 @@ func setupAdminAPI(r gin.IRouter, engine *gin.Engine, hdlrs *Handlers, repos *Re
 		superAdminAPI.Use(adminmw.SuperAdminMiddleware(repos.UserRepo))
 		{
 			superAdminAPI.PUT("/users/:uid/role", hdlrs.adminHandler.SetUserRole)
+			superAdminAPI.DELETE("/users/:uid/totp", hdlrs.adminHandler.ResetUserTOTP)
 			superAdminAPI.DELETE("/users/:uid", hdlrs.adminHandler.DeleteUser)
 			superAdminAPI.GET("/logs", hdlrs.adminHandler.GetLogs)
 

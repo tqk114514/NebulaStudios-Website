@@ -447,6 +447,9 @@ func (f *FakeAdminLogStore) LogBanUser(context.Context, string, string, string, 
 	return nil
 }
 func (f *FakeAdminLogStore) LogUnbanUser(context.Context, string, string, string) error { return nil }
+func (f *FakeAdminLogStore) LogResetUserTOTP(context.Context, string, string, string) error {
+	return nil
+}
 func (f *FakeAdminLogStore) LogOAuthClientCreate(context.Context, string, int64, string, string) error {
 	return nil
 }

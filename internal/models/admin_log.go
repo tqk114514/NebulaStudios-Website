@@ -21,6 +21,7 @@ const (
 	ActionDeleteUser                  = "delete_user"
 	ActionBanUser                     = "ban_user"
 	ActionUnbanUser                   = "unban_user"
+	ActionResetUserTOTP               = "reset_user_totp"
 	ActionOAuthClientCreate           = "oauth_client_create"
 	ActionOAuthClientUpdate           = "oauth_client_update"
 	ActionOAuthClientDelete           = "oauth_client_delete"
@@ -219,6 +220,29 @@ func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID
 		Details:   detailsJSON,
 	}
 
+	return r.Create(ctx, log)
+}
+
+// ResetTOTPDetails 重置用户两步验证详情
+type ResetTOTPDetails struct {
+	TargetUsername string `json:"target_username"`
+}
+
+// LogResetUserTOTP 记录重置用户两步验证操作
+func (r *AdminLogRepository) LogResetUserTOTP(ctx context.Context, adminUID, targetUID, targetUsername string) error {
+	details := ResetTOTPDetails{TargetUsername: targetUsername}
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("marshal details failed: %w", err)
+	}
+
+	target := targetUID
+	log := &AdminLog{
+		AdminUID:  adminUID,
+		Action:    ActionResetUserTOTP,
+		TargetUID: &target,
+		Details:   detailsJSON,
+	}
 	return r.Create(ctx, log)
 }
 

@@ -12,7 +12,6 @@
   "stats.adminCount": "管理员数",
   "stats.bannedCount": "封禁用户",
   "stats.loadFailed": "统计数据加载失败",
-
   "common.close": "关闭",
   "common.cancel": "取消",
   "common.view": "查看",
@@ -23,7 +22,6 @@
   "common.forbidden": "无权限查看",
   "common.operateFailed": "操作失败",
   "common.confirm": "确认",
-
   "users.searchPlaceholder": "搜索用户名或邮箱",
   "users.col.uid": "UID",
   "users.col.username": "用户名",
@@ -80,7 +78,6 @@
   "users.toast.deleted": "用户已删除",
   "users.toast.banFailed": "封禁失败",
   "users.toast.deleteFailed": "删除失败",
-
   "logs.col.admin": "操作者",
   "logs.col.action": "操作",
   "logs.col.details": "详情",
@@ -104,7 +101,6 @@
   "logs.details.deletedUser": "{name} ({email})",
   "logs.details.banReason": "{name}: {reason}",
   "logs.details.dataStats": "用户 {users} 条, 日志 {logs} 条",
-
   "oauth.searchPlaceholder": "搜索应用名称",
   "oauth.create": "创建应用",
   "oauth.col.name": "应用名称",
@@ -157,7 +153,6 @@
   "oauth.toast.regenerated": "密钥已重新生成",
   "oauth.toast.updateFailed": "更新失败",
   "oauth.toast.deleteFailed": "删除失败",
-
   "whitelist.create": "添加白名单",
   "whitelist.col.domain": "域名",
   "whitelist.col.logo": "徽标",
@@ -200,7 +195,6 @@
   "whitelist.toast.createFailed": "创建失败",
   "whitelist.toast.updateFailed": "更新失败",
   "whitelist.toast.deleteFailed": "删除失败",
-
   "data.export.title": "导出数据",
   "data.export.desc": "导出 users 表和 user_logs 表为加密备份文件",
   "data.export.button": "导出数据",
@@ -239,5 +233,17 @@
   "data.import.anomaly.logsFailed": "{count} 条日志导入失败",
   "data.import.anomaly.passwordSkipped": "{count} 个用户因密码哈希不合法被跳过（疑似篡改）",
   "data.import.anomaly.roleDowngraded": "{count} 个用户因 role 非法被降级为普通用户（疑似篡改）",
-  "data.import.networkError": "网络错误"
+  "data.import.networkError": "网络错误",
+  "users.col.totp": "两步验证",
+  "users.totp.on": "已开启",
+  "users.totp.off": "未开启",
+  "users.detail.totp": "两步验证",
+  "users.action.resetTotp": "重置两步验证",
+  "users.confirm.resetTotpTitle": "重置两步验证",
+  "users.confirm.resetTotpText": "确认为用户 {name} 重置两步验证？其密钥与恢复码将被清空，全部会话将被注销，需要重新登录并重新绑定验证器。",
+  "users.toast.resetTotp": "两步验证已重置",
+  "users.toast.resetTotpFailed": "重置两步验证失败",
+  "users.detail.google": "Google 账号",
+  "users.detail.microsoft": "微软账号",
+  "users.detail.bound": "已绑定"
 }

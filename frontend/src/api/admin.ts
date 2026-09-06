@@ -22,11 +22,13 @@ export interface AdminUser {
   email: string
   avatar_url: string
   role: number
-  microsoft_name?: string
+  microsoft_bound?: boolean
+  google_bound?: boolean
   is_banned?: boolean
   ban_reason?: string
   banned_at?: string
   unban_at?: string
+  totp_enabled?: boolean
   created_at?: string
 }
 
@@ -154,6 +156,11 @@ export function banAdminUser(uid: string, reason: string, days: number) {
 
 export function unbanAdminUser(uid: string) {
   return patch(`/admin/api/users/${encodeURIComponent(uid)}/unban`)
+}
+
+/** 重置用户两步验证（超管）：清空密钥与恢复码并撤销其全部会话 */
+export function resetAdminUserTOTP(uid: string) {
+  return del<{ message: string }>(`/admin/api/users/${encodeURIComponent(uid)}/totp`)
 }
 
 // ---- 操作日志 ----

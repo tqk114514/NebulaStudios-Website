@@ -34,11 +34,13 @@ type AdminHandler struct {
 	exportService      services.ExportManager
 	dataExportSalt     string
 	dataExportRepo     models.DataExportImportStore
+	totpService        services.TOTPManager
+	sessionService     services.SessionManager
 }
 
 // NewAdminHandler 创建管理后台 Handler，验证必需依赖（userRepo、userCache、logRepo）后初始化。
 // oauthService 和 emailWhitelistRepo 为可选参数。
-func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthAdminManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, dataExportRepo models.DataExportImportStore) (*AdminHandler, error) {
+func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStore, logRepo models.AdminLogStore, userLogRepo models.UserLogStore, oauthService services.OAuthAdminManager, emailWhitelistRepo models.EmailWhitelistStore, exportService services.ExportManager, dataExportSalt string, dataExportRepo models.DataExportImportStore, totpService services.TOTPManager, sessionService services.SessionManager) (*AdminHandler, error) {
 	if userRepo == nil {
 		return nil, ErrAdminNilUserRepo
 	}
@@ -61,5 +63,7 @@ func NewAdminHandler(userRepo models.UserStore, userCache services.UserCacheStor
 		exportService:      exportService,
 		dataExportSalt:     dataExportSalt,
 		dataExportRepo:     dataExportRepo,
+		totpService:        totpService,
+		sessionService:     sessionService,
 	}, nil
 }

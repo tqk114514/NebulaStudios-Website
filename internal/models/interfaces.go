@@ -99,7 +99,8 @@ type AdminLogStore interface {
 	LogSetRole(ctx context.Context, adminUID, targetUID string, targetUsername string, oldRole, newRole int) error
 	LogDeleteUser(ctx context.Context, adminUID, targetUID string, targetUsername, targetEmail string) error
 	LogBanUser(ctx context.Context, adminUID, targetUID string, targetUsername, reason string, unbanAt *time.Time) error
-	LogUnbanUser(ctx context.Context, adminUID, targetUID string, targetUsername string) error
+	LogUnbanUser(ctx context.Context, adminUID, targetUID, targetUsername string) error
+	LogResetUserTOTP(ctx context.Context, adminUID, targetUID, targetUsername string) error
 	LogOAuthClientCreate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
 	LogOAuthClientUpdate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
 	LogOAuthClientDelete(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error

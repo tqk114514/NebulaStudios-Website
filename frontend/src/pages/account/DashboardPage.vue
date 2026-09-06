@@ -53,13 +53,8 @@ const gt = (key: string, params?: Record<string, unknown>): string =>
 // ==================== 用户信息 ====================
 const user = ref<Me | null>(null)
 
-const avatarDisplayUrl = computed(() => {
-  const u = user.value
-  if (!u) return ''
-  if (u.avatar_url === 'microsoft') return u.microsoft_avatar_url ?? ''
-  if (u.avatar_url === 'google') return u.google_avatar_url ?? ''
-  return u.avatar_url || ''
-})
+// 后端已将头像哨兵值（microsoft/google）解析为具体 URL，前端直接展示
+const avatarDisplayUrl = computed(() => user.value?.avatar_url || '')
 
 function isBanned(u: Me | null): boolean {
   if (!u?.is_banned) return false

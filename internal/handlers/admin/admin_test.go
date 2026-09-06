@@ -18,6 +18,8 @@ import (
 type adminTestDeps struct {
 	userRepo *testutil.FakeUserRepo
 	oauth    *testutil.FakeOAuthAdmin
+	totp     *testutil.FakeTOTPManager
+	session  *testutil.FakeSessionManager
 }
 
 func newTestAdminHandler(t *testing.T) (*AdminHandler, *adminTestDeps) {
@@ -27,6 +29,8 @@ func newTestAdminHandler(t *testing.T) (*AdminHandler, *adminTestDeps) {
 	deps := &adminTestDeps{
 		userRepo: testutil.NewFakeUserRepo(),
 		oauth:    &testutil.FakeOAuthAdmin{},
+		totp:     &testutil.FakeTOTPManager{},
+		session:  &testutil.FakeSessionManager{},
 	}
 
 	h, err := NewAdminHandler(
@@ -39,6 +43,8 @@ func newTestAdminHandler(t *testing.T) (*AdminHandler, *adminTestDeps) {
 		&testutil.FakeExportManager{},
 		"test-salt",
 		&testutil.FakeDataExportRepo{},
+		deps.totp,
+		deps.session,
 	)
 	if err != nil {
 		t.Fatalf("NewAdminHandler() error = %v", err)

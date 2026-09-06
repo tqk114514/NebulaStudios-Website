@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 // userListResponse 用户列表响应
 type userListResponse struct {
-	Users      []*models.UserPublic `json:"users"`
+	Users      []*models.AdminUserPublic `json:"users"`
 	Total      int64                `json:"total"`
 	Page       int                  `json:"page"`
 	PageSize   int                  `json:"pageSize"`
@@ -59,9 +60,9 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 		return
 	}
 
-	publicUsers := make([]*models.UserPublic, len(users))
+	publicUsers := make([]*models.AdminUserPublic, len(users))
 	for i, u := range users {
-		publicUsers[i] = u.ToPublic()
+		publicUsers[i] = u.ToAdminPublic()
 	}
 
 	totalPages := int(total) / pageSize
@@ -102,7 +103,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	utils.RespondSuccessWithData(c, user.ToPublic())
+	utils.RespondSuccessWithData(c, user.ToAdminPublic())
 }
 
 // SetUserRole 设置用户角色
@@ -380,4 +381,67 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	utils.LogInfoCtx(c.Request.Context(), "ADMIN", "User unbanned", "operator_uid", operatorUID, "target_uid", targetUserUID)
 
 	utils.RespondSuccess(c, gin.H{"message": "User unbanned"})
+}
+
+// ResetUserTOTP 重置用户两步验证（清空密钥与恢复码并撤销全部会话）
+// DELETE /admin/api/users/:uid/totp
+//
+// 权限：超级管理员。用于用户丢失验证器且恢复码耗尽的支持场景；
+// 未启用 TOTP 时幂等返回成功（与封禁接口对"已封禁"的处理一致）。
+func (h *AdminHandler) ResetUserTOTP(c *gin.Context) {
+	operatorUID, _ := middleware.GetUID(c)
+
+	targetUserUID := c.Param("uid")
+	if targetUserUID == "" {
+		utils.RespondError(c, http.StatusBadRequest, utils.ErrCodeInvalidUserUID)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
+	defer cancel()
+
+	targetUser, err := h.userRepo.FindByUID(ctx, targetUserUID)
+	if err != nil {
+		if utils.IsDatabaseNotFound(err) {
+			utils.RespondError(c, http.StatusNotFound, utils.ErrCodeUserNotFound)
+			return
+		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeQueryFailed, err.Error())
+		return
+	}
+
+	if !targetUser.TOTPEnabled {
+		utils.RespondSuccess(c, gin.H{"message": "No change: TOTP not enabled"})
+		return
+	}
+
+	if err := h.userRepo.SetTOTPEnabled(ctx, targetUserUID, false); err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUpdateFailed,
+			fmt.Sprintf("Failed to disable TOTP in ResetUserTOTP: userUID=%s, %v", targetUserUID, err))
+		return
+	}
+	if err := h.userRepo.SetTOTPSecret(ctx, targetUserUID, ""); err != nil {
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeUpdateFailed,
+			fmt.Sprintf("Failed to clear TOTP secret in ResetUserTOTP: userUID=%s, %v", targetUserUID, err))
+		return
+	}
+	if h.totpService != nil {
+		if err := h.totpService.ClearRecoveryCodes(ctx, targetUserUID); err != nil {
+			utils.LogWarnCtx(ctx, "ADMIN", "Failed to clear recovery codes in ResetUserTOTP", "user_uid", targetUserUID)
+		}
+	}
+	// 重置后撤销全部会话：原验证器可能仍留在攻击者手中，强制重新登录
+	if h.sessionService != nil {
+		if err := h.sessionService.RevokeUserTokens(ctx, targetUserUID); err != nil {
+			utils.LogWarnCtx(ctx, "ADMIN", "Failed to revoke sessions in ResetUserTOTP", "user_uid", targetUserUID)
+		}
+	}
+	h.userCache.Invalidate(targetUserUID)
+
+	if err := h.logRepo.LogResetUserTOTP(ctx, operatorUID, targetUserUID, targetUser.Username); err != nil {
+		utils.LogWarnCtx(ctx, "ADMIN", "Failed to log TOTP reset", "user_uid", targetUserUID)
+	}
+
+	utils.LogInfoCtx(ctx, "ADMIN", "User TOTP reset", "operator_uid", operatorUID, "user_uid", targetUserUID)
+	utils.RespondSuccess(c, gin.H{"message": "TOTP reset"})
 }

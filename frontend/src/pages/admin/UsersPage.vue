@@ -17,6 +17,7 @@ import {
   deleteAdminUser,
   banAdminUser,
   unbanAdminUser,
+  resetAdminUserTOTP,
   type AdminUser,
 } from '@/api/admin'
 import { ApiClientError } from '@/api/client'
@@ -59,15 +60,30 @@ let confirmAction: (() => Promise<void>) | null = null
 const BAN_REASONS = ['violation', 'abuse', 'malicious', 'spam'] as const
 const BAN_DURATIONS = ['1', '3', '7', '30', '90', '365', '0'] as const
 
-/** 详情弹窗加载态：左侧固定标签，值区显示加载动画（封禁相关行等数据到达后再渲染） */
-const DETAIL_KEYS = [
-  'admin.users.col.uid',
-  'admin.users.col.username',
-  'admin.users.col.email',
-  'admin.users.col.role',
-  'admin.users.detail.microsoftAccount',
-  'admin.users.col.createdAt',
-] as const
+// 详情行序列：uid/username/email/role/totp/微软/Google/注册时间，封禁时追加 4 行。
+// 打开弹窗时列表行数据已可知封禁状态，骨架行据此生成，与详情加载完成后的实际行完全对齐
+const DETAIL_ROW_I18N: Record<string, string> = {
+  uid: 'admin.users.col.uid',
+  username: 'admin.users.col.username',
+  email: 'admin.users.col.email',
+  role: 'admin.users.col.role',
+  totp: 'admin.users.detail.totp',
+  microsoft: 'admin.users.detail.microsoft',
+  google: 'admin.users.detail.google',
+  createdAt: 'admin.users.col.createdAt',
+  banStatus: 'admin.users.detail.banStatus',
+  banReason: 'admin.users.detail.banReason',
+  banTime: 'admin.users.detail.banTime',
+  unbanTime: 'admin.users.detail.unbanTime',
+}
+
+const detailSource = ref<AdminUser | null>(null)
+
+function detailRowKeys(src: AdminUser | null): string[] {
+  const keys = ['uid', 'username', 'email', 'role', 'totp', 'microsoft', 'google', 'createdAt']
+  if (src && isTargetBanned(src)) keys.push('banStatus', 'banReason', 'banTime', 'unbanTime')
+  return keys
+}
 
 function roleBadgeClass(role: number): string {
   return role === 2 ? 'adm-tag adm-tag--danger' : role === 1 ? 'adm-tag adm-tag--warning' : 'adm-tag'
@@ -121,6 +137,7 @@ async function openDetail(uid: string): Promise<void> {
   detailOpen.value = true
   detailLoading.value = true
   detailUser.value = null
+  detailSource.value = users.value.find((u) => u.uid === uid) ?? null
   try {
     detailUser.value = await fetchAdminUser(uid)
   } catch {
@@ -211,6 +228,23 @@ function confirmDemote(user: AdminUser): void {
   })
 }
 
+function confirmResetTotp(user: AdminUser): void {
+  askConfirm(
+    t('admin.users.confirm.resetTotpTitle'),
+    t('admin.users.confirm.resetTotpText', { name: user.username }),
+    async () => {
+      try {
+        await resetAdminUserTOTP(user.uid)
+        toast.success(t('admin.users.toast.resetTotp'))
+        await refreshList()
+      } catch {
+        toast.error(t('admin.users.toast.resetTotpFailed'))
+      }
+    },
+    true,
+  )
+}
+
 function confirmDelete(user: AdminUser): void {
   askConfirm(
     t('admin.users.confirm.deleteTitle'),
@@ -257,6 +291,7 @@ onMounted(loadUsers)
             <th>{{ $t('admin.users.col.username') }}</th>
             <th>{{ $t('admin.users.col.email') }}</th>
             <th>{{ $t('admin.users.col.role') }}</th>
+            <th>{{ $t('admin.users.col.totp') }}</th>
             <th class="adm-num">{{ $t('admin.users.col.createdAt') }}</th>
             <th class="adm-end">{{ $t('admin.users.col.actions') }}</th>
           </tr>
@@ -264,17 +299,17 @@ onMounted(loadUsers)
         <tbody>
           <template v-if="loading">
             <tr v-for="i in 5" :key="i" class="adm-tr--skel" aria-hidden="true">
-              <td v-for="j in 6" :key="j"><span class="adm-skel"></span></td>
+              <td v-for="j in 7" :key="j"><span class="adm-skel"></span></td>
             </tr>
           </template>
           <tr v-else-if="forbidden">
-            <td colspan="6" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
+            <td colspan="7" class="adm-state is-warning">{{ $t('admin.common.forbidden') }}</td>
           </tr>
           <tr v-else-if="loadFailed">
-            <td colspan="6" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
+            <td colspan="7" class="adm-state is-danger">{{ $t('admin.common.loadFailed') }}</td>
           </tr>
           <tr v-else-if="users.length === 0">
-            <td colspan="6" class="adm-state">{{ $t('admin.users.noData') }}</td>
+            <td colspan="7" class="adm-state">{{ $t('admin.users.noData') }}</td>
           </tr>
           <template v-else>
             <tr v-for="u in users" :key="u.uid">
@@ -282,6 +317,10 @@ onMounted(loadUsers)
               <td class="adm-strong">{{ u.username }}</td>
               <td>{{ u.email }}</td>
               <td><span :class="roleBadgeClass(u.role)">{{ roleText(u.role) }}</span></td>
+              <td>
+                <span v-if="u.totp_enabled" class="adm-tag adm-tag--success">{{ $t('admin.users.totp.on') }}</span>
+                <span v-else class="adm-tag">{{ $t('admin.users.totp.off') }}</span>
+              </td>
               <td class="adm-num">{{ formatDate(u.created_at) }}</td>
               <td class="adm-end">
                 <button type="button" class="adm-row-btn" @click="openDetail(u.uid)">
@@ -300,8 +339,12 @@ onMounted(loadUsers)
     <AppModal v-model:open="detailOpen" :title="$t('admin.users.detail.title')" width="480px">
       <template v-if="detailLoading || !detailUser">
         <div class="adm-detail">
-          <div v-for="key in DETAIL_KEYS" :key="key" class="adm-detail-row adm-detail-row--skel">
-            <span class="adm-detail-label">{{ $t(key) }}</span>
+          <div
+            v-for="row in detailRowKeys(detailSource)"
+            :key="row"
+            class="adm-detail-row adm-detail-row--skel"
+          >
+            <span class="adm-detail-label">{{ $t(DETAIL_ROW_I18N[row]) }}</span>
             <span class="adm-skel" aria-hidden="true"></span>
           </div>
         </div>
@@ -325,8 +368,27 @@ onMounted(loadUsers)
             <span class="adm-detail-value"><span :class="roleBadgeClass(detailUser.role)">{{ roleText(detailUser.role) }}</span></span>
           </div>
           <div class="adm-detail-row">
-            <span class="adm-detail-label">{{ $t('admin.users.detail.microsoftAccount') }}</span>
-            <span class="adm-detail-value">{{ detailUser.microsoft_name || $t('admin.users.detail.notBound') }}</span>
+            <span class="adm-detail-label">{{ $t('admin.users.detail.totp') }}</span>
+            <span class="adm-detail-value">
+              <span v-if="detailUser.totp_enabled" class="adm-tag adm-tag--success">{{ $t('admin.users.totp.on') }}</span>
+              <span v-else class="adm-tag">{{ $t('admin.users.totp.off') }}</span>
+            </span>
+          </div>
+          <div class="adm-detail-row">
+            <span class="adm-detail-label">{{ $t('admin.users.detail.microsoft') }}</span>
+            <span class="adm-detail-value">
+              <span :class="detailUser.microsoft_bound ? 'adm-tag adm-tag--success' : 'adm-tag'">
+                {{ $t(detailUser.microsoft_bound ? 'admin.users.detail.bound' : 'admin.users.detail.notBound') }}
+              </span>
+            </span>
+          </div>
+          <div class="adm-detail-row">
+            <span class="adm-detail-label">{{ $t('admin.users.detail.google') }}</span>
+            <span class="adm-detail-value">
+              <span :class="detailUser.google_bound ? 'adm-tag adm-tag--success' : 'adm-tag'">
+                {{ $t(detailUser.google_bound ? 'admin.users.detail.bound' : 'admin.users.detail.notBound') }}
+              </span>
+            </span>
           </div>
           <div class="adm-detail-row">
             <span class="adm-detail-label">{{ $t('admin.users.col.createdAt') }}</span>
@@ -368,6 +430,14 @@ onMounted(loadUsers)
                 {{ $t('admin.users.action.ban') }}
               </button>
             </template>
+            <button
+              v-if="currentRole >= 2 && detailUser.totp_enabled"
+              type="button"
+              class="adm-btn adm-btn--danger"
+              @click="confirmResetTotp(detailUser)"
+            >
+              {{ $t('admin.users.action.resetTotp') }}
+            </button>
             <template v-if="currentRole >= 2 && detailUser.role < 2">
               <button v-if="detailUser.role === 0 && !isTargetBanned(detailUser)" type="button" class="adm-btn adm-btn--secondary" @click="confirmPromote(detailUser)">
                 {{ $t('admin.users.action.promote') }}
