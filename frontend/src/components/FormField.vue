@@ -2,7 +2,9 @@
 // 表单字段（迁移自原站 .form-group 系列：底部划线输入 + 行内错误）。
 // 用法：<FormField label="邮箱" :error="err"><input v-model="x" /></FormField>
 // label 默认渲染为 sr-only（原站视觉上只有 placeholder），需要可见 label 时传 visible-label。
-import { computed, useId } from 'vue'
+// label 的 for 关联：插槽下发的 id 需要使用方显式绑定到控件；为兼容未绑定的既有用法，
+// 挂载后会自动为首个表单控件补上该 id（控件已有 id 时尊重原值不覆盖）。
+import { computed, onMounted, ref, useId } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -16,10 +18,16 @@ const props = withDefaults(
 
 const inputId = useId()
 const labelClass = computed(() => (props.visibleLabel ? 'field-label' : 'field-label sr-only'))
+const rootEl = ref<HTMLElement | null>(null)
+
+onMounted(() => {
+  const control = rootEl.value?.querySelector('input, select, textarea')
+  if (control && !control.id) control.id = inputId
+})
 </script>
 
 <template>
-  <div class="form-field" :class="{ 'form-field--error': !!error }">
+  <div ref="rootEl" class="form-field" :class="{ 'form-field--error': !!error }">
     <label v-if="label" :class="labelClass" :for="inputId">{{ label }}</label>
     <slot :id="inputId" />
     <p v-if="hint && !error" class="field-hint">{{ hint }}</p>

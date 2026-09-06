@@ -228,7 +228,7 @@ func TestOTPAuthURI(t *testing.T) {
 		t.Errorf("uri should start with otpauth://totp/, got %s", uri)
 	}
 	if !strings.Contains(uri, "secret=JBSWY3DPEHPK3PXP") ||
-		!strings.Contains(uri, "issuer=Nebula+Studios") ||
+		!strings.Contains(uri, "issuer=Nebula%20Studios") ||
 		!strings.Contains(uri, "algorithm=SHA1") ||
 		!strings.Contains(uri, "digits=6") ||
 		!strings.Contains(uri, "period=30") {

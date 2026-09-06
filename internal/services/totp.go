@@ -111,10 +111,12 @@ func (s *TOTPService) GenerateSecret() string {
 }
 
 // OTPAuthURI 构建 otpauth:// URI
+// 空格须编码为 %20（PathEscape）而非 +（QueryEscape）：部分验证器 App 不解码
+// 查询参数中的 +，会把 issuer 字面显示为 "Nebula+Studios"
 func (s *TOTPService) OTPAuthURI(email, secret string) string {
 	label := url.PathEscape(totpIssuer + ":" + email)
 	return fmt.Sprintf("otpauth://totp/%s?secret=%s&issuer=%s&algorithm=SHA1&digits=%d&period=%d",
-		label, secret, url.QueryEscape(totpIssuer), totpDigits, totpPeriod)
+		label, secret, url.PathEscape(totpIssuer), totpDigits, totpPeriod)
 }
 
 // totpCodeAt 计算指定时间片偏移下的 TOTP 码

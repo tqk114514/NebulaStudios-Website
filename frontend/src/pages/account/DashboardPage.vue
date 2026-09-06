@@ -1443,7 +1443,8 @@ onMounted(async () => {
   margin: 16px 0;
 }
 
-.totp-qr svg {
+/* v-html 注入的 SVG 不带 scoped data-v 属性，须用 :deep() 穿透 */
+.totp-qr :deep(svg) {
   display: block;
   width: 200px;
   height: 200px;
@@ -1451,7 +1452,7 @@ onMounted(async () => {
 
 /* paulmillr/qr 输出无 fill 属性的黑色 path（透明背景），
    深色主题下反色为白色模块以保证扫描对比度 */
-.totp-qr svg path {
+.totp-qr :deep(svg path) {
   fill: #fff;
 }
 
