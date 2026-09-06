@@ -253,5 +253,7 @@
   "totp.disable": "2단계 인증 해제",
   "totp.disableIntro": "해제하려면 현재 비밀번호와 인증 코드가 필요합니다. 해제 시 모든 세션이 로그아웃되며 다시 로그인해야 합니다.",
   "totp.disableSuccess": "2단계 인증이 해제되었습니다. 다시 로그인해 주세요",
-  "totp.failed": "작업에 실패했습니다. 잠시 후 다시 시도해 주세요"
+  "totp.failed": "작업에 실패했습니다. 잠시 후 다시 시도해 주세요",
+  "dashboard.adminEntry": "관리 패널",
+  "dashboard.adminEntryHint": "사용자, 로그 및 시스템 설정 관리"
 }

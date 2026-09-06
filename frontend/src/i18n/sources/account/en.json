@@ -253,5 +253,7 @@
   "totp.disable": "Disable 2FA",
   "totp.disableIntro": "Disabling requires your current password and a verification code. All sessions will be signed out and you will need to sign in again.",
   "totp.disableSuccess": "Two-factor authentication disabled, please sign in again",
-  "totp.failed": "Operation failed, please try again later"
+  "totp.failed": "Operation failed, please try again later",
+  "dashboard.adminEntry": "Admin Panel",
+  "dashboard.adminEntryHint": "Manage users, logs and system settings"
 }

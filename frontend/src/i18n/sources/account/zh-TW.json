@@ -253,5 +253,7 @@
   "totp.disable": "關閉兩步驗證",
   "totp.disableIntro": "關閉兩步驗證需要輸入目前密碼和驗證碼。關閉後所有工作階段將被登出，需要重新登入。",
   "totp.disableSuccess": "兩步驗證已關閉，請重新登入",
-  "totp.failed": "操作失敗，請稍後重試"
+  "totp.failed": "操作失敗，請稍後重試",
+  "dashboard.adminEntry": "管理後台",
+  "dashboard.adminEntryHint": "前往使用者、日誌與系統管理"
 }

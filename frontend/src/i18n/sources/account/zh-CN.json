@@ -253,5 +253,7 @@
   "totp.disable": "关闭两步验证",
   "totp.disableIntro": "关闭两步验证需要输入当前密码和验证码。关闭后所有会话将被注销，需要重新登录。",
   "totp.disableSuccess": "两步验证已关闭，请重新登录",
-  "totp.failed": "操作失败，请稍后重试"
+  "totp.failed": "操作失败，请稍后重试",
+  "dashboard.adminEntry": "管理后台",
+  "dashboard.adminEntryHint": "前往用户、日志与系统管理"
 }

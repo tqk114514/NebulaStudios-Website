@@ -62,6 +62,8 @@ function isBanned(u: Me | null): boolean {
   return true
 }
 const banned = computed(() => isBanned(user.value))
+// 管理员（含超管）显示管理后台入口；角色以后端 /me 数据为准，被撤销后刷新即消失
+const isAdminUser = computed(() => (user.value?.role ?? 0) >= 1)
 
 function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return '-'
@@ -1006,6 +1008,23 @@ onMounted(async () => {
         <div class="dash-profile-welcome">
           <h1>{{ user.username }}</h1>
           <p class="dash-profile-email">{{ user.email }}</p>
+        </div>
+      </section>
+
+      <!-- 管理后台入口（仅管理员可见，插在账户信息之上） -->
+      <section v-if="isAdminUser" class="dash-section">
+        <h2 class="dash-section-title">{{ $t('account.dashboard.adminEntry') }}</h2>
+        <div class="dash-list">
+          <button type="button" class="dash-item clickable" @click="router.push('/admin')">
+            <div class="dash-item-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+            </div>
+            <div class="dash-item-content">
+              <span class="dash-item-label">{{ $t('account.dashboard.adminEntry') }}</span>
+              <span class="dash-item-hint">{{ $t('account.dashboard.adminEntryHint') }}</span>
+            </div>
+            <div class="dash-item-arrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></div>
+          </button>
         </div>
       </section>
 

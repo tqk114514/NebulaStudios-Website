@@ -253,5 +253,7 @@
   "totp.disable": "二段階認証を無効にする",
   "totp.disableIntro": "無効にするには現在のパスワードと認証コードが必要です。無効にするとすべてのセッションがログアウトされ、再度ログインが必要です。",
   "totp.disableSuccess": "二段階認証を無効にしました。再度ログインしてください",
-  "totp.failed": "操作に失敗しました。しばらくしてからもう一度お試しください"
+  "totp.failed": "操作に失敗しました。しばらくしてからもう一度お試しください",
+  "dashboard.adminEntry": "管理パネル",
+  "dashboard.adminEntryHint": "ユーザー・ログ・システム設定の管理"
 }
