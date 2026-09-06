@@ -330,7 +330,21 @@ func (h *AdminHandler) UpdateEmailWhitelist(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorUID, item); err != nil {
+	// 变更审计：记录每个发生变化的字段 old -> new（禁用/启用、注册链接、徽标增删改、域名）
+	changes := map[string]models.FieldChange{}
+	if domain != existing.Domain {
+		changes["domain"] = models.FieldChange{Old: existing.Domain, New: domain}
+	}
+	if signupURL != existing.SignupURL {
+		changes["signup_url"] = models.FieldChange{Old: existing.SignupURL, New: signupURL}
+	}
+	if logoURL != existing.LogoURL {
+		changes["logo_url"] = models.FieldChange{Old: existing.LogoURL, New: logoURL}
+	}
+	if isEnabled != existing.IsEnabled {
+		changes["is_enabled"] = models.FieldChange{Old: existing.IsEnabled, New: isEnabled}
+	}
+	if err := h.logRepo.LogEmailWhitelistUpdate(ctx, operatorUID, item, changes); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log update email whitelist", "error", err)
 	}
 
@@ -358,17 +372,23 @@ func (h *AdminHandler) DeleteEmailWhitelist(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), adminTimeout)
 	defer cancel()
 
-	err = h.emailWhitelistRepo.Delete(ctx, id)
+	entry, err := h.emailWhitelistRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrEmailWhitelistNotFound) {
 			utils.HTTPErrorResponse(c, "ADMIN", http.StatusNotFound, utils.ErrCodeNotFound, "Email whitelist entry not found")
 			return
 		}
+		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeGetFailed, err.Error())
+		return
+	}
+
+	err = h.emailWhitelistRepo.Delete(ctx, id)
+	if err != nil {
 		utils.HTTPErrorResponse(c, "ADMIN", http.StatusInternalServerError, utils.ErrCodeDeleteFailed, err.Error())
 		return
 	}
 
-	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorUID, id); err != nil {
+	if err := h.logRepo.LogEmailWhitelistDelete(ctx, operatorUID, entry); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log delete email whitelist", "error", err)
 	}
 

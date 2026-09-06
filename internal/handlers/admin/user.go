@@ -18,10 +18,10 @@ import (
 // userListResponse 用户列表响应
 type userListResponse struct {
 	Users      []*models.AdminUserPublic `json:"users"`
-	Total      int64                `json:"total"`
-	Page       int                  `json:"page"`
-	PageSize   int                  `json:"pageSize"`
-	TotalPages int                  `json:"totalPages"`
+	Total      int64                     `json:"total"`
+	Page       int                       `json:"page"`
+	PageSize   int                       `json:"pageSize"`
+	TotalPages int                       `json:"totalPages"`
 }
 
 // setRoleRequest 设置角色请求

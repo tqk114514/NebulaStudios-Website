@@ -245,5 +245,17 @@
   "users.toast.resetTotpFailed": "重置两步验证失败",
   "users.detail.google": "Google 账号",
   "users.detail.microsoft": "微软账号",
-  "users.detail.bound": "已绑定"
+  "users.detail.bound": "已绑定",
+  "logs.details.banInfo": "原因：{reason} · {duration}",
+  "logs.change.role": "角色",
+  "logs.change.is_enabled": "启用状态",
+  "logs.change.name": "名称",
+  "logs.change.description": "描述",
+  "logs.change.redirect_uri": "回调地址",
+  "logs.change.domain": "域名",
+  "logs.change.signup_url": "注册链接",
+  "logs.change.logo_url": "徽标",
+  "logs.value.enabled": "启用",
+  "logs.value.disabled": "禁用",
+  "logs.value.empty": "（空）"
 }

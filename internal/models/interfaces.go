@@ -101,14 +101,14 @@ type AdminLogStore interface {
 	LogBanUser(ctx context.Context, adminUID, targetUID string, targetUsername, reason string, unbanAt *time.Time) error
 	LogUnbanUser(ctx context.Context, adminUID, targetUID, targetUsername string) error
 	LogResetUserTOTP(ctx context.Context, adminUID, targetUID, targetUsername string) error
-	LogOAuthClientCreate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
-	LogOAuthClientUpdate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
-	LogOAuthClientDelete(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
-	LogOAuthClientRegenerateSecret(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error
-	LogOAuthClientToggle(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string, enabled bool) error
+	LogOAuthClientCreate(ctx context.Context, adminUID string, client *OAuthClient) error
+	LogOAuthClientUpdate(ctx context.Context, adminUID string, client *OAuthClient, changes map[string]FieldChange) error
+	LogOAuthClientDelete(ctx context.Context, adminUID string, client *OAuthClient) error
+	LogOAuthClientRegenerateSecret(ctx context.Context, adminUID string, client *OAuthClient) error
+	LogOAuthClientToggle(ctx context.Context, adminUID string, client *OAuthClient, oldEnabled bool) error
 	LogEmailWhitelistCreate(ctx context.Context, adminUID string, entry *EmailWhitelist) error
-	LogEmailWhitelistUpdate(ctx context.Context, adminUID string, entry *EmailWhitelist) error
-	LogEmailWhitelistDelete(ctx context.Context, adminUID string, id int64) error
+	LogEmailWhitelistUpdate(ctx context.Context, adminUID string, entry *EmailWhitelist, changes map[string]FieldChange) error
+	LogEmailWhitelistDelete(ctx context.Context, adminUID string, entry *EmailWhitelist) error
 	LogDataExport(ctx context.Context, adminUID string, usersCount, logsCount int) error
 	LogDataImport(ctx context.Context, adminUID string, usersImported, logsImported int) error
 	FindAll(ctx context.Context, page, pageSize int) ([]*AdminLogPublic, int64, error)

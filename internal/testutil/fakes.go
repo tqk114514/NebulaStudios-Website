@@ -450,30 +450,32 @@ func (f *FakeAdminLogStore) LogUnbanUser(context.Context, string, string, string
 func (f *FakeAdminLogStore) LogResetUserTOTP(context.Context, string, string, string) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogOAuthClientCreate(context.Context, string, int64, string, string) error {
+func (f *FakeAdminLogStore) LogOAuthClientCreate(context.Context, string, *models.OAuthClient) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogOAuthClientUpdate(context.Context, string, int64, string, string) error {
+func (f *FakeAdminLogStore) LogOAuthClientUpdate(context.Context, string, *models.OAuthClient, map[string]models.FieldChange) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogOAuthClientDelete(context.Context, string, int64, string, string) error {
+func (f *FakeAdminLogStore) LogOAuthClientDelete(context.Context, string, *models.OAuthClient) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogOAuthClientRegenerateSecret(context.Context, string, int64, string, string) error {
+func (f *FakeAdminLogStore) LogOAuthClientRegenerateSecret(context.Context, string, *models.OAuthClient) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogOAuthClientToggle(context.Context, string, int64, string, string, bool) error {
+func (f *FakeAdminLogStore) LogOAuthClientToggle(context.Context, string, *models.OAuthClient, bool) error {
 	return nil
 }
 func (f *FakeAdminLogStore) LogEmailWhitelistCreate(context.Context, string, *models.EmailWhitelist) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogEmailWhitelistUpdate(context.Context, string, *models.EmailWhitelist) error {
+func (f *FakeAdminLogStore) LogEmailWhitelistUpdate(context.Context, string, *models.EmailWhitelist, map[string]models.FieldChange) error {
 	return nil
 }
-func (f *FakeAdminLogStore) LogEmailWhitelistDelete(context.Context, string, int64) error { return nil }
-func (f *FakeAdminLogStore) LogDataExport(context.Context, string, int, int) error        { return nil }
-func (f *FakeAdminLogStore) LogDataImport(context.Context, string, int, int) error        { return nil }
+func (f *FakeAdminLogStore) LogEmailWhitelistDelete(context.Context, string, *models.EmailWhitelist) error {
+	return nil
+}
+func (f *FakeAdminLogStore) LogDataExport(context.Context, string, int, int) error { return nil }
+func (f *FakeAdminLogStore) LogDataImport(context.Context, string, int, int) error { return nil }
 func (f *FakeAdminLogStore) FindAll(context.Context, int, int) ([]*models.AdminLogPublic, int64, error) {
 	return nil, 0, nil
 }

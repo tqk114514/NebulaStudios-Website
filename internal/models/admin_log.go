@@ -57,56 +57,30 @@ type AdminLogPublic struct {
 	CreatedAt     time.Time       `json:"created_at"`
 }
 
-// SetRoleDetails 修改角色操作详情
-type SetRoleDetails struct {
-	TargetUsername string `json:"target_username"`
-	OldRole        int    `json:"old_role"`
-	NewRole        int    `json:"new_role"`
+// FieldChange 字段级变更（old/new 为任意 JSON 值；null 表示原本无值）
+type FieldChange struct {
+	Old any `json:"old"`
+	New any `json:"new"`
 }
 
-// DeleteUserDetails 删除用户操作详情
-type DeleteUserDetails struct {
-	TargetUsername string `json:"target_username"`
-	TargetEmail    string `json:"target_email"`
-}
-
-// BanUserDetails 封禁用户操作详情
-type BanUserDetails struct {
-	TargetUsername string     `json:"target_username"`
-	Reason         string     `json:"reason"`
-	UnbanAt        *time.Time `json:"unban_at,omitempty"` // nil 表示永久封禁
-}
-
-// UnbanUserDetails 解封用户操作详情
-type UnbanUserDetails struct {
-	TargetUsername string `json:"target_username"`
-}
-
-// OAuthClientDetails OAuth 客户端操作详情
-type OAuthClientDetails struct {
-	ClientDBID int64  `json:"client_db_id"`
-	ClientID   string `json:"client_id"`
-	ClientName string `json:"client_name"`
-}
-
-// OAuthClientToggleDetails OAuth 客户端启用/禁用操作详情
-type OAuthClientToggleDetails struct {
-	ClientDBID int64  `json:"client_db_id"`
-	ClientID   string `json:"client_id"`
-	ClientName string `json:"client_name"`
-	Enabled    bool   `json:"enabled"`
-}
-
-// DataExportDetails 导出数据操作详情
-type DataExportDetails struct {
-	UsersCount int `json:"users_count"`
-	LogsCount  int `json:"logs_count"`
-}
-
-// DataImportDetails 导入数据操作详情
-type DataImportDetails struct {
-	UsersImported int `json:"users_imported"`
-	LogsImported  int `json:"logs_imported"`
+// makeDetails 组装统一信封的 details：
+//
+//	{
+//	  "summary": { 动作对象的识别信息 },
+//	  "changes": { "field": {"old": x, "new": y} }  // 仅变更类动作
+//	}
+//
+// changes 为空时省略该键。
+func makeDetails(summary any, changes map[string]FieldChange) (json.RawMessage, error) {
+	envelope := map[string]any{"summary": summary}
+	if len(changes) > 0 {
+		envelope["changes"] = changes
+	}
+	b, err := json.Marshal(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("marshal details failed: %w", err)
+	}
+	return b, nil
 }
 
 // AdminLogRepository 管理员日志仓库
@@ -155,335 +129,227 @@ func (r *AdminLogRepository) Create(ctx context.Context, log *AdminLog) error {
 	return nil
 }
 
+// ---------- 用户动作（target_uid = 被操作用户的 UID） ----------
+
 // LogSetRole 记录修改角色操作
-func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminUID, targetUID string, targetUsername string, oldRole, newRole int) error {
-	details := SetRoleDetails{
-		TargetUsername: targetUsername,
-		OldRole:        oldRole,
-		NewRole:        newRole,
-	}
+func (r *AdminLogRepository) LogSetRole(ctx context.Context, adminUID, targetUID, targetUsername string, oldRole, newRole int) error {
+	summary := map[string]any{"target_username": targetUsername}
+	changes := map[string]FieldChange{"role": {Old: oldRole, New: newRole}}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, changes)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionSetRole,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	target := targetUID
+	log := &AdminLog{AdminUID: adminUID, Action: ActionSetRole, TargetUID: &target, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
 // LogDeleteUser 记录删除用户操作
-func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminUID, targetUID string, targetUsername, targetEmail string) error {
-	details := DeleteUserDetails{
-		TargetUsername: targetUsername,
-		TargetEmail:    targetEmail,
-	}
+func (r *AdminLogRepository) LogDeleteUser(ctx context.Context, adminUID, targetUID, targetUsername, targetEmail string) error {
+	summary := map[string]any{"target_username": targetUsername, "target_email": targetEmail}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionDeleteUser,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	target := targetUID
+	log := &AdminLog{AdminUID: adminUID, Action: ActionDeleteUser, TargetUID: &target, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
 // LogBanUser 记录封禁用户操作
-func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID string, targetUsername, reason string, unbanAt *time.Time) error {
-	details := BanUserDetails{
-		TargetUsername: targetUsername,
-		Reason:         reason,
-		UnbanAt:        unbanAt,
-	}
+func (r *AdminLogRepository) LogBanUser(ctx context.Context, adminUID, targetUID, targetUsername, reason string, unbanAt *time.Time) error {
+	summary := map[string]any{"target_username": targetUsername, "reason": reason, "unban_at": unbanAt}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
-	}
-
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionBanUser,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
-	return r.Create(ctx, log)
-}
-
-// ResetTOTPDetails 重置用户两步验证详情
-type ResetTOTPDetails struct {
-	TargetUsername string `json:"target_username"`
-}
-
-// LogResetUserTOTP 记录重置用户两步验证操作
-func (r *AdminLogRepository) LogResetUserTOTP(ctx context.Context, adminUID, targetUID, targetUsername string) error {
-	details := ResetTOTPDetails{TargetUsername: targetUsername}
-	detailsJSON, err := json.Marshal(details)
-	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
 	target := targetUID
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionResetUserTOTP,
-		TargetUID: &target,
-		Details:   detailsJSON,
-	}
+	log := &AdminLog{AdminUID: adminUID, Action: ActionBanUser, TargetUID: &target, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
 // LogUnbanUser 记录解封用户操作
-func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminUID, targetUID string, targetUsername string) error {
-	details := UnbanUserDetails{
-		TargetUsername: targetUsername,
-	}
+func (r *AdminLogRepository) LogUnbanUser(ctx context.Context, adminUID, targetUID, targetUsername string) error {
+	summary := map[string]any{"target_username": targetUsername}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionUnbanUser,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	target := targetUID
+	log := &AdminLog{AdminUID: adminUID, Action: ActionUnbanUser, TargetUID: &target, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogOAuthClientCreate 记录创建 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
-	details := OAuthClientDetails{
-		ClientDBID: clientDBID,
-		ClientID:   clientID,
-		ClientName: clientName,
-	}
+// LogResetUserTOTP 记录重置用户两步验证操作
+func (r *AdminLogRepository) LogResetUserTOTP(ctx context.Context, adminUID, targetUID, targetUsername string) error {
+	summary := map[string]any{"target_username": targetUsername}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionOAuthClientCreate,
-		Details:  detailsJSON,
-	}
-
+	target := targetUID
+	log := &AdminLog{AdminUID: adminUID, Action: ActionResetUserTOTP, TargetUID: &target, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogOAuthClientUpdate 记录更新 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
-	details := OAuthClientDetails{
-		ClientDBID: clientDBID,
-		ClientID:   clientID,
-		ClientName: clientName,
+// ---------- OAuth 客户端动作（target_uid 恒为 NULL，对象以 summary 中的 client_id 标识） ----------
+
+func oauthClientSummary(client *OAuthClient) map[string]any {
+	return map[string]any{
+		"client_db_id": client.ID,
+		"client_id":    client.ClientID,
+		"name":         client.Name,
+	}
+}
+
+// LogOAuthClientCreate 记录创建 OAuth 客户端（记录初始配置）
+func (r *AdminLogRepository) LogOAuthClientCreate(ctx context.Context, adminUID string, client *OAuthClient) error {
+	summary := oauthClientSummary(client)
+	summary["redirect_uri"] = client.RedirectURI
+	if client.Description != "" {
+		summary["description"] = client.Description
 	}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionOAuthClientUpdate,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionOAuthClientCreate, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogOAuthClientDelete 记录删除 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
-	details := OAuthClientDetails{
-		ClientDBID: clientDBID,
-		ClientID:   clientID,
-		ClientName: clientName,
-	}
-
-	detailsJSON, err := json.Marshal(details)
+// LogOAuthClientUpdate 记录更新 OAuth 客户端（changes 记录字段级 old -> new）
+func (r *AdminLogRepository) LogOAuthClientUpdate(ctx context.Context, adminUID string, client *OAuthClient, changes map[string]FieldChange) error {
+	detailsJSON, err := makeDetails(oauthClientSummary(client), changes)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionOAuthClientDelete,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionOAuthClientUpdate, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogOAuthClientRegenerateSecret 记录重新生成 OAuth 客户端密钥操作
-func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string) error {
-	details := OAuthClientDetails{
-		ClientDBID: clientDBID,
-		ClientID:   clientID,
-		ClientName: clientName,
-	}
+// LogOAuthClientDelete 记录删除 OAuth 客户端（记录被删对象的完整标识与回调地址）
+func (r *AdminLogRepository) LogOAuthClientDelete(ctx context.Context, adminUID string, client *OAuthClient) error {
+	summary := oauthClientSummary(client)
+	summary["redirect_uri"] = client.RedirectURI
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionOAuthClientRegenerateSecret,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionOAuthClientDelete, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogOAuthClientToggle 记录启用/禁用 OAuth 客户端操作
-func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminUID string, clientDBID int64, clientID, clientName string, enabled bool) error {
-	details := OAuthClientToggleDetails{
-		ClientDBID: clientDBID,
-		ClientID:   clientID,
-		ClientName: clientName,
-		Enabled:    enabled,
-	}
-
-	detailsJSON, err := json.Marshal(details)
+// LogOAuthClientRegenerateSecret 记录重新生成 OAuth 客户端密钥（不记录密钥本身）
+func (r *AdminLogRepository) LogOAuthClientRegenerateSecret(ctx context.Context, adminUID string, client *OAuthClient) error {
+	detailsJSON, err := makeDetails(oauthClientSummary(client), nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionOAuthClientToggle,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionOAuthClientRegenerateSecret, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogEmailWhitelistCreate 记录创建邮箱白名单
+// LogOAuthClientToggle 记录启用/禁用 OAuth 客户端
+func (r *AdminLogRepository) LogOAuthClientToggle(ctx context.Context, adminUID string, client *OAuthClient, oldEnabled bool) error {
+	changes := map[string]FieldChange{"is_enabled": {Old: oldEnabled, New: client.IsEnabled}}
+
+	detailsJSON, err := makeDetails(oauthClientSummary(client), changes)
+	if err != nil {
+		return err
+	}
+
+	log := &AdminLog{AdminUID: adminUID, Action: ActionOAuthClientToggle, Details: detailsJSON}
+	return r.Create(ctx, log)
+}
+
+// ---------- 邮箱白名单动作（target_uid 恒为 NULL，对象以 summary 中的 domain 标识） ----------
+
+func emailWhitelistSummary(entry *EmailWhitelist) map[string]any {
+	return map[string]any{"id": entry.ID, "domain": entry.Domain}
+}
+
+// LogEmailWhitelistCreate 记录创建邮箱白名单（记录初始配置）
 func (r *AdminLogRepository) LogEmailWhitelistCreate(ctx context.Context, adminUID string, entry *EmailWhitelist) error {
-	details := map[string]any{
-		"id":     entry.ID,
-		"domain": entry.Domain,
+	summary := emailWhitelistSummary(entry)
+	summary["signup_url"] = entry.SignupURL
+	summary["is_enabled"] = entry.IsEnabled
+	if entry.LogoURL != "" {
+		summary["logo_url"] = entry.LogoURL
 	}
-	detailsJSON, err := json.Marshal(details)
+
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	targetUID := ""
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionEmailWhitelistCreate,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionEmailWhitelistCreate, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogEmailWhitelistUpdate 记录更新邮箱白名单
-func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminUID string, entry *EmailWhitelist) error {
-	details := map[string]any{
-		"id":         entry.ID,
-		"domain":     entry.Domain,
-		"signup_url": entry.SignupURL,
-		"is_enabled": entry.IsEnabled,
-	}
-	detailsJSON, err := json.Marshal(details)
+// LogEmailWhitelistUpdate 记录更新邮箱白名单（changes 记录字段级 old -> new：
+// 域名、注册链接、徽标、启用状态各自独立记录，未变更的字段不出现）
+func (r *AdminLogRepository) LogEmailWhitelistUpdate(ctx context.Context, adminUID string, entry *EmailWhitelist, changes map[string]FieldChange) error {
+	detailsJSON, err := makeDetails(emailWhitelistSummary(entry), changes)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	targetUID := ""
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionEmailWhitelistUpdate,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionEmailWhitelistUpdate, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
-// LogEmailWhitelistDelete 记录删除邮箱白名单
-func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminUID string, id int64) error {
-	details := map[string]any{
-		"id": id,
-	}
-	detailsJSON, err := json.Marshal(details)
+// LogEmailWhitelistDelete 记录删除邮箱白名单（记录被删条目的域名）
+func (r *AdminLogRepository) LogEmailWhitelistDelete(ctx context.Context, adminUID string, entry *EmailWhitelist) error {
+	detailsJSON, err := makeDetails(emailWhitelistSummary(entry), nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	targetUID := ""
-	log := &AdminLog{
-		AdminUID:  adminUID,
-		Action:    ActionEmailWhitelistDelete,
-		TargetUID: &targetUID,
-		Details:   detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionEmailWhitelistDelete, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
+
+// ---------- 数据导入导出 ----------
 
 // LogDataExport 记录数据导出操作
 func (r *AdminLogRepository) LogDataExport(ctx context.Context, adminUID string, usersCount, logsCount int) error {
-	details := DataExportDetails{
-		UsersCount: usersCount,
-		LogsCount:  logsCount,
-	}
+	summary := map[string]any{"users_count": usersCount, "logs_count": logsCount}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionDataExport,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionDataExport, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 
 // LogDataImport 记录数据导入操作
 func (r *AdminLogRepository) LogDataImport(ctx context.Context, adminUID string, usersImported, logsImported int) error {
-	details := DataImportDetails{
-		UsersImported: usersImported,
-		LogsImported:  logsImported,
-	}
+	summary := map[string]any{"users_imported": usersImported, "logs_imported": logsImported}
 
-	detailsJSON, err := json.Marshal(details)
+	detailsJSON, err := makeDetails(summary, nil)
 	if err != nil {
-		return fmt.Errorf("marshal details failed: %w", err)
+		return err
 	}
 
-	log := &AdminLog{
-		AdminUID: adminUID,
-		Action:   ActionDataImport,
-		Details:  detailsJSON,
-	}
-
+	log := &AdminLog{AdminUID: adminUID, Action: ActionDataImport, Details: detailsJSON}
 	return r.Create(ctx, log)
 }
 

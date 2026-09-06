@@ -155,7 +155,7 @@ func (h *AdminHandler) CreateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorUID, client.ID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientCreate(ctx, operatorUID, client); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log create OAuth client", "error", err)
 	}
 
@@ -209,7 +209,26 @@ func (h *AdminHandler) UpdateOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
+	// 变更审计：按请求字段计算 old -> new（nil 字段表示未变更，不进入日志）
+	newName, newDescription, newRedirectURI := client.Name, client.Description, client.RedirectURI
+	changes := map[string]models.FieldChange{}
+	if req.Name != "" && req.Name != client.Name {
+		changes["name"] = models.FieldChange{Old: client.Name, New: req.Name}
+		newName = req.Name
+	}
+	if req.Description != nil && *req.Description != client.Description {
+		changes["description"] = models.FieldChange{Old: client.Description, New: *req.Description}
+		newDescription = *req.Description
+	}
+	if req.RedirectURI != "" && req.RedirectURI != client.RedirectURI {
+		changes["redirect_uri"] = models.FieldChange{Old: client.RedirectURI, New: req.RedirectURI}
+		newRedirectURI = req.RedirectURI
+	}
+	updated := &models.OAuthClient{
+		ID: client.ID, ClientID: client.ClientID, Name: newName,
+		Description: newDescription, RedirectURI: newRedirectURI, IsEnabled: client.IsEnabled,
+	}
+	if err := h.logRepo.LogOAuthClientUpdate(ctx, operatorUID, updated, changes); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log update OAuth client", "error", err)
 	}
 
@@ -251,7 +270,7 @@ func (h *AdminHandler) DeleteOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientDelete(ctx, operatorUID, client); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log delete OAuth client", "error", err)
 	}
 
@@ -293,7 +312,7 @@ func (h *AdminHandler) RegenerateOAuthClientSecret(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorUID, clientID, client.ClientID, client.Name); err != nil {
+	if err := h.logRepo.LogOAuthClientRegenerateSecret(ctx, operatorUID, client); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log regenerate OAuth client secret", "error", err)
 	}
 
@@ -351,7 +370,7 @@ func (h *AdminHandler) ToggleOAuthClient(c *gin.Context) {
 		return
 	}
 
-	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorUID, clientID, client.ClientID, client.Name, req.Enabled); err != nil {
+	if err := h.logRepo.LogOAuthClientToggle(ctx, operatorUID, client, client.IsEnabled); err != nil {
 		utils.LogWarnCtx(c.Request.Context(), "ADMIN", "Failed to log toggle OAuth client", "error", err)
 	}
 
