@@ -710,4 +710,44 @@ watch(locale, () => {
   font-size: var(--text-lg);
   color: var(--fg);
 }
+
+/* ---- 移动端适配：导航折行为两行，标签禁止逐字竖排，超出可横滑 ---- */
+@media (max-width: 640px) {
+  .policy-nav {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 4px;
+  }
+
+  .policy-nav-items {
+    flex: 1 1 100%;
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .policy-nav-items::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 关键：white-space 禁止按钮内文字逐字换行成竖排 */
+  .policy-nav-item {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    font-size: var(--text-sm);
+    letter-spacing: 0.08em;
+  }
+
+  .version-switch {
+    margin-left: auto;
+  }
+
+  /* 导航折为两行（约 150px 高），正文顶部留白同步加大；左右留白收窄适配小屏 */
+  .policy-container {
+    padding: 170px 20px 48px;
+  }
+}
 </style>
