@@ -7,7 +7,7 @@ Their respective licenses are listed below.
 ------------------------------------------------------------
 License: Apache-2.0
 ------------------------------------------------------------
-  go.mongodb.org/mongo-driver/v2
+  go.mongodb.org/mongo-driver/v2/bson (via gin-gonic/gin binding)
     https://github.com/mongodb/mongo-go-driver/blob/v2.8.0/LICENSE
   github.com/cure53/DOMPurify (Apache-2.0 OR MPL-2.0)
     https://github.com/cure53/DOMPurify/blob/3.4.14/LICENSE
@@ -51,6 +51,8 @@ License: BSD-3-Clause
     https://github.com/twitchyliquid64/golang-asm/blob/v0.15.1/LICENSE
   golang.org/x/arch
     https://cs.opensource.google/go/x/arch/+/v0.29.0:LICENSE
+  libwebp (vendored in img-processor/vendor/libwebp)
+    https://chromium.googlesource.com/webm/libwebp/+/refs/tags/v1.6.0/COPYING
 
 ------------------------------------------------------------
 License: MIT
@@ -105,22 +107,26 @@ License: MIT
     https://github.com/uber-go/multierr/blob/v1.11.0/LICENSE.txt
   go.uber.org/zap
     https://github.com/uber-go/zap/blob/v1.28.0/LICENSE
-  github.com/markedjs/marked
-    https://github.com/markedjs/marked/blob/v18.0.10/LICENSE
-  github.com/faisalman/ua-parser-js
-    https://github.com/faisalman/ua-parser-js/blob/1.0.41/license.md
   github.com/goccy/go-json
     https://github.com/goccy/go-json/blob/v0.10.6/LICENSE
   github.com/json-iterator/go
     https://github.com/json-iterator/go/blob/v1.1.12/LICENSE
   github.com/klauspost/cpuid/v2
     https://github.com/klauspost/cpuid/blob/v2.4.0/LICENSE
-  github.com/paulmillr/qr(MIT OR Apache-2.0)
-    https://github.com/paulmillr/qr/blob/0.6.0/LICENSE-MIT
-  github.com/golang-migrate/migrate/v4
-   https://github.com/golang-migrate/migrate/blob/v4.19.1/LICENSE
-  github.com/lib/pq
-   https://github.com/lib/pq/blob/v1.12.3/LICENSE
+  github.com/markedjs/marked
+    https://github.com/markedjs/marked/blob/v18.0.11/LICENSE
+  github.com/vuejs/pinia
+    https://github.com/vuejs/pinia/blob/v2.3.1/LICENSE
+  github.com/vuejs/vue
+    https://github.com/vuejs/core/blob/v3.5.42/LICENSE
+  github.com/vuejs/vue-router
+    https://github.com/vuejs/router/blob/v4.6.4/LICENSE
+  github.com/intlify/vue-i18n
+    https://github.com/intlify/vue-i18n/blob/v11.4.10/LICENSE
+  github.com/mrdoob/three.js
+    https://github.com/mrdoob/three.js/blob/r185/LICENSE
+  ziglang/zig (standard library, compiled into img-processor)
+    https://github.com/ziglang/zig/blob/master/LICENSE
 
 ------------------------------------------------------------
 License: MPL-2.0
@@ -139,3 +145,9 @@ License: OFL-1.1
     https://github.com/productiontype/Newsreader/blob/master/OFL.txt
   Azeret Mono
     https://github.com/displaay/Azeret/blob/main/OFL.txt
+
+------------------------------------------------------------
+License: MIT OR Public Domain (stb)
+------------------------------------------------------------
+  stb_image.h (vendored in img-processor/vendor/stb_image)
+    https://github.com/nothings/stb/blob/master/LICENSE
