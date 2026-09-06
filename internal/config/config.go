@@ -27,6 +27,10 @@ type Config struct {
 	DatabaseURL string
 	DBMaxConns  int
 
+	// SchemaAllowDestructive 是否允许 schema 同步执行可能丢失数据的操作
+	// （删表/删列/类型收窄）。默认 false：遇到此类操作拒绝启动并列出被拦截项
+	SchemaAllowDestructive bool
+
 	JWTPrivateKey      string
 	JWTExpiresIn       time.Duration
 	AccessTokenExpiry  time.Duration
@@ -92,6 +96,12 @@ func Load() (*Config, error) {
 		utils.LogWarn("CONFIG", "Invalid DB_MAX_CONNS, using default", "error", err)
 	}
 	newCfg.DBMaxConns = dbMaxConns
+
+	schemaAllowDestructive, err := getEnvBool("SCHEMA_ALLOW_DESTRUCTIVE", false)
+	if err != nil {
+		utils.LogWarn("CONFIG", "Invalid SCHEMA_ALLOW_DESTRUCTIVE, using default", "error", err)
+	}
+	newCfg.SchemaAllowDestructive = schemaAllowDestructive
 
 	newCfg.JWTPrivateKey = getEnv("JWT_PRIVATE_KEY", "")
 	newCfg.JWTIssuer = getEnv("JWT_ISSUER", "")
@@ -253,6 +263,19 @@ func getEnvInt(key string, defaultValue int) (int, error) {
 	}
 
 	return intVal, nil
+}
+
+func getEnvBool(key string, defaultValue bool) (bool, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue, nil
+	}
+
+	boolVal, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("%w: %s=%s is not a valid boolean", ErrInvalidValue, key, value)
+	}
+	return boolVal, nil
 }
 
 // getEnvDuration 解析时间间隔环境变量，支持 Go duration 格式（1h, 30m）和纯数字（视为小时）

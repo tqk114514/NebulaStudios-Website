@@ -1,18 +1,8 @@
 package models
 
 import (
-	"auth-system/internal/utils"
 	"fmt"
-	"io"
-	"io/fs"
 	"strings"
-	"time"
-
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // ColumnDefinition 列定义
@@ -231,15 +221,15 @@ func getTableSchemas() []TableSchema {
 	}
 }
 
-// getIndexDefinitions 获取所有索引定义
-func getIndexDefinitions() []struct {
+// IndexDefinition 索引定义（SQL 语句形式）
+type IndexDefinition struct {
 	Name string
 	SQL  string
-} {
-	return []struct {
-		Name string
-		SQL  string
-	}{
+}
+
+// getIndexDefinitions 获取所有索引定义
+func getIndexDefinitions() []IndexDefinition {
+	return []IndexDefinition{
 		{"idx_users_email", "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"},
 		{"idx_users_username", "CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))"},
 		{"idx_users_microsoft_id", "CREATE INDEX IF NOT EXISTS idx_users_microsoft_id ON users(microsoft_id)"},
@@ -270,6 +260,36 @@ func getIndexDefinitions() []struct {
 	}
 }
 
+// buildColumnDefinitionSQL 构建单个列的 SQL 片段（类型、约束、外键，不含结尾逗号与缩进）
+func buildColumnDefinitionSQL(col ColumnDefinition) string {
+	line := fmt.Sprintf(`"%s" %s`, col.Name, col.Type)
+
+	if !col.Nullable {
+		line += " NOT NULL"
+	}
+
+	if col.Default != "" {
+		line += fmt.Sprintf(" DEFAULT %s", col.Default)
+	}
+
+	if col.IsPrimary {
+		line += " PRIMARY KEY"
+	}
+
+	if col.IsUnique {
+		line += " UNIQUE"
+	}
+
+	if col.References != "" {
+		line += fmt.Sprintf(` REFERENCES %s`, col.References)
+		if col.OnDelete != "" {
+			line += fmt.Sprintf(" ON DELETE %s", col.OnDelete)
+		}
+	}
+
+	return line
+}
+
 // buildCreateTableSQL 构建 CREATE TABLE 语句
 func buildCreateTableSQL(schema TableSchema) string {
 	var lines []string
@@ -277,30 +297,7 @@ func buildCreateTableSQL(schema TableSchema) string {
 	lines = append(lines, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (`, schema.Name))
 
 	for i, col := range schema.Columns {
-		line := fmt.Sprintf(`    "%s" %s`, col.Name, col.Type)
-
-		if !col.Nullable {
-			line += " NOT NULL"
-		}
-
-		if col.Default != "" {
-			line += fmt.Sprintf(" DEFAULT %s", col.Default)
-		}
-
-		if col.IsPrimary {
-			line += " PRIMARY KEY"
-		}
-
-		if col.IsUnique {
-			line += " UNIQUE"
-		}
-
-		if col.References != "" {
-			line += fmt.Sprintf(` REFERENCES %s`, col.References)
-			if col.OnDelete != "" {
-				line += fmt.Sprintf(" ON DELETE %s", col.OnDelete)
-			}
-		}
+		line := "    " + buildColumnDefinitionSQL(col)
 
 		if i < len(schema.Columns)-1 || len(schema.UniqueConstraints) > 0 {
 			line += ","
@@ -320,156 +317,4 @@ func buildCreateTableSQL(schema TableSchema) string {
 	lines = append(lines, ")")
 
 	return strings.Join(lines, "\n")
-}
-
-// buildFullMigrationSQL 构建完整的迁移 SQL（表 + 索引）
-func buildFullMigrationSQL() string {
-	var sb strings.Builder
-
-	sb.WriteString("-- Initialize database schema\n")
-	sb.WriteString("-- Version 1: Create all tables and indexes\n\n")
-
-	for _, schema := range getTableSchemas() {
-		sb.WriteString(buildCreateTableSQL(schema))
-		sb.WriteString(";\n\n")
-	}
-
-	for _, idx := range getIndexDefinitions() {
-		sb.WriteString(idx.SQL)
-		sb.WriteString(";\n")
-	}
-
-	return sb.String()
-}
-
-// RunMigrations 使用 golang-migrate 执行数据库迁移
-func RunMigrations(pool *pgxpool.Pool) error {
-	if pool == nil {
-		return ErrDBNotInitialized
-	}
-
-	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer sqlDB.Close()
-
-	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
-	if err != nil {
-		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create postgres driver")
-		return fmt.Errorf("create postgres driver: %w", err)
-	}
-
-	migrationSQL := buildFullMigrationSQL()
-	mapFS := mapFS{
-		"1_initial_schema.up.sql": {data: []byte(migrationSQL)},
-	}
-	source, err := iofs.New(mapFS, ".")
-	if err != nil {
-		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create migration source")
-		return fmt.Errorf("create migration source: %w", err)
-	}
-
-	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
-	if err != nil {
-		utils.LogError("DATABASE", "RunMigrations", err, "Failed to create migrator")
-		return fmt.Errorf("create migrator: %w", err)
-	}
-	defer m.Close()
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		utils.LogError("DATABASE", "RunMigrations", err, "Migration failed")
-		return fmt.Errorf("run migrations: %w", err)
-	}
-
-	utils.LogInfo("DATABASE", "Migrations completed successfully")
-	return nil
-}
-
-// mapFS 内存文件系统，实现 fs.FS 接口，用于 golang-migrate iofs 驱动
-type mapFS map[string]*mapFile
-
-type mapFile struct {
-	data   []byte
-	reader *strings.Reader
-	offset int64
-}
-
-func (fsys mapFS) Open(name string) (fs.File, error) {
-	if name == "." {
-		return &mapDir{files: fsys}, nil
-	}
-	f, ok := fsys[name]
-	if !ok {
-		return nil, fmt.Errorf("file not found: %s", name)
-	}
-	f.reader = strings.NewReader(string(f.data))
-	f.offset = 0
-	return f, nil
-}
-
-func (f *mapFile) Stat() (fs.FileInfo, error) {
-	return &mapFileInfo{name: "", size: int64(len(f.data))}, nil
-}
-
-func (f *mapFile) Read(b []byte) (int, error) {
-	n, err := f.reader.Read(b)
-	f.offset += int64(n)
-	return n, err
-}
-
-func (f *mapFile) Close() error {
-	f.reader = nil
-	return nil
-}
-
-type mapFileInfo struct {
-	name string
-	size int64
-}
-
-func (fi *mapFileInfo) Name() string       { return fi.name }
-func (fi *mapFileInfo) Size() int64        { return fi.size }
-func (fi *mapFileInfo) Mode() fs.FileMode  { return 0444 }
-func (fi *mapFileInfo) ModTime() time.Time { return time.Time{} }
-func (fi *mapFileInfo) IsDir() bool        { return false }
-func (fi *mapFileInfo) Sys() any           { return nil }
-
-var _ io.Closer = (*mapFile)(nil)
-
-// mapDir 目录类型，实现 fs.ReadDirFile
-type mapDir struct {
-	files mapFS
-}
-
-func (d *mapDir) Stat() (fs.FileInfo, error) {
-	return &mapFileInfo{name: ".", size: 0}, nil
-}
-
-func (d *mapDir) Read([]byte) (int, error) {
-	return 0, fmt.Errorf("is a directory")
-}
-
-func (d *mapDir) Close() error {
-	return nil
-}
-
-func (d *mapDir) ReadDir(n int) ([]fs.DirEntry, error) {
-	entries := make([]fs.DirEntry, 0, len(d.files))
-	for name, f := range d.files {
-		entries = append(entries, &mapDirEntry{name: name, size: int64(len(f.data))})
-	}
-	if n <= 0 || n > len(entries) {
-		n = len(entries)
-	}
-	return entries[:n], nil
-}
-
-type mapDirEntry struct {
-	name string
-	size int64
-}
-
-func (e *mapDirEntry) Name() string      { return e.name }
-func (e *mapDirEntry) IsDir() bool       { return false }
-func (e *mapDirEntry) Type() fs.FileMode { return 0 }
-func (e *mapDirEntry) Info() (fs.FileInfo, error) {
-	return &mapFileInfo{name: e.name, size: e.size}, nil
 }

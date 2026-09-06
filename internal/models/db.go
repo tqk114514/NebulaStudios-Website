@@ -68,7 +68,7 @@ func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
 	utils.LogInfo("DATABASE", "PostgreSQL connected successfully", "max_conns",
 		poolConfig.MaxConns, "min_conns", poolConfig.MinConns)
 
-	if err := initTables(ctx, pool); err != nil {
+	if err := initTables(ctx, pool, cfg.SchemaAllowDestructive); err != nil {
 		pool.Close()
 		utils.LogError("DATABASE", "InitDB", err, "Failed to initialize tables")
 		return nil, fmt.Errorf("%w: %v", ErrDBTableInitFailed, err)
@@ -115,10 +115,10 @@ func configurePool(poolConfig *pgxpool.Config, cfg *config.Config) {
 	poolConfig.HealthCheckPeriod = defaultHealthCheckPeriod
 }
 
-func initTables(ctx context.Context, pool *pgxpool.Pool) error {
-	if err := RunMigrations(pool); err != nil {
-		utils.LogError("DATABASE", "initTables", err, "Migration failed")
-		return fmt.Errorf("migration failed: %w", err)
+func initTables(ctx context.Context, pool *pgxpool.Pool, allowDestructive bool) error {
+	if err := RunSchemaSync(ctx, pool, allowDestructive); err != nil {
+		utils.LogError("DATABASE", "initTables", err, "Schema sync failed")
+		return fmt.Errorf("schema sync failed: %w", err)
 	}
 
 	utils.LogInfo("DATABASE", "Tables initialized successfully")

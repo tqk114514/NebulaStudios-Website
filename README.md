@@ -163,7 +163,7 @@ npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 d
 │   ├── config/            # 配置加载（环境变量、验证）
 │   ├── handlers/          # HTTP Handler（auth、user、admin、oauth、static）
 │   ├── middleware/        # Gin 中间件（auth、admin、ban、compress、cors、ratelimit、security）
-│   ├── models/            # 数据库模型（CRUD、Schema 定义、golang-migrate 版本化迁移）
+│   ├── models/            # 数据库模型（CRUD、Schema 定义、声明式 schema 同步）
 │   ├── paths/             # 路由路径常量
 │   ├── services/          # 业务服务（token、session、captcha、email、localstorage、imgprocessor、oauth）
 │   ├── utils/             # 工具函数（加密、验证、日志、Cookie、响应格式）
@@ -253,6 +253,9 @@ DATA_EXPORT_SALT="your-export-salt"
 # 数据库连接池（可选）
 DB_MAX_CONNS=10              # 最大连接数
 
+# Schema 同步（可选）
+SCHEMA_ALLOW_DESTRUCTIVE=false  # 是否允许同步执行可能丢失数据的操作（删表/删列/类型收窄）
+
 # 默认头像（可选）
 DEFAULT_AVATAR_URL="https://cdn.example.com/default-avatar.svg"
 ```
@@ -302,7 +305,7 @@ go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=
 ./server
 ```
 
-服务启动时通过 golang-migrate 执行数据库版本化迁移：首次启动会应用动态生成的版本 1（`CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`，幂等）。已应用过迁移的数据库不会重复执行。
+服务启动时执行**声明式 schema 同步**（无版本号、无 SQL 文件）：introspect 数据库实际结构，与 `internal/models/schema.go` 中 `getTableSchemas()` / `getIndexDefinitions()` 声明的期望状态 diff，生成变更计划（完整输出到日志）后在单事务内应用。成功即提交；任何语句失败都整体回滚并拒绝启动。可能造成数据丢失的操作（删表、删列、类型收窄）默认被拒绝并列出明细，需设置 `SCHEMA_ALLOW_DESTRUCTIVE=true` 才允许执行。多实例并发启动通过事务级 advisory lock 串行化。
 
 ### 静态文件服务
 
@@ -322,7 +325,7 @@ go build -trimpath -ldflags="-s -w -X auth-system/internal/version.ServerCommit=
 
 5. **i18n 配置**：前端文案源存储在 `frontend/src/i18n/sources/`，由 `scripts/gen-locales.mjs` 生成 `frontend/src/i18n/locales/`（不入库；`npm run dev/build/typecheck` 前自动生成）。政策 Markdown 位于 `frontend/policy/`，构建时复制进 `dist/policy/`。改动文案后需重新执行 `npm run build`。
 
-6. **数据库迁移**：由 golang-migrate 管理，迁移 SQL 由 `getTableSchemas()` / `getIndexDefinitions()` 动态生成并作为版本 1 应用，仅执行一次。**对已有表新增列不会自动应用**（`CREATE TABLE IF NOT EXISTS` 对已存在的表是空操作）——需要手动执行 `ALTER TABLE ... ADD COLUMN`，或在迁移中追加新版本。删除列、修改类型、约束变更同样需要手动 SQL。
+6. **Schema 同步**：声明式同步（见"数据库"一节）。新增表/列、修改类型、增删约束和索引后重启即自动对齐，无需手写 SQL 或版本文件；但 rename 无法被识别（表现为删旧列 + 加新列），删列/删表/类型收窄默认拒绝、需要 `SCHEMA_ALLOW_DESTRUCTIVE=true`。改名建议先用新列替代旧列，确认数据迁移完成后再删除旧列。
 
 ## License
 
