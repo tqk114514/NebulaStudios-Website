@@ -18,7 +18,7 @@ import { errorKey } from '@/api/errorCodes'
 import { login, loginTotp } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePolicyConsent } from '@/composables/usePolicyConsent'
-import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled } from '@/composables/useCaptcha'
+import { loadCaptchaConfig, getCaptchaToken, isCaptchaEnabled, resetCaptchaToken } from '@/composables/useCaptcha'
 import { CDN_URL } from '@/config/cdn'
 
 const route = useRoute()
@@ -32,6 +32,13 @@ const loading = ref(false)
 const showAlert = ref(false)
 const alertMessage = ref('')
 const captchaReady = ref(false)
+const captchaKey = ref(0)
+
+/** Turnstile token 一次性：每次提交尝试（无论成败）后必须复位组件换取新 token */
+function refreshCaptcha() {
+  resetCaptchaToken()
+  captchaKey.value++
+}
 
 // TOTP 二步验证状态：密码通过后切换出验证码输入形态
 const totpStep = ref(false)
@@ -116,6 +123,7 @@ async function handleSubmit() {
     reactToError(e)
   } finally {
     loading.value = false
+    refreshCaptcha()
   }
 }
 
@@ -188,7 +196,7 @@ onMounted(async () => {
       </AppButton>
 
       <!-- 人机验证（系统启用时显示；未启用时不占用空间） -->
-      <CaptchaWidget />
+      <CaptchaWidget :key="captchaKey" />
     </form>
 
     <!-- TOTP 二步验证形态 -->
@@ -212,7 +220,7 @@ onMounted(async () => {
         {{ loading ? $t('account.login.loggingIn') : $t('account.totp.loginSubmit') }}
       </AppButton>
 
-      <button type="button" class="totp-back" :disabled="loading" @click="totpStep = false">
+      <button type="button" class="totp-back" :disabled="loading" @click="totpStep = false; refreshCaptcha()">
         {{ $t('account.totp.backToLogin') }}
       </button>
     </form>

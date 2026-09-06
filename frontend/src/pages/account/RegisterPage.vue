@@ -42,6 +42,7 @@ const emailError = ref('')
 const emailSendable = computed(() => validateEmail(form.email.trim()).valid)
 const submitting = ref(false)
 const sendingCode = ref(false)
+const captchaKey = ref(0)
 const showAlert = ref(false)
 const alertMessage = ref('')
 const showSupportedEmails = ref(false)
@@ -92,7 +93,6 @@ async function handleSendCode() {
       language: document.documentElement.lang || 'zh-CN',
     })
     countdown.start('register', email)
-    resetCaptchaToken() // token 一次性，发送后清除避免复用
     alert('account.register.codeSent')
   } catch (e) {
     // 限流命中：以服务端返回的限制结束时间戳启动倒计时（后端按邮箱 60s 限流，本地计时可能不准）
@@ -102,6 +102,8 @@ async function handleSendCode() {
     alert(errorKey(e))
   } finally {
     sendingCode.value = false
+    resetCaptchaToken() // token 一次性：无论成败，提交后即失效，须重新验证
+    captchaKey.value++
   }
 }
 
@@ -231,7 +233,7 @@ onMounted(async () => {
           <template v-if="countdown.running.value">{{ countdown.remaining }}s</template>
           <template v-else>{{ $t('account.register.sendCodeButton') }}</template>
         </AppButton>
-        <CaptchaWidget />
+        <CaptchaWidget :key="captchaKey" />
       </FormField>
 
       <FormField :label="$t('account.register.passwordPlaceholder')">

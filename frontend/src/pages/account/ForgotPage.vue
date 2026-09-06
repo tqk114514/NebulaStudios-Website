@@ -38,6 +38,7 @@ const emailError = ref('')
 // 邮箱合法（格式完整 + 白名单内）才可发送重置验证码（对齐旧前端）
 const emailSendable = computed(() => validateEmail(email.value.trim()).valid)
 const sendingCode = ref(false)
+const captchaKey = ref(0)
 const resetting = ref(false)
 const countdown = useCountdown(60)
 const showAlert = ref(false)
@@ -96,7 +97,6 @@ async function handleSendCode() {
       captchaToken: getCaptchaToken(),
       language: document.documentElement.lang || 'zh-CN',
     })
-    resetCaptchaToken()
     countdown.start('forgot', e)
     alert('account.forgotPassword.codeSent')
     step.value = 'reset'
@@ -108,6 +108,8 @@ async function handleSendCode() {
     alert(errorKey(er))
   } finally {
     sendingCode.value = false
+    resetCaptchaToken() // token 一次性：无论成败，提交后即失效，须重新验证
+    captchaKey.value++
   }
 }
 
@@ -176,7 +178,7 @@ onMounted(async () => {
           <template v-if="countdown.running.value">{{ countdown.remaining }}s</template>
           <template v-else>{{ $t('account.forgotPassword.sendCode') }}</template>
         </AppButton>
-        <CaptchaWidget />
+        <CaptchaWidget :key="captchaKey" />
       </FormField>
     </form>
 
