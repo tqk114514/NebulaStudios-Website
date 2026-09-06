@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 页面加载遮罩（迁移自原站 .page-loader：fixed 全屏覆盖 + 居中 spinner）。
+// 页面加载遮罩（原 .page-loader：fixed 全屏覆盖）。
+// 加载动效：Logo 两半 180° 旋转对称——快转半圈停顿再转，"顿挫旋转"。
 // 全覆盖含顶栏区域：/admin 无全局站头，且切换期间必须完全遮住页面本身。
 // 显示/隐藏逻辑见 composables/usePageLoader.ts（路由懒加载 + 页面数据 + 字体就绪）。
 import { pageLoaderVisible } from '@/composables/usePageLoader'
@@ -10,7 +11,10 @@ const visible = pageLoaderVisible()
 <template>
   <Transition name="page-loader">
     <div v-if="visible" class="page-loader">
-      <div class="page-loader__spinner"></div>
+      <svg class="page-loader__logo" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M56 48H96L144 96L112 128L96 112V208H56V48Z" fill="currentColor" />
+        <path d="M200 208H160L112 160L144 128L160 144V48H200V208Z" fill="currentColor" />
+      </svg>
     </div>
   </Transition>
 </template>
@@ -27,18 +31,32 @@ const visible = pageLoaderVisible()
   z-index: 110;
 }
 
-.page-loader__spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--line);
-  border-top-color: var(--fg);
-  border-radius: 50%;
-  animation: page-loader-spin 0.8s linear infinite;
+.page-loader__logo {
+  width: 40px;
+  height: 40px;
+  color: var(--fg);
+  transform-origin: 50% 50%;
+  /* 转 180° 恰好与原图重合：45%-50% 处顿停，节奏"快转-慢停" */
+  animation: page-loader-snap 1.5s cubic-bezier(0.87, 0, 0.13, 1) infinite;
 }
 
-@keyframes page-loader-spin {
-  to {
+@keyframes page-loader-snap {
+  0% {
+    transform: rotate(0deg);
+  }
+  45%,
+  50% {
+    transform: rotate(180deg);
+  }
+  95%,
+  100% {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loader__logo {
+    animation: none;
   }
 }
 
