@@ -296,6 +296,7 @@ body.adm-page-open :is(a, button, input, select, textarea):focus-visible {
   font-family: var(--adm-mono);
   font-size: 11.5px;
   color: var(--adm-ink-2);
+  word-break: break-all;
 }
 
 .adm-cell-main {
@@ -923,5 +924,33 @@ body.adm-page-open .toast-success {
 
   .adm-pagination {
     justify-content: center;
+  }
+}
+
+/* ==================== 移动端适配（与 AdminLayout 侧栏抽屉同一断点） ==================== */
+@media (max-width: 768px) {
+  /* 表格不再被挤压逐列换行：保持可读列宽，整表在卡片内横向滚动 */
+  .adm-table {
+    min-width: 640px;
+  }
+
+  .adm-card--table {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 宽表（如用户管理 7 列）：给足列宽 */
+  .adm-table--wide {
+    min-width: 760px;
+  }
+
+  /* 详情弹窗行：长值折到标签下方独立成行，避免与标签挤在一行反复换行 */
+  .adm-detail-row {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+
+  .adm-detail-value {
+    width: 100%;
+    text-align: left;
   }
 }

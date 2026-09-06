@@ -284,7 +284,7 @@ onMounted(loadUsers)
     </div>
 
     <div class="adm-card adm-card--table">
-      <table class="adm-table">
+      <table class="adm-table adm-table--wide">
         <thead>
           <tr>
             <th>{{ $t('admin.users.col.uid') }}</th>
