@@ -28,6 +28,29 @@ export class ApiClientError extends Error {
 
 const API_BODY_JSON = 'application/json'
 
+// ---- 静默续期（access token 过期时的自动刷新） ----
+// 刷新端点用原生 fetch 直调（不走 request，避免递归重试）；
+// 并发 401 共享同一个在途刷新，防止 refresh token 轮转被并发消费触发重放撤销。
+let refreshInFlight: Promise<boolean> | null = null
+
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: API_BODY_JSON },
+      })
+      return res.ok
+    } catch {
+      return false
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
 async function parseResponse<T>(res: Response): Promise<ApiResponse<T>> {
   // 204 / 空响应
   if (res.status === 204 || res.headers.get('content-length') === '0') {
@@ -46,11 +69,13 @@ async function parseResponse<T>(res: Response): Promise<ApiResponse<T>> {
  * 带 CSRF 防护的通用请求封装。
  * - 状态变更请求（POST/PATCH/PUT/DELETE）自动携带 X-CSRF-Token（同源时读 token cookie）
  * - 非 2xx 统一映射为 ApiClientError
+ * - 401 时先尝试用 refresh token 静默续期并重试一次（仅一次；refresh 端点自身不重试）
  */
 export async function request<T = Record<string, never>>(
   method: string,
   path: string,
   body?: unknown,
+  isRetry = false,
 ): Promise<ApiSuccess<T>['data']> {
   const headers: Record<string, string> = { Accept: API_BODY_JSON }
 
@@ -78,6 +103,13 @@ export async function request<T = Record<string, never>>(
   const payload = await parseResponse<T>(res)
 
   if (!res.ok || !payload.success) {
+    // access token 过期：用 refresh token 静默续期后重试原请求（仅一次）
+    if (res.status === 401 && !isRetry && path !== '/api/auth/refresh') {
+      const refreshed = await refreshSession()
+      if (refreshed) {
+        return request<T>(method, path, body, true)
+      }
+    }
     const code = payload.success === false ? payload.errorCode : 'HTTP_' + res.status
     const retryAt = payload.success === false ? payload.retryAt : undefined
     throw new ApiClientError(code, res.status, retryAt)
