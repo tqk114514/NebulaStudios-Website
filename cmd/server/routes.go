@@ -150,6 +150,8 @@ func setupAPIRoutes(r *gin.Engine, hdlrs *Handlers, repos *Repos, svcs *Services
 
 func setupConfigAPI(r gin.IRouter, hdlrs *Handlers) {
 	configAPI := r.Group("/api/config")
+	// 挂 CSRF：GET 会设置 csrf_token cookie，供前端写操作读取（登录/隐私页 bootstrap 都会请求此端点）
+	configAPI.Use(middleware.CSRFTokenMiddleware())
 	{
 		configAPI.GET("/captcha", hdlrs.staticHandler.GetCaptchaConfig)
 	}
@@ -192,15 +194,18 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.POST("/change-password",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.authHandler.ChangePassword)
 
 		authAPI.POST("/send-delete-code",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.userHandler.SendDeleteCode)
 		authAPI.POST("/delete-account",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.userHandler.DeleteAccount)
 
 		authAPI.GET("/microsoft", hdlrs.microsoftHandler.Auth)
@@ -208,6 +213,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.POST("/microsoft/unlink",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.microsoftHandler.Unlink)
 		authAPI.GET("/microsoft/pending-link", hdlrs.microsoftHandler.GetPendingLinkInfo)
 		authAPI.POST("/microsoft/confirm-link",
@@ -218,6 +224,7 @@ func setupAuthAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 		authAPI.POST("/google/unlink",
 			middleware.AuthMiddleware(svcs.SessionService),
 			middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService),
+			middleware.CSRFTokenMiddleware(),
 			hdlrs.googleHandler.Unlink)
 		authAPI.GET("/google/pending-link", hdlrs.googleHandler.GetPendingLinkInfo)
 		authAPI.POST("/google/confirm-link",
@@ -233,6 +240,8 @@ func setupUserAPI(r gin.IRouter, hdlrs *Handlers, repos *Repos, svcs *Services) 
 	userAPI := r.Group("/api/user")
 	userAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
 	userAPI.Use(middleware.BanCheckMiddleware(svcs.UserCache, repos.UserRepo, svcs.SessionService))
+	// 认证后必须带 CSRF token（Double-Submit Cookie）；GET 请求由其内部放行并刷新 cookie
+	userAPI.Use(middleware.CSRFTokenMiddleware())
 	{
 		userAPI.PATCH("/username", hdlrs.userHandler.UpdateUsername)
 		userAPI.PATCH("/avatar", hdlrs.userHandler.UpdateAvatar)

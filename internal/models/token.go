@@ -21,6 +21,7 @@ var (
 	ErrEmailMismatch   = errors.New("EMAIL_MISMATCH")
 	ErrTypeMismatch    = errors.New("TYPE_MISMATCH")
 	ErrCodeNotVerified = errors.New("CODE_NOT_VERIFIED")
+	ErrCodeLocked      = errors.New("CODE_LOCKED")
 )
 
 const (

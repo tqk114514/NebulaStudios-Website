@@ -53,6 +53,10 @@ type TokenService struct {
 	codeRepo         models.CodeStore
 	sessionTokenRepo models.SessionTokenStore
 	pool             *pgxpool.Pool
+
+	// 验证码防爆破：记录同一邮箱的失败尝试，达到阈值后锁定，防止逐码爆破
+	lockMu         sync.Mutex
+	verifyFailures map[string]*verifyLockEntry
 }
 
 // NewTokenService 创建 Token 服务
@@ -63,6 +67,68 @@ func NewTokenService(pool *pgxpool.Pool) *TokenService {
 		codeRepo:         models.NewCodeRepository(pool),
 		sessionTokenRepo: models.NewSessionTokenRepository(pool),
 		pool:             pool,
+		verifyFailures:   make(map[string]*verifyLockEntry),
+	}
+}
+
+// 验证码防爆破参数：同一邮箱连续失败达到上限后锁定一段时间（配合 IP 限流与 CAPTCHA）
+const (
+	codeMaxFailures     = 5
+	codeLockoutDuration = 5 * time.Minute
+	codeLockStateTTL    = 10 * time.Minute
+)
+
+type verifyLockEntry struct {
+	count       int
+	lockedUntil time.Time
+	lastSeen    time.Time
+}
+
+func (s *TokenService) isVerifyLocked(email string) bool {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	entry := s.verifyFailures[email]
+	if entry == nil {
+		return false
+	}
+	return time.Now().Before(entry.lockedUntil)
+}
+
+// registerVerifyFailure 记录一次失败，返回是否触发锁定。
+func (s *TokenService) registerVerifyFailure(email string) bool {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	now := time.Now()
+	entry := s.verifyFailures[email]
+	if entry == nil {
+		entry = &verifyLockEntry{}
+		s.verifyFailures[email] = entry
+	}
+	entry.count++
+	entry.lastSeen = now
+	if entry.count >= codeMaxFailures {
+		entry.lockedUntil = now.Add(codeLockoutDuration)
+		return true
+	}
+	return false
+}
+
+func (s *TokenService) resetVerifyFailures(email string) {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	delete(s.verifyFailures, email)
+}
+
+// cleanupVerifyLockout 清理过期锁定状态（与 TOTP 清理周期一致，挂到后台任务）
+func (s *TokenService) cleanupVerifyLockout() {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-codeLockStateTTL)
+	for email, entry := range s.verifyFailures {
+		if now.After(entry.lockedUntil) && entry.lastSeen.Before(cutoff) {
+			delete(s.verifyFailures, email)
+		}
 	}
 }
 
@@ -177,10 +243,19 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 
+	// 防爆破：命中锁定则直接拒绝，避免逐码试错
+	if s.isVerifyLocked(normalizedEmail) {
+		utils.LogWarn("TOKEN", "Verification locked (too many failures)", "email", normalizedEmail)
+		return nil, models.ErrCodeLocked
+	}
+
 	code, err := s.codeRepo.FindByCode(ctx, codeStr)
 	if err != nil {
 		if utils.IsDatabaseNotFound(err) {
 			utils.LogDebug("TOKEN", "Code not found", "code", codeStr)
+			if s.registerVerifyFailure(normalizedEmail) {
+				return nil, models.ErrCodeLocked
+			}
 			return nil, models.ErrInvalidCode
 		}
 		return nil, err
@@ -188,6 +263,9 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 
 	if code.Email != normalizedEmail {
 		utils.LogWarn("TOKEN", "Email mismatch", "expected", code.Email, "got", normalizedEmail)
+		if s.registerVerifyFailure(normalizedEmail) {
+			return nil, models.ErrCodeLocked
+		}
 		return nil, models.ErrEmailMismatch
 	}
 
@@ -202,6 +280,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 	}
 
 	if code.IsVerified() {
+		s.resetVerifyFailures(normalizedEmail)
 		return &CodeResult{Type: code.Type, AlreadyVerified: true}, nil
 	}
 
@@ -210,6 +289,7 @@ func (s *TokenService) VerifyCode(ctx context.Context, codeStr, email, expectedT
 		return nil, fmt.Errorf("failed to update verification: %w", err)
 	}
 
+	s.resetVerifyFailures(normalizedEmail)
 	utils.LogInfo("TOKEN", "Code verified", "email", normalizedEmail, "type", code.Type)
 
 	return &CodeResult{Type: code.Type}, nil
@@ -386,6 +466,10 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 		if count > 0 {
 			utils.LogInfo("TOKEN", "Cleaned up expired session tokens", "count", count)
 		}
+	})
+
+	wg.Go(func() {
+		s.cleanupVerifyLockout()
 	})
 
 	wg.Wait()

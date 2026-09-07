@@ -22,6 +22,7 @@ var businessTokenErrors = []error{
 	models.ErrTypeMismatch,
 	models.ErrCodeNotVerified,
 	models.ErrCodeUsed,
+	models.ErrCodeLocked,
 }
 
 // RespondTokenError 令牌/验证码校验错误的统一响应：

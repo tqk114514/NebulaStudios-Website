@@ -164,6 +164,7 @@ type FakeTokenManager struct {
 	Invalidated    []string
 	UseTokenResult *services.TokenResult
 	UseTokenErr    error
+	UseCodeCalls   int
 }
 
 func (f *FakeTokenManager) CreateToken(context.Context, string, string) (string, int64, error) {
@@ -184,7 +185,7 @@ func (f *FakeTokenManager) VerifyCode(_ context.Context, code, _, _ string) (*se
 func (f *FakeTokenManager) IsCodeVerified(context.Context, string, string) (bool, error) {
 	return true, nil
 }
-func (f *FakeTokenManager) UseCode(context.Context, string, string) error { return nil }
+func (f *FakeTokenManager) UseCode(context.Context, string, string) error { f.UseCodeCalls++; return nil }
 func (f *FakeTokenManager) InvalidateCodeByEmail(_ context.Context, email string, _ *string) error {
 	f.Invalidated = append(f.Invalidated, email)
 	return nil

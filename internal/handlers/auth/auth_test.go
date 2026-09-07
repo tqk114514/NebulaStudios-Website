@@ -120,9 +120,9 @@ func TestRegisterSuccess(t *testing.T) {
 	if ok, _ := utils.VerifyPassword("Abcdef1!@#ghijklmn", created.Password); !ok {
 		t.Error("hashed password should verify")
 	}
-	// 验证码应被消费
-	if len(deps.tokenMgr.Invalidated) != 1 || deps.tokenMgr.Invalidated[0] != "alice@example.com" {
-		t.Errorf("verification code should be invalidated once, got %v", deps.tokenMgr.Invalidated)
+	// 验证码应被原子消费（F3 修复：改用 UseCode，而非宽删除）
+	if deps.tokenMgr.UseCodeCalls != 1 {
+		t.Errorf("verification code should be atomically consumed via UseCode exactly once, got %d calls", deps.tokenMgr.UseCodeCalls)
 	}
 }
 

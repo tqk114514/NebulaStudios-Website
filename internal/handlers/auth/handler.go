@@ -223,8 +223,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// 立即消费验证码（一次性），避免 VerifyCode 与用户创建之间的窗口期被并发重放
-	_ = h.tokenService.InvalidateCodeByEmail(ctx, emailResult.Value, &tokenType)
+	// 原子消费验证码（一次性）：UseCode 以"存在 + 邮箱匹配 + 已验证"为条件单条删除，
+	// 消除 VerifyCode 与用户创建之间被并发重放的窗口（与 ResetPassword 一致）。
+	if err := h.tokenService.UseCode(ctx, code, emailResult.Value); err != nil {
+		handlers.RespondTokenError(c, "AUTH", err, fmt.Sprintf("Registration code consume failed: email=%s", emailResult.Value))
+		return
+	}
 
 	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {

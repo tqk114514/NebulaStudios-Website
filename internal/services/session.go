@@ -278,7 +278,9 @@ func (s *SessionService) VerifyToken(tokenString string) (*Claims, error) {
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+		// 钉死算法为 ES256：拒绝任何其他 ECDSA 变体（ES384/ES512）及非 ECDSA 算法，
+		// 避免算法混淆与曲线不一致带来的签名校验歧义。
+		if token.Method.Alg() != jwt.SigningMethodES256.Alg() {
 			utils.LogWarn("SESSION", "Unexpected signing method", "alg", token.Header["alg"])
 			return nil, ErrInvalidSigningMethod
 		}
@@ -408,6 +410,11 @@ func parseECDSAPrivateKey(pemData string) (*ecdsa.PrivateKey, error) {
 
 // handleParseError 处理 Token 解析错误
 func (s *SessionService) handleParseError(err error) error {
+	// 算法不符（非 ES256）直接透传，便于调用方识别"算法被钉死"的拒绝
+	if errors.Is(err, ErrInvalidSigningMethod) {
+		return ErrInvalidSigningMethod
+	}
+
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		utils.LogDebug("SESSION", "Token expired")
 		return ErrTokenExpiredSession

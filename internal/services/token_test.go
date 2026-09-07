@@ -95,7 +95,7 @@ func newTokenServiceWithFakes(t *testing.T) (*TokenService, *fakeTokenStore, *fa
 	t.Helper()
 	tokenRepo := &fakeTokenStore{}
 	codeRepo := &fakeCodeStore{}
-	s := &TokenService{tokenRepo: tokenRepo, codeRepo: codeRepo}
+	s := &TokenService{tokenRepo: tokenRepo, codeRepo: codeRepo, verifyFailures: make(map[string]*verifyLockEntry)}
 	return s, tokenRepo, codeRepo
 }
 
