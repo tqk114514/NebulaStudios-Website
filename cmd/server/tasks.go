@@ -24,8 +24,8 @@ func startBackgroundTasks(_ *Handlers, repos *Repos, svcs *Services) {
 	go runTokenCleanup(svcs.TokenService)
 	utils.LogInfo("TASKS", "Token cleanup task started", "interval", tokenCleanupInterval)
 
-	go runUserLogCleanup(repos.UserLogRepo)
-	utils.LogInfo("TASKS", "User log cleanup task started: interval=24h, retention=6 months")
+	go runUserLogCleanup(repos.UserLogRepo, repos.UserConsentRepo)
+	utils.LogInfo("TASKS", "Retention cleanup task started: interval=24h, retention=6 months (user_logs, user_consents)")
 
 	go runTOTPCleanup(svcs.TOTPService)
 	utils.LogInfo("TASKS", "TOTP state cleanup task started", "interval", "1m")
@@ -58,16 +58,16 @@ func runTokenCleanup(tokenService services.TokenManager) {
 	}
 }
 
-func runUserLogCleanup(userLogRepo models.UserLogStore) {
+func runUserLogCleanup(userLogRepo models.UserLogStore, consentRepo models.UserConsentStore) {
 	if userLogRepo == nil {
 		utils.LogWarn("TASKS", "User log repository is nil, cleanup task disabled")
 		return
 	}
 
-	func() {
+	sweep := func(taskLabel string) {
 		defer func() {
 			if r := recover(); r != nil {
-				utils.LogError("TASKS", "runUserLogCleanup", fmt.Errorf("panic: %v", r))
+				utils.LogError("TASKS", taskLabel, fmt.Errorf("panic: %v", r))
 			}
 		}()
 
@@ -76,33 +76,30 @@ func runUserLogCleanup(userLogRepo models.UserLogStore) {
 
 		count, err := userLogRepo.DeleteExpiredLogs(ctx)
 		if err != nil {
-			utils.LogError("TASKS", "DeleteExpiredLogs", err, "initial cleanup")
+			utils.LogError("TASKS", "DeleteExpiredLogs", err)
 		} else if count > 0 {
-			utils.LogInfo("TASKS", "Initial user log cleanup completed", "deleted", count)
+			utils.LogInfo("TASKS", "User log cleanup completed", "deleted", count)
 		}
-	}()
+
+		if consentRepo == nil {
+			return
+		}
+
+		count, err = consentRepo.DeleteExpiredConsents(ctx)
+		if err != nil {
+			utils.LogError("TASKS", "DeleteExpiredConsents", err)
+		} else if count > 0 {
+			utils.LogInfo("TASKS", "User consent cleanup completed", "deleted", count)
+		}
+	}
+
+	sweep("runUserLogCleanup initial")
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					utils.LogError("TASKS", "runUserLogCleanup", fmt.Errorf("panic: %v", r))
-				}
-			}()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			defer cancel()
-
-			count, err := userLogRepo.DeleteExpiredLogs(ctx)
-			if err != nil {
-				utils.LogError("TASKS", "DeleteExpiredLogs", err)
-			} else if count > 0 {
-				utils.LogInfo("TASKS", "User log cleanup completed", "deleted", count)
-			}
-		}()
+		sweep("runUserLogCleanup")
 	}
 }
 

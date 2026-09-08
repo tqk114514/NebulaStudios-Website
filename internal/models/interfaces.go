@@ -77,6 +77,7 @@ type UserConsentStore interface {
 	LogConsent(ctx context.Context, userUID, policyType, policyVersion string) error
 	FindByUserUID(ctx context.Context, userUID string) ([]*UserConsent, error)
 	DeleteByUserUID(ctx context.Context, userUID string) error
+	DeleteExpiredConsents(ctx context.Context) (int64, error)
 }
 
 // EmailWhitelistStore 邮件白名单数据访问接口

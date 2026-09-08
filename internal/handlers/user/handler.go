@@ -24,6 +24,7 @@ var (
 type UserHandler struct {
 	userRepo           models.UserReadWriter
 	userLogRepo        models.UserLogStore
+	userConsentRepo    models.UserConsentStore
 	tokenService       services.TokenManager
 	emailService       services.EmailSender
 	captchaService     services.CaptchaVerifier
@@ -37,10 +38,11 @@ type UserHandler struct {
 }
 
 // NewUserHandler 创建用户管理 Handler，验证所有必需依赖后初始化。
-// storageService 和 oauthService 为可选参数。
+// userConsentRepo、storageService 和 oauthService 为可选参数。
 func NewUserHandler(
 	userRepo models.UserReadWriter,
 	userLogRepo models.UserLogStore,
+	userConsentRepo models.UserConsentStore,
 	tokenService services.TokenManager,
 	emailService services.EmailSender,
 	captchaService services.CaptchaVerifier,
@@ -76,6 +78,7 @@ func NewUserHandler(
 	return &UserHandler{
 		userRepo:           userRepo,
 		userLogRepo:        userLogRepo,
+		userConsentRepo:    userConsentRepo,
 		tokenService:       tokenService,
 		emailService:       emailService,
 		captchaService:     captchaService,

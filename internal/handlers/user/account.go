@@ -292,22 +292,6 @@ func (h *UserHandler) RevokeOAuthGrant(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{})
 }
 
-// getDataExportFooter 获取数据导出文件的本地化页脚
-func getDataExportFooter(lang string, utcTime string) string {
-	switch lang {
-	case "zh-CN":
-		return fmt.Sprintf("\n\n数据截止 %s", utcTime)
-	case "zh-TW":
-		return fmt.Sprintf("\n\n資料截止 %s", utcTime)
-	case "ja":
-		return fmt.Sprintf("\n\nデータ取得日時 %s", utcTime)
-	case "ko":
-		return fmt.Sprintf("\n\n데이터 기준 %s", utcTime)
-	default:
-		return fmt.Sprintf("\n\nData as of %s", utcTime)
-	}
-}
-
 // RequestDataExport 请求数据导出（生成一次性下载 Token）
 // POST /api/user/export/request
 func (h *UserHandler) RequestDataExport(c *gin.Context) {
@@ -366,6 +350,7 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 
 	var logs []*models.UserLog
 	if h.userLogRepo != nil {
+		var err error
 		logs, _, err = h.userLogRepo.FindByUserUID(ctx, userUID, 1, 10000)
 		if err != nil {
 			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to get logs for export", "user_uid", userUID)
@@ -373,22 +358,66 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 		}
 	}
 
+	var consents []*models.UserConsent
+	if h.userConsentRepo != nil {
+		var err error
+		consents, err = h.userConsentRepo.FindByUserUID(ctx, userUID)
+		if err != nil {
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to get consents for export", "user_uid", userUID)
+			consents = []*models.UserConsent{}
+		}
+	}
+
+	var grants []*models.OAuthGrantWithClient
+	if h.oauthService != nil {
+		var err error
+		grants, err = h.oauthService.GetUserGrants(ctx, userUID)
+		if err != nil {
+			utils.LogWarnCtx(c.Request.Context(), "USER", "Failed to get OAuth grants for export", "user_uid", userUID)
+			grants = []*models.OAuthGrantWithClient{}
+		}
+	}
+
+	now := time.Now().UTC()
+
 	exportData := gin.H{
 		"export_info": gin.H{
-			"exported_at": time.Now().UTC().Format(time.RFC3339),
+			"exported_at": now.Format(time.RFC3339),
 			"user_uid":    userUID,
+			"data_as_of":  now.Format("2006-01-02 15:04:05") + " UTC",
+			// 验证凭据不在导出范围内：密码哈希、TOTP 密钥与恢复码摘要、
+			// 会话与 OAuth 令牌摘要仅用于身份校验，导出不具备可用性且会扩大泄露面
+			"excluded": []string{
+				"password_hash",
+				"totp_secret",
+				"totp_recovery_code_hashes",
+				"session_token_hashes",
+				"oauth_token_hashes",
+			},
 		},
 		"user_info": gin.H{
-			"username":         user.Username,
-			"email":            user.Email,
-			"avatar_url":       user.AvatarURL,
-			"microsoft_id":     user.MicrosoftID,
-			"microsoft_name":   user.MicrosoftName,
-			"microsoft_avatar": user.MicrosoftAvatarURL,
-			"created_at":       user.CreatedAt,
-			"updated_at":       user.UpdatedAt,
+			"username":              user.Username,
+			"email":                 user.Email,
+			"avatar_url":            user.AvatarURL,
+			"role":                  user.Role,
+			"microsoft_id":          user.MicrosoftID,
+			"microsoft_name":        user.MicrosoftName,
+			"microsoft_avatar_url":  user.MicrosoftAvatarURL,
+			"microsoft_avatar_sync": user.MicrosoftAvatarSync,
+			"google_id":             user.GoogleID,
+			"google_name":           user.GoogleName,
+			"google_avatar_url":     user.GoogleAvatarURL,
+			"totp_enabled":          user.TOTPEnabled,
+			"is_banned":             user.IsBanned,
+			"ban_reason":            user.BanReason,
+			"banned_at":             user.BannedAt,
+			"unban_at":              user.UnbanAt,
+			"created_at":            user.CreatedAt,
+			"updated_at":            user.UpdatedAt,
 		},
-		"operation_logs": logs,
+		"policy_consents": consents,
+		"oauth_grants":    grants,
+		"operation_logs":  logs,
 	}
 
 	jsonData, err := json.MarshalIndent(exportData, "", "  ")
@@ -398,21 +427,9 @@ func (h *UserHandler) DownloadUserData(c *gin.Context) {
 		return
 	}
 
-	lang := utils.GetLanguageCookie(c)
-	if lang == "" {
-		lang = "en"
-	}
-
-	now := time.Now().UTC()
-	utcTimeStr := now.Format("2006-01-02 15:04:05") + " UTC"
-
-	footer := getDataExportFooter(lang, utcTimeStr)
-	finalData := append(jsonData, []byte(footer)...)
-
-	filename := fmt.Sprintf("nebula_account_data_%s_%s.txt", userUID, time.Now().In(utils.ShanghaiLocation()).Format("20060102_150405"))
+	filename := fmt.Sprintf("nebula_account_data_%s_%s.json", userUID, now.In(utils.ShanghaiLocation()).Format("20060102_150405"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", finalData)
+	c.Data(http.StatusOK, "application/json; charset=utf-8", jsonData)
 
-	utils.LogInfoCtx(c.Request.Context(), "USER", "Data exported", "user_uid", userUID, "size", len(finalData))
+	utils.LogInfoCtx(c.Request.Context(), "USER", "Data exported", "user_uid", userUID, "size", len(jsonData))
 }

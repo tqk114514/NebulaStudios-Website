@@ -383,7 +383,7 @@ async function handleDataExport() {
     const url = `/api/user/export/${encodeURIComponent(res.token)}`
     const link = document.createElement('a')
     link.href = url
-    link.download = 'user-data.txt'
+    link.download = 'user-data.json'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

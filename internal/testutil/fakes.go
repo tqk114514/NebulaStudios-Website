@@ -185,7 +185,10 @@ func (f *FakeTokenManager) VerifyCode(_ context.Context, code, _, _ string) (*se
 func (f *FakeTokenManager) IsCodeVerified(context.Context, string, string) (bool, error) {
 	return true, nil
 }
-func (f *FakeTokenManager) UseCode(context.Context, string, string) error { f.UseCodeCalls++; return nil }
+func (f *FakeTokenManager) UseCode(context.Context, string, string) error {
+	f.UseCodeCalls++
+	return nil
+}
 func (f *FakeTokenManager) InvalidateCodeByEmail(_ context.Context, email string, _ *string) error {
 	f.Invalidated = append(f.Invalidated, email)
 	return nil
@@ -317,14 +320,19 @@ func (f *FakeUserCache) ResetStats()             {}
 
 // ---------- FakeUserConsentStore: models.UserConsentStore ----------
 
-type FakeUserConsentStore struct{}
+type FakeUserConsentStore struct {
+	Consents []*models.UserConsent
+}
 
 func (f *FakeUserConsentStore) Create(context.Context, *models.UserConsent) error        { return nil }
 func (f *FakeUserConsentStore) LogConsent(context.Context, string, string, string) error { return nil }
 func (f *FakeUserConsentStore) FindByUserUID(context.Context, string) ([]*models.UserConsent, error) {
-	return nil, nil
+	return f.Consents, nil
 }
 func (f *FakeUserConsentStore) DeleteByUserUID(context.Context, string) error { return nil }
+func (f *FakeUserConsentStore) DeleteExpiredConsents(context.Context) (int64, error) {
+	return 0, nil
+}
 
 // ---------- FakeEmailWhitelist: models.EmailWhitelistStore ----------
 

@@ -2,7 +2,10 @@ package models
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"auth-system/internal/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -75,8 +78,26 @@ func (r *UserConsentRepository) FindByUserUID(ctx context.Context, userUID strin
 	return consents, rows.Err()
 }
 
-// DeleteByUserUID 删除用户的所有同意记录（用户删除时调用，审计保留与 user_logs 相同）
+// DeleteByUserUID 删除用户的所有同意记录
+// 注意：同意记录是处理合法性的举证依据，账户注销时不即时删除，
+// 而是与 user_logs 一样按 6 个月留存期由 DeleteExpiredConsents 清扫
 func (r *UserConsentRepository) DeleteByUserUID(ctx context.Context, userUID string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM user_consents WHERE user_uid = $1`, userUID)
 	return err
+}
+
+// DeleteExpiredConsents 删除超过 6 个月的同意记录
+// 应通过定时任务定期调用（与用户日志清扫同一周期）
+func (r *UserConsentRepository) DeleteExpiredConsents(ctx context.Context) (int64, error) {
+	if r.pool == nil {
+		return 0, errors.New("database not ready")
+	}
+
+	result, err := r.pool.Exec(ctx,
+		"DELETE FROM user_consents WHERE created_at < NOW() - INTERVAL '6 months'")
+	if err != nil {
+		return 0, utils.LogError("USER_CONSENT", "DeleteExpiredConsents", err)
+	}
+
+	return result.RowsAffected(), nil
 }

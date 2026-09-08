@@ -287,7 +287,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	utils.LogInfo("HANDLERS", "TOTPHandler initialized")
 
 	hdlrs.userHandler, err = userhandler.NewUserHandler(
-		repos.UserRepo, repos.UserLogRepo, svcs.TokenService,
+		repos.UserRepo, repos.UserLogRepo, repos.UserConsentRepo, svcs.TokenService,
 		svcs.EmailService, svcs.CaptchaService, svcs.UserCache,
 		svcs.StorageService, svcs.OAuthService, svcs.LimiterMgr,
 		svcs.ExportTokenService, cfg.BaseURL, cfg.DefaultAvatarURL,

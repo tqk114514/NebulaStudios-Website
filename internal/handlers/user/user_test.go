@@ -2,6 +2,8 @@ package user
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +21,7 @@ import (
 // userTestDeps 测试依赖集合
 type userTestDeps struct {
 	userRepo    *testutil.FakeUserRepo
+	consents    *testutil.FakeUserConsentStore
 	tokenMgr    *testutil.FakeTokenManager
 	captcha     *testutil.FakeCaptcha
 	emailSender *testutil.FakeEmailSender
@@ -32,6 +35,7 @@ func newTestUserHandler(t *testing.T) (*UserHandler, *userTestDeps) {
 
 	deps := &userTestDeps{
 		userRepo:    testutil.NewFakeUserRepo(),
+		consents:    &testutil.FakeUserConsentStore{},
 		tokenMgr:    &testutil.FakeTokenManager{},
 		captcha:     &testutil.FakeCaptcha{},
 		emailSender: &testutil.FakeEmailSender{},
@@ -42,6 +46,7 @@ func newTestUserHandler(t *testing.T) (*UserHandler, *userTestDeps) {
 	h, err := NewUserHandler(
 		deps.userRepo,
 		&testutil.FakeUserLogStore{},
+		deps.consents,
 		deps.tokenMgr,
 		deps.emailSender,
 		deps.captcha,
@@ -263,5 +268,79 @@ func TestDeleteAccountMissingParams(t *testing.T) {
 	w := postUserJSON(h.DeleteAccount, `{"code":"","password":""}`)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "MISSING_PARAMETERS") {
 		t.Errorf("status = %d body = %s", w.Code, w.Body.String())
+	}
+}
+
+// TestDownloadUserDataComplete 验证数据导出覆盖用户本人的全部个人数据类别、
+// 产物为可独立解析的合法 JSON，且不泄露验证凭据
+func TestDownloadUserDataComplete(t *testing.T) {
+	h, deps := newTestUserHandler(t)
+	// FakeExportToken.ValidateAndConsume 固定返回 "uid"
+	deps.userRepo.Seed(&models.User{
+		UID:                 "uid",
+		Username:            "alice",
+		Email:               "alice@example.com",
+		Password:            "argon2-hash-must-not-leak",
+		AvatarURL:           "https://cdn.example.com/a.webp",
+		GoogleID:            sql.NullString{String: "goog-1", Valid: true},
+		GoogleName:          sql.NullString{String: "Alice G", Valid: true},
+		GoogleAvatarURL:     sql.NullString{String: "https://lh3.googleusercontent.com/a", Valid: true},
+		MicrosoftAvatarHash: sql.NullString{String: "sha256-of-image", Valid: true},
+		MicrosoftAvatarSync: true,
+		TOTPEnabled:         true,
+		TOTPSecret:          sql.NullString{String: "JBSWY3DPEHPK3PXP", Valid: true},
+	})
+	deps.consents.Consents = []*models.UserConsent{
+		{UserUID: "uid", PolicyType: models.PolicyTypePrivacy, PolicyVersion: "2026-09-01.md"},
+	}
+
+	r := gin.New()
+	r.GET("/api/user/export/:token", h.DownloadUserData)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/user/export/export-token", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("导出产物不是合法 JSON: %v\n%s", err, w.Body.String())
+	}
+	for _, key := range []string{"policy_consents", "oauth_grants", "operation_logs"} {
+		if _, ok := payload[key]; !ok {
+			t.Errorf("导出缺少 %q", key)
+		}
+	}
+
+	userInfo, ok := payload["user_info"].(map[string]any)
+	if !ok {
+		t.Fatalf("user_info 缺失或非对象: %s", w.Body.String())
+	}
+	for _, key := range []string{
+		"username", "email", "avatar_url", "role",
+		"microsoft_id", "microsoft_name", "microsoft_avatar_url", "microsoft_avatar_sync",
+		"google_id", "google_name", "google_avatar_url",
+		"totp_enabled", "is_banned", "ban_reason", "banned_at", "unban_at",
+		"created_at", "updated_at",
+	} {
+		if _, ok := userInfo[key]; !ok {
+			t.Errorf("user_info 缺少字段 %q", key)
+		}
+	}
+	for _, credential := range []string{"password", "totp_secret", "microsoft_avatar_hash"} {
+		if _, ok := userInfo[credential]; ok {
+			t.Errorf("user_info 不得包含凭据字段 %q", credential)
+		}
+	}
+
+	body := w.Body.String()
+	for _, secret := range []string{"JBSWY3DPEHPK3PXP", "argon2-hash-must-not-leak", "sha256-of-image"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("导出泄露凭据值 %q", secret)
+		}
 	}
 }
