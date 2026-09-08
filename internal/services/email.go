@@ -284,9 +284,9 @@ func usableSenderName(name string) bool {
 
 // setSenderHeaders 设置发件人身份相关的头。
 // 配置了可用的 SMTP_FROM_NAME 时，From 写成 `"显示名" <地址>`（使收件方看到品牌名而非
-// 邮箱本地部分 "noreply"），并复用同一名称作为 User-Agent/X-Mailer；
-// 显示名不可用时 From 降级为纯地址，且完全不写 mailer 标识
-// （go-mail 的默认值会把库名与精确版本号发给每一个收件人）。
+// 邮箱本地部分 "noreply"）；显示名不可用时 From 降级为纯地址。
+// 两种情况都不写 User-Agent/X-Mailer：收件方客户端会把该字段渲染成发件人旁的 "使用 XXX"
+// 标注，而 go-mail 的默认值还会把库名与精确版本号发给每一个收件人。
 func (s *EmailService) setSenderHeaders(msg *mail.Msg) error {
 	name := s.cfg.SMTPFromName
 	if !usableSenderName(name) {
@@ -295,7 +295,6 @@ func (s *EmailService) setSenderHeaders(msg *mail.Msg) error {
 		}
 		return msg.From(s.cfg.SMTPFrom)
 	}
-	msg.SetUserAgent(name)
 	return msg.FromFormat(name, s.cfg.SMTPFrom)
 }
 

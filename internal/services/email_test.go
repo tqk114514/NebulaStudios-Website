@@ -1,8 +1,6 @@
 package services
 
 import (
-	"reflect"
-	"strings"
 	"testing"
 
 	"auth-system/internal/config"
@@ -11,9 +9,10 @@ import (
 )
 
 // TestSetSenderHeaders 验证发件人身份相关的头：
-// 配置了 SMTP_FROM_NAME 时 From 写为 `"显示名" <地址>` 且复用为 mailer 标识；
-// 未配置或显示名会破坏 RFC 5322 quoted-string 时，From 降级为纯地址且不写 mailer 标识，
-// 避免装饰性字段阻断验证码投递，也避免把依赖库名与版本号发给每个收件人
+// 配置了 SMTP_FROM_NAME 时 From 写为 `"显示名" <地址>`；未配置或显示名会破坏
+// RFC 5322 quoted-string 时 From 降级为纯地址，避免装饰性字段阻断验证码投递。
+// 两种情况都断言不写 User-Agent/X-Mailer：收件方客户端会把该字段渲染成发件人旁的
+// "使用 XXX" 标注，go-mail 的默认值还会外泄依赖库名与版本号
 func TestSetSenderHeaders(t *testing.T) {
 	const addr = "noreply@nebulastudios.top"
 
@@ -21,12 +20,11 @@ func TestSetSenderHeaders(t *testing.T) {
 		fromName string
 		wantName string
 		wantAddr string
-		wantUA   []string
 	}{
-		{"Nebula Studios", "Nebula Studios", addr, []string{"Nebula Studios"}},
-		{"", "", addr, nil},
-		{`evil" <x@evil.example>`, "", addr, nil},
-		{`back\slash`, "", addr, nil},
+		{"Nebula Studios", "Nebula Studios", addr},
+		{"", "", addr},
+		{`evil" <x@evil.example>`, "", addr},
+		{`back\slash`, "", addr},
 	}
 
 	for _, tc := range cases {
@@ -49,14 +47,9 @@ func TestSetSenderHeaders(t *testing.T) {
 		}
 
 		for _, header := range []mail.Header{mail.HeaderUserAgent, mail.HeaderXMailer} {
-			got := msg.GetGenHeader(header)
-			if !reflect.DeepEqual(got, tc.wantUA) {
-				t.Errorf("SMTP_FROM_NAME=%q: %s = %q，期望 %q", tc.fromName, header, got, tc.wantUA)
+			if got := msg.GetGenHeader(header); len(got) != 0 {
+				t.Errorf("SMTP_FROM_NAME=%q: 不应设置 %s，实际 %q", tc.fromName, header, got)
 			}
-		}
-
-		if ua := strings.Join(msg.GetGenHeader(mail.HeaderUserAgent), " "); strings.Contains(ua, "go-mail") {
-			t.Errorf("User-Agent 不应外泄依赖库信息：%q", ua)
 		}
 	}
 }
