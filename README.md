@@ -211,6 +211,8 @@ SMTP_PORT=465
 SMTP_USER="your-email@163.com"
 SMTP_PASSWORD="your-smtp-password"
 SMTP_FROM="your-email@163.com"
+# 发件人显示名（可选）：收件方看到的名字，如 "Nebula Studios"；留空则客户端显示邮箱本地部分
+SMTP_FROM_NAME="Nebula Studios"
 
 # 人机验证开关（必需，仅接受 true/false）：false 时登录/注册/重置密码/删除账户等
 # 全部跳过人机验证且前端不展示验证组件

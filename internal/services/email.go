@@ -276,6 +276,29 @@ func (s *EmailService) renderTextBody(common map[string]string, verifyURL string
 	return strings.ReplaceAll(textBody, "{{VERIFY_URL}}", verifyURL)
 }
 
+// usableSenderName 判断 SMTP_FROM_NAME 能否安全用于邮件头：
+// 空值不可用；含裸双引号或反斜杠会破坏 RFC 5322 的 quoted-string
+func usableSenderName(name string) bool {
+	return name != "" && !strings.ContainsAny(name, `"\\`)
+}
+
+// setSenderHeaders 设置发件人身份相关的头。
+// 配置了可用的 SMTP_FROM_NAME 时，From 写成 `"显示名" <地址>`（使收件方看到品牌名而非
+// 邮箱本地部分 "noreply"），并复用同一名称作为 User-Agent/X-Mailer；
+// 显示名不可用时 From 降级为纯地址，且完全不写 mailer 标识
+// （go-mail 的默认值会把库名与精确版本号发给每一个收件人）。
+func (s *EmailService) setSenderHeaders(msg *mail.Msg) error {
+	name := s.cfg.SMTPFromName
+	if !usableSenderName(name) {
+		if name != "" {
+			utils.LogWarn("EMAIL", "SMTP_FROM_NAME contains quote or backslash, sending without display name")
+		}
+		return msg.From(s.cfg.SMTPFrom)
+	}
+	msg.SetUserAgent(name)
+	return msg.FromFormat(name, s.cfg.SMTPFrom)
+}
+
 // sendEmail 发送邮件
 func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 	if to == "" {
@@ -286,7 +309,8 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 	}
 
 	// 校验 CRLF 防止邮件头部注入：to/subject/from 含换行符可注入 Bcc/Reply-To 等头
-	if containsNewline(to) || containsNewline(subject) || containsNewline(s.cfg.SMTPFrom) {
+	if containsNewline(to) || containsNewline(subject) || containsNewline(s.cfg.SMTPFrom) ||
+		containsNewline(s.cfg.SMTPFromName) {
 		utils.LogError("EMAIL", "send", ErrEmailHeaderInjection, "reason", "CRLF detected in email headers", "to", to, "subject", subject)
 		return ErrEmailHeaderInjection
 	}
@@ -296,11 +320,11 @@ func (s *EmailService) sendEmail(to, subject, htmlBody, textBody string) error {
 		return err
 	}
 
-	msg := mail.NewMsg()
+	msg := mail.NewMsg(mail.WithNoDefaultUserAgent())
 
-	if err := msg.From(s.cfg.SMTPFrom); err != nil {
-		utils.LogError("EMAIL", "send", err, "Failed to set from address")
-		return fmt.Errorf("failed to set from address: %w", err)
+	if err := s.setSenderHeaders(msg); err != nil {
+		utils.LogError("EMAIL", "send", err, "Failed to set sender headers")
+		return fmt.Errorf("failed to set sender headers: %w", err)
 	}
 
 	if err := msg.To(to); err != nil {

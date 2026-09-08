@@ -40,6 +40,7 @@ type Config struct {
 
 	SMTPHost     string
 	SMTPFrom     string
+	SMTPFromName string
 	SMTPUser     string
 	SMTPPassword string
 	SMTPPort     int
@@ -126,6 +127,7 @@ func Load() (*Config, error) {
 
 	newCfg.SMTPHost = getEnv("SMTP_HOST", "")
 	newCfg.SMTPFrom = getEnv("SMTP_FROM", "")
+	newCfg.SMTPFromName = getEnv("SMTP_FROM_NAME", "")
 	newCfg.SMTPUser = getEnv("SMTP_USER", "")
 	newCfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
 	smtpPort, err := getEnvInt("SMTP_PORT", 0)
