@@ -49,6 +49,38 @@ jobs:
       - name: go build
         run: go build ./...
 
+  coverage:
+    name: Go coverage gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # //go:embed 硬依赖 img-processor-bin，编译测试前必须实时构建
+      - name: Install Zig 0.16.0
+        run: |
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          /opt/zig/zig version
+          echo "/opt/zig" >> "$GITHUB_PATH"
+
+      - name: Build img-processor
+        run: |
+          cd img-processor
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/img-processor ../internal/services/img-processor-bin
+
+      # 门槛在 scripts/coverage.sh 内（默认 50%，随覆盖率提升逐步上调）
+      # 当前实测约 73%（排除 models / testutil / node_modules 口径），先卡在 65 留出平台差异余量
+      - name: Coverage gate
+        env:
+          MIN_COVERAGE: 65
+        run: ./scripts/coverage.sh
+
   frontend:
     name: Frontend (Vue 3 + Vite build)
     runs-on: ubuntu-latest

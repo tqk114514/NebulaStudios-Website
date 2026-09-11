@@ -57,3 +57,6 @@ __pycache__/
 *.pyc
 
 old_frontend/
+
+# 覆盖率产物
+coverage.out
