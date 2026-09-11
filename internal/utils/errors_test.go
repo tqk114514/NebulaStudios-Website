@@ -30,8 +30,8 @@ func TestHandleDatabaseErrorNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("HandleDatabaseError should return error")
 	}
-	var dbErr *DatabaseError
-	if !errors.As(err, &dbErr) {
+	dbErr, ok := errors.AsType[*DatabaseError](err)
+	if !ok {
 		t.Fatalf("expected *DatabaseError, got %T", err)
 	}
 	if !dbErr.NotFound {
@@ -48,8 +48,8 @@ func TestHandleDatabaseErrorNotFound(t *testing.T) {
 func TestHandleDatabaseErrorOther(t *testing.T) {
 	genericErr := errors.New("connection refused")
 	err := HandleDatabaseError("TEST", "Create", genericErr, "id-1")
-	var dbErr *DatabaseError
-	if !errors.As(err, &dbErr) {
+	dbErr, ok := errors.AsType[*DatabaseError](err)
+	if !ok {
 		t.Fatalf("expected *DatabaseError, got %T", err)
 	}
 	if dbErr.NotFound {

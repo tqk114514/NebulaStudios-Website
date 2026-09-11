@@ -3,17 +3,17 @@ module auth-system
 go 1.27.1
 
 require (
-	github.com/andybalholm/brotli v1.2.2
+	github.com/andybalholm/brotli v1.2.4
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/wneessen/go-mail v0.8.1
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.54.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/time v0.15.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/time v0.16.0
 )
 
 require (
@@ -47,8 +47,8 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.8.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.29.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

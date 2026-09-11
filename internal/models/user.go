@@ -22,8 +22,7 @@ var (
 
 // IsUniqueViolation 检查错误是否为指定列的唯一约束冲突
 func IsUniqueViolation(err error, column string) bool {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" {
 		return strings.Contains(pgErr.ConstraintName, column)
 	}
 	return false

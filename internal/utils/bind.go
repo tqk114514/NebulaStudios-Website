@@ -20,7 +20,7 @@ var (
 //	    utils.HTTPErrorResponse(c, ..., http.StatusBadRequest, ...)
 //	    return
 //	}
-func BindJSON(c *gin.Context, obj interface{}) error {
+func BindJSON(c *gin.Context, obj any) error {
 	err := c.ShouldBindJSON(obj)
 	if err != nil && strings.Contains(err.Error(), "request body too large") {
 		RespondError(c, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE")
@@ -35,7 +35,7 @@ func BindJSON(c *gin.Context, obj interface{}) error {
 //	if !utils.BindJSONOrError(c, "MODULE", &req, "INVALID_REQUEST") {
 //	    return
 //	}
-func BindJSONOrError(c *gin.Context, module string, obj interface{}, errorCode string) bool {
+func BindJSONOrError(c *gin.Context, module string, obj any, errorCode string) bool {
 	if err := BindJSON(c, obj); err != nil {
 		if errors.Is(err, ErrBodyTooLarge) {
 			return false // 413 已由 BindJSON 自动响应

@@ -20,6 +20,7 @@ node_modules/
 .trae/
 .skill/
 .zcode/
+.workbuddy-ai/
 
 # 日志
 *.log

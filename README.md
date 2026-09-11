@@ -8,7 +8,7 @@ Nebula Studios 网站的前后端源码，包含用户系统、OAuth 认证、�
 
 | 层面 | 技术 |
 |------|------|
-| 后端语言 | Go 1.26.5 |
+| 后端语言 | Go 1.27.1 |
 | Web 框架 | Gin |
 | 数据库 | PostgreSQL（pgx 驱动，连接池管理） |
 | 图片处理 | Zig 0.16.0（调用 libwebp + stb_image） |
@@ -203,7 +203,7 @@ npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 d
 
 ### 环境要求
 
-- Go 1.26.5
+- Go 1.27.1（`go.mod` 的 go 指令即所需最低版本，CI 与本地按此对齐）
 - Zig 0.16.0（如果不需要图片处理可以不安装，但头像上传功能将不可用）
 - PostgreSQL 14+
 

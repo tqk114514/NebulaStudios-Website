@@ -1,0 +1,39 @@
+name: Race
+
+# 竞态检测比常规测试慢数倍（-race 需要重新编译全部依赖），因此不挂到每次 PR，
+# 改为每日夜间定时跑 + 手动触发。若需要在 PR 上拦截，把下面的 pull_request 触发器放开即可。
+on:
+  schedule:
+    # 每天 03:17 UTC（北京时间 11:17）
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  # pull_request:
+
+jobs:
+  race:
+    name: Go race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # //go:embed 硬依赖 img-processor-bin，跑测试前必须实时编译
+      - name: Install Zig 0.16.0
+        run: |
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          /opt/zig/zig version
+          echo "/opt/zig" >> "$GITHUB_PATH"
+
+      - name: Build img-processor
+        run: |
+          cd img-processor
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/img-processor ../internal/services/img-processor-bin
+
+      - name: go test -race
+        run: go test -race -count=1 ./...

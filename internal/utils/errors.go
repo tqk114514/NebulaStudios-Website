@@ -93,8 +93,7 @@ func HandleDatabaseError(module, operation string, err error, identifier any) er
 // IsDatabaseNotFound 检查是否为"未找到"错误
 // 兼容包装后的 *DatabaseError 与各仓库直接返回的裸 ErrNoRows sentinel
 func IsDatabaseNotFound(err error) bool {
-	var dbErr *DatabaseError
-	if errors.As(err, &dbErr) {
+	if dbErr, ok := errors.AsType[*DatabaseError](err); ok {
 		return dbErr.NotFound
 	}
 	return errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows)
