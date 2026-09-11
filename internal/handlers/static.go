@@ -196,7 +196,9 @@ func (h *StaticHandler) ServeAvatar(c *gin.Context) {
 
 	dir := h.cfg.AvatarDir
 	name := filepath.Base(c.Param("filepath"))
-	if name == "" || name == "." || name == "/" {
+	// filepath.Base 已剥掉目录部分，但对 "/" 在 Windows 上返回 "\"、".." 会原样保留，
+	// 二者都会让 filepath.Join 落到目录而不是文件，必须显式拒绝
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
 		c.Status(http.StatusNotFound)
 		return
 	}

@@ -39,7 +39,7 @@ type createOAuthClientRequest struct {
 // updateOAuthClientRequest 更新 OAuth 客户端请求
 type updateOAuthClientRequest struct {
 	Name        string  `json:"name" binding:"omitempty,min=1,max=100"`
-	Description *string `json:"description" binding:"max=500"`
+	Description *string `json:"description" binding:"omitempty,max=500"`
 	RedirectURI string  `json:"redirect_uri" binding:"required,url"`
 }
 
