@@ -5,6 +5,7 @@ import (
 	"auth-system/internal/utils"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -75,6 +76,14 @@ type Config struct {
 	CDNURL string
 
 	EmailWhitelistDomains string
+
+	// PprofEnabled 是否启动独立的 pprof 诊断服务（PPROF_ENABLED，默认 false）
+	PprofEnabled bool
+	// PprofAddr pprof 监听地址，默认 127.0.0.1:6060。
+	// 非回环地址必须同时设置 PPROF_ALLOW_REMOTE=true 才允许启动
+	PprofAddr string
+	// PprofAllowRemote 显式允许 pprof 监听非回环地址（PPROF_ALLOW_REMOTE，默认 false）
+	PprofAllowRemote bool
 }
 
 // Load 从 .env 文件和系统环境变量加载配置，验证必需项后返回
@@ -166,6 +175,18 @@ func Load() (*Config, error) {
 	newCfg.DataExportSalt = getEnv("DATA_EXPORT_SALT", "")
 	newCfg.EmailWhitelistDomains = getEnv("EMAIL_WHITELIST_DOMAINS", "")
 
+	pprofEnabled, err := getEnvBool("PPROF_ENABLED", false)
+	if err != nil {
+		utils.LogWarn("CONFIG", "Invalid PPROF_ENABLED, using default", "error", err)
+	}
+	newCfg.PprofEnabled = pprofEnabled
+	newCfg.PprofAddr = getEnv("PPROF_ADDR", "127.0.0.1:6060")
+	pprofAllowRemote, err := getEnvBool("PPROF_ALLOW_REMOTE", false)
+	if err != nil {
+		utils.LogWarn("CONFIG", "Invalid PPROF_ALLOW_REMOTE, using default", "error", err)
+	}
+	newCfg.PprofAllowRemote = pprofAllowRemote
+
 	if err := validateConfig(newCfg); err != nil {
 		return nil, err
 	}
@@ -205,6 +226,12 @@ func validateConfig(c *Config) error {
 		utils.LogWarn("CONFIG", w)
 	}
 
+	// pprof 端点会暴露 goroutine 栈、堆采样与二进制元信息，且不走 Gin 的鉴权/CSP 中间件。
+	// 默认拒绝非回环监听，避免误配置把诊断接口暴露到公网；确实需要远程访问时显式声明。
+	if c.PprofEnabled && !c.PprofAllowRemote && !isLoopbackAddr(c.PprofAddr) {
+		return fmt.Errorf("%w: PPROF_ADDR=%s must be a loopback address (127.0.0.1 / [::1] / localhost), or set PPROF_ALLOW_REMOTE=true", ErrInvalidValue, c.PprofAddr)
+	}
+
 	if len(missingKeys) > 0 {
 		errMsg := fmt.Sprintf("missing required config: %s", strings.Join(missingKeys, ", "))
 		utils.LogError("CONFIG", "Validate", ErrMissingRequired, errMsg)
@@ -240,6 +267,20 @@ func (c *Config) GoogleProxyURLs() []string {
 		}
 	}
 	return urls
+}
+
+// isLoopbackAddr 判断监听地址是否只绑定回环接口。
+// 无法解析出 host（例如 ":6060" 监听所有网卡）一律按非回环处理，防止 pprof 被误暴露。
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func getEnv(key, defaultValue string) string {

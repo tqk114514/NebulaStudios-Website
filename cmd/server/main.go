@@ -87,6 +87,15 @@ func run() error {
 
 	startBackgroundTasks(hdlrs, repos, svcs)
 
+	// pprof 诊断服务（可选）：独立监听，默认仅回环，见 config 中的校验
+	var pprofSrv *http.Server
+	if cfg.PprofEnabled {
+		pprofSrv, _, err = startPprofServer(cfg.PprofAddr)
+		if err != nil {
+			return fmt.Errorf("pprof server start failed: %w", err)
+		}
+	}
+
 	router := setupRouter(cfg, hdlrs, repos, svcs)
 
 	srv := createServer(cfg.Port, router)
@@ -94,7 +103,7 @@ func run() error {
 		return fmt.Errorf("server start failed: %w", err)
 	}
 
-	gracefulShutdown(srv, repos, svcs)
+	gracefulShutdown(srv, pprofSrv, repos, svcs)
 
 	return nil
 }
@@ -385,12 +394,17 @@ func startServer(srv *http.Server) error {
 	return nil
 }
 
-func gracefulShutdown(srv *http.Server, repos *Repos, svcs *Services) {
+func gracefulShutdown(srv *http.Server, pprofSrv *http.Server, repos *Repos, svcs *Services) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-quit
 	utils.LogInfo("SERVER", "Received signal, initiating graceful shutdown", "signal", sig)
+
+	// 先停诊断服务：pprof 采集（尤其 profile/trace）会占用采样时间，不应拖慢主服务收尾
+	if err := shutdownPprofServer(pprofSrv); err != nil {
+		utils.LogWarn("SERVER", "pprof server shutdown returned error", "error", err)
+	}
 
 	svcs.ExportTokenService.Stop()
 

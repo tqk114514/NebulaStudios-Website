@@ -1,6 +1,6 @@
 module auth-system
 
-go 1.26.5
+go 1.27.1
 
 require (
 	github.com/andybalholm/brotli v1.2.2

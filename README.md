@@ -144,6 +144,19 @@ npm run build   # vue-tsc 类型检查 + vite build，产物输出到项目根 d
 
 - `GET /api/version`：返回编译时注入的 Git commit
 
+### 诊断接口（pprof）
+
+`PPROF_ENABLED=true` 时在 `PPROF_ADDR`（默认 `127.0.0.1:6060`）上单独起一个 HTTP 服务，暴露标准 `net/http/pprof` 端点：
+
+- `/debug/pprof/goroutineleak` —— Go 1.27 转正的 goroutine 泄漏 profile，用于排查后台任务与 img-processor 常驻 goroutine
+- `/debug/pprof/heap`、`/debug/pprof/goroutine`、`/debug/pprof/profile`、`/debug/pprof/trace` 等标准端点
+
+设计取舍：
+
+- **独立监听，不挂主路由**：pprof 端点不经过 Gin 的鉴权 / 限流 / CSP 中间件，访问面只能靠监听地址收敛
+- **默认仅回环**：`PPROF_ADDR` 为非回环地址且未设置 `PPROF_ALLOW_REMOTE=true` 时，服务拒绝启动
+- **远程排查走隧道**：`ssh -L 6060:127.0.0.1:6060 <server>`，然后本地访问 `http://localhost:6060/debug/pprof/`
+
 ### 后台任务
 
 服务启动时自动拉起以下后台任务：
@@ -270,6 +283,11 @@ SCHEMA_ALLOW_DESTRUCTIVE=false  # 是否允许同步执行可能丢失数据的�
 
 # 默认头像（可选）
 DEFAULT_AVATAR_URL="https://cdn.example.com/default-avatar.svg"
+
+# 诊断接口 pprof（可选）
+PPROF_ENABLED=false            # 是否启动独立 pprof 服务，默认关闭
+PPROF_ADDR="127.0.0.1:6060"    # pprof 监听地址，默认仅回环
+PPROF_ALLOW_REMOTE=false       # 允许 pprof 监听非回环地址，需显式开启
 ```
 
 未配置 SMTP 或未设置 CAPTCHA_ENABLED 时服务会拒绝启动（注册/重置/注销验证均依赖邮件；验证码开关必须显式声明）；CAPTCHA_ENABLED=false 时跳过全部人机验证，TURNSTILE 密钥可省略。
