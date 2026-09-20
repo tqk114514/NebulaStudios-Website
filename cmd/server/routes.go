@@ -167,6 +167,9 @@ func setupPolicyAPI(r gin.IRouter, hdlrs *Handlers, svcs *Services) {
 
 		consentAPI := policyAPI.Group("")
 		consentAPI.Use(middleware.AuthMiddleware(svcs.SessionService))
+		// RecordConsent 是 cookie 认证下的写操作，必须与全站一致挂 CSRF：
+		// 只 AuthMiddleware 会让 POST /api/policy/consent 成为可被跨站伪造的写入口
+		consentAPI.Use(middleware.CSRFTokenMiddleware())
 		{
 			consentAPI.GET("/pending-consent", hdlrs.policyHandler.GetPendingConsent)
 			consentAPI.POST("/consent", hdlrs.policyHandler.RecordConsent)
