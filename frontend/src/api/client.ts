@@ -79,18 +79,17 @@ export async function request<T = Record<string, never>>(
 ): Promise<ApiSuccess<T>['data']> {
   const headers: Record<string, string> = { Accept: API_BODY_JSON }
 
-  const isBodyMethod = method !== 'GET' && method !== 'HEAD'
+  const isWriteMethod = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
   if (body !== undefined) {
     headers['Content-Type'] = API_BODY_JSON
-    // 状态变更请求附带 CSRF Double-Submit Cookie 令牌
-    if (isBodyMethod) {
-      const token = document.cookie
-        .split(';')
-        .map((s) => s.trim())
-        .find((s) => s.startsWith('csrf_token='))
-        ?.split('=')[1]
-      if (token) headers['X-CSRF-Token'] = decodeURIComponent(token)
-    }
+  }
+
+  // 写请求一律附带 CSRF double-submit 令牌，与「是否带 body」无关：
+  // 原先嵌在 body !== undefined 分支里，post(path) 这类无 body 的写请求
+  // 打到挂了 CSRFTokenMiddleware 的路由会直接 403。
+  if (isWriteMethod) {
+    const token = getCsrfToken()
+    if (token) headers['X-CSRF-Token'] = token
   }
 
   const res = await fetch(path, {
