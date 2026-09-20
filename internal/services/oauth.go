@@ -41,13 +41,15 @@ const (
 	oauthRefreshTokenExpiry = 30 * 24 * time.Hour
 )
 
-// OAuthService OAuth 服务
+// OAuthService OAuth 服务。
+// 仓储以接口形式持有：生产环境由 NewOAuthService 用连接池装配，
+// 测试可注入内存实现，无需真实数据库。
 type OAuthService struct {
-	clientRepo       *models.OAuthClientRepository
-	authCodeRepo     *models.OAuthAuthCodeRepository
-	accessTokenRepo  *models.OAuthAccessTokenRepository
-	refreshTokenRepo *models.OAuthRefreshTokenRepository
-	grantRepo        *models.OAuthGrantRepository
+	clientRepo       models.OAuthClientStore
+	authCodeRepo     models.OAuthAuthCodeStore
+	accessTokenRepo  models.OAuthAccessTokenStore
+	refreshTokenRepo models.OAuthRefreshTokenStore
+	grantRepo        models.OAuthGrantStore
 }
 
 // OAuthTokenResponse Token 响应
@@ -59,14 +61,31 @@ type OAuthTokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// NewOAuthService 创建 OAuth 服务
+// NewOAuthService 创建 OAuth 服务（生产装配：由连接池构造各仓储）
 func NewOAuthService(pool *pgxpool.Pool) *OAuthService {
+	return NewOAuthServiceWithRepos(
+		models.NewOAuthClientRepository(pool),
+		models.NewOAuthAuthCodeRepository(pool),
+		models.NewOAuthAccessTokenRepository(pool),
+		models.NewOAuthRefreshTokenRepository(pool),
+		models.NewOAuthGrantRepository(pool),
+	)
+}
+
+// NewOAuthServiceWithRepos 用显式仓储创建 OAuth 服务，供测试注入内存实现
+func NewOAuthServiceWithRepos(
+	clients models.OAuthClientStore,
+	authCodes models.OAuthAuthCodeStore,
+	accessTokens models.OAuthAccessTokenStore,
+	refreshTokens models.OAuthRefreshTokenStore,
+	grants models.OAuthGrantStore,
+) *OAuthService {
 	return &OAuthService{
-		clientRepo:       models.NewOAuthClientRepository(pool),
-		authCodeRepo:     models.NewOAuthAuthCodeRepository(pool),
-		accessTokenRepo:  models.NewOAuthAccessTokenRepository(pool),
-		refreshTokenRepo: models.NewOAuthRefreshTokenRepository(pool),
-		grantRepo:        models.NewOAuthGrantRepository(pool),
+		clientRepo:       clients,
+		authCodeRepo:     authCodes,
+		accessTokenRepo:  accessTokens,
+		refreshTokenRepo: refreshTokens,
+		grantRepo:        grants,
 	}
 }
 

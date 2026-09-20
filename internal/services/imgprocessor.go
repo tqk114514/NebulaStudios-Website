@@ -41,7 +41,9 @@ var (
 //go:embed img-processor-bin
 var imgProcessorBin []byte
 
-// ImgProcessor 图片处理服务
+// ImgProcessor 图片处理服务。
+// 连接建立与子进程启动通过字段注入：生产环境走 Unix Socket + exec，
+// 测试可替换为内存管道与桩进程，从而在无 Unix Socket 的平台上验证协议与状态机。
 type ImgProcessor struct {
 	mu         sync.Mutex
 	available  bool
@@ -51,6 +53,39 @@ type ImgProcessor struct {
 	socketPath string        // Unix Socket 路径（位于私有临时目录内）
 	binaryPath string        // 已写入的二进制路径（每次启动随机生成）
 	tempDir    string        // 私有临时目录路径
+
+	// dialContext 建立到处理进程的连接；为 nil 时使用带超时的默认 dialer
+	dialContext func(ctx context.Context, network, address string) (net.Conn, error)
+	// startProcess 启动子进程；为 nil 时使用 exec.Command + IMG_PROCESSOR_SOCKET 环境变量
+	startProcess func(binaryPath, socketPath string) (*exec.Cmd, error)
+}
+
+// defaultStartProcess 生产环境的子进程启动方式
+func defaultStartProcess(binaryPath, socketPath string) (*exec.Cmd, error) {
+	cmd := exec.Command(binaryPath)
+	// 通过环境变量把实际 socket 路径传给 Zig 子进程（无论是否显式配置）
+	cmd.Env = append(os.Environ(), "IMG_PROCESSOR_SOCKET="+socketPath)
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
+}
+
+// dial 返回生效的连接建立函数
+func (p *ImgProcessor) dial() func(ctx context.Context, network, address string) (net.Conn, error) {
+	if p.dialContext != nil {
+		return p.dialContext
+	}
+	dialer := &net.Dialer{Timeout: ConnectTimeout}
+	return dialer.DialContext
+}
+
+// starter 返回生效的子进程启动函数
+func (p *ImgProcessor) starter() func(binaryPath, socketPath string) (*exec.Cmd, error) {
+	if p.startProcess != nil {
+		return p.startProcess
+	}
+	return defaultStartProcess
 }
 
 // NewImgProcessor 创建图片处理服务
@@ -156,21 +191,24 @@ func (p *ImgProcessor) startProcessor() {
 
 	os.Remove(p.socketPath)
 
-	p.cmd = exec.Command(binaryPath)
-	// 通过环境变量把实际 socket 路径传给 Zig 子进程（无论是否显式配置）
-	p.cmd.Env = append(os.Environ(), "IMG_PROCESSOR_SOCKET="+p.socketPath)
-	if err := p.cmd.Start(); err != nil {
+	cmd, err := p.starter()(binaryPath, p.socketPath)
+	if err != nil {
 		utils.LogError("IMG", "start", err, "Failed to start processor")
 		os.RemoveAll(tempDir)
 		p.available = false
 		return
 	}
+	p.cmd = cmd
 
 	for range 50 {
 		time.Sleep(100 * time.Millisecond)
 		if _, err := os.Stat(p.socketPath); err == nil {
 			p.available = true
-			utils.LogInfo("IMG", "Image processor started", "pid", p.cmd.Process.Pid)
+			pid := 0
+			if p.cmd != nil && p.cmd.Process != nil {
+				pid = p.cmd.Process.Pid
+			}
+			utils.LogInfo("IMG", "Image processor started", "pid", pid)
 			return
 		}
 	}
@@ -272,7 +310,7 @@ func (p *ImgProcessor) ToWebP(imageData []byte) ([]byte, error) {
 	sockPath := p.socketPath
 	p.mu.Unlock()
 
-	conn, err := net.DialTimeout("unix", sockPath, ConnectTimeout)
+	conn, err := p.dial()(context.Background(), "unix", sockPath)
 	if err != nil {
 		p.available = false
 		p.checkAndRestart() // 连接失败时触发重启检查

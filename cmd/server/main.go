@@ -344,7 +344,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 	}
 	utils.LogInfo("HANDLERS", "StaticHandler initialized")
 
-	hdlrs.policyHandler, err = handlers.NewPolicyHandler(repos.Pool)
+	hdlrs.policyHandler, err = handlers.NewPolicyHandler(repos.UserConsentRepo)
 	if err != nil {
 		return nil, fmt.Errorf("PolicyHandler: %w", err)
 	}

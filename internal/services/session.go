@@ -67,7 +67,13 @@ type SessionService struct {
 }
 
 // NewSessionService 创建 Session 服务（带配置验证）
+// NewSessionService 创建会话服务（生产装配：由连接池构造会话令牌仓储）
 func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService, error) {
+	return NewSessionServiceWithRepo(cfg, models.NewSessionTokenRepository(pool))
+}
+
+// NewSessionServiceWithRepo 用显式仓储创建会话服务，供测试注入内存实现
+func NewSessionServiceWithRepo(cfg *config.Config, sessionTokenRepo models.SessionTokenStore) (*SessionService, error) {
 	if cfg == nil {
 		return nil, ErrSessionNilConfig
 	}
@@ -124,7 +130,7 @@ func NewSessionService(cfg *config.Config, pool *pgxpool.Pool) (*SessionService,
 		refreshTokenExpiry: refreshExpiry,
 		jwtIssuer:          issuer,
 		jwtAudience:        audience,
-		sessionTokenRepo:   models.NewSessionTokenRepository(pool),
+		sessionTokenRepo:   sessionTokenRepo,
 	}, nil
 }
 

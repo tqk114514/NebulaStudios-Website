@@ -157,3 +157,82 @@ type CodeStore interface {
 	DeleteByEmail(ctx context.Context, email string, tokenType *string) error
 	DeleteExpired(ctx context.Context, now int64) (int64, error)
 }
+
+// OAuthClientStore OAuth 客户端数据访问接口
+type OAuthClientStore interface {
+	FindByID(ctx context.Context, id int64) (*OAuthClient, error)
+	FindByClientID(ctx context.Context, clientID string) (*OAuthClient, error)
+	FindAll(ctx context.Context, page, pageSize int, search string) ([]*OAuthClient, int64, error)
+	Create(ctx context.Context, client *OAuthClient) error
+	Update(ctx context.Context, id int64, updates map[string]any) error
+	Delete(ctx context.Context, id int64) error
+}
+
+// OAuthAuthCodeStore 授权码数据访问接口
+type OAuthAuthCodeStore interface {
+	Create(ctx context.Context, code *OAuthAuthCode) error
+	FindByCode(ctx context.Context, codeHash string) (*OAuthAuthCode, error)
+	MarkUsed(ctx context.Context, id int64) error
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+// OAuthAccessTokenStore 访问令牌数据访问接口
+type OAuthAccessTokenStore interface {
+	Create(ctx context.Context, token *OAuthAccessToken) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*OAuthAccessToken, error)
+	Delete(ctx context.Context, id int64) error
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error)
+	DeleteByUser(ctx context.Context, userUID string) (int64, error)
+	DeleteExpired(ctx context.Context) (int64, error)
+	DeleteByClient(ctx context.Context, clientID string) (int64, error)
+}
+
+// OAuthRefreshTokenStore 刷新令牌数据访问接口
+type OAuthRefreshTokenStore interface {
+	Create(ctx context.Context, token *OAuthRefreshToken) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*OAuthRefreshToken, error)
+	Delete(ctx context.Context, id int64) error
+	Consume(ctx context.Context, id int64) error
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	DeleteByUserAndClient(ctx context.Context, userUID string, clientID string) (int64, error)
+	DeleteByUser(ctx context.Context, userUID string) (int64, error)
+	DeleteExpired(ctx context.Context) (int64, error)
+	DeleteByClient(ctx context.Context, clientID string) (int64, error)
+}
+
+// OAuthGrantStore 用户授权记录数据访问接口
+type OAuthGrantStore interface {
+	CreateOrUpdate(ctx context.Context, grant *OAuthGrant) error
+	FindByUserUID(ctx context.Context, userUID string) ([]*OAuthGrantWithClient, error)
+	FindByUserAndClient(ctx context.Context, userUID string, clientID string) (*OAuthGrant, error)
+	Delete(ctx context.Context, userUID string, clientID string) error
+	DeleteByUser(ctx context.Context, userUID string) (int64, error)
+	DeleteByClient(ctx context.Context, clientID string) (int64, error)
+}
+
+// 编译期断言：具体仓储必须满足对应接口，签名漂移会在此处直接编译失败
+var (
+	_ TokenStore             = (*TokenRepository)(nil)
+	_ CodeStore              = (*CodeRepository)(nil)
+	_ SessionTokenStore      = (*SessionTokenRepository)(nil)
+	_ OAuthClientStore       = (*OAuthClientRepository)(nil)
+	_ OAuthAuthCodeStore     = (*OAuthAuthCodeRepository)(nil)
+	_ OAuthAccessTokenStore  = (*OAuthAccessTokenRepository)(nil)
+	_ OAuthRefreshTokenStore = (*OAuthRefreshTokenRepository)(nil)
+	_ OAuthGrantStore        = (*OAuthGrantRepository)(nil)
+)
+
+// ExpiredCleaner 只暴露"清理过期数据"这一项能力的仓储视图。
+// OAuth 授权码/访问令牌/刷新令牌三个仓储的 DeleteExpired 签名一致，
+// 后台清理任务只需这一项能力，无需依赖完整仓储。
+type ExpiredCleaner interface {
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+var (
+	_ ExpiredCleaner = (*OAuthAuthCodeRepository)(nil)
+	_ ExpiredCleaner = (*OAuthAccessTokenRepository)(nil)
+	_ ExpiredCleaner = (*OAuthRefreshTokenRepository)(nil)
+	_ ExpiredCleaner = (*SessionTokenRepository)(nil)
+)

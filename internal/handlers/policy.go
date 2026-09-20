@@ -13,23 +13,24 @@ import (
 	"auth-system/internal/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PolicyHandler 政策版本查询与用户同意记录 Handler
+// PolicyHandler 政策版本查询与用户同意记录 Handler。
+// 同意记录仓储以接口形式注入，生产环境传入 models.UserConsentStore 实现，
+// 测试可注入内存实现，无需真实数据库。
 type PolicyHandler struct {
-	pool *pgxpool.Pool
+	consentRepo models.UserConsentStore
 }
 
 // NewPolicyHandler 创建政策 Handler，验证所有必需依赖后初始化
-func NewPolicyHandler(pool *pgxpool.Pool) (*PolicyHandler, error) {
-	if pool == nil {
-		return nil, errors.New("pool is required")
+func NewPolicyHandler(consentRepo models.UserConsentStore) (*PolicyHandler, error) {
+	if consentRepo == nil {
+		return nil, errors.New("consent repository is required")
 	}
 
 	utils.LogInfo("POLICY", "PolicyHandler initialized")
 
-	return &PolicyHandler{pool: pool}, nil
+	return &PolicyHandler{consentRepo: consentRepo}, nil
 }
 
 // policyManifestPath 政策版本清单（manifest.json）路径，位于 dist/policy 下
@@ -135,8 +136,7 @@ func (h *PolicyHandler) GetPendingConsent(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	consentRepo := models.NewUserConsentRepository(h.pool)
-	consents, err := consentRepo.FindByUserUID(ctx, userUID)
+	consents, err := h.consentRepo.FindByUserUID(ctx, userUID)
 	if err != nil {
 		utils.LogErrorCtx(c.Request.Context(), "POLICY", "GetPendingConsent", err, "user_uid", userUID)
 		utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeDatabaseError, "Failed to query user consents")
@@ -222,9 +222,8 @@ func (h *PolicyHandler) RecordConsent(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	consentRepo := models.NewUserConsentRepository(h.pool)
 	for _, p := range req.Policies {
-		if err := consentRepo.LogConsent(ctx, userUID, p.PolicyType, p.PolicyVersion); err != nil {
+		if err := h.consentRepo.LogConsent(ctx, userUID, p.PolicyType, p.PolicyVersion); err != nil {
 			utils.LogErrorCtx(c.Request.Context(), "POLICY", "RecordConsent", err, "user_uid", userUID, "type", p.PolicyType, "version", p.PolicyVersion)
 			utils.HTTPErrorResponse(c, "POLICY", http.StatusInternalServerError, utils.ErrCodeConsentLogFailed, "Failed to record consent")
 			return

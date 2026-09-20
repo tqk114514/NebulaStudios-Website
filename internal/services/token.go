@@ -47,27 +47,53 @@ type CodeResult struct {
 	AlreadyVerified bool   `json:"alreadyVerified"`
 }
 
-// TokenService Token 服务
+// TokenService Token 服务。
+// 仓储以接口形式持有：生产环境由 NewTokenService 用连接池装配，
+// 测试可注入内存实现，无需真实数据库。
 type TokenService struct {
 	tokenRepo        models.TokenStore
 	codeRepo         models.CodeStore
 	sessionTokenRepo models.SessionTokenStore
-	pool             *pgxpool.Pool
+	// OAuth 侧过期数据清理：只需 DeleteExpired，故用窄接口而非完整仓储
+	oauthAuthCodeCleaner     models.ExpiredCleaner
+	oauthAccessTokenCleaner  models.ExpiredCleaner
+	oauthRefreshTokenCleaner models.ExpiredCleaner
 
 	// 验证码防爆破：记录同一邮箱的失败尝试，达到阈值后锁定，防止逐码爆破
 	lockMu         sync.Mutex
 	verifyFailures map[string]*verifyLockEntry
 }
 
-// NewTokenService 创建 Token 服务
+// NewTokenService 创建 Token 服务（生产装配：由连接池构造各仓储）
 func NewTokenService(pool *pgxpool.Pool) *TokenService {
+	return NewTokenServiceWithStores(
+		models.NewTokenRepository(pool),
+		models.NewCodeRepository(pool),
+		models.NewSessionTokenRepository(pool),
+		models.NewOAuthAuthCodeRepository(pool),
+		models.NewOAuthAccessTokenRepository(pool),
+		models.NewOAuthRefreshTokenRepository(pool),
+	)
+}
+
+// NewTokenServiceWithStores 用显式仓储创建 Token 服务，供测试注入内存实现
+func NewTokenServiceWithStores(
+	tokenRepo models.TokenStore,
+	codeRepo models.CodeStore,
+	sessionTokenRepo models.SessionTokenStore,
+	oauthAuthCodeCleaner models.ExpiredCleaner,
+	oauthAccessTokenCleaner models.ExpiredCleaner,
+	oauthRefreshTokenCleaner models.ExpiredCleaner,
+) *TokenService {
 	utils.LogInfo("TOKEN", "Token service initialized")
 	return &TokenService{
-		tokenRepo:        models.NewTokenRepository(pool),
-		codeRepo:         models.NewCodeRepository(pool),
-		sessionTokenRepo: models.NewSessionTokenRepository(pool),
-		pool:             pool,
-		verifyFailures:   make(map[string]*verifyLockEntry),
+		tokenRepo:                tokenRepo,
+		codeRepo:                 codeRepo,
+		sessionTokenRepo:         sessionTokenRepo,
+		oauthAuthCodeCleaner:     oauthAuthCodeCleaner,
+		oauthAccessTokenCleaner:  oauthAccessTokenCleaner,
+		oauthRefreshTokenCleaner: oauthRefreshTokenCleaner,
+		verifyFailures:           make(map[string]*verifyLockEntry),
 	}
 }
 
@@ -413,8 +439,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthAuthCodeRepository(s.pool)
-		if count, err := repo.DeleteExpired(ctx); err != nil {
+		if count, err := s.oauthAuthCodeCleaner.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth auth codes", "error", err)
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", "Cleaned up expired OAuth auth codes", "count", count)
@@ -428,8 +453,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthAccessTokenRepository(s.pool)
-		if count, err := repo.DeleteExpired(ctx); err != nil {
+		if count, err := s.oauthAccessTokenCleaner.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth access tokens", "error", err)
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", "Cleaned up expired OAuth access tokens", "count", count)
@@ -443,8 +467,7 @@ func (s *TokenService) CleanupExpired(ctx context.Context) {
 			}
 		}()
 
-		repo := models.NewOAuthRefreshTokenRepository(s.pool)
-		if count, err := repo.DeleteExpired(ctx); err != nil {
+		if count, err := s.oauthRefreshTokenCleaner.DeleteExpired(ctx); err != nil {
 			utils.LogWarn("TOKEN", "Failed to cleanup OAuth refresh tokens", "error", err)
 		} else if count > 0 {
 			utils.LogInfo("TOKEN", "Cleaned up expired OAuth refresh tokens", "count", count)
