@@ -7,6 +7,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getCsrfToken } from '@/api/client'
 import { usePolicyConsent } from '@/composables/usePolicyConsent'
 import AuthCard from '@/components/AuthCard.vue'
 import AppButton from '@/components/AppButton.vue'
@@ -86,10 +87,16 @@ async function submitDecision(decision: 'approve' | 'deny') {
     }
     form.append('decision', decision)
 
+    // 裸 fetch 不走 api/client 的自动附加逻辑，必须自行带上 CSRF 令牌：
+    // 后端 CSRFTokenMiddleware 要求 X-CSRF-Token 头（或 csrf_token 表单字段）与
+    // double-submit cookie 匹配，缺失即 403（日志表现为 "CSRF token mismatch"）
     const res = await fetch('/oauth/authorize', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-Token': getCsrfToken(),
+      },
       body: form.toString(),
     })
     const data = (await res.json()) as AuthorizeResult
