@@ -58,6 +58,8 @@ const (
 	ErrCodeUserBanned     = "USER_BANNED"
 	ErrCodeInvalidUserUID = "INVALID_USER_UID"
 	ErrCodeInvalidID      = "INVALID_ID"
+	// 前端 errorCodes.ts 与五语言文案已登记（error.invalidAvatarUrl），此前后端从未发出
+	ErrCodeInvalidAvatarURL = "INVALID_AVATAR_URL"
 )
 
 // 两步验证（TOTP）

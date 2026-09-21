@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"database/sql"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -358,4 +359,45 @@ func TestProcessAvatarAsync(t *testing.T) {
 			t.Errorf("Uploaded = %v, want none when clearing", storage.Uploaded())
 		}
 	})
+
+	// Provider 头像被清空时，指向它的哨兵必须一起撤掉，否则 avatar_url 指向空地址
+	t.Run("clearing drops the microsoft sentinel avatar", func(t *testing.T) {
+		repo := testutil.NewFakeUserRepo()
+		repo.Seed(&models.User{
+			UID: "u5", MicrosoftAvatarSync: true, AvatarURL: "microsoft",
+			MicrosoftAvatarURL: sql.NullString{String: "https://cdn.test/old.webp", Valid: true},
+		})
+		storage := &testutil.FakeStorageService{Configured: true}
+		h := newTestHandler(t, repo, storage)
+
+		h.processAvatarAsync("u5", "old-hash", nil, "image/png")
+
+		if got := updatedFields(repo, "u5")["avatar_url"]; got != "https://cdn.example.com/default.svg" {
+			t.Errorf("avatar_url = %v, want default avatar", got)
+		}
+	})
+
+	// 自定义图床地址与本次清空无关，不能被顺手改写
+	t.Run("clearing leaves a custom avatar alone", func(t *testing.T) {
+		repo := testutil.NewFakeUserRepo()
+		repo.Seed(&models.User{UID: "u6", MicrosoftAvatarSync: true, AvatarURL: "https://img.example/a.png"})
+		storage := &testutil.FakeStorageService{Configured: true}
+		h := newTestHandler(t, repo, storage)
+
+		h.processAvatarAsync("u6", "old-hash", nil, "image/png")
+
+		if _, ok := updatedFields(repo, "u6")["avatar_url"]; ok {
+			t.Error("avatar_url should not be rewritten for a custom avatar")
+		}
+	})
+}
+
+// updatedFields 取某个用户首次 Update 调用的字段集合
+func updatedFields(repo *testutil.FakeUserRepo, uid string) map[string]any {
+	for _, u := range repo.Updates() {
+		if u.UserUID == uid {
+			return u.Fields
+		}
+	}
+	return nil
 }

@@ -44,6 +44,24 @@ type FakeUserRepo struct {
 	SetTOTPSecretErr error
 	BanErr           error
 	UnbanErr         error
+
+	// updates 记录每次 Update 的字段：fake 不真正应用更新，测试靠它断言「写了什么」。
+	// processAvatarAsync 在后台 goroutine 中调用，读写都必须持锁
+	upMu    sync.Mutex
+	updates []UserUpdate
+}
+
+// UserUpdate 一次 FakeUserRepo.Update 的调用记录
+type UserUpdate struct {
+	UserUID string
+	Fields  map[string]any
+}
+
+// Updates 返回 Update 调用记录的快照
+func (f *FakeUserRepo) Updates() []UserUpdate {
+	f.upMu.Lock()
+	defer f.upMu.Unlock()
+	return append([]UserUpdate(nil), f.updates...)
 }
 
 // NewFakeUserRepo 创建空的内存用户仓库
@@ -106,7 +124,12 @@ func (f *FakeUserRepo) Create(_ context.Context, user *models.User) error {
 	f.Seed(user)
 	return nil
 }
-func (f *FakeUserRepo) Update(context.Context, string, map[string]any) error { return f.UpdateErr }
+func (f *FakeUserRepo) Update(_ context.Context, userUID string, fields map[string]any) error {
+	f.upMu.Lock()
+	f.updates = append(f.updates, UserUpdate{UserUID: userUID, Fields: fields})
+	f.upMu.Unlock()
+	return f.UpdateErr
+}
 func (f *FakeUserRepo) UpdatePassword(_ context.Context, uid, plainPassword string) error {
 	f.PasswordUpdates = append(f.PasswordUpdates, uid)
 	return nil

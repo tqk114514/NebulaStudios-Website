@@ -90,6 +90,22 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{"username": newUsername})
 }
 
+// validateAvatarSentinel 只有已绑定该 Provider 且其头像 URL 已落库时，avatar_url 才允许存哨兵值。
+// 否则哨兵指向一个空地址，读取方只能各自兜底；解绑与头像同步清空时也会把哨兵一并撤掉。
+func validateAvatarSentinel(value string, u *models.User) error {
+	switch value {
+	case "microsoft":
+		if !u.MicrosoftID.Valid || u.MicrosoftAvatarURL.String == "" {
+			return errors.New("microsoft avatar is not available: not linked or not stored yet")
+		}
+	case "google":
+		if !u.GoogleID.Valid || u.GoogleAvatarURL.String == "" {
+			return errors.New("google avatar is not available: not linked or not stored yet")
+		}
+	}
+	return nil
+}
+
 // UpdateAvatar 更新头像
 // PATCH /api/user/avatar
 func (h *UserHandler) UpdateAvatar(c *gin.Context) {
@@ -170,6 +186,11 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 		return
 	}
 	oldAvatarURL := currentUser.AvatarURL
+
+	if err := validateAvatarSentinel(urlResult.Value, currentUser); err != nil {
+		utils.HTTPErrorResponse(c, "USER", http.StatusBadRequest, utils.ErrCodeInvalidAvatarURL, err.Error())
+		return
+	}
 
 	updates := map[string]any{"avatar_url": urlResult.Value}
 	// 使用微软头像时重新开启自动同步

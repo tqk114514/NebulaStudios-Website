@@ -330,7 +330,8 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 	defer cancel()
 
 	// 用户已关闭微软头像自动同步（移除头像场景）时跳过，不再下载/存储/更新
-	if user, err := h.UserRepo.FindByUID(ctx, userUID); err == nil && !user.MicrosoftAvatarSync {
+	currentUser, findErr := h.UserRepo.FindByUID(ctx, userUID)
+	if findErr == nil && !currentUser.MicrosoftAvatarSync {
 		utils.LogInfo("OAUTH-MS", "Avatar sync disabled, skipping", "user_uid", userUID)
 		return
 	}
@@ -353,10 +354,16 @@ func (h *MicrosoftHandler) processAvatarAsync(userUID string, oldAvatarHash stri
 		utils.LogInfo("OAUTH-MS", "Avatar updated async", "user_uid", userUID)
 
 	} else if newAvatarHash == "" && oldAvatarHash != "" {
-		err := h.UserRepo.Update(ctx, userUID, map[string]any{
+		updates := map[string]any{
 			"microsoft_avatar_url":  nil,
 			"microsoft_avatar_hash": nil,
-		})
+		}
+		// Provider 头像没了，指向它的哨兵必须一起撤掉，否则 avatar_url 指向空地址
+		if findErr == nil && currentUser.AvatarURL == h.Spec.AvatarStateValue {
+			updates["avatar_url"] = h.DefaultAvatarURL
+		}
+
+		err := h.UserRepo.Update(ctx, userUID, updates)
 		if err != nil {
 			utils.LogError("OAUTH-MS", "processAvatarAsync", err, "user_uid", userUID)
 			return
