@@ -72,10 +72,10 @@ func TestAfterLinkStoresAvatar(t *testing.T) {
 		AvatarURL:  "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("data-url-avatar")),
 	})
 
-	if !waitUntil(2*time.Second, func() bool { return len(storage.Uploaded) > 0 }) {
+	if !waitUntil(2*time.Second, func() bool { return len(storage.Uploaded()) > 0 }) {
 		t.Error("raw avatar data should be uploaded asynchronously after link")
 	}
-	if !waitUntil(2*time.Second, func() bool { return len(storage2.Uploaded) > 0 }) {
+	if !waitUntil(2*time.Second, func() bool { return len(storage2.Uploaded()) > 0 }) {
 		t.Error("data URL avatar should be parsed and uploaded after link")
 	}
 }
@@ -92,13 +92,13 @@ func TestAfterLoginSkipsWhenAvatarUnchanged(t *testing.T) {
 	h.afterLogin(context.Background(), user, oauth.ProviderIdentity{AvatarData: data, AvatarCT: "image/png"})
 	// 等待一段时间确认没有发生上传
 	time.Sleep(150 * time.Millisecond)
-	if len(storage.Uploaded) != 0 {
-		t.Errorf("Uploaded = %v, want none when avatar hash unchanged", storage.Uploaded)
+	if len(storage.Uploaded()) != 0 {
+		t.Errorf("Uploaded = %v, want none when avatar hash unchanged", storage.Uploaded())
 	}
 
 	// 头像变化后应重新转存
 	h.afterLogin(context.Background(), user, oauth.ProviderIdentity{AvatarData: []byte("avatar-v2"), AvatarCT: "image/png"})
-	if !waitUntil(2*time.Second, func() bool { return len(storage.Uploaded) > 0 }) {
+	if !waitUntil(2*time.Second, func() bool { return len(storage.Uploaded()) > 0 }) {
 		t.Error("changed avatar should be re-uploaded")
 	}
 }
@@ -113,8 +113,8 @@ func TestAfterUnlinkDeletesStoredAvatar(t *testing.T) {
 	h.afterUnlink(context.Background(), "u2", &models.User{UID: "u2", MicrosoftAvatarURL: sql.NullString{String: "data:image/png;base64,AAAA", Valid: true}})
 
 	time.Sleep(150 * time.Millisecond)
-	if len(storage.DeletedUsers) != 0 {
-		t.Errorf("DeletedUsers = %v, want none for in-memory avatars", storage.DeletedUsers)
+	if len(storage.DeletedUsers()) != 0 {
+		t.Errorf("DeletedUsers = %v, want none for in-memory avatars", storage.DeletedUsers())
 	}
 
 	// 已落盘的真实 URL
@@ -123,7 +123,7 @@ func TestAfterUnlinkDeletesStoredAvatar(t *testing.T) {
 		UID:                "u3",
 		MicrosoftAvatarURL: sql.NullString{String: "https://cdn.test/u3.webp", Valid: true},
 	})
-	if !waitUntil(2*time.Second, func() bool { return len(storage.DeletedUsers) > 0 }) {
+	if !waitUntil(2*time.Second, func() bool { return len(storage.DeletedUsers()) > 0 }) {
 		t.Error("stored avatar should be deleted from storage after unlink")
 	}
 }
@@ -136,7 +136,7 @@ func TestProcessAvatarAsyncRespectsSyncDisabled(t *testing.T) {
 	h.processAvatarAsync("u1", "", []byte("avatar"), "image/png")
 
 	time.Sleep(150 * time.Millisecond)
-	if len(storage.Uploaded) != 0 {
-		t.Errorf("Uploaded = %v, want none when avatar sync disabled", storage.Uploaded)
+	if len(storage.Uploaded()) != 0 {
+		t.Errorf("Uploaded = %v, want none when avatar sync disabled", storage.Uploaded())
 	}
 }

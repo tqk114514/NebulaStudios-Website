@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"auth-system/internal/cache"
@@ -320,8 +322,14 @@ type FakeUserLogStore struct {
 	// FindByUserUIDErr 注入按用户查询失败，覆盖日志列表与数据导出的降级分支
 	FindByUserUIDErr error
 	// 保留期清扫：错误注入 + 调用计数（后台任务无返回值，只能靠计数断言）
-	DeleteExpiredLogsErr   error
-	DeleteExpiredLogsCalls int
+	DeleteExpiredLogsErr error
+	// 清扫由后台 goroutine 执行、测试 goroutine 轮询读取，必须原子访问
+	deleteExpiredLogsCalls atomic.Int64
+}
+
+// DeleteExpiredLogsCalls 返回清扫被调用的次数
+func (f *FakeUserLogStore) DeleteExpiredLogsCalls() int64 {
+	return f.deleteExpiredLogsCalls.Load()
 }
 
 func (f *FakeUserLogStore) Create(context.Context, *models.UserLog) error   { return nil }
@@ -360,7 +368,7 @@ func (f *FakeUserLogStore) FindByUserUID(context.Context, string, int, int) ([]*
 }
 func (f *FakeUserLogStore) DeleteByUserUID(context.Context, string) error { return nil }
 func (f *FakeUserLogStore) DeleteExpiredLogs(context.Context) (int64, error) {
-	f.DeleteExpiredLogsCalls++
+	f.deleteExpiredLogsCalls.Add(1)
 	if f.DeleteExpiredLogsErr != nil {
 		return 0, f.DeleteExpiredLogsErr
 	}
@@ -387,10 +395,16 @@ func (f *FakeUserCache) ResetStats()             {}
 type FakeUserConsentStore struct {
 	// FindByUserUIDErr 注入查询失败，覆盖数据导出的降级分支
 	FindByUserUIDErr error
-	// DeleteExpiredConsentsErr / Calls：保留期清扫的错误注入与调用计数
-	DeleteExpiredConsentsErr   error
-	DeleteExpiredConsentsCalls int
-	Consents                   []*models.UserConsent
+	// DeleteExpiredConsentsErr / DeleteExpiredConsentsCalls：保留期清扫的错误注入与调用计数
+	DeleteExpiredConsentsErr error
+	Consents                 []*models.UserConsent
+	// 清扫由后台 goroutine 执行、测试 goroutine 轮询读取，必须原子访问
+	deleteExpiredConsentsCalls atomic.Int64
+}
+
+// DeleteExpiredConsentsCalls 返回清扫被调用的次数
+func (f *FakeUserConsentStore) DeleteExpiredConsentsCalls() int64 {
+	return f.deleteExpiredConsentsCalls.Load()
 }
 
 func (f *FakeUserConsentStore) Create(context.Context, *models.UserConsent) error        { return nil }
@@ -403,7 +417,7 @@ func (f *FakeUserConsentStore) FindByUserUID(context.Context, string) ([]*models
 }
 func (f *FakeUserConsentStore) DeleteByUserUID(context.Context, string) error { return nil }
 func (f *FakeUserConsentStore) DeleteExpiredConsents(context.Context) (int64, error) {
-	f.DeleteExpiredConsentsCalls++
+	f.deleteExpiredConsentsCalls.Add(1)
 	if f.DeleteExpiredConsentsErr != nil {
 		return 0, f.DeleteExpiredConsentsErr
 	}
@@ -502,19 +516,42 @@ func (f *FakeLimiter) StopAll()                                {}
 
 // FakeStorageService 头像存储 fake，Configured 控制 IsConfigured
 type FakeStorageService struct {
-	Configured   bool
-	DeletedUsers []string
-	Uploaded     []string
+	Configured bool
+
+	// 头像同步走 processAvatarAsync 后台 goroutine，测试用 waitUntil 轮询这些记录，
+	// 因此写入与读取都必须持锁
+	mu      sync.Mutex
+	upload  []string
+	deleted []string
 }
 
 func (f *FakeStorageService) UploadAvatar(_ context.Context, userUID string, _ []byte) (string, error) {
-	f.Uploaded = append(f.Uploaded, userUID)
+	f.mu.Lock()
+	f.upload = append(f.upload, userUID)
+	f.mu.Unlock()
 	return "https://storage.local/avatars/" + userUID + ".webp", nil
 }
 func (f *FakeStorageService) DeleteAvatar(_ context.Context, userUID string) error {
-	f.DeletedUsers = append(f.DeletedUsers, userUID)
+	f.mu.Lock()
+	f.deleted = append(f.deleted, userUID)
+	f.mu.Unlock()
 	return nil
 }
+
+// Uploaded 返回已上传头像的用户 UID 快照
+func (f *FakeStorageService) Uploaded() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.upload...)
+}
+
+// DeletedUsers 返回已删除头像的用户 UID 快照
+func (f *FakeStorageService) DeletedUsers() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.deleted...)
+}
+
 func (f *FakeStorageService) IsConfigured() bool                       { return f.Configured }
 func (f *FakeStorageService) GetImgProcessor() services.ImageProcessor { return nil }
 

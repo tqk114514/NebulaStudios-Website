@@ -279,8 +279,8 @@ func TestUploadAvatar(t *testing.T) {
 	if got != "https://storage.local/avatars/u2.webp" {
 		t.Errorf("storage URL = %q", got)
 	}
-	if len(storage.Uploaded) != 1 || storage.Uploaded[0] != "u2" {
-		t.Errorf("Uploaded = %v, want [u2]", storage.Uploaded)
+	if len(storage.Uploaded()) != 1 || storage.Uploaded()[0] != "u2" {
+		t.Errorf("Uploaded = %v, want [u2]", storage.Uploaded())
 	}
 }
 
@@ -314,8 +314,8 @@ func TestProcessAvatarAsync(t *testing.T) {
 
 		h.processAvatarAsync("u1", "old-hash", []byte("new-avatar"), "image/png")
 
-		if len(storage.Uploaded) != 1 {
-			t.Errorf("Uploaded = %v, want one upload", storage.Uploaded)
+		if len(storage.Uploaded()) != 1 {
+			t.Errorf("Uploaded = %v, want one upload", storage.Uploaded())
 		}
 	})
 
@@ -327,8 +327,8 @@ func TestProcessAvatarAsync(t *testing.T) {
 
 		h.processAvatarAsync("u2", "", []byte("new-avatar"), "image/png")
 
-		if len(storage.Uploaded) != 0 {
-			t.Errorf("Uploaded = %v, want none when sync disabled", storage.Uploaded)
+		if len(storage.Uploaded()) != 0 {
+			t.Errorf("Uploaded = %v, want none when sync disabled", storage.Uploaded())
 		}
 	})
 
@@ -341,8 +341,8 @@ func TestProcessAvatarAsync(t *testing.T) {
 		data := []byte("same-avatar")
 		h.processAvatarAsync("u3", h.calculateAvatarHash(data), data, "image/png")
 
-		if len(storage.Uploaded) != 0 {
-			t.Errorf("Uploaded = %v, want none when hash unchanged", storage.Uploaded)
+		if len(storage.Uploaded()) != 0 {
+			t.Errorf("Uploaded = %v, want none when hash unchanged", storage.Uploaded())
 		}
 	})
 
@@ -354,8 +354,8 @@ func TestProcessAvatarAsync(t *testing.T) {
 
 		h.processAvatarAsync("u4", "old-hash", nil, "image/png")
 
-		if len(storage.Uploaded) != 0 {
-			t.Errorf("Uploaded = %v, want none when clearing", storage.Uploaded)
+		if len(storage.Uploaded()) != 0 {
+			t.Errorf("Uploaded = %v, want none when clearing", storage.Uploaded())
 		}
 	})
 }

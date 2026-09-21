@@ -98,10 +98,10 @@ func TestRunUserLogCleanupSweeps(t *testing.T) {
 
 	go runUserLogCleanup(logs, consents)
 
-	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls() > 0 }) {
 		t.Fatal("DeleteExpiredLogs should be called on startup sweep")
 	}
-	if !waitFor(t, time.Second, func() bool { return consents.DeleteExpiredConsentsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return consents.DeleteExpiredConsentsCalls() > 0 }) {
 		t.Error("DeleteExpiredConsents should be called when consent repo is configured")
 	}
 }
@@ -111,7 +111,7 @@ func TestRunUserLogCleanupWithoutConsentRepo(t *testing.T) {
 
 	go runUserLogCleanup(logs, nil)
 
-	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls() > 0 }) {
 		t.Fatal("DeleteExpiredLogs should be called on startup sweep")
 	}
 }
@@ -123,10 +123,10 @@ func TestRunUserLogCleanupErrors(t *testing.T) {
 
 	go runUserLogCleanup(logs, consents)
 
-	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls() > 0 }) {
 		t.Fatal("cleanup should be attempted even if it fails")
 	}
-	if !waitFor(t, time.Second, func() bool { return consents.DeleteExpiredConsentsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return consents.DeleteExpiredConsentsCalls() > 0 }) {
 		t.Error("consent cleanup should be attempted even if it fails")
 	}
 }
@@ -144,7 +144,7 @@ func TestStartBackgroundTasks(t *testing.T) {
 	startBackgroundTasks(nil, repos, svcs)
 
 	// 保留期清扫在启动时立即跑一次，可据此确认任务确实被拉起
-	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls > 0 }) {
+	if !waitFor(t, time.Second, func() bool { return logs.DeleteExpiredLogsCalls() > 0 }) {
 		t.Error("retention cleanup should have been started")
 	}
 }
