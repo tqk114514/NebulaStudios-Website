@@ -127,12 +127,6 @@ func GetUID(c *gin.Context) (string, bool) {
 	return uidStr, true
 }
 
-// IsAuthenticated 检查用户是否已认证
-func IsAuthenticated(c *gin.Context) bool {
-	_, ok := GetUID(c)
-	return ok
-}
-
 // ExtractToken 从请求中提取 Token，优先从 Cookie 获取（同源 Cookie 无法被跨域脚本篡改 Header），其次从 Authorization Header 获取
 func ExtractToken(c *gin.Context) string {
 	if c == nil {

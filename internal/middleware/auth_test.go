@@ -210,6 +210,119 @@ func TestOptionalAuthSuccess(t *testing.T) {
 	}
 }
 
+// ---------- OptionalAuthMiddleware：未覆盖的降级与拒绝分支 ----------
+
+func TestOptionalAuthNilServicePassesThrough(t *testing.T) {
+	w := runAuth(OptionalAuthMiddleware(nil), http.MethodGet, "/test", "token=whatever", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（nil 服务应跳过鉴权）", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"uid":null`) {
+		t.Errorf("nil 服务时不应挂载 UID, got %s", w.Body.String())
+	}
+}
+
+// 关键分支：token 校验成功但 claims 非法时，绝不能把空身份挂进 Context，
+// 否则下游 GetUID 会拿到 ""，把"未登录"误判成"已登录的空用户"
+func TestOptionalAuthEmptyUIDNotMounted(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: ""}}
+	w := runAuth(OptionalAuthMiddleware(sess), http.MethodGet, "/test", "token=valid", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（可选鉴权必须放行）", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"uid":null`) {
+		t.Errorf("空 UID 不应被挂到 context, got %s", w.Body.String())
+	}
+}
+
+func TestOptionalAuthNilClaimsNotMounted(t *testing.T) {
+	sess := &testutil.FakeSessionManager{} // VerifyResult 为 nil
+	w := runAuth(OptionalAuthMiddleware(sess), http.MethodGet, "/test", "token=valid", "")
+	if !strings.Contains(w.Body.String(), `"uid":null`) {
+		t.Errorf("nil claims 不应被挂到 context, got %s", w.Body.String())
+	}
+}
+
+// ---------- GetUID / ExtractToken 的 nil 入参防御 ----------
+
+func TestGetUIDNilContext(t *testing.T) {
+	if uid, ok := GetUID(nil); ok || uid != "" {
+		t.Errorf("GetUID(nil) = (%q, %v), want (\"\", false)", uid, ok)
+	}
+}
+
+func TestExtractTokenNilContext(t *testing.T) {
+	if got := ExtractToken(nil); got != "" {
+		t.Errorf("ExtractToken(nil) = %q, want empty", got)
+	}
+}
+
+func TestGuestOnlyInvalidTokenPasses(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyErr: errors.New("expired")}
+	w := runAuth(GuestOnlyMiddleware(sess, &testutil.FakeUserCache{}, testutil.NewFakeUserRepo()),
+		http.MethodGet, "/test", "token=bad", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（token 失效应视为访客，不得重定向）", w.Code)
+	}
+}
+
+// 空 UID 的合法 token 不能被当成"已登录"重定向，否则会跳到需要身份的页面并白屏
+func TestGuestOnlyEmptyUIDNotRedirected(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: ""}}
+	w := runAuth(GuestOnlyMiddleware(sess, &testutil.FakeUserCache{}, testutil.NewFakeUserRepo()),
+		http.MethodGet, "/test", "token=valid", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, got body %s", w.Code, w.Body.String())
+	}
+}
+
+// ---------- guestOnlyTokenCheck：降级模式 ----------
+// UserCache/UserRepo 任一为 nil 时，GuestOnly 退化为"只认 token"。
+// 这条路径此前覆盖率为 0，而降级模式正是鉴权最容易出错的地方。
+
+func TestGuestOnlyDegradedStillRedirects(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: "u1"}}
+	// userRepo 为 nil → 走降级分支
+	w := runAuth(GuestOnlyMiddleware(sess, &testutil.FakeUserCache{}, nil), http.MethodGet, "/test", "token=valid", "")
+	if w.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302（降级模式下已登录仍须重定向）", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Location"), "account/dashboard") {
+		t.Errorf("want redirect to dashboard, got %s", w.Header().Get("Location"))
+	}
+}
+
+func TestGuestOnlyDegradedEmptyUIDPasses(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyResult: &services.Claims{UID: ""}}
+	w := runAuth(GuestOnlyMiddleware(sess, nil, nil), http.MethodGet, "/test", "token=valid", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（空 UID 视为访客）", w.Code)
+	}
+}
+
+func TestGuestOnlyDegradedInvalidTokenPasses(t *testing.T) {
+	sess := &testutil.FakeSessionManager{VerifyErr: errors.New("bad")}
+	w := runAuth(GuestOnlyMiddleware(sess, nil, testutil.NewFakeUserRepo()), http.MethodGet, "/test", "token=bad", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（token 无效视为访客）", w.Code)
+	}
+}
+
+func TestGuestOnlyDegradedNoTokenPasses(t *testing.T) {
+	sess := &testutil.FakeSessionManager{}
+	w := runAuth(GuestOnlyMiddleware(sess, nil, nil), http.MethodGet, "/test", "", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+}
+
+func TestGuestOnlyNilServiceSkipsCheck(t *testing.T) {
+	w := runAuth(GuestOnlyMiddleware(nil, nil, nil), http.MethodGet, "/test", "token=x", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200（nil 服务时跳过检查）", w.Code)
+	}
+}
+
 // ---------- GuestOnlyMiddleware ----------
 
 func TestGuestOnlyNoToken(t *testing.T) {
