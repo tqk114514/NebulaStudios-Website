@@ -201,6 +201,18 @@ func TestUpdateAvatarInvalidURL(t *testing.T) {
 	}
 }
 
+// 移除头像时 google 哨兵同样要回落为默认头像（此前只处理 microsoft）
+func TestUpdateAvatarRemoveGoogleSentinel(t *testing.T) {
+	h, deps := newTestUserHandler(t)
+	user := seedUser(deps, t, "Abcdef1!@#ghijklmn")
+	user.AvatarURL = "google"
+
+	w := postUserJSON(h.UpdateAvatar, `{"avatar_url":""}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"avatar_url":"https://test.local/default.png"`) {
+		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
+	}
+}
+
 // 哨兵值要求对应 Provider 已绑定且头像已落库，否则存进去就是一个指向空地址的头像
 func TestUpdateAvatarSentinelRequiresProviderAvatar(t *testing.T) {
 	t.Run("未绑定微软时拒绝", func(t *testing.T) {
