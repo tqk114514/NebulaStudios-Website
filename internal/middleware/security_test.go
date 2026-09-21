@@ -123,6 +123,33 @@ func TestCSRFPostMismatch(t *testing.T) {
 	}
 }
 
+// cookie 有、但客户端压根没交令牌：与「值不一致」是两类问题，必须分开报
+func TestCSRFPostTokenNotSent(t *testing.T) {
+	w := runMW(CSRFTokenMiddleware(), http.MethodPost, "/", "", map[string]string{
+		"Cookie": "csrf_token=abc123",
+	})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "CSRF_TOKEN_NOT_SENT") {
+		t.Errorf("want CSRF_TOKEN_NOT_SENT, got %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "CSRF_TOKEN_MISMATCH") {
+		t.Error("漏带令牌不应被报成 mismatch")
+	}
+}
+
+// 中间件声明支持的第二条通道：表单字段 csrf_token 也应放行
+func TestCSRFPostFormFieldAccepted(t *testing.T) {
+	w := runMW(CSRFTokenMiddleware(), http.MethodPost, "/", "csrf_token=abc123", map[string]string{
+		"Cookie":       "csrf_token=abc123",
+		"Content-Type": "application/x-www-form-urlencoded",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+}
+
 // ---------- BodySizeLimit ----------
 
 func TestBodySizeLimitTooLarge(t *testing.T) {

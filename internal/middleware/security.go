@@ -190,7 +190,19 @@ func CSRFTokenMiddleware() gin.HandlerFunc {
 			clientToken = c.PostForm("csrf_token")
 		}
 
-		if clientToken == "" || subtle.ConstantTimeCompare([]byte(clientToken), []byte(cookieToken)) != 1 {
+		// 区分「客户端压根没交令牌」与「交了但值不一致」：两者排查方向完全不同。
+		// 合成一条 mismatch 曾把「裸 fetch 漏带令牌」误导成「令牌被篡改」
+		if clientToken == "" {
+			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token not sent by client", "path", c.Request.URL.Path)
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"success":   false,
+				"errorCode": utils.ErrCodeCSRFTokenNotSent,
+				"message":   "CSRF token is required for this request",
+			})
+			return
+		}
+
+		if subtle.ConstantTimeCompare([]byte(clientToken), []byte(cookieToken)) != 1 {
 			utils.LogWarnCtx(c.Request.Context(), "SECURITY", "CSRF token mismatch", "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success":   false,

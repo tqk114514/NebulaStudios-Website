@@ -43,6 +43,7 @@ const (
 	ErrCodeTokenGenerateFailed   = "TOKEN_GENERATE_FAILED"
 	ErrCodeTokenGenerationFailed = "TOKEN_GENERATION_FAILED"
 	ErrCodeCSRFTokenMissing      = "CSRF_TOKEN_MISSING"
+	ErrCodeCSRFTokenNotSent      = "CSRF_TOKEN_NOT_SENT"
 	ErrCodeCSRFTokenMismatch     = "CSRF_TOKEN_MISMATCH"
 )
 
