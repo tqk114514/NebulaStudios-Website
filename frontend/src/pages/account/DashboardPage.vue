@@ -76,7 +76,12 @@ function formatDateTime(dateStr: string | null | undefined): string {
   })
 }
 
-const msSyncDisabled = computed(() => user.value?.microsoft_avatar_sync === false)
+// 「同步被关闭」只在有微软头像可恢复时才是恢复态：未绑定用户的 microsoft_avatar_sync
+// 取自列默认值、不表达任何意愿，据此判定会把按钮变成「恢复同步」并让点击去提交一个不成立的哨兵
+const msSyncDisabled = computed(() => {
+  const u = user.value
+  return !!u && !!u.microsoft_avatar_url && u.microsoft_avatar_sync === false
+})
 
 function microsoftName(): string {
   const u = user.value
