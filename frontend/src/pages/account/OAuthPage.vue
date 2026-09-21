@@ -42,11 +42,8 @@ function scopeName(scope: string): string {
   return SCOPE_NAMES[scope] ?? scope
 }
 
-// 后端偶有未能解析的头像哨兵值（如 "microsoft"），此时回落到用户名首字母
-const avatarSrc = computed(() => {
-  const url = info.value?.userAvatar ?? ''
-  return url.startsWith('/') || url.startsWith('https://') ? url : ''
-})
+// 后端已把头像哨兵解析成真实 URL（无可用地址时为空串），空则回退用户名首字母
+const avatarSrc = computed(() => info.value?.userAvatar ?? '')
 
 async function loadInfo() {
   const q = route.query

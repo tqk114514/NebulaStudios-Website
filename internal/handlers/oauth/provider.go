@@ -215,18 +215,8 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 
 	normalizedScope := h.normalizeScope(scope)
 
-	// 授权页直接把该值当图片 src 用，哨兵值必须就地解析成真实 URL
-	avatarURL := user.AvatarURL
-	switch avatarURL {
-	case "microsoft":
-		if user.MicrosoftAvatarURL.Valid {
-			avatarURL = user.MicrosoftAvatarURL.String
-		}
-	case "google":
-		if user.GoogleAvatarURL.Valid {
-			avatarURL = user.GoogleAvatarURL.String
-		}
-	}
+	// 该值会被授权页当图片 src 直接用，不能漏出哨兵
+	avatarURL := user.ResolvedAvatarURL()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -460,11 +450,7 @@ func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope st
 			response["sub"] = user.UID
 		case ScopeProfile:
 			response["username"] = user.Username
-			avatarURL := user.AvatarURL
-			if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
-				avatarURL = user.MicrosoftAvatarURL.String
-			}
-			response["avatar_url"] = avatarURL
+			response["avatar_url"] = user.ResolvedAvatarURL()
 		case ScopeEmail:
 			response["email"] = user.Email
 		}

@@ -229,6 +229,11 @@ func TestAuthorizeInfoResolvesAvatarSentinel(t *testing.T) {
 			user: models.User{AvatarURL: "/avatars/u1.webp"},
 			want: "/avatars/u1.webp",
 		},
+		{
+			name: "哨兵未落库时留空",
+			user: models.User{AvatarURL: "google"},
+			want: "",
+		},
 	}
 
 	for _, tc := range cases {

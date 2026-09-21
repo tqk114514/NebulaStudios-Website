@@ -125,8 +125,9 @@ type UserRepository struct {
 	defaultAvatarURL string
 }
 
-// resolveAvatarURL 将头像哨兵值（"microsoft"/"google"）解析为具体的第三方头像 URL
-func (u *User) resolveAvatarURL() string {
+// ResolvedAvatarURL 将头像哨兵值（"microsoft"/"google"）解析为具体的第三方头像 URL。
+// 哨兵指向的 URL 尚未落库时返回空串，调用方按「无头像」处理，不要把哨兵原样透出。
+func (u *User) ResolvedAvatarURL() string {
 	switch u.AvatarURL {
 	case "microsoft":
 		return u.MicrosoftAvatarURL.String
@@ -148,7 +149,7 @@ func (u *User) ToPublic() *UserPublic {
 		UID:                 u.UID,
 		Username:            u.Username,
 		Email:               u.Email,
-		AvatarURL:           u.resolveAvatarURL(),
+		AvatarURL:           u.ResolvedAvatarURL(),
 		Role:                u.Role,
 		IsBanned:            u.IsBanned,
 		TOTPEnabled:         u.TOTPEnabled,
@@ -217,7 +218,7 @@ func (u *User) ToAdminPublic() *AdminUserPublic {
 		UID:            u.UID,
 		Username:       u.Username,
 		Email:          u.Email,
-		AvatarURL:      u.resolveAvatarURL(),
+		AvatarURL:      u.ResolvedAvatarURL(),
 		Role:           u.Role,
 		MicrosoftBound: u.MicrosoftID.Valid,
 		GoogleBound:    u.GoogleID.Valid,

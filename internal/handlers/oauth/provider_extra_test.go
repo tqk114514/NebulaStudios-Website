@@ -277,10 +277,10 @@ func TestBuildUserInfoResponse(t *testing.T) {
 		t.Errorf("avatar_url = %v, want microsoft avatar url", got["avatar_url"])
 	}
 
-	// 未存的微软头像：保持标记值
+	// 哨兵指向的头像尚未落库：对外不能漏出内部标记，返回空串
 	plain := &models.User{UID: "u2", Username: "bob", Email: "bob@example.com", AvatarURL: "microsoft"}
 	got = h.buildUserInfoResponse(plain, "profile")
-	if got["avatar_url"] != "microsoft" {
-		t.Errorf("avatar_url = %v, want fallback marker", got["avatar_url"])
+	if got["avatar_url"] != "" {
+		t.Errorf("avatar_url = %v, want empty", got["avatar_url"])
 	}
 }
