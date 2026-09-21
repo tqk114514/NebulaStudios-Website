@@ -172,7 +172,7 @@ func initRepos(cfg *config.Config, pool *pgxpool.Pool) *Repos {
 	repos.UserConsentRepo = models.NewUserConsentRepository(pool)
 	repos.EmailWhitelistRepo = models.NewEmailWhitelistRepository(pool)
 	repos.AdminLogRepo = models.NewAdminLogRepository(pool)
-	repos.DataExportRepo = models.NewDataExportImportRepository(pool)
+	repos.DataExportRepo = models.NewDataExportImportRepository(pool, cfg.DefaultAvatarURL)
 
 	utils.LogInfo("REPOS", "All repositories initialized")
 	return repos

@@ -15,12 +15,13 @@ import (
 
 // DataExportImportRepository 数据导入导出仓库，封装批量数据操作的 SQL 逻辑
 type DataExportImportRepository struct {
-	pool *pgxpool.Pool
+	pool             *pgxpool.Pool
+	defaultAvatarURL string
 }
 
 // NewDataExportImportRepository 创建数据导入导出仓库
-func NewDataExportImportRepository(pool *pgxpool.Pool) *DataExportImportRepository {
-	return &DataExportImportRepository{pool: pool}
+func NewDataExportImportRepository(pool *pgxpool.Pool, defaultAvatarURL string) *DataExportImportRepository {
+	return &DataExportImportRepository{pool: pool, defaultAvatarURL: defaultAvatarURL}
 }
 
 // pgxConn 是 *pgxpool.Pool 和 pgx.Tx 的共同接口，用于统一批量操作逻辑
@@ -189,7 +190,7 @@ type ImportUsersResult struct {
 // ImportUsers 批量导入用户（ON CONFLICT upsert），使用 pgx.Batch 减少数据库往返
 // 安全校验：role 必须为合法枚举值，password 必须为 Argon2id 哈希格式，防止篡改备份提权
 func (r *DataExportImportRepository) ImportUsers(ctx context.Context, users []map[string]any) (ImportUsersResult, error) {
-	return importUsersBatch(ctx, r.pool, users)
+	return importUsersBatch(ctx, r.pool, users, r.defaultAvatarURL)
 }
 
 // ImportUserLogs 批量导入用户日志（ON CONFLICT DO NOTHING），使用 pgx.Batch 减少数据库往返
@@ -212,7 +213,7 @@ func (r *DataExportImportRepository) ImportAllInTransaction(ctx context.Context,
 		return ImportUsersResult{}, 0, 0, fmt.Errorf("failed to clear users: %w", err)
 	}
 
-	usersResult, err := importUsersBatch(ctx, tx, users)
+	usersResult, err := importUsersBatch(ctx, tx, users, r.defaultAvatarURL)
 	if err != nil {
 		return usersResult, 0, 0, err
 	}
@@ -229,8 +230,24 @@ func (r *DataExportImportRepository) ImportAllInTransaction(ctx context.Context,
 	return usersResult, logsImported, logsFailed, nil
 }
 
+// avatarForImport 沿用 PATCH /api/user/avatar 的规则：哨兵值必须有对应的 Provider 头像兜底。
+// 历史备份里存在"哨兵但头像未落库"的行（该校验此前缺失），导入时回落为默认头像。
+func avatarForImport(avatarURL, microsoftURL, googleURL, defaultAvatarURL string) string {
+	switch avatarURL {
+	case "microsoft":
+		if microsoftURL == "" {
+			return defaultAvatarURL
+		}
+	case "google":
+		if googleURL == "" {
+			return defaultAvatarURL
+		}
+	}
+	return avatarURL
+}
+
 // importUsersBatch 批量导入用户，conn 可以是 pool 或 tx
-func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any) (ImportUsersResult, error) {
+func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any, defaultAvatarURL string) (ImportUsersResult, error) {
 	batch := &pgx.Batch{}
 	uids := make([]string, 0, len(users))
 	result := ImportUsersResult{}
@@ -257,12 +274,22 @@ func importUsersBatch(ctx context.Context, conn pgxConn, users []map[string]any)
 			continue
 		}
 
+		rawAvatarURL := toString(user["avatar_url"])
+		avatarURL := avatarForImport(rawAvatarURL,
+			toString(user["microsoft_avatar_url"]),
+			toString(user["google_avatar_url"]),
+			defaultAvatarURL)
+		if avatarURL != rawAvatarURL {
+			utils.LogWarn("DATA-IMPORT", "Avatar sentinel has no provider avatar, reset to default",
+				"uid", uid, "avatar_url", rawAvatarURL)
+		}
+
 		batch.Queue(importUsersSQL,
 			uid,
 			toString(user["username"]),
 			toString(user["email"]),
 			password,
-			toString(user["avatar_url"]),
+			avatarURL,
 			toNullableString(user["microsoft_id"]),
 			toNullableString(user["microsoft_name"]),
 			toNullableString(user["microsoft_avatar_url"]),
