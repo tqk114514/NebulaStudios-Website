@@ -201,14 +201,15 @@ func TestUpdateAvatarInvalidURL(t *testing.T) {
 	}
 }
 
-// 移除头像时 google 哨兵同样要回落为默认头像（此前只处理 microsoft）
-func TestUpdateAvatarRemoveGoogleSentinel(t *testing.T) {
+// 「移除头像」只关掉微软转存链路：Google 的头像 URL 由 Google 直发、不随本地文件消失，
+// 所以 google 哨兵要原样保留（微软那一路见 TestUpdateAvatarRemove）
+func TestUpdateAvatarRemoveKeepsGoogleSentinel(t *testing.T) {
 	h, deps := newTestUserHandler(t)
 	user := seedUser(deps, t, "Abcdef1!@#ghijklmn")
 	user.AvatarURL = "google"
 
 	w := postUserJSON(h.UpdateAvatar, `{"avatar_url":""}`)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"avatar_url":"https://test.local/default.png"`) {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"avatar_url":"google"`) {
 		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
 	}
 }

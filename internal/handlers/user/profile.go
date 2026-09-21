@@ -90,11 +90,6 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	utils.RespondSuccess(c, gin.H{"username": newUsername})
 }
 
-// avatarIsSentinel 哨兵值表示「使用某 Provider 的头像」，本身不是可显示的地址
-func avatarIsSentinel(value string) bool {
-	return value == "microsoft" || value == "google"
-}
-
 // validateAvatarSentinel 只有已绑定该 Provider 且其头像 URL 已落库时，avatar_url 才允许存哨兵值。
 // 否则哨兵指向一个空地址，读取方只能各自兜底；解绑与头像同步清空时也会把哨兵一并撤掉。
 func validateAvatarSentinel(value string, u *models.User) error {
@@ -141,12 +136,14 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 			_ = h.storageService.DeleteAvatar(ctx, userUID)
 		}
 
-		// 仅当当前使用 Provider 哨兵头像时改为默认头像 URL；使用自定义头像时保留原 URL
+		// 只回落 microsoft 哨兵：微软不给 URL 只给图片，microsoft_avatar_url 是本地转存产物，
+		// 关掉同步删掉文件后它就没了，哨兵必须一起撤；google_avatar_url 是 Google 直发的 URL，
+		// 不受本按钮影响，保留哨兵即仍然有效。使用自定义头像时同样保留原 URL。
 		updates := map[string]any{
 			"microsoft_avatar_sync": false,
 			"microsoft_avatar_hash": nil,
 		}
-		if avatarIsSentinel(currentUser.AvatarURL) {
+		if currentUser.AvatarURL == "microsoft" {
 			updates["avatar_url"] = h.defaultAvatarURL
 		}
 
@@ -169,9 +166,9 @@ func (h *UserHandler) UpdateAvatar(c *gin.Context) {
 			}
 		}
 
-		// 响应当前生效的头像 URL：Provider 哨兵头像→默认头像；自定义头像→保持原样
+		// 响应当前生效的头像 URL：微软头像→默认头像；自定义头像→保持原样
 		resultAvatarURL := currentUser.AvatarURL
-		if avatarIsSentinel(currentUser.AvatarURL) {
+		if currentUser.AvatarURL == "microsoft" {
 			resultAvatarURL = h.defaultAvatarURL
 		}
 		utils.LogInfoCtx(c.Request.Context(), "USER", "Avatar removed", "user_uid", userUID)
