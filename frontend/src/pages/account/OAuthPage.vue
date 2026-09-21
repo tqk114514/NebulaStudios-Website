@@ -4,7 +4,7 @@
 // 页面专属样式（应用信息、用户信息、权限列表、提示文本、加载 spinner）在本页 scoped 中。
 // 通过 URL query 携带授权参数，拉取 /oauth/authorize/info 展示应用与权限，
 // 用户在允许/拒绝后 POST /oauth/authorize，成功则跳转 redirect_url。
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getCsrfToken } from '@/api/client'
@@ -41,6 +41,12 @@ const SCOPE_NAMES: Record<string, string> = { openid: 'openid', profile: 'profil
 function scopeName(scope: string): string {
   return SCOPE_NAMES[scope] ?? scope
 }
+
+// 后端偶有未能解析的头像哨兵值（如 "microsoft"），此时回落到用户名首字母
+const avatarSrc = computed(() => {
+  const url = info.value?.userAvatar ?? ''
+  return url.startsWith('/') || url.startsWith('https://') ? url : ''
+})
 
 async function loadInfo() {
   const q = route.query
@@ -159,7 +165,10 @@ onMounted(() => {
       <!-- 当前用户 -->
       <div class="oauth-user-info">
         <span>{{ $t('account.oauth.authorize.loginAs') }}</span>
-        <div class="oauth-user-avatar">{{ info.username.charAt(0).toUpperCase() }}</div>
+        <div class="oauth-user-avatar">
+          <img v-if="avatarSrc" :src="avatarSrc" :alt="info.username" />
+          <template v-else>{{ info.username.charAt(0).toUpperCase() }}</template>
+        </div>
         <span class="oauth-user-name">{{ info.username }}</span>
       </div>
 
@@ -289,6 +298,12 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 700;
   color: var(--fg);
+}
+
+.oauth-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .oauth-user-name {

@@ -215,9 +215,17 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 
 	normalizedScope := h.normalizeScope(scope)
 
+	// 授权页直接把该值当图片 src 用，哨兵值必须就地解析成真实 URL
 	avatarURL := user.AvatarURL
-	if avatarURL == "microsoft" && user.MicrosoftAvatarURL.Valid {
-		avatarURL = user.MicrosoftAvatarURL.String
+	switch avatarURL {
+	case "microsoft":
+		if user.MicrosoftAvatarURL.Valid {
+			avatarURL = user.MicrosoftAvatarURL.String
+		}
+	case "google":
+		if user.GoogleAvatarURL.Valid {
+			avatarURL = user.GoogleAvatarURL.String
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

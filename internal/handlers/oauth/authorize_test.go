@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -200,6 +202,63 @@ func TestAuthorizeInfoSuccess(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "Test App") || !strings.Contains(body, "alice") {
 		t.Errorf("want clientName/username in response, got %s", body)
+	}
+}
+
+// 授权页把 userAvatar 直接当图片 src 用，哨兵值必须在服务端就被解析成真实 URL
+func TestAuthorizeInfoResolvesAvatarSentinel(t *testing.T) {
+	cases := []struct {
+		name string
+		user models.User
+		want string
+	}{
+		{
+			name: "microsoft 哨兵",
+			user: models.User{AvatarURL: "microsoft",
+				MicrosoftAvatarURL: sql.NullString{String: "https://ms.example/a.png", Valid: true}},
+			want: "https://ms.example/a.png",
+		},
+		{
+			name: "google 哨兵",
+			user: models.User{AvatarURL: "google",
+				GoogleAvatarURL: sql.NullString{String: "https://g.example/a.jpg", Valid: true}},
+			want: "https://g.example/a.jpg",
+		},
+		{
+			name: "本地头像原样返回",
+			user: models.User{AvatarURL: "/avatars/u1.webp"},
+			want: "/avatars/u1.webp",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, deps := newTestProvider(t)
+			seedOAuthClient(deps)
+			tc.user.UID = "u1"
+			tc.user.Username = "alice"
+			tc.user.Email = "alice@example.com"
+			deps.userRepo.Seed(&tc.user)
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set(middleware.ContextKeyUID, "u1")
+			c.Request = httptest.NewRequest(http.MethodGet,
+				"/oauth/authorize/info?client_id=client-1&redirect_uri="+url.QueryEscape("https://app.example.com/cb")+"&scope=openid", nil)
+			h.AuthorizeInfo(c)
+
+			var resp struct {
+				Data struct {
+					UserAvatar string `json:"userAvatar"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal %s: %v", w.Body.String(), err)
+			}
+			if resp.Data.UserAvatar != tc.want {
+				t.Errorf("userAvatar = %q, want %q", resp.Data.UserAvatar, tc.want)
+			}
+		})
 	}
 }
 
