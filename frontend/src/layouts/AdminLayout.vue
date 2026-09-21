@@ -123,8 +123,7 @@ onBeforeUnmount(() => {
 const avatarSrc = computed(() => {
   const u = auth.user
   if (!u) return ''
-  if (u.avatar_url === 'microsoft') return u.microsoft_avatar_url ?? ''
-  if (u.avatar_url === 'google') return u.google_avatar_url ?? ''
+  // 后端 ToPublic 已把头像哨兵解析成具体 URL，这里只需兜默认头像
   return u.avatar_url || CDN_URL + '/images/default-avatar.svg'
 })
 
