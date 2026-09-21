@@ -332,7 +332,7 @@ func initHandlers(cfg *config.Config, repos *Repos, svcs *Services) (*Handlers, 
 
 	hdlrs.oauthProviderHandler = oauth.NewOAuthProviderHandler(
 		svcs.OAuthService, repos.UserRepo, repos.UserLogRepo,
-		svcs.UserCache, svcs.SessionService, cfg.BaseURL,
+		svcs.UserCache, svcs.SessionService, cfg.BaseURL, cfg.DefaultAvatarURL,
 	)
 	utils.LogInfo("HANDLERS", "OAuthProviderHandler initialized")
 

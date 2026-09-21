@@ -43,6 +43,7 @@ func newTestProvider(t *testing.T) (*OAuthProviderHandler, *providerTestDeps) {
 		&testutil.FakeUserCache{},
 		&testutil.FakeSessionManager{},
 		"https://test.local",
+		"https://cdn.test/default-avatar.svg",
 	)
 	return h, deps
 }

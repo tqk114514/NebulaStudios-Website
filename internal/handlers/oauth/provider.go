@@ -51,12 +51,13 @@ func authorizeErrorStatus(errorCode string) int {
 
 // OAuthProviderHandler OAuth Provider Handler
 type OAuthProviderHandler struct {
-	oauthService   services.OAuthProviderStore
-	userRepo       models.UserReader
-	userLogRepo    models.UserLogStore
-	userCache      services.UserCacheStore
-	sessionService services.SessionManager
-	baseURL        string
+	oauthService     services.OAuthProviderStore
+	userRepo         models.UserReader
+	userLogRepo      models.UserLogStore
+	userCache        services.UserCacheStore
+	sessionService   services.SessionManager
+	baseURL          string
+	defaultAvatarURL string
 }
 
 // NewOAuthProviderHandler 创建 OAuth Provider Handler
@@ -67,15 +68,25 @@ func NewOAuthProviderHandler(
 	userCache services.UserCacheStore,
 	sessionService services.SessionManager,
 	baseURL string,
+	defaultAvatarURL string,
 ) *OAuthProviderHandler {
 	return &OAuthProviderHandler{
-		oauthService:   oauthService,
-		userRepo:       userRepo,
-		userLogRepo:    userLogRepo,
-		userCache:      userCache,
-		sessionService: sessionService,
-		baseURL:        baseURL,
+		oauthService:     oauthService,
+		userRepo:         userRepo,
+		userLogRepo:      userLogRepo,
+		userCache:        userCache,
+		sessionService:   sessionService,
+		baseURL:          baseURL,
+		defaultAvatarURL: defaultAvatarURL,
 	}
+}
+
+// displayAvatar 对外给出可直接显示的头像地址：哨兵解析不出时回落到配置的默认头像
+func (h *OAuthProviderHandler) displayAvatar(user *models.User) string {
+	if v := user.ResolvedAvatarURL(); v != "" {
+		return v
+	}
+	return h.defaultAvatarURL
 }
 
 // Authorize 授权端点（GET），验证参数和登录状态后重定向到授权页面
@@ -215,8 +226,7 @@ func (h *OAuthProviderHandler) AuthorizeInfo(c *gin.Context) {
 
 	normalizedScope := h.normalizeScope(scope)
 
-	// 该值会被授权页当图片 src 直接用，不能漏出哨兵
-	avatarURL := user.ResolvedAvatarURL()
+	avatarURL := h.displayAvatar(user)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -450,7 +460,7 @@ func (h *OAuthProviderHandler) buildUserInfoResponse(user *models.User, scope st
 			response["sub"] = user.UID
 		case ScopeProfile:
 			response["username"] = user.Username
-			response["avatar_url"] = user.ResolvedAvatarURL()
+			response["avatar_url"] = h.displayAvatar(user)
 		case ScopeEmail:
 			response["email"] = user.Email
 		}

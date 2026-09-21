@@ -230,9 +230,9 @@ func TestAuthorizeInfoResolvesAvatarSentinel(t *testing.T) {
 			want: "/avatars/u1.webp",
 		},
 		{
-			name: "哨兵未落库时留空",
+			name: "哨兵但无对应头像URL时回落默认",
 			user: models.User{AvatarURL: "google"},
-			want: "",
+			want: "https://cdn.test/default-avatar.svg",
 		},
 	}
 

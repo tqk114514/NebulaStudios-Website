@@ -256,7 +256,7 @@ func TestBuildUserInfoResponse(t *testing.T) {
 		AvatarURL:          "microsoft",
 		MicrosoftAvatarURL: sql.NullString{String: "https://ms.example/a.png", Valid: true},
 	}
-	h := &OAuthProviderHandler{}
+	h := &OAuthProviderHandler{defaultAvatarURL: "https://cdn.test/default-avatar.svg"}
 
 	// 仅 openid：只有 sub
 	got := h.buildUserInfoResponse(user, "openid")
@@ -277,10 +277,16 @@ func TestBuildUserInfoResponse(t *testing.T) {
 		t.Errorf("avatar_url = %v, want microsoft avatar url", got["avatar_url"])
 	}
 
-	// 哨兵指向的头像尚未落库：对外不能漏出内部标记，返回空串
+	// 哨兵指向的头像尚未落库、以及清空头像：一律回落默认头像，不能漏出内部标记
 	plain := &models.User{UID: "u2", Username: "bob", Email: "bob@example.com", AvatarURL: "microsoft"}
 	got = h.buildUserInfoResponse(plain, "profile")
-	if got["avatar_url"] != "" {
-		t.Errorf("avatar_url = %v, want empty", got["avatar_url"])
+	if got["avatar_url"] != "https://cdn.test/default-avatar.svg" {
+		t.Errorf("avatar_url = %v, want default avatar", got["avatar_url"])
+	}
+
+	got = h.buildUserInfoResponse(
+		&models.User{UID: "u3", Username: "carol", Email: "c@example.com"}, "profile")
+	if got["avatar_url"] != "https://cdn.test/default-avatar.svg" {
+		t.Errorf("avatar_url = %v, want default avatar", got["avatar_url"])
 	}
 }
