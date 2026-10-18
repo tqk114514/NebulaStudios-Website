@@ -1,0 +1,127 @@
+/*
+ * 设计令牌 —— 色值、字体名、时长与缓动的唯一出处。
+ * 组件样式只允许引用角色令牌，不得写字面色值、字体族或 cubic-bezier。
+ * 深色单主题；无浅色变体。
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- 原语 ---------- */
+
+  --neutral-950: #0d0d0d;
+  --neutral-900: #1a1a1a;
+  --neutral-800: #2a2a2a;
+  --neutral-600: #6f6b64;
+  --neutral-500: #9a968d;
+  --neutral-200: #e0ddd8;
+  --neutral-100: #f0ede8;
+
+  --status-success: #71b391;
+  --status-error: #d4635b;
+  --status-error-bright: #e88b81;
+  --status-warning: #cfa757;
+  --status-danger: #c08a8a;
+
+  /* ---------- 角色 ---------- */
+
+  --bg: var(--neutral-950);
+  --surface: #111111;
+  --surface-raised: #171717;
+  --fg: var(--neutral-100);
+  --fg-hover: var(--neutral-200);
+  --fg-muted: var(--neutral-500);
+  --fg-faint: var(--neutral-600);
+  --line: var(--neutral-900);
+  --line-strong: var(--neutral-800);
+  --focus: var(--neutral-100);
+  --success: var(--status-success);
+  --error: var(--status-error);
+  --warning: var(--status-warning);
+  --danger: var(--status-danger);
+
+  /* ---------- 字体 ---------- */
+
+  --font-display: "Unbounded", "Avenir Next", "Segoe UI", system-ui,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", monospace;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+
+  /* ---------- 字阶 ----------
+     11/12/14/16/22 取自 v3；xl 以上为新增，用于原先靠行内字号撑出的展示层级 */
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 22px;
+  --text-xl: clamp(28px, 2.2vw + 18px, 40px);
+  --text-2xl: clamp(32px, 3vw + 20px, 52px);
+  --text-hero: clamp(40px, 5vw + 20px, 76px);
+
+  --lh-prose: 1.75;
+  --lh-ui: 1.6;
+  --lh-heading: 1.15;
+
+  /* 中文不加正字距；拉丁小标签靠字距分层 */
+  --track-none: 0;
+  --track-body: 0.01em;
+  --track-mono: 0.06em;
+  --track-label: 0.12em;
+  --track-caps: 0.2em;
+  --track-button: 0.08em;
+
+  /* ---------- 间距：4px 基准，禁止 6px / 7px 这类脱格值 ---------- */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* ---------- 圆角：容器 0，交互件小值 ---------- */
+
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 50%;
+
+  /* ---------- 度量与容器 ----------
+     汉字约 1em 见方、拉丁约 0.5em：同一 40em 同时满足 WCAG 2.2 SC 1.4.8
+     的 40 汉字与 80 拉丁字符上限 */
+
+  --measure: 40em;
+  --form-max: 24rem;
+  --page-max: 1280px;
+  --page-pad: 24px;
+  --header-h: 56px;
+
+  /* ---------- 动效 ----------
+     --ease-brand 与错峰步长取自 v3；入场序列由 --i 传索引，不用 JS 改样式 */
+
+  --ease-brand: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --dur-ui: 200ms;
+  --dur-reveal: 800ms;
+  --stagger: 200ms;
+  --reveal-shift: 16px;
+
+  /* ---------- 触达与焦点 ---------- */
+
+  --target-min: 24px;
+  --target-comfort: 48px;
+  --ring-width: 2px;
+  --ring-offset: 2px;
+}
