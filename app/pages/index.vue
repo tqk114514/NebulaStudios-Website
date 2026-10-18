@@ -8,7 +8,6 @@ const password = ref('')
 <template>
   <main>
     <AuthPanel
-      num="01"
       title="登录 Nebula"
       subtitle="邮箱与密码，或从已绑定的第三方账号进入。"
     >

@@ -70,9 +70,14 @@ textarea {
   color: var(--bg);
 }
 
-:where(a, button, input, select, textarea, summary):focus-visible {
+:where(a, button, select, summary):focus-visible {
   outline: var(--ring-width) solid var(--focus);
   outline-offset: var(--ring-offset);
+}
+
+/* 文本控件是无框下划线式，矩形环与其形态冲突；焦点由下划线加粗变色承担 */
+:where(input, textarea):focus-visible {
+  outline: none;
 }
 
 .sr-only {

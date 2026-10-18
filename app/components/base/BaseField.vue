@@ -135,6 +135,10 @@ function toggleReveal() {
 .base-field__input:focus {
   border-color: var(--fg);
 }
+.base-field__input:focus-visible {
+  border-bottom-width: 2px;
+  padding-bottom: calc(var(--space-2) - 1px);
+}
 
 /* 动态码：单框 + 字距分格，六个分格会破坏自动填充与退格 */
 .base-field__input--code {
