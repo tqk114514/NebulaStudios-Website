@@ -103,6 +103,7 @@ test/{unit,nuxt,e2e}
 3. 组件内不手写 `fetch('/api/…')`。API client 生成为独立 workspace 包，照 `halo-dev/halo` 的 `ui/packages/api-client`——接口形状一致性由生成器保证。
 4. i18n 用 `@nuxtjs/i18n`，locale 按功能域一份，key 命名空间 = 组件/功能名，CI 跑缺项检查。不使用手写 codegen。
 5. 自动导入：composables/utils 开启；页面私有组件对该目录设 `components: false`，显式导入。
+6. 原子分两层：`components/base/` 放通用控件（按钮、字段、模态、标签、分页），`components/patterns/` 放领域重复件（详情行、带图标的列表项、状态徽标）。同一视觉结构第三次出现时必须提为组件，不再复制。
 
 ---
 
@@ -160,7 +161,7 @@ test/{unit,nuxt,e2e}
 
 **行数上限**（项目自定，非外部标准；v3 的 `DashboardPage.vue` 2186 行、`HomePage.vue` 1465 行）：SFC ≤ 200、composable ≤ 80、普通模块 ≤ 120，用 `max-lines` 强制。
 
-**辅助门禁**：`knip`（死导出/死文件即失败）、`lychee`、`renovate`、`nano-staged` 预提交跑 `eslint --fix` 与触及文件的类型检查。命令：`nuxt typecheck`。
+**辅助门禁**：`knip`（死导出/死文件即失败）、`stylelint` 的 `declaration-property-value-disallowed-list` 与 `stylelint-declaration-strict-value`（禁字面色值、字体族、`cubic-bezier`，只允许引用令牌）、`lychee`、`renovate`、`nano-staged` 预提交跑 `eslint --fix` 与触及文件的类型检查。命令：`nuxt typecheck`。
 
 ---
 
@@ -196,6 +197,7 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 9. **PKCE 不接受 `plain`。** v3 接受 `plain`（无客户端使用）而文档称强制 PKCE。降级路径存在则降级迟早发生。
 10. **`openid` 命名需有依据。** v3 有 `openid` scope 而无 OIDC discovery/JWKS 端点。补齐，或不叫 `openid`。
 11. **语言覆盖范围与实际一致。** v3 的 `i18n/sources/admin/` 只有 `zh-CN`，对外称五语言。
+12. **人机验证不得是唯一步骤。** WCAG 2.2 SC 3.3.8 禁止把认知功能测试作为认证的必要环节；v3 把 Turnstile 挂在登录、注册发码、改密、注销、开关 TOTP 上且无替代路径。→ 每处验证码都提供替代（邮件链接、TOTP、passkey）。
 
 ---
 
