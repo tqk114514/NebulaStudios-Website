@@ -136,8 +136,6 @@ test/{unit,nuxt,e2e}
 - 不变量写在声明处（结构体字段、trait 方法），不写在使用处。
 - TODO：`TODO(@user): 上下文，附 issue; 截止日期或触发条件`。
 
-来源：[API Guidelines · Documentation](https://rust-lang.github.io/api-guidelines/documentation.html) · [rustdoc](https://doc.rust-lang.org/rustdoc/write-documentation/the-doc-attribute.html) · [Google Python Guide](https://google.github.io/styleguide/pyguide.html)
-
 ---
 
 ## 6. 机器门禁 · Rust
@@ -147,8 +145,6 @@ test/{unit,nuxt,e2e}
 **错误处理**（C-GOOD-ERR）：库侧 thiserror 派生专用枚举，anyhow 只出现在 `main.rs` 与边界；公开 `Result` 的错误类型必须 `impl Error + Send + Sync + 'static'` 且 `impl Debug`；`()` 不作错误类型；`Display` 小写开头、结尾无标点；不用已废弃的 `description()`。
 
 **CI 必跑**：`cargo fmt --all -- --check`、`cargo clippy -- -D warnings`、`cargo test`、`cargo doc --no-deps`（`RUSTDOCFLAGS` 含 `-D rustdoc::broken_intra_doc_links`）、`cargo deny check`、`cargo machete`、`typos`。
-
-来源：[rustfmt options](https://raw.githubusercontent.com/rust-lang/rustfmt/main/src/config/options.rs) · [thiserror](https://raw.githubusercontent.com/dtolnay/thiserror/master/README.md) / [anyhow](https://raw.githubusercontent.com/dtolnay/anyhow/master/README.md) · [Cargo Book](https://doc.rust-lang.org/cargo/guide/project-layout.html) · [Rust Book 7.5](https://doc.rust-lang.org/book/ch07-05-separating-modules-into-different-files.html) · [Edition 2024](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
 
 ---
 
@@ -166,8 +162,6 @@ test/{unit,nuxt,e2e}
 
 **辅助门禁**：`knip`（死导出/死文件即失败）、`lychee`、`renovate`、`nano-staged` 预提交跑 `eslint --fix` 与触及文件的类型检查。命令：`nuxt typecheck`。
 
-来源：[@nuxt/eslint](https://eslint.nuxt.com/packages/module) · [nuxt typecheck](https://nuxt.com/docs/4.x/api/commands/typecheck) · [antfu/eslint-config](https://github.com/antfu/eslint-config) · [nuxt/nuxt 根配置](https://github.com/nuxt/nuxt) · [Vue Style Guide](https://vuejs.org/style-guide/) · [SFC script-setup](https://vuejs.org/api/sfc-script-setup.html)
-
 ---
 
 ## 8. 测试
@@ -184,8 +178,6 @@ test/{unit,nuxt,e2e}
 6. fake 优先手写；`mockall` + `#[async_trait]` 可用但通常更啰嗦。
 7. e2e 覆盖主流程：注册 → 验证 → 登录 → 会话 → 登出；断言用 `getByRole` / `getByPlaceholder` 与 web-first `expect(...).toHaveText`。
 8. 并发代码在竞态检测下测（loom，或多线程 runtime 的并发用例），且进 PR 门禁，不只挂定时任务。
-
-来源：[Nuxt testing](https://nuxt.com/docs/4.x/getting-started/testing) · [axum testing example](https://github.com/tokio-rs/axum/tree/main/examples) · [SWE at Google ch.11](https://abseil.io/resources/swe-book/html/ch11.html) / [ch.12](https://abseil.io/resources/swe-book/html/ch12.html) · [Testing Trophy](https://kentcdodds.com/blog/the-testing-trophy-and-testing-classifications) · [Playwright best practices](https://playwright.dev/docs/best-practices)
 
 ---
 
@@ -223,8 +215,6 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 
 **保留 v3 的有效姿态**：HttpOnly + `Secure` + `SameSite` 的 access/refresh 分离 cookie；refresh 只存哈希；检测重放即撤销整个家族；写操作恒定时间比较 CSRF 令牌；CSRF 判定按请求方法，不按是否有 body（v3 曾按后者出 bug）。
 
-来源：[Nuxt 安全公告](https://nuxt.com/blog/v4-5-security) · [nuxt/nuxt#33686](https://github.com/nuxt/nuxt/issues/33686) · [routing](https://nuxt.com/docs/4.x/getting-started/routing/) · [data fetching](https://nuxt.com/docs/4.x/getting-started/data-fetching) · [rendering](https://nuxt.com/docs/4.x/guide/concepts/rendering)
-
 ---
 
 ## 11. 流程纪律
@@ -237,8 +227,6 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 - **版本**：SemVer 2.0。`0.y.z` 阶段规范允许任意变更，初期不走正式发版流程。
 - **ADR**：每个不可逆决策一份 `docs/adr/NNNN-标题.md`，章节 Title / Status / Context / Decision / Consequences。
 
-来源：[refactoring.com](https://refactoring.com/) · [eng-practices](https://google.github.io/eng-practices/review/reviewer/standard.html) / [small-cls](https://google.github.io/eng-practices/review/developer/small-cls.html) · [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) · [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/spec/v2.0.0.html) · [ADR 模板](https://github.com/joelparkerhenderson/architecture-decision-record)
-
 ---
 
 ## 12. 只能靠评审的四条
@@ -247,8 +235,6 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 2. **非法状态不可表示**：能用状态机就不用布尔字段组合。补丁通常是往非法状态上再叠一个分支。
 3. **注释只写做什么与在什么条件下成立**（§5）。
 4. **不能解释的 diff 不合**，无论是否测过。
-
-来源：[looking-for](https://google.github.io/eng-practices/review/reviewer/looking-for.html) · [AI 时代的维护要求](https://kubernetes.io/blog/2026-06-26/open-source-maintainership-in-the-age-of-ai/) · Ousterhout《A Philosophy of Software Design》（措辞需对照纸质书）
 
 ---
 
@@ -259,8 +245,6 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 - 复制第二套同类实现而不复用第一套。
 - 静默丢弃错误。被吞掉的错误必须在注释中写明后果。
 - 无来源 URL 的条款进入本文件。
-
-来源：[Vertical Slice](https://www.jimmybogard.com/vertical-slice-architecture/)
 
 ---
 
@@ -301,8 +285,12 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 
 ## 17. 来源
 
-**Rust**：[API Guidelines · Naming](https://rust-lang.github.io/api-guidelines/naming.html) · [Documentation](https://rust-lang.github.io/api-guidelines/documentation.html) · [Interoperability](https://rust-lang.github.io/api-guidelines/interoperability.html) · [Rust Style Guide](https://doc.rust-lang.org/style-guide/) · [MAS](https://github.com/element-hq/matrix-authentication-service) · [axum examples](https://github.com/tokio-rs/axum/tree/main/examples) · [rustls](https://github.com/rustls/rustls) · [tokio](https://github.com/tokio-rs/tokio) · [jsonwebtoken](https://docs.rs/jsonwebtoken/latest/jsonwebtoken/struct.EncodingKey.html) · [sqlx](https://github.com/launchbadge/sqlx/blob/main/CHANGELOG.md) · [rand](https://github.com/rust-random/rand/blob/master/CHANGELOG.md) · [lettre](https://github.com/lettre/lettre) · [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) · [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) · [12factor](https://12factor.net/)
+**Rust 规范与工具链**：[API Guidelines · Naming](https://rust-lang.github.io/api-guidelines/naming.html) · [Documentation](https://rust-lang.github.io/api-guidelines/documentation.html) · [Interoperability](https://rust-lang.github.io/api-guidelines/interoperability.html) · [Rust Style Guide](https://doc.rust-lang.org/style-guide/) · [rustdoc](https://doc.rust-lang.org/rustdoc/write-documentation/the-doc-attribute.html) · [Cargo Book 布局](https://doc.rust-lang.org/cargo/guide/project-layout.html) · [Rust Book 7.5](https://doc.rust-lang.org/book/ch07-05-separating-modules-into-different-files.html) · [Edition 2024](https://doc.rust-lang.org/edition-guide/rust-2024/index.html) · [rustfmt 选项](https://raw.githubusercontent.com/rust-lang/rustfmt/main/src/config/options.rs) · [thiserror](https://raw.githubusercontent.com/dtolnay/thiserror/master/README.md) / [anyhow](https://raw.githubusercontent.com/dtolnay/anyhow/master/README.md)
 
-**前端**：[Nuxt 入口](https://nuxt.com/docs/4.x/getting-started/introduction) · [shared](https://nuxt.com/docs/4.x/directory-structure/shared) · [server](https://nuxt.com/docs/4.x/directory-structure/server) · [VueUse CONTRIBUTING](https://vueuse.org/contributing) · [nuxt/ui](https://github.com/nuxt/ui) · [halo](https://github.com/halo-dev/halo) · [openobserve](https://github.com/openobserve/openobserve) · [FSD](https://feature-sliced.design/docs/get-started/overview) · [i18n releases](https://github.com/nuxt-modules/i18n/releases)
+**Rust 参考代码库与 crate**：[MAS](https://github.com/element-hq/matrix-authentication-service)（`docs/development/architecture.md`）· [axum examples](https://github.com/tokio-rs/axum/tree/main/examples) · [rustls](https://github.com/rustls/rustls) · [tokio](https://github.com/tokio-rs/tokio) · [jsonwebtoken](https://docs.rs/jsonwebtoken/latest/jsonwebtoken/struct.EncodingKey.html) · [sqlx](https://github.com/launchbadge/sqlx/blob/main/CHANGELOG.md) · [rand](https://github.com/rust-random/rand/blob/master/CHANGELOG.md) · [lettre](https://github.com/lettre/lettre) · [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) · [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) · [12factor](https://12factor.net/)
 
-**架构**：[Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012-08-13/the-clean-architecture.html) · [Hexagonal](https://alistair.cockburn.us/hexagonal-architecture/) · [Given/When/Then](https://dannorth.net/introducing-bdd/) · [Test Pyramid](https://martinfowler.com/bliki/TestPyramid.html)
+**前端规范**：[Vue Style Guide](https://vuejs.org/style-guide/) · [SFC script-setup](https://vuejs.org/api/sfc-script-setup.html) · [VueUse CONTRIBUTING](https://vueuse.org/contributing) · [antfu/eslint-config](https://github.com/antfu/eslint-config) · [@nuxt/eslint](https://eslint.nuxt.com/packages/module) · [FSD](https://feature-sliced.design/docs/get-started/overview) · [nuxt/ui](https://github.com/nuxt/ui) · [halo](https://github.com/halo-dev/halo) · [openobserve](https://github.com/openobserve/openobserve) · [nuxt/nuxt 根配置](https://github.com/nuxt/nuxt)
+
+**Nuxt 文档**：[入口](https://nuxt.com/docs/4.x/getting-started/introduction) · [shared](https://nuxt.com/docs/4.x/directory-structure/shared) · [server](https://nuxt.com/docs/4.x/directory-structure/server) · [routing](https://nuxt.com/docs/4.x/getting-started/routing/) · [data fetching](https://nuxt.com/docs/4.x/getting-started/data-fetching) · [rendering](https://nuxt.com/docs/4.x/guide/concepts/rendering) · [testing](https://nuxt.com/docs/4.x/getting-started/testing) · [typecheck](https://nuxt.com/docs/4.x/api/commands/typecheck) · [i18n releases](https://github.com/nuxt-modules/i18n/releases) · [v4.5 安全公告](https://nuxt.com/blog/v4-5-security) · [nuxt/nuxt#33686](https://github.com/nuxt/nuxt/issues/33686)
+
+**架构与流程**：[Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012-08-13/the-clean-architecture.html) · [Hexagonal](https://alistair.cockburn.us/hexagonal-architecture/) · [Vertical Slice](https://www.jimmybogard.com/vertical-slice-architecture/) · [Test Pyramid](https://martinfowler.com/bliki/TestPyramid.html) · [Testing Trophy](https://kentcdodds.com/blog/the-testing-trophy-and-testing-classifications) · [Given/When/Then](https://dannorth.net/introducing-bdd/) · [SWE at Google ch.11](https://abseil.io/resources/swe-book/html/ch11.html) / [ch.12](https://abseil.io/resources/swe-book/html/ch12.html) · [refactoring.com](https://refactoring.com/) · [eng-practices](https://google.github.io/eng-practices/review/reviewer/standard.html) / [looking-for](https://google.github.io/eng-practices/review/reviewer/looking-for.html) / [small-cls](https://google.github.io/eng-practices/review/developer/small-cls.html) · [Google Python Guide](https://google.github.io/styleguide/pyguide.html) · [Playwright best practices](https://playwright.dev/docs/best-practices) · [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) · [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/spec/v2.0.0.html) · [ADR 模板](https://github.com/joelparkerhenderson/architecture-decision-record) · [AI 时代的维护要求](https://kubernetes.io/blog/2026-06-26/open-source-maintainership-in-the-age-of-ai/) · Ousterhout《A Philosophy of Software Design》（措辞需对照纸质书）
