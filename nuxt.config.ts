@@ -9,6 +9,7 @@ export default defineNuxtConfig({
   },
 
   css: [
+    '@fontsource/unbounded/200.css',
     '@fontsource/unbounded/400.css',
     '@fontsource/unbounded/700.css',
     '@fontsource/unbounded/900.css',
@@ -19,6 +20,11 @@ export default defineNuxtConfig({
     '@fontsource-variable/newsreader/wght-italic.css',
     '~/assets/css/tokens.css',
     '~/assets/css/base.css',
+  ],
+
+  components: [
+    { path: '~/components/base', pathPrefix: false },
+    { path: '~/components/patterns', pathPrefix: false },
   ],
 
   // 公开页走 SSR；账号与后台为客户端渲染（见 AGENTS.md §10）

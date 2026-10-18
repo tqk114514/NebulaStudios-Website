@@ -58,6 +58,8 @@
   --text-base: 14px;
   --text-md: 16px;
   --text-lg: 22px;
+  --text-title: clamp(24px, 3vw, 32px);
+  --text-num: 64px;
   --text-xl: clamp(28px, 2.2vw + 18px, 40px);
   --text-2xl: clamp(32px, 3vw + 20px, 52px);
   --text-hero: clamp(40px, 5vw + 20px, 76px);
@@ -73,6 +75,9 @@
   --track-label: 0.12em;
   --track-caps: 0.2em;
   --track-button: 0.08em;
+  --track-wide: 0.04em;
+  --track-tight: -0.04em;
+  --track-title: -0.02em;
 
   /* ---------- 间距：4px 基准，禁止 6px / 7px 这类脱格值 ---------- */
 
@@ -102,15 +107,17 @@
 
   --measure: 40em;
   --form-max: 24rem;
+  --panel-max: 400px;
   --page-max: 1280px;
   --page-pad: 24px;
-  --header-h: 56px;
+  --header-h: 60px;
 
   /* ---------- 动效 ----------
      --ease-brand 与错峰步长取自 v3；入场序列由 --i 传索引，不用 JS 改样式 */
 
   --ease-brand: cubic-bezier(0.76, 0, 0.24, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasize: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
   --dur-ui: 200ms;
@@ -124,4 +131,11 @@
   --target-comfort: 48px;
   --ring-width: 2px;
   --ring-offset: 2px;
+
+  /* ---------- 层级：顶栏 100、页面遮罩 110、弹窗 200、二级确认 210 ---------- */
+
+  --z-header: 100;
+  --z-overlay: 110;
+  --z-modal: 200;
+  --z-confirm: 210;
 }
