@@ -1,0 +1,10 @@
+edition = "2024"
+max_width = 100
+use_small_heuristics = "Max"
+merge_derives = true
+use_field_init_shorthand = true
+reorder_imports = true
+
+# 仅 stable 选项。
+# group_imports / imports_granularity 是 nightly-only；
+# 需要强制 std → 外部 → crate 分组时，CI 必须改用 cargo +nightly fmt。
