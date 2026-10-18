@@ -9,6 +9,7 @@
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

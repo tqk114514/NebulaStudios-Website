@@ -101,7 +101,7 @@ function submitCode() {
       </form>
 
       <div class="foot">
-        <a class="quiet" href="#recovery">{{ t('login.recovery') }}</a>
+        <span />
         <button class="quiet" type="button" @click="step = 'password'">
           {{ t('totp.back') }}
         </button>

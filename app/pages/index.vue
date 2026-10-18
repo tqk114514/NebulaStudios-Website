@@ -16,7 +16,6 @@ const { t } = useI18n()
           <BaseButton class="hero__cta" to="/account/login">
             {{ t('home.cta') }}
           </BaseButton>
-          <a class="hero__link" href="#capabilities">{{ t('home.howItWorks') }}</a>
         </div>
       </div>
     </section>
@@ -63,16 +62,5 @@ const { t } = useI18n()
 .hero__cta {
   width: auto;
   min-width: 200px;
-}
-
-.hero__link {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg-muted);
-}
-
-.hero__link:hover {
-  color: var(--fg);
 }
 </style>
