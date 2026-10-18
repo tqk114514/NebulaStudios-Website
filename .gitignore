@@ -1,62 +1,24 @@
-# 构建产物
-dist/
-*.exe
-
-# 构建时生成（scripts/gen-locales.mjs，dev/build/typecheck 前自动执行）
-frontend/src/i18n/locales/
-
-# 依赖
+# 依赖与构建产物
 node_modules/
+.nuxt/
+.output/
+dist/
 
 # 环境变量
 .env
 .env.*
 
-# IDE 配置
+# 编辑器与工具缓存
 .vscode/
 .idea/
-
-# 项目特定
-.trae/
-.skill/
-.zcode/
-.workbuddy-ai/
-
-# 日志
-*.log
-
-# 临时文件
 .DS_Store
 Thumbs.db
-TODO.md
+*.log
+.eslintcache
+.stylelintcache
 
-# Rust
-img-processor/target/
+# 本地数据
+data/avatars/
 
-# Zig
-img-processor/zig-cache/
-img-processor/zig-out/
-img-processor/.zig-cache/
-
-# 前端工具配置
-.htmlhintrc
-.eslint.config.mjs
-.stylelintrc.json
-index.js
-
-/server
-
-.zight/
-.tmp-poc/
-
-# 构建时生成（build.ps1 / CI 编译 img-processor 后写入，//go:embed 使用）
-internal/services/img-processor-bin
-
-# Python
-__pycache__/
-*.pyc
-
-old_frontend/
-
-# 覆盖率产物
-coverage.out
+# 注意：lint 配置（eslint.config.mjs、.stylelintrc.json、knip.json）必须入库，
+# 否则门禁只存在于某一台机器上。
