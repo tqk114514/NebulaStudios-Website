@@ -1,0 +1,8 @@
+// N 字标的两条 path，viewBox 0 0 256 256。
+// 顶栏字标与星云粒子雕塑共用，改一处即可。
+export const LOGO_VIEW_BOX = '0 0 256 256'
+
+export const LOGO_PATHS = [
+  'M56 48H96L144 96L112 128L96 112V208H56V48Z',
+  'M200 208H160L112 160L144 128L160 144V48H200V208Z',
+]

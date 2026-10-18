@@ -35,6 +35,7 @@
   --line: var(--neutral-900);
   --line-strong: var(--neutral-800);
   --focus: var(--neutral-100);
+  --nebula-ring: #cfd6e4; /* 星环冷白，仅 3D 粒子材质读取 */
   --success: var(--status-success);
   --error: var(--status-error);
   --warning: var(--status-warning);
