@@ -160,7 +160,7 @@ function toggleReveal() {
   border: none;
   background: transparent;
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   letter-spacing: var(--track-mono);
   color: var(--fg-muted);
   cursor: pointer;
@@ -176,7 +176,7 @@ function toggleReveal() {
 }
 
 .base-field__error {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   letter-spacing: var(--track-label);
   color: var(--error);
 }

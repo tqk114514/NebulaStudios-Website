@@ -1,0 +1,36 @@
+{
+  "home": {
+    "title": "ONE IDENTITY EVERYWHERE",
+    "subtitle": "A hand-built account system: email and password sign-in, TOTP two-factor, session rotation, and an OAuth 2.0 authorization server.",
+    "cta": "Get started",
+    "howItWorks": "How it works"
+  },
+  "login": {
+    "title": "Sign in to Nebula",
+    "subtitle": "Use your email and password, or a linked third-party account.",
+    "email": "Email",
+    "password": "Password",
+    "remember": "Keep me signed in on this device",
+    "forgot": "Forgot password",
+    "submit": "Sign in",
+    "providers": "Or use a third-party account",
+    "signinGoogle": "Sign in with Google",
+    "signinMicrosoft": "Sign in with Microsoft",
+    "invalidCredentials": "That email and password combination isn't recognised. Reset it with the link above.",
+    "recovery": "Use a recovery code",
+    "register": "Create an account",
+    "privacy": "Privacy policy"
+  },
+  "totp": {
+    "title": "Two-factor verification",
+    "hint": "Enter the 6-digit code from your authenticator. It expires after 30 seconds.",
+    "code": "Code",
+    "invalidCode": "The code is 6 digits.",
+    "submit": "Verify",
+    "back": "Back"
+  },
+  "common": {
+    "language": "Language",
+    "skipToContent": "Skip to main content"
+  }
+}

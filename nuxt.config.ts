@@ -1,6 +1,19 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-18',
 
+  modules: ['@nuxtjs/i18n'],
+
+  devtools: { enabled: false },
+
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'zh-CN',
+    locales: [
+      { code: 'zh-CN', language: 'zh-Hans', file: 'zh-CN.json', name: '简体中文' },
+      { code: 'en', language: 'en-US', file: 'en.json', name: 'English' },
+    ],
+  },
+
   app: {
     head: {
       htmlAttrs: { lang: 'zh-Hans' },

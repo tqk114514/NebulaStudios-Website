@@ -1,42 +1,78 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { useI18n } from '#imports'
 
-const email = ref('')
-const password = ref('')
+const { t } = useI18n()
 </script>
 
 <template>
   <main>
-    <AuthPanel
-      title="登录 Nebula"
-      subtitle="邮箱与密码，或从已绑定的第三方账号进入。"
-    >
-      <div class="form">
-        <BaseField
-          v-model="email"
-          label="邮箱"
-          name="email"
-          type="email"
-          autocomplete="username email"
-        />
-        <BaseField
-          v-model="password"
-          label="密码"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          error="邮箱或密码不正确"
-        />
-        <BaseButton type="submit">登录</BaseButton>
-        <BaseButton variant="secondary">使用恢复码</BaseButton>
+    <section class="hero">
+      <NebulaHero />
+
+      <div class="hero__content">
+        <h1 class="hero__title">{{ t('home.title') }}</h1>
+        <p class="hero__subtitle">{{ t('home.subtitle') }}</p>
+        <div class="hero__actions">
+          <BaseButton class="hero__cta" to="/account/login">
+            {{ t('home.cta') }}
+          </BaseButton>
+          <a class="hero__link" href="#capabilities">{{ t('home.howItWorks') }}</a>
+        </div>
       </div>
-    </AuthPanel>
+    </section>
   </main>
 </template>
 
 <style scoped>
-.form {
+.hero {
+  position: relative;
   display: grid;
-  gap: var(--space-4);
+  align-items: center;
+  min-height: calc(100svh - var(--header-h));
+  padding: var(--space-16) var(--page-pad);
+}
+
+.hero__content {
+  position: relative;
+  z-index: 1;
+  max-width: var(--measure);
+  display: grid;
+  gap: var(--space-6);
+}
+
+.hero__title {
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: 700;
+  line-height: var(--lh-heading);
+  letter-spacing: var(--track-none);
+}
+
+.hero__subtitle {
+  max-width: var(--measure);
+  color: var(--fg-muted);
+}
+
+.hero__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-top: var(--space-2);
+}
+
+.hero__cta {
+  width: auto;
+  min-width: 200px;
+}
+
+.hero__link {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-mono);
+  color: var(--fg-muted);
+}
+
+.hero__link:hover {
+  color: var(--fg);
 }
 </style>

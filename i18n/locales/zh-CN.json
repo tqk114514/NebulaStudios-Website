@@ -1,0 +1,36 @@
+{
+  "home": {
+    "title": "ONE IDENTITY EVERYWHERE",
+    "subtitle": "自行实现的账号系统：邮箱与密码登录、TOTP 两步验证、会话轮转，以及一个 OAuth 2.0 授权服务器。",
+    "cta": "开始使用",
+    "howItWorks": "看它怎么运作"
+  },
+  "login": {
+    "title": "登录 Nebula",
+    "subtitle": "使用邮箱与密码，或从已绑定的第三方账号进入。",
+    "email": "邮箱",
+    "password": "密码",
+    "remember": "在这台设备上保持登录状态",
+    "forgot": "忘记密码",
+    "submit": "登录",
+    "providers": "或使用第三方账号",
+    "signinGoogle": "使用 Google 登录",
+    "signinMicrosoft": "使用 Microsoft 登录",
+    "invalidCredentials": "邮箱或密码不正确。如果忘记密码，用链接重设。",
+    "recovery": "使用恢复码",
+    "register": "创建账号",
+    "privacy": "隐私政策"
+  },
+  "totp": {
+    "title": "两步验证",
+    "hint": "输入验证器上的 6 位动态码，30 秒后失效。",
+    "code": "动态码",
+    "invalidCode": "动态码是 6 位数字",
+    "submit": "验证",
+    "back": "返回"
+  },
+  "common": {
+    "language": "语言",
+    "skipToContent": "跳到主要内容"
+  }
+}
