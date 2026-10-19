@@ -75,6 +75,7 @@ function onToggle(event: Event) {
 <style scoped>
 .lang {
   position: relative;
+  line-height: var(--lh-control);
 }
 
 .lang__trigger {
@@ -82,8 +83,7 @@ function onToggle(event: Event) {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--target-comfort);
-  padding: 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: transparent;
   border: 1px solid var(--line);
   font-family: var(--font-mono);

@@ -69,6 +69,9 @@
 
   --lh-prose: 1.75;
   --lh-ui: 1.6;
+  /* 单行控件标签（按钮、菜单项、字段名）：等宽字在 normal 下行盒约 1.8 倍字号，
+     不压掉的话 padding 再小也还是墩的 */
+  --lh-control: 1.25;
   --lh-heading: 1.15;
   --lh-section: 1.05;
   --lh-display: 0.92;
