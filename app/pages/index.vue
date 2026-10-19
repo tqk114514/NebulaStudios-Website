@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from '#imports'
+import HomeTicker from '~/components/pages/home/HomeTicker.vue'
 import { useNebulaField } from '~/composables/useNebulaField'
 
 const { t } = useI18n()
@@ -35,6 +36,8 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
         <div ref="anchorRef" class="hero__anchor" aria-hidden="true" />
       </div>
     </section>
+
+    <HomeTicker />
   </main>
 </template>
 
