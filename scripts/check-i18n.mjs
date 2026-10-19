@@ -6,11 +6,11 @@ const LOCALES = ['zh-CN', 'en']
 const SOURCE_DIR = 'app'
 
 function flatten(obj, prefix = '') {
-  return Object.entries(obj).flatMap(([key, value]) =>
-    value !== null && typeof value === 'object'
-      ? flatten(value, `${prefix}${key}.`)
-      : [`${prefix}${key}`],
-  )
+  return Object.entries(obj).flatMap(([key, value]) => {
+    // 数组是富文本分段这类消息本体，不是命名空间：展开会把 text1 拆成 text1.0.s
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return [`${prefix}${key}`]
+    return flatten(value, `${prefix}${key}.`)
+  })
 }
 
 function filesIn(dir) {
@@ -21,13 +21,14 @@ function filesIn(dir) {
 }
 
 const used = new Set()
+// 任何点号字面量都算一次引用：t()、tm()、<i18n-t keypath>、以及放进数组里再间接
+// 取用的键都要覆盖到。按调用名匹配会漏掉后两种，而 app/** 里不存在第二种形状的
+// 字符串（点号字面量只有键），所以这条规则没有误报面。
+const KEY_LITERAL = /'([a-z][\w-]*(?:\.[\w-]+)+)'/g
 for (const file of filesIn(SOURCE_DIR)) {
   if (!file.endsWith('.vue') && !file.endsWith('.ts')) continue
   const source = readFileSync(file, 'utf8')
-  for (const match of source.matchAll(/\bt\(\s*'([^']+)'/g)) used.add(match[1])
-  for (const match of source.matchAll(/\$t\(\s*'([^']+)'/g)) used.add(match[1])
-  // <i18n-t> 的键写在模板属性上，不扫到就会被误报为未引用
-  for (const match of source.matchAll(/keypath="([^"]+)"/g)) used.add(match[1])
+  for (const match of source.matchAll(KEY_LITERAL)) used.add(match[1])
 }
 
 const keysByLocale = Object.fromEntries(
