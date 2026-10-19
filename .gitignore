@@ -20,5 +20,8 @@ Thumbs.db
 # 本地数据
 data/avatars/
 
+# v3 归档：留在本地供比对，不进入 v4 的构建、测试与检索
+Reference/
+
 # 注意：lint 配置（eslint.config.mjs、.stylelintrc.json、knip.json）必须入库，
 # 否则门禁只存在于某一台机器上。
