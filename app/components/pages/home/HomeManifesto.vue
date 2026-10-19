@@ -1,10 +1,27 @@
 <script setup lang="ts">
 // 宣言区。左栏大字在滚动时钉住，右栏三段带强调的整句文案。
-// 强调部分用 <i18n-t> 的具名插槽而不是把一句拆成 before/strong/after 三个键：
-// 语序属于语言本身，拆开后换语言就散架。
+// 强调写在消息文本里用 ** 包裹，而不是拆成 before/strong/after 三个键——语序属于
+// 语言本身，拆开后换语言就散架。也不用 <i18n-t>：它按 useScope: 'parent' 沿组件树
+// 找局部 scope，而 Nuxt 的消息全在全局 scope，dev 下每个实例警告一次。
 import { useI18n } from '#imports'
 
+interface Segment {
+  s: string
+  em: boolean
+}
+
+const EMPHASIS = /^\*\*[^*]+\*\*$/
+
 const { t } = useI18n()
+
+const PARAGRAPHS = ['home.manifesto.text1', 'home.manifesto.text2', 'home.manifesto.text3'] as const
+
+function segments(sentence: string): Segment[] {
+  return sentence
+    .split(/(\*\*[^*]+\*\*)/)
+    .filter((part) => part !== '')
+    .map((part) => ({ s: part.replace(/^\*\*|\*\*$/g, ''), em: EMPHASIS.test(part) }))
+}
 </script>
 
 <template>
@@ -19,38 +36,17 @@ const { t } = useI18n()
     </div>
 
     <div class="manifesto__body">
-      <i18n-t
-        keypath="home.manifesto.text1"
-        tag="p"
+      <p
+        v-for="(key, i) in PARAGRAPHS"
+        :key="key"
         class="manifesto__text"
-        data-reveal>
-        <template #strong>
-          <strong>{{ t('home.manifesto.text1Strong') }}</strong>
+        :data-reveal="String(i)"
+      >
+        <template v-for="(seg, j) in segments(t(key))" :key="j">
+          <strong v-if="seg.em">{{ seg.s }}</strong>
+          <template v-else>{{ seg.s }}</template>
         </template>
-      </i18n-t>
-
-      <i18n-t
-        keypath="home.manifesto.text2"
-        tag="p"
-        class="manifesto__text"
-        data-reveal="1">
-        <template #strong>
-          <strong>{{ t('home.manifesto.text2Strong') }}</strong>
-        </template>
-      </i18n-t>
-
-      <i18n-t
-        keypath="home.manifesto.text3"
-        tag="p"
-        class="manifesto__text"
-        data-reveal="2">
-        <template #infrastructure>
-          <strong>{{ t('home.manifesto.text3Infrastructure') }}</strong>
-        </template>
-        <template #principle>
-          <strong>{{ t('home.manifesto.text3Principle') }}</strong>
-        </template>
-      </i18n-t>
+      </p>
     </div>
   </section>
 </template>
