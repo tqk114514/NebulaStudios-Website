@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 全站唯一按钮外观出处。to / href 缺省时渲染 <button>，用于表单提交与动作；
 // 传 to 或 href 时渲染链接，视觉与按钮一致，避免出现第二套 CTA 样式。
+// 宽度由布局上下文决定：grid 项自动拉伸，flex 项按内容定宽，组件本身不写 width。
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -8,7 +9,6 @@ const props = withDefaults(
     variant?: 'primary' | 'secondary'
     size?: 'md' | 'sm'
     type?: 'button' | 'submit'
-    block?: boolean
     arrow?: boolean
     disabled?: boolean
     to?: string
@@ -18,7 +18,6 @@ const props = withDefaults(
     variant: 'primary',
     size: 'md',
     type: 'button',
-    block: true,
     arrow: true,
     disabled: false,
     to: undefined,
@@ -73,7 +72,6 @@ const showArrow = computed(() => props.variant === 'primary' && props.arrow)
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  width: 100%;
   height: var(--target-comfort);
   padding: 0 var(--space-4);
   border: none;
@@ -125,7 +123,6 @@ const showArrow = computed(() => props.variant === 'primary' && props.arrow)
 }
 
 .base-button--sm {
-  width: auto;
   height: auto;
   min-width: var(--space-16);
   padding: var(--space-1) var(--space-3);

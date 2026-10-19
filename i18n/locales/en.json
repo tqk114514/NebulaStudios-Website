@@ -1,8 +1,7 @@
 {
   "home": {
-    "title": "ONE IDENTITY EVERYWHERE",
     "subtitle": "A hand-built account system: email and password sign-in, TOTP two-factor, session rotation, and an OAuth 2.0 authorization server.",
-    "cta": "Get started"
+    "cta": "Sign in"
   },
   "login": {
     "title": "Sign in to Nebula",

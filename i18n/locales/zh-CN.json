@@ -1,8 +1,7 @@
 {
   "home": {
-    "title": "ONE IDENTITY EVERYWHERE",
     "subtitle": "自行实现的账号系统：邮箱与密码登录、TOTP 两步验证、会话轮转，以及一个 OAuth 2.0 授权服务器。",
-    "cta": "开始使用"
+    "cta": "登录"
   },
   "login": {
     "title": "登录 Nebula",
