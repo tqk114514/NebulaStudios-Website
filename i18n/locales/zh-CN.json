@@ -2,11 +2,7 @@
   "home": {
     "description": "一个账户，连接所有。安全、简洁、无缝的身份管理体验。",
     "createAccount": "创建账户",
-    "login": "登录",
-    "stats": {
-      "availability": "服务可用率",
-      "authResponse": "鉴权响应"
-    }
+    "login": "登录"
   },
   "login": {
     "title": "登录 Nebula",

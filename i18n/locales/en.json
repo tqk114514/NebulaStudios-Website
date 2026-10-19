@@ -2,11 +2,7 @@
   "home": {
     "description": "One account, everything connected. Identity management that is secure, direct and seamless.",
     "createAccount": "Create account",
-    "login": "Sign in",
-    "stats": {
-      "availability": "Availability",
-      "authResponse": "Auth latency"
-    }
+    "login": "Sign in"
   },
   "login": {
     "title": "Sign in to Nebula",

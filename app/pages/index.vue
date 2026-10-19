@@ -33,17 +33,6 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
       <div class="hero__right enter" style="--i: 3">
         <!-- 雕塑中心投影到此方块，尺寸随它变化；窄屏隐藏后雕塑退化为居中缩小 -->
         <div ref="anchorRef" class="hero__anchor" aria-hidden="true" />
-
-        <div class="hero__stats">
-          <div class="hero__stat">
-            <span class="hero__stat-num" translate="no">99.9%</span>
-            <span class="hero__stat-label">{{ t('home.stats.availability') }}</span>
-          </div>
-          <div class="hero__stat">
-            <span class="hero__stat-num" translate="no">&lt; 80ms</span>
-            <span class="hero__stat-label">{{ t('home.stats.authResponse') }}</span>
-          </div>
-        </div>
       </div>
     </section>
   </main>
@@ -53,24 +42,11 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
 .hero {
   position: relative;
   display: grid;
-  /* 两栏必须严格等宽，否则 ::before 的 50% 中线对不上列边界；
-     1fr 的最小尺寸是 auto，会被标题最长词撑偏 */
+  /* 两栏必须严格等宽；1fr 的最小尺寸是 auto，会被标题最长词撑偏 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: 100svh;
+  /* 顶栏偏移由 layouts/default.vue 承担，这里只填满剩余视口 */
+  min-height: calc(100svh - var(--header-h));
   overflow: hidden;
-  padding-top: var(--header-h);
-}
-
-/* 画布是不透明的第一层，中线与文字需抬到它之上才可见 */
-.hero::before {
-  content: '';
-  position: absolute;
-  top: var(--header-h);
-  bottom: 0;
-  left: 50%;
-  width: 1px;
-  background: var(--line);
-  z-index: 1;
 }
 
 .hero__canvas {
@@ -82,6 +58,7 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
   pointer-events: none;
 }
 
+/* 画布是不透明的第一层，文字需抬到它之上 */
 .hero__left,
 .hero__right {
   position: relative;
@@ -140,37 +117,6 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
   aspect-ratio: 1;
   position: relative;
   pointer-events: none;
-}
-
-.hero__stats {
-  position: absolute;
-  right: var(--space-20);
-  bottom: var(--space-20);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-6);
-}
-
-.hero__stat {
-  display: grid;
-  justify-items: end;
-  gap: var(--space-1);
-}
-
-.hero__stat-num {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: 700;
-  letter-spacing: var(--track-none);
-  color: var(--fg);
-}
-
-.hero__stat-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg-muted);
 }
 
 @media (max-width: 900px) {
