@@ -3,7 +3,9 @@
 // 控件由本组件渲染而非插槽下发，id 关联因此可以在编译期确定。
 // 口令类型自带显示切换（NIST SP 800-63B 的 SHOULD 项）。
 import { computed, ref, useId } from 'vue'
+import { useI18n } from '#imports'
 
+const { t } = useI18n()
 const model = defineModel<string>({ required: true })
 
 const props = withDefaults(
@@ -77,10 +79,9 @@ function toggleReveal() {
         class="base-field__reveal"
         type="button"
         :aria-pressed="revealed"
-        :aria-label="revealed ? '隐藏密码' : '显示密码明文。注意：这会在屏幕上显示你的密码。'"
         @click="toggleReveal"
       >
-        {{ revealed ? '隐藏' : '显示' }}
+        {{ revealed ? t('form.hidePassword') : t('form.showPassword') }}
       </button>
     </div>
 
@@ -149,6 +150,11 @@ function toggleReveal() {
 
 .base-field--error .base-field__input {
   border-color: var(--error);
+}
+
+/* 切换按钮浮在控件右端，明文状态下的输入内容需要从它下面让开 */
+.base-field__control:has(.base-field__reveal) .base-field__input {
+  padding-right: var(--space-24);
 }
 
 .base-field__reveal {

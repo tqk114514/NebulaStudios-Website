@@ -4,6 +4,10 @@
     "createAccount": "创建账户",
     "login": "登录"
   },
+  "form": {
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
+  },
   "login": {
     "title": "登录 Nebula",
     "subtitle": "使用邮箱与密码，或从已绑定的第三方账号进入。",
