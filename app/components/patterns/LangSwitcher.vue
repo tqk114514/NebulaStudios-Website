@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// 语言切换器，填入 SiteHeader 的 tools 插槽。
-// 用 Popover API 而不是手写 document 点击监听：点外面关闭、Escape 关闭、
-// 顶层渲染不被祖先 overflow 裁掉，都是浏览器负责的，v3 那套要自己管还漏过焦点。
+// 语言切换器，填入 SiteHeader 的 tools 插槽。用 Popover API 而不是手写 document
+// 点击监听：点外面关闭、Escape 关闭、不被祖先 overflow 裁掉，都交给浏览器。
 import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
 
@@ -17,7 +16,6 @@ const OPTIONS: Option[] = [
 ]
 
 const { locale, setLocale, t } = useI18n()
-const triggerRef = ref<HTMLElement | null>(null)
 const open = ref(false)
 
 const current = computed(() => OPTIONS.find((o) => o.code === locale.value) ?? OPTIONS[0]!)
@@ -27,58 +25,27 @@ async function choose(code: Option['code']) {
   if (code !== locale.value) await setLocale(code)
 }
 
-// 点外面与按 Escape 都不触发按钮的 click，展开态只能从 popover 自己的事件读。
-// 位置也在这里写：顶层元素不以祖先为包含块（absolute 相对视口解析），
-// 只能按触发按钮的实际矩形算出 fixed 偏移。读 CSS 令牌同样只能在这里——
-// 放到 setup 顶层会在 SSR 阶段调用到不存在的 getComputedStyle。
+// 点外面与按 Escape 都不触发按钮的 click，展开态只能从 popover 自己的事件读
 function onToggle(event: Event) {
-  const trigger = triggerRef.value
-  if (!(event.target instanceof HTMLElement) || !trigger) return
-  const menu = event.target
-  open.value = menu.matches(':popover-open')
-  if (!open.value) return
-
-  const gap = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-2')) || 8
-  const box = trigger.getBoundingClientRect()
-  menu.style.setProperty('--menu-top', `${box.bottom + gap}px`)
-  // clientWidth 而非 innerWidth：fixed 的 right 从布局视口算，含滚动条的 innerWidth 会偏出一个 scrollbar 宽
-  menu.style.setProperty('--menu-right', `${document.documentElement.clientWidth - box.right}px`)
+  if (event.target instanceof HTMLElement) open.value = event.target.matches(':popover-open')
 }
 </script>
 
 <template>
   <div class="lang">
     <button
-      ref="triggerRef"
       class="lang__trigger"
       type="button"
       popovertarget="lang-menu"
       :aria-label="t('lang.switch')"
       :aria-expanded="open"
     >
-      <svg
-        class="lang__globe"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5">
+      <svg class="lang__icon" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
       </svg>
       <span class="lang__current">{{ current.name }}</span>
-      <svg
-        class="lang__caret"
-        :class="{ 'lang__caret--open': open }"
-        width="10"
-        height="10"
-        viewBox="0 0 12 12"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5">
+      <svg class="lang__icon lang__caret" viewBox="0 0 12 12" aria-hidden="true">
         <path d="M3 4.5L6 7.5L9 4.5" />
       </svg>
     </button>
@@ -96,7 +63,10 @@ function onToggle(event: Event) {
         :aria-current="option.code === locale ? 'true' : undefined"
         @click="choose(option.code)"
       >
-        {{ option.name }}
+        <span>{{ option.name }}</span>
+        <svg class="lang__icon lang__check" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M2.5 7L5.5 10L11.5 4" />
+        </svg>
       </button>
     </div>
   </div>
@@ -108,6 +78,7 @@ function onToggle(event: Event) {
 }
 
 .lang__trigger {
+  anchor-name: --lang-trigger;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -116,60 +87,95 @@ function onToggle(event: Event) {
   background: transparent;
   border: 1px solid var(--line);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg-muted);
+  font-size: var(--text-base);
+  letter-spacing: var(--track-wide);
+  color: var(--fg);
   cursor: pointer;
-  transition: color var(--dur-ui) var(--ease-standard), border-color var(--dur-ui) var(--ease-standard);
+  transition: border-color var(--dur-ui) var(--ease-standard);
 }
 
 .lang__trigger:hover {
-  border-color: var(--line-strong);
-  color: var(--fg);
+  border-color: var(--fg-muted);
 }
 
-.lang__globe,
-.lang__caret {
+/* 语言名长短不一（简体中文 / English），定宽才不会在切换时把整条头部推得挪动 */
+.lang__current {
+  min-width: 60px;
+  text-align: left;
+}
+
+.lang__icon {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 .lang__caret {
+  width: 10px;
+  height: 10px;
   transition: transform var(--dur-ui) var(--ease-standard);
 }
 
-.lang__caret--open {
+.lang:has(.lang__menu:popover-open) .lang__caret {
   transform: rotate(180deg);
 }
 
 /*
- * 顶层元素不以 .lang 为包含块，位置由 onToggle 写进来的 --menu-top / --menu-right
- * 决定（触发按钮的实际矩形），var 回退值保证测量前不闪成整屏宽。
- * margin 与 inset 是 UA 那套居中样式的残留，必须清掉。
+ * 顶层元素不以 .lang 为包含块，所以用锚点定位贴着按钮（block-end、右对齐，放不下翻上）；
+ * top/right 是不支持锚点定位时的回退，margin/inset 清掉 UA 的居中样式。
+ * 展开动画：popover 显隐是离散属性，得把 display 列进 transition 并 allow-discrete。
  */
 .lang__menu {
   position: fixed;
   inset: auto;
-  top: var(--menu-top, var(--header-h));
-  right: var(--menu-right, var(--space-10));
+  position-anchor: --lang-trigger;
+  position-area: span-block-end span-inline-end;
+  position-try-fallbacks: flip-block;
+  top: var(--header-h);
+  right: var(--space-10);
   margin: 0;
+  margin-top: var(--space-2);
+  min-width: 140px;
   padding: var(--space-1) 0;
   background: var(--bg);
   border: 1px solid var(--line);
   white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity var(--dur-ui) var(--ease-standard), transform var(--dur-ui) var(--ease-standard), display var(--dur-ui) allow-discrete;
+}
+
+.lang__menu:popover-open {
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .lang__menu:popover-open {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
 }
 
 .lang__option {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   width: 100%;
   padding: var(--space-2) var(--space-3);
   background: transparent;
   border: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
+  font-size: var(--text-base);
+  letter-spacing: var(--track-wide);
   text-align: left;
   color: var(--fg-muted);
   cursor: pointer;
+  transition: color var(--dur-ui) var(--ease-standard), background-color var(--dur-ui) var(--ease-standard);
 }
 
 .lang__option:hover {
@@ -177,13 +183,18 @@ function onToggle(event: Event) {
   background: var(--surface);
 }
 
+.lang__check {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  opacity: 0;
+}
+
 .lang__option[aria-current='true'] {
   color: var(--fg);
 }
 
-@media (max-width: 640px) {
-  .lang__current {
-    display: none;
-  }
+.lang__option[aria-current='true'] .lang__check {
+  opacity: 1;
 }
 </style>
