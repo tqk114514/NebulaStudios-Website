@@ -72,9 +72,7 @@ void main() {
   gl_PointSize *= 1.0 + (1.0 - e) * 1.5 + land * 0.5;
 
   float alpha = aAlpha * (0.72 + 0.28 * sin(uTime * aSeed.y + aSeed.x)) * uGlobalAlpha;
-  // 途中保留 0.55 的本色：起点改到深处后飞行段必须看得见，
-  // 压到接近零等于又回到"画面里什么都没有"的老问题
-  alpha *= 0.55 + 0.45 * e;
+  alpha *= 0.12 + 0.88 * e;
   alpha += land * 0.55 * uGlobalAlpha;
 
   // 星环转到雕塑前方时压暗，保住 Logo 主体的可读层次
