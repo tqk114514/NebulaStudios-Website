@@ -1,0 +1,15 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    N 字标即 app/utils/logo-mark.ts 的两条 path，此处是它的独立副本：
+    favicon 是单独文档，拿不到页面里的 CSS 令牌，只能写死色值。
+    默认白色供深色标签页，浅色系统下换成近黑，两者都取自 tokens 的 --fg / --bg。
+  -->
+  <style>
+    path { fill: #f0ede8; }
+    @media (prefers-color-scheme: light) {
+      path { fill: #0d0d0d; }
+    }
+  </style>
+  <path d="M56 48H96L144 96L112 128L96 112V208H56V48Z" />
+  <path d="M200 208H160L112 160L144 128L160 144V48H200V208Z" />
+</svg>

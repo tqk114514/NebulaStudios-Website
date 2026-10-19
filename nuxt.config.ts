@@ -26,6 +26,7 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: 'zh-Hans' },
       title: 'Nebula Studios',
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
     },
   },
 
