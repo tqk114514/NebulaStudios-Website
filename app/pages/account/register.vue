@@ -1,27 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
+import { useSignUp } from '~/composables/useSignUp'
 
 const { t } = useI18n()
-
-const email = ref('')
-const username = ref('')
-const password = ref('')
-const confirm = ref('')
-const submitted = ref(false)
-
-const usernameError = computed(() =>
-  submitted.value && username.value.length > 0 && username.value.length < 3 ? t('register.usernameTaken') : '',
-)
-const passwordError = computed(() =>
-  submitted.value && confirm.value.length > 0 && confirm.value !== password.value
-    ? t('register.passwordMismatch')
-    : '',
-)
-
-function submit() {
-  submitted.value = true
-}
+const {
+  confirm,
+  confirmError,
+  email,
+  formError,
+  password,
+  submit,
+  username,
+  usernameError,
+} = useSignUp()
 </script>
 
 <template>
@@ -58,9 +49,11 @@ function submit() {
           name="confirm-password"
           type="password"
           autocomplete="new-password"
-          :error="passwordError"
+          :error="confirmError"
           required
         />
+
+        <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
 
         <BaseButton type="submit">{{ t('register.submit') }}</BaseButton>
       </form>
@@ -77,6 +70,12 @@ function submit() {
 .stack {
   display: grid;
   gap: var(--space-4);
+}
+
+.form-error {
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--error);
 }
 
 .foot {

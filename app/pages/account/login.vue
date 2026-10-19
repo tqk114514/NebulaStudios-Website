@@ -1,41 +1,27 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
+import { useSignIn } from '~/composables/useSignIn'
 
 const { t } = useI18n()
-
-const email = ref('')
-const password = ref('')
-const code = ref('')
-const remember = ref(true)
-const step = ref<'password' | 'totp'>('password')
-const errorMessage = ref('')
-
-const passwordError = computed(() => (errorMessage.value === 'credentials' ? t('login.invalidCredentials') : ''))
-const codeError = computed(() => (errorMessage.value === 'code' ? t('totp.invalidCode') : ''))
-
-function submitCredentials() {
-  if (!email.value.trim() || !password.value.trim()) {
-    errorMessage.value = 'credentials'
-    return
-  }
-  errorMessage.value = ''
-  step.value = 'totp'
-}
-
-function submitCode() {
-  if (!/^\d{6}$/.test(code.value)) {
-    errorMessage.value = 'code'
-    return
-  }
-  errorMessage.value = ''
-}
+const {
+  backToCredentials,
+  code,
+  codeError,
+  email,
+  emailError,
+  password,
+  passwordError,
+  remember,
+  step,
+  submitCode,
+  submitCredentials,
+} = useSignIn()
 </script>
 
 <template>
   <main>
     <AuthPanel
-      v-if="step === 'password'"
+      v-if="step === 'credentials'"
       :title="t('login.title')"
       :subtitle="t('login.subtitle')"
     >
@@ -46,6 +32,7 @@ function submitCode() {
           name="email"
           type="email"
           autocomplete="username email"
+          :error="emailError"
           required
         />
         <BaseField
@@ -85,7 +72,6 @@ function submitCode() {
           v-model="code"
           :label="t('totp.code')"
           name="code"
-          type="text"
           inputmode="numeric"
           autocomplete="one-time-code"
           :maxlength="6"
@@ -96,8 +82,7 @@ function submitCode() {
       </form>
 
       <div class="foot">
-        <span />
-        <button class="quiet" type="button" @click="step = 'password'">
+        <button class="quiet" type="button" @click="backToCredentials">
           {{ t('totp.back') }}
         </button>
       </div>
@@ -124,11 +109,6 @@ function submitCode() {
   width: var(--target-min);
   height: var(--target-min);
   accent-color: var(--fg);
-}
-
-.panel-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .quiet {
@@ -167,7 +147,7 @@ function submitCode() {
   align-items: center;
   justify-content: center;
   min-height: var(--target-comfort);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-5);
   background: var(--surface);
   border: 1px solid var(--line-strong);
   font-family: var(--font-mono);

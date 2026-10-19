@@ -9,12 +9,13 @@
     "subtitle": "使用邮箱与密码，或从已绑定的第三方账号进入。",
     "email": "邮箱",
     "password": "密码",
+    "emailMissing": "请输入邮箱地址",
+    "passwordMissing": "请输入密码",
     "remember": "在这台设备上保持登录状态",
     "submit": "登录",
     "providers": "或使用第三方账号",
     "signinGoogle": "使用 Google 登录",
     "signinMicrosoft": "使用 Microsoft 登录",
-    "invalidCredentials": "邮箱或密码不正确。如果忘记密码，用链接重设。",
     "register": "创建账户"
   },
   "register": {
@@ -24,9 +25,10 @@
     "username": "用户名",
     "password": "密码",
     "confirmPassword": "确认密码",
-    "submit": "创建账户",
-    "usernameTaken": "该用户名已被占用",
+    "usernameTooShort": "用户名至少 3 个字符",
     "passwordMismatch": "两次输入的密码不一致",
+    "fieldsRequired": "请填写全部字段",
+    "submit": "创建账户",
     "haveAccount": "已有账户",
     "signIn": "登录"
   },
