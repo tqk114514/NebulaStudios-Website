@@ -75,7 +75,6 @@ function onToggle(event: Event) {
 <style scoped>
 .lang {
   position: relative;
-  line-height: var(--lh-control);
 }
 
 .lang__trigger {

@@ -65,6 +65,15 @@ textarea {
   color: inherit;
 }
 
+/* 单行控件与其标签：`font: inherit` 会把正文行高带进来，--lh-prose 在等宽字上撑出的
+   行盒比 padding 更能决定控件高度。textarea 是可换行的，留在正文行高。 */
+button,
+input,
+select,
+label {
+  line-height: var(--lh-control);
+}
+
 ::selection {
   background: var(--fg);
   color: var(--bg);
