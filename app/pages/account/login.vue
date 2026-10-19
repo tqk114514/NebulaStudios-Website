@@ -63,10 +63,6 @@ function submitCode() {
           {{ t('login.remember') }}
         </label>
 
-        <div class="panel-actions">
-          <a class="quiet" href="/account/forgot">{{ t('login.forgot') }}</a>
-        </div>
-
         <BaseButton type="submit">{{ t('login.submit') }}</BaseButton>
       </form>
 
@@ -79,8 +75,7 @@ function submitCode() {
       </div>
 
       <div class="foot">
-        <a class="quiet" href="/account/register">{{ t('login.register') }}</a>
-        <a class="quiet" href="/policy/privacy">{{ t('login.privacy') }}</a>
+        <NuxtLink class="quiet" to="/account/register">{{ t('login.register') }}</NuxtLink>
       </div>
     </AuthPanel>
 

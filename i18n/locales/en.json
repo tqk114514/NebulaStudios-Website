@@ -10,14 +10,12 @@
     "email": "Email",
     "password": "Password",
     "remember": "Keep me signed in on this device",
-    "forgot": "Forgot password",
     "submit": "Sign in",
     "providers": "Or use a third-party account",
     "signinGoogle": "Sign in with Google",
     "signinMicrosoft": "Sign in with Microsoft",
     "invalidCredentials": "That email and password combination isn't recognised. Reset it with the link above.",
-    "register": "Create account",
-    "privacy": "Privacy policy"
+    "register": "Create account"
   },
   "register": {
     "title": "Create account",

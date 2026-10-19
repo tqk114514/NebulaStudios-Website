@@ -3,7 +3,7 @@ import * as THREE from 'three'
 export type ParticleKind = 0 | 1 | 2 // 0=Logo 1=星环 2=星尘
 
 /**
- * 粒子顶点属性构建器：一次性填充全部属性后交给我，不做增量更新。
+ * 粒子顶点属性构建器：一次性填充全部属性后生成几何体，不支持增量更新。
  * 星环的轨道参数写进 aParams，运动在 GPU 每帧算，CPU 不参与。
  */
 export class ParticleBuilder {

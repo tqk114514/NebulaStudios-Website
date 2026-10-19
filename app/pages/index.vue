@@ -95,7 +95,6 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
   font-weight: 300;
   font-style: italic;
   letter-spacing: var(--track-none);
-  text-transform: none;
 }
 
 .hero__desc {

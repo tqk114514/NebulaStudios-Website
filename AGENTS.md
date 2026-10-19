@@ -99,7 +99,7 @@ test/{unit,nuxt,e2e}
 ```
 
 1. `app/pages/` 只包含三类代码：`definePageMeta`、数据获取、组件编排。
-2. Composable 一个功能一个目录四件套：`useXxx/index.ts` + `index.md` + `index.test.ts`（+ 可选 `demo.vue`）；命名导出；返回 `shallowReadonly`；每个公开成员带 JSDoc。
+2. Composable 一个功能一个目录：`index.ts` + `index.md`（测试位置见 §8）；命名导出；只读状态返回 `shallowReadonly`，表单类 composable 因 `v-model` 需可写 ref；每个公开成员带 JSDoc。
 3. 组件内不手写 `fetch('/api/…')`。API client 生成为独立 workspace 包，照 `halo-dev/halo` 的 `ui/packages/api-client`——接口形状一致性由生成器保证。
 4. i18n 用 `@nuxtjs/i18n`，locale 按功能域一份，key 命名空间 = 组件/功能名，CI 跑缺项检查。不使用手写 codegen。
 5. 自动导入：composables/utils 开启；页面私有组件对该目录设 `components: false`，显式导入。
