@@ -3,6 +3,7 @@
 // 传 to 或 href 时渲染链接，视觉与按钮一致，避免出现第二套 CTA 样式。
 // 宽度由布局上下文决定：grid 项自动拉伸，flex 项按内容定宽，组件本身不写 width。
 import { computed } from 'vue'
+import { NuxtLink } from '#components'
 
 const props = withDefaults(
   defineProps<{
@@ -26,7 +27,7 @@ const props = withDefaults(
 )
 
 const tag = computed(() => {
-  if (props.to) return 'NuxtLink'
+  if (props.to) return NuxtLink
   return props.href ? 'a' : 'button'
 })
 
