@@ -89,7 +89,8 @@ tests/             HTTP 层集成测试
 
 ```
 app/{pages,layouts,middleware,composables,types}
-app/components/base/     原子件，可自动导入
+app/components/base/     通用控件，自动导入
+app/components/patterns/ 领域重复件，自动导入
 app/components/pages/    页面私有件，关自动导入、一律显式 import
 shared/                  app 与 server 共用；仅 shared/utils 与 shared/types 自动导入，其余走 #shared
 server/api/              文件式路由，方法后缀 .get.ts / .post.ts
@@ -103,7 +104,7 @@ test/{unit,nuxt,e2e}
 3. 组件内不手写 `fetch('/api/…')`。API client 生成为独立 workspace 包，照 `halo-dev/halo` 的 `ui/packages/api-client`——接口形状一致性由生成器保证。
 4. i18n 用 `@nuxtjs/i18n`，locale 按功能域一份，key 命名空间 = 组件/功能名，CI 跑缺项检查。不使用手写 codegen。
 5. 自动导入：composables/utils 开启；页面私有组件对该目录设 `components: false`，显式导入。
-6. 原子分两层：`components/base/` 放通用控件（按钮、字段、模态、标签、分页），`components/patterns/` 放领域重复件（详情行、带图标的列表项、状态徽标）。同一视觉结构第三次出现时必须提为组件，不再复制。
+6. 组件分三层：`base/` 通用控件（按钮、字段、标签、分页），`patterns/` 领域重复件（详情行、带图标的列表项、状态徽标），`pages/` 页面私有件。Modal/Toast 由 `@nuxt/ui` 提供，不在 `base/` 重复实现。同一视觉结构第三次出现时必须提为组件，不再复制。
 
 ---
 
@@ -118,7 +119,7 @@ test/{unit,nuxt,e2e}
 - 保留字冲突用 `r#crate` 或 `crate_`，不拼错成 `krate`。
 - **C-WORD-ORDER：同一概念在整个 crate 里词序一致。**
 
-**前端**：`useXxx`；SFC 文件名 PascalCase 且全项目一致；原子件 `Base*`；紧耦合子件加父名前缀（`TodoList` → `TodoListItem`）；props camelCase；emit 事件 kebab-case；写完整单词，不用 `Mgr` / `Utils2` / `HomeNew` / `DashboardV3`。
+**前端**：`useXxx`；组件 SFC 文件名 PascalCase，页面文件跟随路由路径（`app/pages/account/login.vue`）；通用控件 `Base*`；紧耦合子件加父名前缀（`TodoList` → `TodoListItem`）；props camelCase；emit 事件 kebab-case；写完整单词，不用 `Mgr` / `Utils2` / `HomeNew` / `DashboardV3`。
 
 **同一意图只允许一个键名。** v3 里"登录后回跳目标"在后端是 `?return=`、在路由守卫是 `query.redirect`、在登录页读的是 `return`。
 
