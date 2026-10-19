@@ -8,21 +8,21 @@ const RINGS = [
   { r: 2.05, tilt: 0.62, n: [160, 98], speed: 0.05 },
 ] as const
 
-// 起点球壳必须落在画面内：半径若大于视口半对角，入场期间画布上什么都没有，
-// 观感就是"粒子突然从边缘涌进来"而不是"星尘析出成形"。
-// 1.8–4.2 单位在常见视口下约 400–940px，多数粒子起始可见，少数仍从框外飞入。
-const SCATTER_MIN = 1.8
-const SCATTER_SPAN = 2.4
+// 入场起点：x/y 铺满画面，z 推到相机前方深处。"远"走深度而非画面半径——
+// 起点若在画面外，入场期间画布上是空的，观感就是突然涌进；若只铺在画面内，
+// 又只是一团静止的雾。放在深处则透视替我们做剩下的事：点径按 1/距离 放大，
+// 飞近即加速，第一帧也已有内容可看。
+// x/y 的 ±7 来自该深度处的视锥半宽（约 3 倍于 z=0 处），保证铺满而非聚成一坨。
+const SCATTER_XY = 7
+const SCATTER_Z_NEAR = -10
+const SCATTER_Z_FAR = -20
 
-/** 入场起点：球壳上随机一点，落在雕塑缩放后的视口外，汇聚方向因此各不相同 */
+/** 起点：画面内铺开、深度上推远，汇聚方向因此各不相同 */
 function scatterPoint(): [number, number, number] {
-  const theta = Math.random() * Math.PI * 2
-  const phi = Math.acos(2 * Math.random() - 1)
-  const r = SCATTER_MIN + Math.random() * SCATTER_SPAN
   return [
-    r * Math.sin(phi) * Math.cos(theta),
-    r * Math.sin(phi) * Math.sin(theta),
-    r * Math.cos(phi),
+    (Math.random() * 2 - 1) * SCATTER_XY,
+    (Math.random() * 2 - 1) * SCATTER_XY,
+    SCATTER_Z_FAR + Math.random() * (SCATTER_Z_NEAR - SCATTER_Z_FAR),
   ]
 }
 
