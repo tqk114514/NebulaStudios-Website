@@ -8,6 +8,17 @@ export const RING_SPAN = 4.1 // 星环外沿直径（世界单位，缩放前）
 export const COMPACT_MAX_WIDTH = 900 // 该宽度以下锚点隐藏，雕塑居中缩小压暗
 
 /**
+ * 入场：散点从球壳外汇聚成雕塑。粒子按 aDelay 错峰开始各自 TRAVEL 长度的汇聚，
+ * 落地瞬间记作一次闪光，闪光在 q ∈ [0.8, 1.2] 内非零（q 是本地进度）。
+ * 约束 STAGGER + TRAVEL × 1.2 ≤ 1：不满足则最后一批粒子会在 intro=1 上停在
+ * 闪光峰值里，巡航态永久带一层额外亮度。
+ */
+export const INTRO_DURATION = 1.8 // s
+export const INTRO_STAGGER = 0.55 // aDelay ∈ [0, INTRO_STAGGER]
+export const INTRO_TRAVEL = 0.35 // 单个粒子汇聚所占的比例，0.35×1.8 = 0.63s
+export const INTRO_SPIN_FLOOR = 0.35 // 首帧的自旋速度倍率，intro=1 时回到 1
+
+/**
  * 泛光预算：UnrealBloom 的模糊链最低级会把大块中亮区域摊成全屏均匀灰加回画面，
  * 近黑底色上哪怕 +0.03 线性亮度都读作蒙了一层白。因此 threshold 必须高到只有
  * 扫描波与最热的粒子重叠核进得了泛光链，主体亮度压在阈值之下保持锐利。

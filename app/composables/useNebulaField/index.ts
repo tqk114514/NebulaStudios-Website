@@ -1,6 +1,7 @@
 import { onMounted, onScopeDispose, type Ref } from 'vue'
 import { COMPACT_MAX_WIDTH, SPIN } from './constants'
 import { createParallax } from './parallax'
+import { introProgress } from './intro'
 import { createNebulaScene, type NebulaScene } from './scene'
 
 export interface NebulaFieldOptions {
@@ -23,6 +24,7 @@ export function useNebulaField(options: NebulaFieldOptions): void {
   let visibleObs: IntersectionObserver | null = null
   let last = 0
   let rotY = 0
+  let introElapsed = 0
   let inView = true
 
   function frame(now: number) {
@@ -35,8 +37,11 @@ export function useNebulaField(options: NebulaFieldOptions): void {
     const dt = last === 0 ? 0.016 : Math.min(0.05, (now - last) / 1000)
     last = now
     rotY += dt * SPIN
+    // 入场时钟只在真正出帧的帧上推进：中途滚出视口则暂停，回来接着播
+    const intro = introProgress(introElapsed)
+    if (intro < 1) introElapsed += dt
     const { x, y } = parallax.advance()
-    scene?.render(now / 1000, rotY, x, y)
+    scene?.render({ time: now / 1000, spin: rotY, parX: x, parY: y, intro })
   }
 
   onMounted(() => {

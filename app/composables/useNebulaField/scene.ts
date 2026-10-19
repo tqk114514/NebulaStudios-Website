@@ -1,17 +1,30 @@
 import * as THREE from 'three'
-import { CAM_DIST, FOV, SCAN_PERIOD, SCAN_RANGE, STATIC_ROT_Y, STATIC_TIME, TILT } from './constants'
+import { CAM_DIST, SCAN_PERIOD, SCAN_RANGE, STATIC_ROT_Y, STATIC_TIME, TILT } from './constants'
 import { createBackground } from './background'
+import { spinScale } from './intro'
 import { measureViewport, placeSculpture } from './layout'
 import { createNebulaMaterial } from './material'
 import { createPostprocessing } from './postprocessing'
 import { buildSculpture } from './sculpture'
+import { createStage } from './stage'
 import { buildStarField } from './star-field'
+
+export interface NebulaFrame {
+  /** 页面时间（s）：闪烁与扫描相位 */
+  time: number
+  /** 累计自旋角（rad），入场期间按进度压慢 */
+  spin: number
+  /** 缓动后的鼠标视差（rad） */
+  parX: number
+  parY: number
+  /** 0=散点起点，1=巡航 */
+  intro: number
+}
 
 export interface NebulaScene {
   /** 视口变化后重算尺寸与雕塑布局；静态模式下顺带重绘一帧 */
   resize: () => void
-  /** 渲染一帧。rotY 为累计自旋，parX/parY 为缓动后的鼠标视差 */
-  render: (time: number, rotY: number, parX: number, parY: number) => void
+  render: (frame: NebulaFrame) => void
   dispose: () => void
 }
 
@@ -22,22 +35,9 @@ export function createNebulaScene(
   compact: boolean,
   reduced: boolean,
 ): NebulaScene | null {
-  // WebGL2 不可用时返回 null，由调用方静默降级：页面其余部分不受影响
-  if (!document.createElement('canvas').getContext('webgl2')) return null
-
-  const dpr = Math.min(window.devicePixelRatio || 1, compact ? 1.5 : 2)
-
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: false, // 点精灵 + 泛光后期，MSAA 无用
-    powerPreference: 'high-performance',
-  })
-  renderer.setPixelRatio(dpr)
-  renderer.setClearColor(0x000000, 1)
-
-  const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 40)
-  camera.position.set(0, 0, CAM_DIST)
+  const stage = createStage(canvas, compact)
+  if (!stage) return null
+  const { renderer, scene, camera, dpr } = stage
 
   const background = createBackground()
   scene.add(background)
@@ -55,15 +55,17 @@ export function createNebulaScene(
 
   const postprocessing = createPostprocessing(renderer, scene, camera)
 
-  function render(time: number, rotY: number, parX: number, parY: number) {
+  function render(frame: NebulaFrame) {
+    const { time, spin, parX, parY, intro } = frame
     const scanX = -SCAN_RANGE + ((time % SCAN_PERIOD) / SCAN_PERIOD) * SCAN_RANGE * 2
     // 雕塑自旋 + 完整视差；星场只做轻微视差倾斜，不累积自旋
-    sculpture.uniforms.uRotY.value = rotY + parX
+    sculpture.uniforms.uRotY.value = spin * spinScale(intro) + parX
     sculpture.uniforms.uTiltX.value = TILT + parY
     field.uniforms.uRotY.value = parX * 0.25
     field.uniforms.uTiltX.value = TILT * 0.4 + parY * 0.15
     for (const uniforms of [sculpture.uniforms, field.uniforms]) {
       uniforms.uTime.value = time
+      uniforms.uIntro.value = intro
       uniforms.uScanX.value = scanX
     }
     postprocessing.setTime(time)
@@ -97,7 +99,7 @@ export function createNebulaScene(
     fieldPoints.scale.set(viewport.halfW * 1.15, viewport.halfH * 1.15, 4.5)
     fieldPoints.position.set(0, 0, -1.5)
 
-    if (reduced) render(STATIC_TIME, STATIC_ROT_Y, 0, 0)
+    if (reduced) render({ time: STATIC_TIME, spin: STATIC_ROT_Y, parX: 0, parY: 0, intro: 1 })
   }
 
   function dispose() {
