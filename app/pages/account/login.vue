@@ -22,6 +22,7 @@ const {
   <main>
     <AuthPanel
       v-if="step === 'credentials'"
+      num="01"
       :title="t('login.title')"
       :subtitle="t('login.subtitle')"
     >
@@ -66,7 +67,7 @@ const {
       </div>
     </AuthPanel>
 
-    <AuthPanel v-else :title="t('totp.title')" :subtitle="t('totp.hint')">
+    <AuthPanel v-else num="02" :title="t('totp.title')" :subtitle="t('totp.hint')">
       <form class="stack" novalidate @submit.prevent="submitCode">
         <BaseField
           v-model="code"
