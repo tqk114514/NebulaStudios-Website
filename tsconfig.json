@@ -1,3 +1,24 @@
 {
-  "extends": ["./.nuxt/tsconfig.json"]
+  "extends": ["./.nuxt/tsconfig.json"],
+  // 派生配置的 include 整体替换基底的，所以这里要重列 Nuxt 的那几项（含 nuxt.node.d.ts，
+  // defineNuxtConfig 由它提供）。加进来的只有 test/**：test/unit 原本落在基底之外，
+  // 既不进 nuxt typecheck，也不进类型感知 lint。
+  "include": [
+    "./.nuxt/nuxt.d.ts",
+    "./.nuxt/nuxt.node.d.ts",
+    "./app/**/*",
+    "./i18n/**/*",
+    "./shared/**/*",
+    "./test/**/*.ts",
+    "./nuxt.config.*",
+    "./vitest.config.ts",
+    "./.config/nuxt.*"
+  ],
+  // 基底把 types 收成空数组以挡住 Node 全局；构建期文件（vitest.config 等）需要
+  // node:url，故在此显式引入 @types/node，客户端侧的 Node 全局改由
+  // eslint 的 no-restricted-globals 拦
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "exclude": ["node_modules", "./Reference/**/*", "./.output/**/*", "./dist/**/*", "./server/**/*"]
 }

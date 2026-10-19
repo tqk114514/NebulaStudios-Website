@@ -1,9 +1,17 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-18',
 
-  modules: ['@nuxtjs/i18n'],
+  modules: ['@nuxtjs/i18n', '@nuxt/eslint'],
 
   devtools: { enabled: false },
+
+  // 类型感知规则只在给出 tsconfigPath 时才叠加；strict 默认为 true，会再叠一层
+  // strict-type-checked，§7 要的是 recommended-type-checked，故关掉
+  eslint: {
+    config: {
+      typescript: { tsconfigPath: './tsconfig.json', strict: false },
+    },
+  },
 
   i18n: {
     strategy: 'no_prefix',

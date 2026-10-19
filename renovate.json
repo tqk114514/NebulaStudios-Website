@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)",
+    "schedule:weekly"
+  ],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["major"],
+      "groupName": "npm major updates",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchPackageNames": ["nuxt", "@nuxtjs/i18n", "@nuxt/eslint"],
+      "groupName": "nuxt 全家桶"
+    }
+  ]
+}

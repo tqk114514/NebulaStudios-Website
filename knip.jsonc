@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // 路由页与布局由 Nuxt 在运行时挂载，没有静态 import 方，只能列为 entry
+  "entry": ["app/pages/**/*.vue", "app/layouts/**/*.vue", "scripts/**/*.mjs", "test/**/*.test.ts"],
+  "project": ["app/**/*.{ts,vue}", "test/**/*.ts"],
+  // knip 跟随 .gitignore，Reference/ 与 .nuxt/ 已在其中
+  "ignoreDependencies": [
+    "vue-tsc",
+    "@fontsource/unbounded",
+    "@fontsource/azeret-mono",
+    "@fontsource-variable/newsreader"
+  ]
+}

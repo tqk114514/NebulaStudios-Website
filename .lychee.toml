@@ -1,0 +1,7 @@
+# 文档条款必须有活着的来源 URL（AGENTS.md §16）。这里只放选项，检查目标写在 CI 里。
+# 本地没有 lychee 二进制，配置由 CI 首次运行验证。
+cache = true
+timeout = 20
+concurrency = 4
+exclude_mail = true
+exclude_loopback = true
