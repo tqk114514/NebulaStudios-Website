@@ -152,17 +152,17 @@ test/{unit,nuxt,e2e}
 
 ## 7. 机器门禁 · 前端
 
-**规范权威只有一个：`@nuxt/eslint`**，preset 取 `recommended-type-checked`（类型感知 lint 需先开 TS 类型检查）。
+**规范权威只有一个：`@nuxt/eslint`**。没有 preset 可选：TS 侧恒叠加 `flat/recommended`，只有配了 `eslint.config.typescript.tsconfigPath` 才追加 `recommended-type-checked-only`；同处 `strict` 默认为 `true`（会再叠 strict 层），要 recommended-type-checked 的强度须显式 `strict: false`。
 
 不叠 `@antfu/eslint-config`，不装 Prettier。两者与官方 style guide 在四条上直接冲突（多词组件名、`require-prop-types`、`require-default-prop`、`max-attributes-per-line`：antfu 关闭，官方要求），且两边都属权威，只能二选一。
 
-**必须启用的 lint**：`vue/block-order`、`vue/define-macros-order`、`vue/component-name-in-template-casing`、`vue/prop-name-casing`、`vue/custom-event-name-casing`、`vue/require-v-for-key`、`vue/no-use-v-if-with-v-for`、`vue/html-self-closing`、`vue/max-attributes-per-line`；`ts/consistent-type-imports`（`separate-type-imports`）、`ts/no-import-type-side-effects`、`ts/ban-ts-comment`（`ts-expect-error` 带描述）；`app/**` 禁 `as any`（生成代码目录例外）；`@vitest/eslint-plugin` + `no-only-tests` 设 `error`。
+**必须启用的 lint**：`vue/block-order`、`vue/define-macros-order`、`vue/component-name-in-template-casing`、`vue/prop-name-casing`、`vue/custom-event-name-casing`、`vue/require-v-for-key`、`vue/no-use-v-if-with-v-for`、`vue/html-self-closing`、`vue/html-indent`；`@typescript-eslint/`（无 `ts/` 别名）下的 `consistent-type-imports`（`fixStyle: separate-type-imports`）、`no-import-type-side-effects`、`ban-ts-comment`（`ts-expect-error` 带描述）；`app/**` 禁 `as any`（生成代码目录例外）；`vitest/no-focused-tests` 设 `error`。`vue/max-attributes-per-line` 取 `singleline: 3`：官方默认 1 会把短标签全部炸成多行，而 stylistic 未开时该规则的 fixer 只换行不缩进。layouts 与 pages 必须单根节点（`@nuxt/eslint-config` 的 `nuxt/vue/single-root`）。
 
 **组件写法**：props 一律 `withDefaults(defineProps<Props>(), { list: () => [] })`，对象/数组默认值用工厂函数，不用数组形式声明；双向绑定用 `defineModel()`；模板不写复杂表达式（超过一个三元或链式数组方法）则提取具名 `computed`；`v-for` 带 `:key`，同节点不并存 `v-if` 与 `v-for`；无子元素组件自闭合；SFC 顶层顺序 `<script setup lang="ts">` → `<template>` → `<style scoped>`。
 
-**行数上限**（项目自定，非外部标准；v3 的 `DashboardPage.vue` 2186 行、`HomePage.vue` 1465 行）：SFC ≤ 200、composable ≤ 80、普通模块 ≤ 120，用 `max-lines` 强制。
+**行数上限**（项目自定，非外部标准；v3 的 `DashboardPage.vue` 2186 行、`HomePage.vue` 1465 行）：SFC ≤ 200、`app/composables/**/index.ts` ≤ 80、其余模块 ≤ 120，用 `max-lines` 强制。
 
-**辅助门禁**：`knip`（死导出/死文件即失败）、`stylelint` 的 `declaration-property-value-disallowed-list` 与 `stylelint-declaration-strict-value`（禁字面色值、字体族、`cubic-bezier`，只允许引用令牌）、`lychee`、`renovate`、`nano-staged` 预提交跑 `eslint --fix` 与触及文件的类型检查。命令：`nuxt typecheck`。
+**辅助门禁**：`knip`（死导出/死文件即失败）、`stylelint` 的 `declaration-property-value-disallowed-list` 与 `scale-unlimited/declaration-strict-value`（禁字面色值、字体族、`cubic-bezier`，只允许引用令牌；`tokens.css` 作为令牌定义处豁免）、`lychee`、`renovate`、`commitlint`。`nano-staged` 预提交只跑 `eslint --fix` 与 `stylelint --fix`；`vue-tsc` 不支持只查改动文件，类型检查与测试挂在 pre-push，全量门禁在 CI。命令：`nuxt typecheck`。
 
 ---
 
@@ -253,11 +253,10 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 
 ## 14. 未定项：采用本文件前需查证
 
-1. `@nuxt/eslint` 的严格度配置键名（preset 名与 `strictTypeChecked` / `type-checked` 在不同页面表述不一），以 `nuxt eslint.config` 生成结果为准。
-2. `shared/` 的 `srcDir`/`dir` 语义；`components/` 的 `pathPrefix` 与 `global` 前缀规则；`layouts/` 命名规则。
-3. `headers: 'forward'` 是否作为 `useAsyncData` 选项存在。
-4. Nuxt 官方 auth 指南与 `routeMiddleware` 的服务端语义——§10 的鉴权边界设计依赖它。
-5. `routeRules` 中 `cache` 键的现行定义（安全公告提到，`define-route-rules` 页列出的键不含它）。
+1. `shared/` 的 `srcDir`/`dir` 语义；`components/` 的 `pathPrefix` 与 `global` 前缀规则；`layouts/` 命名规则。
+2. `headers: 'forward'` 是否作为 `useAsyncData` 选项存在。
+3. Nuxt 官方 auth 指南与 `routeMiddleware` 的服务端语义——§10 的鉴权边界设计依赖它。
+4. `routeRules` 中 `cache` 键的现行定义（安全公告提到，`define-route-rules` 页列出的键不含它）。
 
 ---
 
