@@ -49,6 +49,23 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
   overflow: hidden;
 }
 
+/*
+ * 分栏中线。v3 从 top: 60px 起画，是因为它的 hero 自己吞掉头部偏移；
+ * v4 的偏移在 layouts/default.vue，hero 顶边即内容顶边，所以从 0 起。
+ * 画布是不透明的 WebGL 层且为 hero 首个子元素，定位元素按树序绘制，
+ * 中线取 z-index 1 才压在画布之上、文字之下。
+ */
+.hero::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  z-index: 1;
+}
+
 .hero__canvas {
   position: absolute;
   inset: 0;
