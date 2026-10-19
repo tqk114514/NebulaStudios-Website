@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CAM_DIST, SCAN_PERIOD, SCAN_RANGE, STATIC_ROT_Y, STATIC_TIME, TILT } from './constants'
 import { createBackground } from './background'
-import { spinScale } from './intro'
+import { createScanClock, spinScale } from './intro'
 import { measureViewport, placeSculpture } from './layout'
 import { createNebulaMaterial } from './material'
 import { createPostprocessing } from './postprocessing'
@@ -9,15 +9,12 @@ import { buildSculpture } from './sculpture'
 import { createStage } from './stage'
 import { buildStarField } from './star-field'
 
+/** time 驱动闪烁；spin 为累计自旋角；parX/parY 是缓动后的视差；intro 0=散点、1=巡航 */
 interface NebulaFrame {
-  /** 页面时间（s）：闪烁与扫描相位 */
   time: number
-  /** 累计自旋角（rad），入场期间按进度压慢 */
   spin: number
-  /** 缓动后的鼠标视差（rad） */
   parX: number
   parY: number
-  /** 0=散点起点，1=巡航 */
   intro: number
 }
 
@@ -54,10 +51,14 @@ export function createNebulaScene(
   scene.add(sculpturePoints, fieldPoints)
 
   const postprocessing = createPostprocessing(renderer, scene, camera)
+  const scanClock = createScanClock()
+  let prevTime = 0
 
   function render(frame: NebulaFrame) {
     const { time, spin, parX, parY, intro } = frame
-    const scanX = -SCAN_RANGE + ((time % SCAN_PERIOD) / SCAN_PERIOD) * SCAN_RANGE * 2
+    const scanT = scanClock(time - prevTime, intro)
+    prevTime = time
+    const scanX = -SCAN_RANGE + ((scanT % SCAN_PERIOD) / SCAN_PERIOD) * SCAN_RANGE * 2
     // 雕塑自旋 + 完整视差；星场只做轻微视差倾斜，不累积自旋
     sculpture.uniforms.uRotY.value = spin * spinScale(intro) + parX
     sculpture.uniforms.uTiltX.value = TILT + parY

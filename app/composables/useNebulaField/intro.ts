@@ -27,3 +27,16 @@ export function particleProgress(intro: number, delay: number): number {
 export function landingFlash(q: number): number {
   return Math.max(0, 1 - Math.abs(q - 1) * 5)
 }
+
+/**
+ * 扫描相位时钟：入场结束前恒返回 0，让光扫停在起点等组装完成，之后按帧间隔累加。
+ * dt 夹在与渲染循环相同的上限里，切后台回来不跳相位。
+ */
+export function createScanClock(): (dt: number, intro: number) => number {
+  let elapsed = 0
+  return (dt, intro) => {
+    if (intro < 1) return 0
+    elapsed += Math.min(0.05, Math.max(0, dt))
+    return elapsed
+  }
+}

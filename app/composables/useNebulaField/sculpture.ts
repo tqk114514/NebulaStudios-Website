@@ -8,8 +8,11 @@ const RINGS = [
   { r: 2.05, tilt: 0.62, n: [160, 98], speed: 0.05 },
 ] as const
 
-const SCATTER_MIN = 3.6 // 起点球壳内沿，落在星尘带外段，汇聚读作从星尘里析出
-const SCATTER_SPAN = 4
+// 起点球壳必须落在画面内：半径若大于视口半对角，入场期间画布上什么都没有，
+// 观感就是"粒子突然从边缘涌进来"而不是"星尘析出成形"。
+// 1.8–4.2 单位在常见视口下约 400–940px，多数粒子起始可见，少数仍从框外飞入。
+const SCATTER_MIN = 1.8
+const SCATTER_SPAN = 2.4
 
 /** 入场起点：球壳上随机一点，落在雕塑缩放后的视口外，汇聚方向因此各不相同 */
 function scatterPoint(): [number, number, number] {

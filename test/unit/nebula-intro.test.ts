@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { INTRO_DURATION, INTRO_STAGGER, INTRO_TRAVEL } from '~/composables/useNebulaField/constants'
 import {
+  createScanClock,
   introProgress,
   landingFlash,
   particleProgress,
@@ -57,5 +58,25 @@ describe('landingFlash', () => {
   it('最后一批粒子在 intro 触顶前完成落地闪光', () => {
     expect(landingFlash(particleProgress(INTRO_STAGGER + INTRO_TRAVEL, INTRO_STAGGER))).toBeCloseTo(1)
     expect(INTRO_STAGGER + INTRO_TRAVEL * 1.2).toBeLessThan(1)
+  })
+})
+
+describe('createScanClock', () => {
+  it('组装完成前停在起点，光扫不会提前开场', () => {
+    const clock = createScanClock()
+    expect(clock(0.016, 0)).toBe(0)
+    expect(clock(0.016, 0.999)).toBe(0)
+  })
+
+  it('intro 到 1 后按帧间隔累加', () => {
+    const clock = createScanClock()
+    clock(0.016, 0)
+    expect(clock(0.02, 1)).toBeCloseTo(0.02)
+    expect(clock(0.03, 1)).toBeCloseTo(0.05)
+  })
+
+  it('切后台回来的大间隔被夹住，恢复时不跳相位', () => {
+    const clock = createScanClock()
+    expect(clock(5, 1)).toBe(0.05)
   })
 })
