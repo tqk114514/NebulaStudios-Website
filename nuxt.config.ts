@@ -24,7 +24,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      htmlAttrs: { lang: 'zh-Hans' },
+      // htmlAttrs.lang 由 app.vue 的 useLocaleHead 提供，跟着当前 locale 走
       title: 'Nebula Studios',
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
     },

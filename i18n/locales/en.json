@@ -54,6 +54,9 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password"
   },
+  "lang": {
+    "switch": "Change language"
+  },
   "login": {
     "title": "Sign in to Nebula",
     "subtitle": "Use your email and password, or a linked third-party account.",

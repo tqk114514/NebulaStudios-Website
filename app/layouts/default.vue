@@ -1,6 +1,10 @@
 <template>
   <div class="default-layout">
-    <SiteHeader />
+    <SiteHeader>
+      <template #tools>
+        <LangSwitcher />
+      </template>
+    </SiteHeader>
     <slot />
     <SiteFooter />
   </div>

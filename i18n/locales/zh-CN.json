@@ -54,6 +54,9 @@
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码"
   },
+  "lang": {
+    "switch": "切换语言"
+  },
   "login": {
     "title": "登录 Nebula",
     "subtitle": "使用邮箱与密码，或从已绑定的第三方账号进入。",
