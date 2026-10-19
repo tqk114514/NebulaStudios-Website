@@ -1,8 +1,54 @@
 {
   "home": {
-    "description": "一个账户，连接所有。安全、简洁、无缝的身份管理体验。",
-    "createAccount": "创建账户",
-    "login": "登录"
+    "hero": {
+      "description": "一个账户，连接所有。安全、简洁、无缝的身份管理体验。",
+      "createAccount": "创建账户",
+      "login": "登录"
+    },
+    "features": {
+      "label": "功能特性",
+      "description": "从账户创建到权限管理，每一个细节都经过精心设计。简单的外表之下，是严密的安全体系。"
+    },
+    "feature": {
+      "identitySecurity": {
+        "name": "身份安全",
+        "desc": "加密保护，密码从不明文存储。修改密码即时生效，操作全程留痕。"
+      },
+      "profile": {
+        "name": "个人资料",
+        "desc": "自定义用户名、头像与邮箱地址。你的账户，完全属于你。"
+      },
+      "thirdParty": {
+        "name": "第三方授权",
+        "desc": "查看并管理所有已授权的第三方应用。随时撤销访问，掌握数据主权。"
+      },
+      "activityLog": {
+        "name": "操作日志",
+        "desc": "完整记录账户所有操作行为。异常登录？立即察觉，快速响应。"
+      },
+      "oauth": {
+        "name": "OAuth 集成",
+        "desc": "支持 Microsoft、Google 账户一键登录与绑定，多平台身份无缝打通。"
+      },
+      "dataExport": {
+        "name": "数据导出",
+        "desc": "随时导出你的完整数据。你的信息始终由你掌控，绝不锁定。"
+      }
+    },
+    "manifesto": {
+      "text1": "我们相信，{strong}。它应该是无形的、可靠的，像空气一样存在——你需要它时它就在那里，但从不打扰你。",
+      "text1Strong": "身份认证不应该是负担",
+      "text2": "Nebula Studios 账户系统从零开始构建，拒绝臃肿的解决方案。{strong}，每一个交互都经过反复打磨。",
+      "text2Strong": "每一行代码都有其存在的理由",
+      "text3": "安全不是功能，它是 {infrastructure}。隐私不是选项，它是 {principle}。这是我们对每一位用户的承诺。",
+      "text3Infrastructure": "基础设施",
+      "text3Principle": "默认值"
+    },
+    "cta": {
+      "description": "注册只需要一个邮箱。无需信用卡，无隐藏收费。立即获得完整的账户功能体验。",
+      "registerNow": "立即注册",
+      "alreadyHaveAccount": "已有账户，去登录"
+    }
   },
   "form": {
     "showPassword": "显示密码",
@@ -43,5 +89,8 @@
     "invalidCode": "动态码是 6 位数字",
     "submit": "验证",
     "back": "返回"
+  },
+  "footer": {
+    "copyright": "© {year} Nebula Studios"
   }
 }

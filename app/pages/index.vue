@@ -1,20 +1,26 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from '#imports'
+import HomeCta from '~/components/pages/home/HomeCta.vue'
+import HomeFeatures from '~/components/pages/home/HomeFeatures.vue'
+import HomeManifesto from '~/components/pages/home/HomeManifesto.vue'
 import HomeTicker from '~/components/pages/home/HomeTicker.vue'
 import { useNebulaField } from '~/composables/useNebulaField'
+import { useReveal } from '~/composables/useReveal'
 
 const { t } = useI18n()
 
+const pageRef = ref<HTMLElement | null>(null)
 const heroRef = ref<HTMLElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const anchorRef = ref<HTMLElement | null>(null)
 
 useNebulaField({ heroRef, canvasRef, anchorRef })
+useReveal(pageRef)
 </script>
 
 <template>
-  <main>
+  <main ref="pageRef">
     <section ref="heroRef" class="hero">
       <canvas ref="canvasRef" class="hero__canvas" aria-hidden="true" />
 
@@ -22,11 +28,11 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
         <h1 class="hero__title enter" style="--i: 2" translate="no">
           ONE<br>IDENTITY<br><em>Everywhere</em>
         </h1>
-        <p class="hero__desc enter" style="--i: 3">{{ t('home.description') }}</p>
+        <p class="hero__desc enter" style="--i: 3">{{ t('home.hero.description') }}</p>
         <div class="hero__cta enter" style="--i: 4">
-          <BaseButton :arrow="false" to="/account/register">{{ t('home.createAccount') }}</BaseButton>
+          <BaseButton :arrow="false" to="/account/register">{{ t('home.hero.createAccount') }}</BaseButton>
           <BaseButton variant="secondary" to="/account/login">
-            {{ t('home.login') }}
+            {{ t('home.hero.login') }}
           </BaseButton>
         </div>
       </div>
@@ -38,6 +44,9 @@ useNebulaField({ heroRef, canvasRef, anchorRef })
     </section>
 
     <HomeTicker />
+    <HomeFeatures />
+    <HomeManifesto />
+    <HomeCta />
   </main>
 </template>
 

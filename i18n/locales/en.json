@@ -1,8 +1,54 @@
 {
   "home": {
-    "description": "One account, everything connected. Identity management that is secure, direct and seamless.",
-    "createAccount": "Create account",
-    "login": "Sign in"
+    "hero": {
+      "description": "One account, everything connected. Identity management that is secure, direct and seamless.",
+      "createAccount": "Create account",
+      "login": "Sign in"
+    },
+    "features": {
+      "label": "Features",
+      "description": "From creating an account to managing permissions, every detail is deliberate. Beneath a plain surface sits a tight security system."
+    },
+    "feature": {
+      "identitySecurity": {
+        "name": "Identity security",
+        "desc": "Encrypted at rest; passwords are never stored in plaintext. A password change takes effect immediately, and everything is logged."
+      },
+      "profile": {
+        "name": "Profile",
+        "desc": "Your username, avatar and email address, all yours to change. The account belongs to you."
+      },
+      "thirdParty": {
+        "name": "Third-party access",
+        "desc": "See and manage every application you have authorised. Revoke access at any time."
+      },
+      "activityLog": {
+        "name": "Activity log",
+        "desc": "A complete record of what happened on the account. An unexpected sign-in is visible the moment it happens."
+      },
+      "oauth": {
+        "name": "OAuth",
+        "desc": "Sign in and link accounts with Microsoft and Google, and issue tokens to your own clients."
+      },
+      "dataExport": {
+        "name": "Data export",
+        "desc": "Export everything at any time. Your data is never held in place."
+      }
+    },
+    "manifesto": {
+      "text1": "We believe {strong}. It should be invisible and reliable, like air — there when you need it, never in your way.",
+      "text1Strong": "authentication should not be a burden",
+      "text2": "The Nebula Studios account system is built from scratch and refuses bloated solutions. {strong}, and every interaction is worked over until it settles.",
+      "text2Strong": "Every line of code has a reason",
+      "text3": "Security is not a feature, it is {infrastructure}. Privacy is not an option, it is the {principle}. That is the promise to every account.",
+      "text3Infrastructure": "infrastructure",
+      "text3Principle": "default"
+    },
+    "cta": {
+      "description": "An email is all registration needs. No card, no hidden charge, the full account from the first minute.",
+      "registerNow": "Register now",
+      "alreadyHaveAccount": "Already have an account? Sign in"
+    }
   },
   "form": {
     "showPassword": "Show password",
@@ -43,5 +89,8 @@
     "invalidCode": "The code is 6 digits.",
     "submit": "Verify",
     "back": "Back"
+  },
+  "footer": {
+    "copyright": "© {year} Nebula Studios"
   }
 }

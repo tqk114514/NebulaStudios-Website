@@ -2,6 +2,7 @@
   <div class="default-layout">
     <SiteHeader />
     <slot />
+    <SiteFooter />
   </div>
 </template>
 

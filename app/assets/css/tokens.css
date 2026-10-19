@@ -64,11 +64,13 @@
   --text-num: 64px;
   --text-xl: clamp(28px, 2.2vw + 18px, 40px);
   --text-2xl: clamp(32px, 3vw + 20px, 52px);
+  --text-display: clamp(36px, 5vw, 72px);
   --text-hero: clamp(48px, 6vw, 88px);
 
   --lh-prose: 1.75;
   --lh-ui: 1.6;
   --lh-heading: 1.15;
+  --lh-section: 1.05;
   --lh-display: 0.92;
 
   /* 中文不加正字距；拉丁小标签靠字距分层 */
@@ -132,6 +134,9 @@
   --dur-enter: 1s;
   --stagger: 200ms;
   --reveal-shift: 20px;
+  /* 滚动显形比首屏入场更慢更远：正文区块需要"被揭开"而非"弹出来" */
+  --dur-reveal: 900ms;
+  --shift-reveal: 32px;
 
   /* ---------- 触达与焦点 ---------- */
 

@@ -26,6 +26,8 @@ for (const file of filesIn(SOURCE_DIR)) {
   const source = readFileSync(file, 'utf8')
   for (const match of source.matchAll(/\bt\(\s*'([^']+)'/g)) used.add(match[1])
   for (const match of source.matchAll(/\$t\(\s*'([^']+)'/g)) used.add(match[1])
+  // <i18n-t> 的键写在模板属性上，不扫到就会被误报为未引用
+  for (const match of source.matchAll(/keypath="([^"]+)"/g)) used.add(match[1])
 }
 
 const keysByLocale = Object.fromEntries(
