@@ -5,7 +5,6 @@
 import { computed, ref, useId } from 'vue'
 import { useI18n } from '#imports'
 
-const { t } = useI18n()
 const model = defineModel<string>({ required: true })
 
 const props = withDefaults(
@@ -34,11 +33,12 @@ const props = withDefaults(
 )
 
 const uid = useId()
+const { t } = useI18n()
 const controlId = computed(() => `${uid}-control`)
-const describedBy = computed(() => {
-  if (props.error) return `${uid}-error`
-  return props.hint ? `${uid}-hint` : undefined
-})
+// 错误优先于提示：这行同时决定控件的 aria-describedby 与下方消息行的 id/class/role
+const messageKind = computed(() => (props.error ? 'error' : props.hint ? 'hint' : ''))
+const message = computed(() => props.error || props.hint)
+const describedBy = computed(() => (messageKind.value ? `${uid}-${messageKind.value}` : undefined))
 
 const revealed = ref(false)
 const isSecret = computed(() => props.type === 'password')
@@ -85,12 +85,12 @@ function toggleReveal() {
       </button>
     </div>
 
-    <p v-if="props.hint && !props.error" :id="`${uid}-hint`" class="base-field__hint">
-      {{ props.hint }}
-    </p>
-    <p v-if="props.error" :id="`${uid}-error`" class="base-field__error" role="alert">
-      {{ props.error }}
-    </p>
+    <p
+      v-if="message"
+      :id="`${uid}-${messageKind}`"
+      :class="`base-field__${messageKind}`"
+      :role="messageKind === 'error' ? 'alert' : undefined"
+    >{{ message }}</p>
   </div>
 </template>
 

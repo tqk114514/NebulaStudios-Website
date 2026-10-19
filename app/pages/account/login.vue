@@ -67,7 +67,11 @@ const {
       </div>
     </AuthPanel>
 
-    <AuthPanel v-else num="02" :title="t('totp.title')" :subtitle="t('totp.hint')">
+    <AuthPanel
+      v-else
+      num="02"
+      :title="t('totp.title')"
+      :subtitle="t('totp.hint')">
       <form class="stack" novalidate @submit.prevent="submitCode">
         <BaseField
           v-model="code"

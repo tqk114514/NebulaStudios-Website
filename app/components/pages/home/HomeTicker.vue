@@ -15,7 +15,11 @@ const { duration, itemCount } = useTicker(rootRef)
     aria-hidden="true"
   >
     <div v-for="track in 2" :key="track" class="ticker__track">
-      <span v-for="item in itemCount" :key="item" class="ticker__item" translate="no">NEBULA</span>
+      <span
+        v-for="item in itemCount"
+        :key="item"
+        class="ticker__item"
+        translate="no">NEBULA</span>
     </div>
   </div>
 </template>

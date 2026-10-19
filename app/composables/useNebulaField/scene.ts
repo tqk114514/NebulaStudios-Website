@@ -9,7 +9,7 @@ import { buildSculpture } from './sculpture'
 import { createStage } from './stage'
 import { buildStarField } from './star-field'
 
-export interface NebulaFrame {
+interface NebulaFrame {
   /** 页面时间（s）：闪烁与扫描相位 */
   time: number
   /** 累计自旋角（rad），入场期间按进度压慢 */

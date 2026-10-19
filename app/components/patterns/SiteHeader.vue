@@ -1,14 +1,22 @@
 <script setup lang="ts">
 // 站点顶栏。v3 的顶栏只有字标与语言切换器，没有导航链接。
 // tools 插槽由使用方填入语言切换器（依赖 @nuxtjs/i18n，尚未接入）。
+import { LOGO_PATHS, LOGO_VIEW_BOX } from '~/utils/logo-mark'
 </script>
 
 <template>
   <header class="site-header">
     <NuxtLink to="/" class="site-header__brand" aria-label="Nebula Studios">
-      <svg class="site-header__mark" viewBox="0 0 256 256" fill="none" aria-hidden="true">
-        <path d="M56 48H96L144 96L112 128L96 112V208H56V48Z" />
-        <path d="M200 208H160L112 160L144 128L160 144V48H200V208Z" />
+      <svg
+        class="site-header__mark"
+        :viewBox="LOGO_VIEW_BOX"
+        fill="none"
+        aria-hidden="true">
+        <path
+          v-for="d in LOGO_PATHS"
+          :key="d"
+          :d="d"
+        />
       </svg>
     </NuxtLink>
 

@@ -3,7 +3,7 @@ import { CAM_DIST, SCAN_RANGE, TILT } from './constants'
 import { NEBULA_FRAG, NEBULA_VERT } from './shaders'
 
 /** 具名字段供调用方使用，索引签名满足 ShaderMaterial.uniforms 的类型要求 */
-export interface NebulaUniforms extends Record<string, THREE.IUniform> {
+interface NebulaUniforms extends Record<string, THREE.IUniform> {
   uTime: { value: number }
   uIntro: { value: number }
   uRotY: { value: number }
