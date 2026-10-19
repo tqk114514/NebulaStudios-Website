@@ -72,6 +72,9 @@ void main() {
   gl_PointSize *= 1.0 + (1.0 - e) * 1.5 + land * 0.5;
 
   float alpha = aAlpha * (0.72 + 0.28 * sin(uTime * aSeed.y + aSeed.x)) * uGlobalAlpha;
+  // 整层随入场时钟淡入：uIntro 从首个真正出帧的帧起算，淡入起点即"有像素"那一刻。
+  // 画布级 CSS 淡入做不到——它从首屏起算，等粒子出现早已放完
+  alpha *= smoothstep(0.0, 0.3, uIntro);
   alpha *= 0.12 + 0.88 * e;
   alpha += land * 0.55 * uGlobalAlpha;
 

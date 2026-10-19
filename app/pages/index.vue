@@ -85,18 +85,6 @@ useReveal(pageRef)
   width: 100%;
   height: 100%;
   pointer-events: none;
-  /*
-   * WebGL 在首次绘制前是透明的，首帧整帧落下会读作"啪"地亮起来。淡入从样式生效
-   * 就开始计时而不是等出帧，正好把 hydration 到首帧之间那段启动耗时接进同一段
-   * 入场节奏里；reduced-motion 由 base.css 的全局规则统一收掉。
-   */
-  animation: canvas-enter var(--dur-enter) var(--ease-brand) both;
-}
-
-@keyframes canvas-enter {
-  from {
-    opacity: 0;
-  }
 }
 
 /* 画布是不透明的第一层，文字需抬到它之上 */
