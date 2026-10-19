@@ -26,7 +26,7 @@ withDefaults(
   max-width: var(--panel-max);
   margin-inline: auto;
   padding: var(--space-16) var(--space-6) var(--space-6);
-  animation: panel-enter var(--dur-reveal) var(--ease-emphasize);
+  animation: panel-enter var(--dur-panel) var(--ease-emphasize);
 }
 
 .auth-panel__num {

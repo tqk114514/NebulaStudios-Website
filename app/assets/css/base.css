@@ -80,6 +80,24 @@ textarea {
   outline: none;
 }
 
+/* 入场序列：延迟由 --i 传索引，不用 JS 改样式 */
+.enter {
+  opacity: 0;
+  animation: fade-up var(--dur-enter) var(--ease-brand) forwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--reveal-shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

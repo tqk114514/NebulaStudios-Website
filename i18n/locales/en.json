@@ -1,7 +1,12 @@
 {
   "home": {
-    "subtitle": "A hand-built account system: email and password sign-in, TOTP two-factor, session rotation, and an OAuth 2.0 authorization server.",
-    "cta": "Sign in"
+    "description": "One account, everything connected. Identity management that is secure, direct and seamless.",
+    "createAccount": "Create account",
+    "login": "Sign in",
+    "stats": {
+      "availability": "Availability",
+      "authResponse": "Auth latency"
+    }
   },
   "login": {
     "title": "Sign in to Nebula",
@@ -15,8 +20,21 @@
     "signinGoogle": "Sign in with Google",
     "signinMicrosoft": "Sign in with Microsoft",
     "invalidCredentials": "That email and password combination isn't recognised. Reset it with the link above.",
-    "register": "Create an account",
+    "register": "Create account",
     "privacy": "Privacy policy"
+  },
+  "register": {
+    "title": "Create account",
+    "subtitle": "Enter an email and password, then confirm with the code we send you.",
+    "email": "Email",
+    "username": "Username",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "submit": "Create account",
+    "usernameTaken": "That username is taken",
+    "passwordMismatch": "The two passwords don't match",
+    "haveAccount": "Already have an account",
+    "signIn": "Sign in"
   },
   "totp": {
     "title": "Two-factor verification",

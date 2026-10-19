@@ -1,7 +1,12 @@
 {
   "home": {
-    "subtitle": "自行实现的账号系统：邮箱与密码登录、TOTP 两步验证、会话轮转，以及一个 OAuth 2.0 授权服务器。",
-    "cta": "登录"
+    "description": "一个账户，连接所有。安全、简洁、无缝的身份管理体验。",
+    "createAccount": "创建账户",
+    "login": "登录",
+    "stats": {
+      "availability": "服务可用率",
+      "authResponse": "鉴权响应"
+    }
   },
   "login": {
     "title": "登录 Nebula",
@@ -15,8 +20,21 @@
     "signinGoogle": "使用 Google 登录",
     "signinMicrosoft": "使用 Microsoft 登录",
     "invalidCredentials": "邮箱或密码不正确。如果忘记密码，用链接重设。",
-    "register": "创建账号",
+    "register": "创建账户",
     "privacy": "隐私政策"
+  },
+  "register": {
+    "title": "创建账户",
+    "subtitle": "填写邮箱与密码，随后用邮件里的验证码完成验证。",
+    "email": "邮箱",
+    "username": "用户名",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "submit": "创建账户",
+    "usernameTaken": "该用户名已被占用",
+    "passwordMismatch": "两次输入的密码不一致",
+    "haveAccount": "已有账户",
+    "signIn": "登录"
   },
   "totp": {
     "title": "两步验证",

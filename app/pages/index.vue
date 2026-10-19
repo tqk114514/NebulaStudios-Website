@@ -1,23 +1,48 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from '#imports'
+import { useNebulaField } from '~/composables/useNebulaField'
 
 const { t } = useI18n()
+
+const heroRef = ref<HTMLElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const anchorRef = ref<HTMLElement | null>(null)
+
+useNebulaField({ heroRef, canvasRef, anchorRef })
 </script>
 
 <template>
   <main>
-    <section class="hero">
-      <NebulaHero />
+    <section ref="heroRef" class="hero">
+      <canvas ref="canvasRef" class="hero__canvas" aria-hidden="true" />
 
-      <div class="hero__content">
-        <h1 class="hero__title" translate="no">
+      <div class="hero__left">
+        <h1 class="hero__title enter" style="--i: 2" translate="no">
           ONE<br>IDENTITY<br><em>Everywhere</em>
         </h1>
-        <p class="hero__subtitle">{{ t('home.subtitle') }}</p>
-        <div class="hero__actions">
-          <BaseButton class="hero__cta" to="/account/login">
-            {{ t('home.cta') }}
+        <p class="hero__desc enter" style="--i: 3">{{ t('home.description') }}</p>
+        <div class="hero__cta enter" style="--i: 4">
+          <BaseButton :arrow="false" to="/account/register">{{ t('home.createAccount') }}</BaseButton>
+          <BaseButton variant="secondary" to="/account/login">
+            {{ t('home.login') }}
           </BaseButton>
+        </div>
+      </div>
+
+      <div class="hero__right enter" style="--i: 3">
+        <!-- 雕塑中心投影到此方块，尺寸随它变化；窄屏隐藏后雕塑退化为居中缩小 -->
+        <div ref="anchorRef" class="hero__anchor" aria-hidden="true" />
+
+        <div class="hero__stats">
+          <div class="hero__stat">
+            <span class="hero__stat-num" translate="no">99.9%</span>
+            <span class="hero__stat-label">{{ t('home.stats.availability') }}</span>
+          </div>
+          <div class="hero__stat">
+            <span class="hero__stat-num" translate="no">&lt; 80ms</span>
+            <span class="hero__stat-label">{{ t('home.stats.authResponse') }}</span>
+          </div>
         </div>
       </div>
     </section>
@@ -28,18 +53,52 @@ const { t } = useI18n()
 .hero {
   position: relative;
   display: grid;
-  align-items: center;
-  min-height: calc(100svh - var(--header-h));
-  padding: var(--space-16) var(--page-pad);
+  /* 两栏必须严格等宽，否则 ::before 的 50% 中线对不上列边界；
+     1fr 的最小尺寸是 auto，会被标题最长词撑偏 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 100svh;
+  overflow: hidden;
+  padding-top: var(--header-h);
 }
 
-.hero__content {
-  position: relative;
+/* 画布是不透明的第一层，中线与文字需抬到它之上才可见 */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: var(--header-h);
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--line);
   z-index: 1;
-  /* 轨道不跟随最长词，正文的行长由 .hero__subtitle 的 --measure 约束 */
-  grid-template-columns: minmax(0, 1fr);
-  display: grid;
-  gap: var(--space-6);
+}
+
+.hero__canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.hero__left,
+.hero__right {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero__left {
+  justify-content: flex-end;
+  padding: var(--space-30) var(--space-16) var(--space-20) var(--space-20);
+}
+
+.hero__right {
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-30) var(--space-20) var(--space-20) var(--space-16);
 }
 
 .hero__title {
@@ -62,19 +121,70 @@ const { t } = useI18n()
   text-transform: none;
 }
 
-.hero__subtitle {
-  max-width: var(--measure);
+.hero__desc {
+  max-width: 380px;
+  margin-top: var(--space-10);
+  font-size: var(--text-lead);
+  line-height: 1.8;
   color: var(--fg-muted);
 }
 
-.hero__actions {
+.hero__cta {
   display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  margin-top: var(--space-2);
+  gap: var(--space-4);
+  margin-top: var(--space-14);
 }
 
-.hero__cta {
-  min-width: 200px;
+.hero__anchor {
+  width: min(480px, 42vw);
+  aspect-ratio: 1;
+  position: relative;
+  pointer-events: none;
+}
+
+.hero__stats {
+  position: absolute;
+  right: var(--space-20);
+  bottom: var(--space-20);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-6);
+}
+
+.hero__stat {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+}
+
+.hero__stat-num {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: var(--track-none);
+  color: var(--fg);
+}
+
+.hero__stat-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-mono);
+  color: var(--fg-muted);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero::before,
+  .hero__right {
+    display: none;
+  }
+
+  .hero__left {
+    padding: var(--space-16) var(--page-pad) var(--space-16);
+  }
 }
 </style>

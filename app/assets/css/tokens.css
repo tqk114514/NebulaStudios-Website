@@ -47,7 +47,7 @@
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: "Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas,
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", monospace;
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 
@@ -58,6 +58,7 @@
   --text-xs: 12px;
   --text-base: 14px;
   --text-md: 16px;
+  --text-lead: 17px;
   --text-lg: 22px;
   --text-title: clamp(24px, 3vw, 32px);
   --text-num: 64px;
@@ -87,12 +88,16 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
+  --space-14: 56px;
   --space-16: 64px;
+  --space-20: 80px;
   --space-24: 96px;
+  --space-30: 120px;
 
   /* ---------- 圆角：容器 0，交互件小值 ---------- */
 
@@ -123,9 +128,10 @@
   --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
   --dur-ui: 200ms;
-  --dur-reveal: 800ms;
+  --dur-panel: 600ms;
+  --dur-enter: 1s;
   --stagger: 200ms;
-  --reveal-shift: 16px;
+  --reveal-shift: 20px;
 
   /* ---------- 触达与焦点 ---------- */
 

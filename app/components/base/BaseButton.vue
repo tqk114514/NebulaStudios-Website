@@ -73,7 +73,7 @@ const showArrow = computed(() => props.variant === 'primary' && props.arrow)
   align-items: center;
   gap: var(--space-2);
   height: var(--target-comfort);
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-5);
   border: none;
   background: transparent;
   text-align: center;
