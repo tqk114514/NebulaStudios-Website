@@ -1,8 +1,9 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!--
-    N 字标即 app/utils/logo-mark.ts 的两条 path，此处是它的独立副本：
-    favicon 是单独文档，拿不到页面里的 CSS 令牌，只能写死色值。
-    默认白色供深色标签页，浅色系统下换成近黑，两者都取自 tokens 的 --fg / --bg。
+    N 字标即 app/utils/logo-mark.ts 的两条 path，此处是它的独立副本。
+    favicon 是单独文档，拿不到页面里的 CSS 令牌，只能写死色值：
+    默认近白供深色标签页，浅色系统下换近黑，两值分别对应 fg 与 bg 令牌。
+    XML 注释内不得出现连续两个减号，所以令牌名省略前缀书写。
   -->
   <style>
     path { fill: #f0ede8; }
