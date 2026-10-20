@@ -1,4 +1,7 @@
 {
+  "meta": {
+    "description": "Nebula Studios 的统一账户：注册一次，即可登录旗下所有产品。"
+  },
   "home": {
     "hero": {
       "description": "一个账户，连接所有。安全、简洁、无缝的身份管理体验。",
