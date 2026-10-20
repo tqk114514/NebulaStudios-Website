@@ -20,8 +20,6 @@ useHead({ htmlAttrs: { lang: language } })
 
 <template>
   <NuxtRouteAnnouncer />
-  <!-- 尺寸与颜色只能经 props 给：组件把它们写成内联样式，规则盖不动 -->
-  <NuxtLoadingIndicator :height="2" color="var(--fg)" error-color="var(--error)" />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
