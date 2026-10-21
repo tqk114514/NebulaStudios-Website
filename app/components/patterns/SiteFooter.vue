@@ -16,13 +16,22 @@ const year = computed(() => new Date().getFullYear())
 
 <style scoped>
 .site-footer {
+  /* 内容不足一屏时贴住视口下沿，由布局的列向 flex 承担 */
+  margin-top: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-8) var(--space-16);
+  /* 横向与站头同值，两者作为画框的两条边必须对齐 */
+  padding: var(--space-8) var(--space-10);
   border-top: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .site-footer {
+    padding: var(--space-6) var(--space-4);
+  }
 }
 
 .site-footer__logo {
@@ -38,11 +47,5 @@ const year = computed(() => new Date().getFullYear())
   font-size: var(--text-xs);
   letter-spacing: var(--track-label);
   color: var(--fg-muted);
-}
-
-@media (max-width: 900px) {
-  .site-footer {
-    padding: var(--space-6) var(--space-8);
-  }
 }
 </style>
