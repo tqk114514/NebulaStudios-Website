@@ -1,7 +1,7 @@
 # 文档条款必须有活着的来源 URL（AGENTS.md §16）。这里只放选项，检查目标写在 CI 里。
-# 本地没有 lychee 二进制，配置由 CI 首次运行验证。
+# 键名以 lychee 0.24 的字段表为准：并发是 max_concurrency，没有 concurrency；
+# 邮箱地址默认不检查，故没有 exclude_mail，只有反向的 include_mail。
 cache = true
 timeout = 20
-concurrency = 4
-exclude_mail = true
+max_concurrency = 4
 exclude_loopback = true
