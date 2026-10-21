@@ -8,4 +8,6 @@ exclude_loopback = true
 user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 # blog.cleancoder.com 对无 Referer 的请求返回「页面不存在」页，文章本身是活的
 # （站内同源 fetch 得 200 且含正文），故只能排除。对应 AGENTS.md §17 的 Clean Architecture 一条。
-exclude = ["blog\\.cleancoder\\.com"]
+# kubernetes.io 的 CDN 对数据中心出口回 404，换 UA 无效；浏览器直开正常（h1 即文章标题）。
+# 两条都经浏览器验证为活，排除的是「测不了」而不是「链接坏了」。
+exclude = ["blog\\.cleancoder\\.com", "kubernetes\\.io"]
