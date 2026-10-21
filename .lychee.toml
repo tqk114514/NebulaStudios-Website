@@ -1,7 +1,11 @@
 # 文档条款必须有活着的来源 URL（AGENTS.md §16）。这里只放选项，检查目标写在 CI 里。
-# 键名以 lychee 0.24 的字段表为准：并发是 max_concurrency，没有 concurrency；
-# 邮箱地址默认不检查，故没有 exclude_mail，只有反向的 include_mail。
+# 键名以 lychee 0.24 的字段表为准：并发是 max_concurrency；邮箱默认不查，没有 exclude_mail。
 cache = true
 timeout = 20
 max_concurrency = 4
 exclude_loopback = true
+# 一些站点按客户端类型回 404 而不是 403，默认 UA 会被当成死链
+user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+# blog.cleancoder.com 对无 Referer 的请求返回「页面不存在」页，文章本身是活的
+# （站内同源 fetch 得 200 且含正文），故只能排除。对应 AGENTS.md §17 的 Clean Architecture 一条。
+exclude = ["blog\\.cleancoder\\.com"]
