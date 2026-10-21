@@ -1,51 +1,61 @@
-import * as THREE from 'three'
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
-import { BLOOM } from './constants'
-import { DITHER_SHADER } from './dither-shader'
+import { bindScreen, createPass } from './gl/pass'
+import type { ColorTarget } from './gl/target'
+import { OUTPUT_FRAG } from './shaders/post'
 
 export interface Postprocessing {
-  setSize: (width: number, height: number) => void
   /** 写入本帧时间，驱动抖动的噪声相位 */
   setTime: (time: number) => void
-  render: () => void
+  render: (scene: ColorTarget, screenWidth: number, screenHeight: number) => void
   dispose: () => void
 }
 
-/** 后期链：RenderPass → UnrealBloom → OutputPass（线性→sRGB）→ 抖动 */
+/**
+ * 末趟：场景 + 泛光 → OETF → 抖动 → 画布。
+ * `bloom` 为 null（无浮点可写目标）时绑一张 1×1 黑纹理——加零比再开一条 program 便宜，
+ * 绘制路径也因此只有一条。
+ */
 export function createPostprocessing(
-  renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
-  camera: THREE.Camera,
+  gl: WebGL2RenderingContext,
+  bloom: WebGLTexture | null,
 ): Postprocessing {
-  const composer = new EffectComposer(renderer)
-  composer.addPass(new RenderPass(scene, camera))
+  const pass = createPass(gl, OUTPUT_FRAG, ['uSource', 'uBloom', 'uTime'] as const)
+  const ownsBloom = bloom === null
+  const bloomTexture = ownsBloom ? createBlackTexture(gl) : bloom
 
-  const bloom = new UnrealBloomPass(
-    new THREE.Vector2(1, 1),
-    BLOOM.strength,
-    BLOOM.radius,
-    BLOOM.threshold,
-  )
-  // 软化高通滤波的膝宽：默认 0.01 的硬截止经模糊链后就是同心圈层的源头
-  const highPass = bloom.highPassUniforms as unknown as { smoothWidth: { value: number } }
-  highPass.smoothWidth.value = BLOOM.knee
-  composer.addPass(bloom)
-
-  composer.addPass(new OutputPass())
-  const dither = new ShaderPass(DITHER_SHADER)
-  const ditherUniforms = dither.uniforms as unknown as { uTime: { value: number } }
-  composer.addPass(dither)
+  gl.useProgram(pass.program)
+  gl.uniform1i(pass.locations.uSource, 0)
+  gl.uniform1i(pass.locations.uBloom, 1)
 
   return {
-    setSize: (width, height) => composer.setSize(width, height),
     setTime: (time) => {
-      ditherUniforms.uTime.value = time
+      gl.useProgram(pass.program)
+      gl.uniform1f(pass.locations.uTime, time)
     },
-    render: () => composer.render(),
-    dispose: () => composer.dispose(),
+    render: (scene, screenWidth, screenHeight) => {
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, scene.texture)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, bloomTexture)
+      bindScreen(gl, screenWidth, screenHeight)
+      gl.disable(gl.BLEND)
+      pass.draw()
+    },
+    dispose: () => {
+      if (ownsBloom) gl.deleteTexture(bloomTexture)
+      pass.dispose()
+    },
   }
+}
+
+function createBlackTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const texture = gl.createTexture()
+  if (!texture) throw new Error('WebGL2: createTexture 返回 null')
+  gl.bindTexture(gl.TEXTURE_2D, texture)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]))
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.bindTexture(gl.TEXTURE_2D, null)
+  return texture
 }

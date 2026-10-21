@@ -1,10 +1,24 @@
-import { INTRO_TRAVEL } from './constants'
+import { INTRO_TRAVEL } from '../constants'
 
 /**
  * 顶点着色器：入场汇聚、星环轨道运动、全局姿态（自旋 + 鼠标视差）、透视点尺寸、
  * 闪烁、星环近侧压暗、Logo 辉光扫描——全部在 GPU 每帧计算，CPU 只更新少量 uniform。
+ * 属性序号与 `gl/geometry.ts` 的 POINT_FIELDS 逐项对应。
  */
-export const NEBULA_VERT = /* glsl */ `
+export const NEBULA_VERT = /* glsl */ `#version 300 es
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 aScatter;
+layout(location = 2) in float aDelay;
+layout(location = 3) in float aKind;
+layout(location = 4) in vec3 aParams;
+layout(location = 5) in float aTilt;
+layout(location = 6) in float aSize;
+layout(location = 7) in vec2 aSeed;
+layout(location = 8) in float aMix;
+layout(location = 9) in float aAlpha;
+
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
 uniform float uTime;
 uniform float uIntro;
 uniform float uRotY;
@@ -15,18 +29,8 @@ uniform float uSizeScale;
 uniform float uCamDist;
 uniform float uGlobalAlpha;
 
-attribute vec3 aScatter;
-attribute float aDelay;
-attribute float aKind;
-attribute vec3 aParams;
-attribute float aTilt;
-attribute float aSize;
-attribute vec2 aSeed;
-attribute float aMix;
-attribute float aAlpha;
-
-varying float vAlpha;
-varying float vMix;
+out float vAlpha;
+out float vMix;
 
 const float TRAVEL = ${INTRO_TRAVEL};
 
@@ -93,28 +97,5 @@ void main() {
 
   vAlpha = alpha;
   vMix = aMix;
-}
-`
-
-/**
- * 片元着色器：软核点精灵（中心实、边缘指数衰减）。
- * vAlpha > 1 的扫描增强转为 HDR 亮度，供 UnrealBloom 在高通滤波里拾取。
- */
-export const NEBULA_FRAG = /* glsl */ `
-uniform vec3 uColorA;
-uniform vec3 uColorB;
-
-varying float vAlpha;
-varying float vMix;
-
-void main() {
-  vec2 uv = gl_PointCoord - 0.5;
-  float d = length(uv);
-  if (d > 0.5) discard;
-  float core = 1.0 - smoothstep(0.0, 0.5, d);
-  core *= core * core;
-  float a = min(vAlpha, 1.25);
-  float hdr = 1.0 + max(0.0, vAlpha - 1.0) * 2.0;
-  gl_FragColor = vec4(mix(uColorA, uColorB, vMix) * hdr, core * a);
 }
 `
