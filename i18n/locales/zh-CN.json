@@ -63,7 +63,6 @@
     "password": "密码",
     "emailMissing": "请输入邮箱地址",
     "passwordMissing": "请输入密码",
-    "remember": "在这台设备上保持登录状态",
     "submit": "登录",
     "providers": "或使用第三方账号",
     "signinGoogle": "使用 Google 登录",
@@ -72,7 +71,7 @@
   },
   "register": {
     "title": "创建账户",
-    "subtitle": "填写邮箱与密码，随后用邮件里的验证码完成验证。",
+    "subtitle": "填写邮箱与密码，随后用邮件里的验证码完成验证",
     "email": "邮箱",
     "username": "用户名",
     "password": "密码",

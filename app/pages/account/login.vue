@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from '#imports'
+import { useI18n, useSeoMeta } from '#imports'
 import { useSignIn } from '~/composables/useSignIn'
 
 const { t } = useI18n()
@@ -11,11 +11,13 @@ const {
   emailError,
   password,
   passwordError,
-  remember,
   step,
   submitCode,
   submitCredentials,
 } = useSignIn()
+
+// 标签页标题与页面主标题同源，不另立一份文案
+useSeoMeta({ title: () => t('login.title') })
 </script>
 
 <template>
@@ -46,11 +48,6 @@ const {
           required
         />
 
-        <label class="check">
-          <input v-model="remember" type="checkbox" name="remember">
-          {{ t('login.remember') }}
-        </label>
-
         <BaseButton type="submit">{{ t('login.submit') }}</BaseButton>
       </form>
 
@@ -58,8 +55,12 @@ const {
 
       <div class="stack">
         <!-- 标识位需替换为官方下载素材：Google 四色 G 只能原色置于白底，Microsoft logo 不得改动 -->
-        <a class="provider" href="/api/auth/google">{{ t('login.signinGoogle') }}</a>
-        <a class="provider" href="/api/auth/microsoft">{{ t('login.signinMicrosoft') }}</a>
+        <BaseButton variant="secondary" href="/api/auth/google">
+          {{ t('login.signinGoogle') }}
+        </BaseButton>
+        <BaseButton variant="secondary" href="/api/auth/microsoft">
+          {{ t('login.signinMicrosoft') }}
+        </BaseButton>
       </div>
 
       <div class="foot">
@@ -101,21 +102,6 @@ const {
   gap: var(--space-4);
 }
 
-.check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg-muted);
-}
-
-.check input {
-  width: var(--target-min);
-  height: var(--target-min);
-  accent-color: var(--fg);
-}
-
 .quiet {
   font-size: var(--text-xs);
   letter-spacing: var(--track-mono);
@@ -145,25 +131,6 @@ const {
   content: '';
   flex: 1;
   border-top: 1px solid var(--line);
-}
-
-.provider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--target-comfort);
-  padding: 0 var(--space-5);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg);
-  transition: background-color var(--dur-ui) var(--ease-standard);
-}
-
-.provider:hover {
-  background: var(--surface-raised);
 }
 
 .foot {

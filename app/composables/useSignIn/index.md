@@ -3,7 +3,7 @@
 登录两步流程的表单状态：口令步骤与动态码步骤。
 
 ```ts
-const { email, password, code, remember, step, emailError, passwordError, codeError, submitCredentials, submitCode, backToCredentials } = useSignIn()
+const { email, password, code, step, emailError, passwordError, codeError, submitCredentials, submitCode, backToCredentials } = useSignIn()
 ```
 
 - `step`：`'credentials' | 'totp'`

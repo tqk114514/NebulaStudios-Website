@@ -14,7 +14,6 @@ export function useSignIn() {
   const email = ref('')
   const password = ref('')
   const code = ref('')
-  const remember = ref(true)
   const step = ref<SignInStep>('credentials')
   const attemptedCredentials = ref(false)
   const attemptedCode = ref(false)
@@ -58,7 +57,6 @@ export function useSignIn() {
     email,
     password,
     code,
-    remember,
     step,
     emailError,
     passwordError,

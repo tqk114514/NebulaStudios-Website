@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from '#imports'
+import { useI18n, useSeoMeta } from '#imports'
 import { useSignUp } from '~/composables/useSignUp'
 
 const { t } = useI18n()
@@ -13,6 +13,9 @@ const {
   username,
   usernameError,
 } = useSignUp()
+
+// 标签页标题与页面主标题同源，不另立一份文案
+useSeoMeta({ title: () => t('register.title') })
 </script>
 
 <template>

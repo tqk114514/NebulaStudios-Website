@@ -63,7 +63,6 @@
     "password": "Password",
     "emailMissing": "Enter your email address",
     "passwordMissing": "Enter your password",
-    "remember": "Keep me signed in on this device",
     "submit": "Sign in",
     "providers": "Or use a third-party account",
     "signinGoogle": "Sign in with Google",
@@ -72,7 +71,7 @@
   },
   "register": {
     "title": "Create account",
-    "subtitle": "Enter an email and password, then confirm with the code we send you.",
+    "subtitle": "Enter an email and password, then confirm with the code we send you",
     "email": "Email",
     "username": "Username",
     "password": "Password",
