@@ -56,9 +56,10 @@ void main() {
 }
 
 /**
- * 五级模糊结果加权相加。`3.0 × strength` 与 lerpBloomFactor 的镜像权重
+ * 五级模糊结果加权相加。`3.0 × strength` 与镜像权重 `mix(factor, 1.2−factor, radius)`
  * 都取自原实现：radius 决定各级占比在 factor 与 1.2−factor 之间怎么插值。
- * 采样器数组由调用方按 mip 顺序填单位，故不需要五个独立 uniform。
+ * 五级只能逐行写：sampler 数组的下标在 GLSL ES 里必须是常量表达式，循环变量取不了。
+ * 顺序与 `BLOOM_KERNEL_SIZES` / `MIP_UNITS` 一一对应。
  */
 export const COMPOSITE_FRAG = /* glsl */ `#version 300 es
 precision highp float;
@@ -71,14 +72,16 @@ in vec2 vUv;
 
 out vec4 outColor;
 
-const float FACTORS[5] = float[](1.0, 0.8, 0.6, 0.4, 0.2);
+float lerpBloomFactor(float factor) {
+  return mix(factor, 1.2 - factor, uRadius);
+}
 
 void main() {
-  vec3 bloom = vec3(0.0);
-  for (int i = 0; i < 5; i++) {
-    float factor = FACTORS[i];
-    bloom += mix(factor, 1.2 - factor, uRadius) * texture(uMips[i], vUv).rgb;
-  }
+  vec3 bloom = lerpBloomFactor(1.0) * texture(uMips[0], vUv).rgb +
+               lerpBloomFactor(0.8) * texture(uMips[1], vUv).rgb +
+               lerpBloomFactor(0.6) * texture(uMips[2], vUv).rgb +
+               lerpBloomFactor(0.4) * texture(uMips[3], vUv).rgb +
+               lerpBloomFactor(0.2) * texture(uMips[4], vUv).rgb;
   outColor = vec4(3.0 * uStrength * bloom, 1.0);
 }
 `
