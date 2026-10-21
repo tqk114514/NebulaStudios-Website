@@ -32,6 +32,7 @@ export function createPostprocessing(
       gl.uniform1f(pass.locations.uTime, time)
     },
     render: (scene, screenWidth, screenHeight) => {
+      gl.useProgram(pass.program)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, scene.texture)
       gl.activeTexture(gl.TEXTURE1)
