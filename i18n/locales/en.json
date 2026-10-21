@@ -57,8 +57,8 @@
     "switch": "Change language"
   },
   "login": {
-    "title": "Sign in to Nebula",
-    "subtitle": "Use your email and password, or a linked third-party account.",
+    "title": "Sign in",
+    "subtitle": "Enter your credentials to continue",
     "email": "Email",
     "password": "Password",
     "emailMissing": "Enter your email address",

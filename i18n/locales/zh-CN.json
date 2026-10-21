@@ -57,8 +57,8 @@
     "switch": "切换语言"
   },
   "login": {
-    "title": "登录 Nebula",
-    "subtitle": "使用邮箱与密码，或从已绑定的第三方账号进入。",
+    "title": "登录",
+    "subtitle": "输入您的凭据以继续",
     "email": "邮箱",
     "password": "密码",
     "emailMissing": "请输入邮箱地址",
