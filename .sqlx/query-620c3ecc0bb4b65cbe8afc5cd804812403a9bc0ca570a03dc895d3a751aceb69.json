@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE totp_login_challenges SET consumed_at = ?2\n             WHERE id = ?1 AND consumed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "620c3ecc0bb4b65cbe8afc5cd804812403a9bc0ca570a03dc895d3a751aceb69"
+}

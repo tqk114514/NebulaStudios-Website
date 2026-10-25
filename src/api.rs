@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod healthz;
+pub mod user;
 
 use std::fmt;
 use std::sync::Arc;
@@ -19,7 +20,8 @@ use tower_governor::governor::GovernorConfigBuilder;
 use crate::context::Clock;
 use crate::mailer::Mailer;
 use crate::storage::sqlite::{
-    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo,
+    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteTotpRepo,
+    SqliteUserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -112,6 +114,8 @@ pub struct AppState {
     pub verification_repo: SqliteEmailVerificationRepo,
     /// 账户删除仓储；与用户仓储共享连接池。
     pub account_repo: SqliteAccountRepo,
+    /// TOTP 仓储；与用户仓储共享连接池。
+    pub totp_repo: SqliteTotpRepo,
     /// 邮件端口。
     pub mailer: std::sync::Arc<dyn Mailer>,
 }
@@ -134,7 +138,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/refresh", post(auth::refresh::refresh))
         .route("/api/auth/logout", post(auth::logout::logout))
         .route("/api/auth/password/change", post(auth::change_password::change_password))
-        .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request));
+        .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request))
+        .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
+        .route("/api/user/totp/setup", post(user::totp_setup::setup))
+        .route("/api/user/totp/enable", post(user::totp_enable::enable))
+        .route("/api/user/totp/disable", post(user::totp_disable::disable));
 
     // 限额参数沿用 v3：注册突发 3、每 20 秒补 1（per_second 语义是「补 1 个
     // 令牌的间隔秒数」，tower_governor 命名反直觉）；finish() 对常量参数必然

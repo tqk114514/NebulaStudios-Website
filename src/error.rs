@@ -62,6 +62,12 @@ pub enum ApiError {
     ResendCooldown(u64),
     /// 邮箱未验证，操作不可进行；409。
     EmailUnverified,
+    /// 口令通过但需 TOTP 二段；`details.challenge_token` 供二段提交（ADR-0004）。
+    TotpRequired(String),
+    /// TOTP 码、恢复码或二段挑战无效；401。
+    TotpInvalid,
+    /// 对未启用 TOTP 的账户执行启用态操作；409。
+    TotpNotEnabled,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -131,6 +137,18 @@ impl IntoResponse for ApiError {
             }
             Self::EmailUnverified => {
                 (StatusCode::CONFLICT, "email_unverified", "邮箱未验证".to_owned(), None)
+            }
+            Self::TotpRequired(challenge) => (
+                StatusCode::UNAUTHORIZED,
+                "totp_required",
+                "需要两步验证".to_owned(),
+                Some(serde_json::json!({ "challenge_token": challenge })),
+            ),
+            Self::TotpInvalid => {
+                (StatusCode::UNAUTHORIZED, "totp_invalid", "两步验证码无效".to_owned(), None)
+            }
+            Self::TotpNotEnabled => {
+                (StatusCode::CONFLICT, "totp_not_enabled", "两步验证未启用".to_owned(), None)
             }
             Self::ResendCooldown(remaining) => (
                 StatusCode::TOO_MANY_REQUESTS,

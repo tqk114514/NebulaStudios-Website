@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id: uuid::Uuid\", consumed_at AS \"consumed_at: Option<chrono::DateTime<chrono::Utc>>\"\n               FROM totp_recovery_codes WHERE user_id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "totp_recovery_codes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "consumed_at: Option<chrono::DateTime<chrono::Utc>>",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "totp_recovery_codes",
+            "name": "consumed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "b998a1536e76780e0401774a301dfd85eae37fa90f3f6be65937d5cebc114c68"
+}

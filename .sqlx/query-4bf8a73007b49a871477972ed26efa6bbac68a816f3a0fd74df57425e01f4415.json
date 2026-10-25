@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)\n                 VALUES (?1, ?2, ?3, ?4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "4bf8a73007b49a871477972ed26efa6bbac68a816f3a0fd74df57425e01f4415"
+}

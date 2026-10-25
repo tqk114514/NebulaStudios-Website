@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id: uuid::Uuid\",\n                      user_id AS \"user_id: uuid::Uuid\",\n                      attempts AS \"attempts: u32\",\n                      expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\"\n               FROM totp_login_challenges WHERE token_hash = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "totp_login_challenges",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "user_id: uuid::Uuid",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "totp_login_challenges",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "attempts: u32",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "totp_login_challenges",
+            "name": "attempts"
+          }
+        }
+      },
+      {
+        "name": "expires_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "totp_login_challenges",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6981e2124983e438b3ac76771a8a8cb90da1cba51aef35d2f5dc416b5578f1e"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE users SET totp_state = 'enabled' WHERE id = ?1 AND totp_state = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "08b34b746df7ca4659c278ebd5793f7af12d781acb5b91e54d3ff8807ebf5f42"
+}

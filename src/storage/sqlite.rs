@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
+use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{LoginCredentials, User, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
@@ -35,6 +36,12 @@ pub struct SqliteEmailVerificationRepo {
 /// SQLite 账户删除仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteAccountRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite TOTP 仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteTotpRepo {
     pool: SqlitePool,
 }
 
@@ -85,6 +92,14 @@ impl SqliteEmailVerificationRepo {
 }
 
 impl SqliteAccountRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteTotpRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -535,6 +550,216 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
+        Ok(())
+    }
+}
+
+impl crate::storage::TotpRepo for SqliteTotpRepo {
+    async fn find(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<(TotpState, Option<String>)>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT totp_state, totp_secret FROM users WHERE id = ?1"#,
+            user_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| {
+            let state = TotpState::from_str_raw(&r.totp_state)
+                .unwrap_or_else(|| unreachable!("库中 TOTP 状态值非法: {}", r.totp_state));
+            (state, r.totp_secret)
+        }))
+    }
+
+    async fn set_pending(
+        &self,
+        user_id: &UserId,
+        secret: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE users SET totp_state = 'pending', totp_secret = ?2 WHERE id = ?1",
+            user_id.as_uuid(),
+            secret,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn enable(&self, user_id: &UserId, _now: DateTime<Utc>) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE users SET totp_state = 'enabled' WHERE id = ?1 AND totp_state = 'pending'",
+            user_id.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn disable(&self, user_id: &UserId, now: DateTime<Utc>) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            "UPDATE users SET totp_state = 'disabled', totp_secret = NULL WHERE id = ?1",
+            user_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            "UPDATE totp_recovery_codes SET consumed_at = ?2
+             WHERE user_id = ?1 AND consumed_at IS NULL",
+            user_id.as_uuid(),
+            now,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            "UPDATE totp_login_challenges SET consumed_at = ?2
+             WHERE user_id = ?1 AND consumed_at IS NULL",
+            user_id.as_uuid(),
+            now,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn add_recovery_codes(
+        &self,
+        user_id: &UserId,
+        hashes: Vec<String>,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        for hash in hashes {
+            sqlx::query!(
+                "INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                Uuid::now_v7(),
+                user_id.as_uuid(),
+                hash,
+                now,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn consume_recovery_code(
+        &self,
+        user_id: &UserId,
+        code_hash: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let consumed = sqlx::query!(
+            "UPDATE totp_recovery_codes SET consumed_at = ?3
+             WHERE user_id = ?1 AND code_hash = ?2 AND consumed_at IS NULL",
+            user_id.as_uuid(),
+            code_hash,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(consumed.rows_affected() == 1)
+    }
+
+    async fn recovery_codes(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Vec<RecoveryCodeRecord>, StorageError> {
+        let rows = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", consumed_at AS "consumed_at: Option<chrono::DateTime<chrono::Utc>>"
+               FROM totp_recovery_codes WHERE user_id = ?1"#,
+            user_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            // 可空列 + Option 覆盖 = Option<Option>；内层即语义值
+            .map(|r| RecoveryCodeRecord { id: r.id, consumed_at: r.consumed_at.flatten() })
+            .collect())
+    }
+
+    async fn issue_challenge(
+        &self,
+        user_id: &UserId,
+        token_hash: &str,
+        expires_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "INSERT INTO totp_login_challenges (id, user_id, token_hash, attempts, expires_at, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            Uuid::now_v7(),
+            user_id.as_uuid(),
+            token_hash,
+            expires_at,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn find_challenge(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<TotpChallenge>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid",
+                      user_id AS "user_id: uuid::Uuid",
+                      attempts AS "attempts: u32",
+                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
+               FROM totp_login_challenges WHERE token_hash = ?1"#,
+            token_hash,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| TotpChallenge {
+            id: r.id,
+            user_id: UserId::from_uuid(r.user_id),
+            attempts: r.attempts,
+            expires_at: r.expires_at,
+        }))
+    }
+
+    async fn record_challenge_attempt(&self, id: &Uuid) -> Result<(), StorageError> {
+        sqlx::query!("UPDATE totp_login_challenges SET attempts = attempts + 1 WHERE id = ?1", id,)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn consume_challenge(&self, id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
+        let consumed = sqlx::query!(
+            "UPDATE totp_login_challenges SET consumed_at = ?2
+             WHERE id = ?1 AND consumed_at IS NULL",
+            id,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(consumed.rows_affected() == 1)
+    }
+
+    async fn invalidate_challenges(
+        &self,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE totp_login_challenges SET consumed_at = ?2
+             WHERE user_id = ?1 AND consumed_at IS NULL",
+            user_id.as_uuid(),
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }
