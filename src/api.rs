@@ -17,6 +17,8 @@ use crate::storage::sqlite::{SqliteRefreshRepo, SqliteUserRepo};
 pub const ACCESS_COOKIE: &str = "nebula_access";
 /// refresh 会话 cookie 名；Path 限定在 `/api/auth`，其余路径不随请求携带。
 pub const REFRESH_COOKIE: &str = "nebula_refresh";
+/// CSRF 双提交 cookie 名；非 HttpOnly（SPA 读取后经 `X-CSRF-Token` 回显，ADR-0005）。
+pub const CSRF_COOKIE: &str = "nebula_csrf";
 
 /// 从请求 Cookie 头解析指定名字的值；提取器与端点共用同一解析规则。
 #[must_use]

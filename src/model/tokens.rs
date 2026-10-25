@@ -98,9 +98,7 @@ impl RefreshToken {
     /// ```
     #[must_use]
     pub fn generate() -> Self {
-        let mut bytes = [0u8; 32];
-        rand::rng().fill_bytes(&mut bytes);
-        Self(hex(&bytes))
+        Self(random_hex_32())
     }
 
     /// 借用明文。
@@ -120,6 +118,14 @@ impl RefreshToken {
     pub fn hash_of(plain: &str) -> String {
         hex(&Sha256::digest(plain.as_bytes()))
     }
+}
+
+/// 生成 32 字节密码学随机数的十六进制串（64 字符）；refresh 与 csrf 令牌共用。
+#[must_use]
+pub fn random_hex_32() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    hex(&bytes)
 }
 
 fn hex(bytes: &[u8]) -> String {

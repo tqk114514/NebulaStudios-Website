@@ -10,7 +10,10 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{cookie_max_age, issue_session, set_access_cookie, set_refresh_cookie};
+use super::{
+    SessionTokens, cookie_max_age, issue_session, set_access_cookie, set_csrf_cookie,
+    set_refresh_cookie,
+};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::password::PasswordHash;
@@ -66,8 +69,8 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
         return Err(ApiError::InvalidCredentials);
     }
     let user = credentials.user;
-    let (access, refresh) = issue_session(&state, user.id).await?;
-    Ok(session_response(StatusCode::OK, &state, &user, &access, &refresh))
+    let tokens = issue_session(&state, user.id).await?;
+    Ok(session_response(StatusCode::OK, &state, &user, &tokens))
 }
 
 /// 哑哈希只用于对齐「用户不存在」路径的耗时；生成失败（OS 随机源故障）按 500，
@@ -97,11 +100,11 @@ fn session_response(
     status: StatusCode,
     state: &AppState,
     user: &User,
-    access: &str,
-    refresh: &str,
+    tokens: &SessionTokens,
 ) -> Response {
     let mut headers = HeaderMap::new();
-    set_access_cookie(&mut headers, access, cookie_max_age(state.session.access_ttl));
-    set_refresh_cookie(&mut headers, refresh, cookie_max_age(state.session.refresh_ttl));
+    set_access_cookie(&mut headers, &tokens.access, cookie_max_age(state.session.access_ttl));
+    set_refresh_cookie(&mut headers, &tokens.refresh, cookie_max_age(state.session.refresh_ttl));
+    set_csrf_cookie(&mut headers, &tokens.csrf, cookie_max_age(state.session.refresh_ttl));
     (status, headers, Json(user)).into_response()
 }

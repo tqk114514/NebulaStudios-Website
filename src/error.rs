@@ -54,6 +54,8 @@ pub enum ApiError {
     RefreshInvalid,
     /// refresh token 重放，家族已整族撤销；401。
     RefreshReused,
+    /// CSRF 校验失败（缺头、缺 cookie 或不相等）；403。
+    CsrfInvalid,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -115,6 +117,9 @@ impl IntoResponse for ApiError {
                 "refresh token 已被重放，会话已撤销".to_owned(),
                 None,
             ),
+            Self::CsrfInvalid => {
+                (StatusCode::FORBIDDEN, "csrf_invalid", "CSRF 校验失败".to_owned(), None)
+            }
         };
 
         let body = ErrorBody { code, message, details };
