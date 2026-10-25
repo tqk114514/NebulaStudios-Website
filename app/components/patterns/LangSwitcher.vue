@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 语言切换器，填入 SiteHeader 的 tools 插槽。用 Popover API 而不是手写 document
-// 点击监听：点外面关闭、Escape 关闭、不被祖先 overflow 裁掉，都交给浏览器。
+// 语言切换器，填入 SiteHeader 的 tools 插槽。popover 机制（点外面/Escape 收起、
+// 不被祖先 overflow 裁掉、点选项即收起）都交给浏览器，不手写 document 点击监听。
 import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
 
@@ -21,7 +21,6 @@ const open = ref(false)
 const current = computed(() => OPTIONS.find((o) => o.code === locale.value) ?? OPTIONS[0]!)
 
 async function choose(code: Option['code']) {
-  open.value = false
   if (code !== locale.value) await setLocale(code)
 }
 
@@ -60,6 +59,8 @@ function onToggle(event: Event) {
         :key="option.code"
         class="lang__option"
         type="button"
+        popovertarget="lang-menu"
+        popovertargetaction="hide"
         :aria-current="option.code === locale ? 'true' : undefined"
         @click="choose(option.code)"
       >
@@ -138,7 +139,7 @@ function onToggle(event: Event) {
   margin: 0;
   margin-top: var(--space-2);
   min-width: 140px;
-  padding: var(--space-1) 0;
+  padding: 0;
   background: var(--bg);
   border: 1px solid var(--line);
   white-space: nowrap;
