@@ -34,7 +34,7 @@
 
 ## 1. 栈
 
-后端：Rust（edition 2024）、`axum 0.8` + `tower-http`、`tokio 1`（`macros`/`rt-multi-thread`/`signal`/`time`）、`sqlx` + SQLite（bundled C，ADR-0003）、`argon2`、`jsonwebtoken`、`totp-rs`、`oauth2` + `openidconnect` + `reqwest`、`lettre`、`rand 0.10`、`validator`、`config`、`uuid`(v7)、`chrono`、`tracing` + `tracing-subscriber`、`metrics` + `axum-prometheus`、`tower_governor`、`image` + `webp`；测试用 `tempfile`、`insta`、`rstest`、`cargo-llvm-cov`。
+后端：Rust（edition 2024）、`axum 0.8` + `tower-http`、`tokio 1`（`macros`/`rt-multi-thread`/`signal`/`time`）、`sqlx` + SQLite（bundled C，ADR-0003）、`argon2`、`jsonwebtoken`、`totp-rs`、`oauth2` + `openidconnect` + `reqwest`、`lettre`、`rand 0.10`、`sha2`、`validator`、`config`、`uuid`(v7)、`chrono`、`tracing` + `tracing-subscriber`、`metrics` + `axum-prometheus`、`tower_governor`、`image` + `webp`；测试用 `tempfile`、`insta`、`rstest`、`cargo-llvm-cov`。
 
 前端：Nuxt 4、Node 22+、`@nuxtjs/i18n`、`@nuxt/test-utils`、`@nuxt/eslint`、`knip`、`lychee`、`renovate`；组件库 `@nuxt/ui`，用于替代手写 Modal/Toast。
 

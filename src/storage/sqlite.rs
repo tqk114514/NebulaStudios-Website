@@ -1,19 +1,66 @@
-//! 用户仓储的 sqlx + SQLite 实现（ADR-0003）。
+//! sqlx + SQLite 实现（ADR-0003）：用户仓储与 refresh 家族仓储共享连接池。
 
 use std::path::Path;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
+use uuid::Uuid;
 
 use crate::model::password::PasswordHash;
+use crate::model::tokens::NewRefreshToken;
 use crate::model::user::{User, UserId};
-use crate::storage::{StorageError, UserRepo, UserRepoError};
+use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
 
 /// SQLite 用户仓储；克隆共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteUserRepo {
     pool: SqlitePool,
+}
+
+/// SQLite refresh 家族仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteRefreshRepo {
+    pool: SqlitePool,
+}
+
+/// 打开既有数据库文件建立带 PRAGMA 的连接池；不创建文件、不跑迁移——迁移由
+/// `sqlx migrate` 作为独立部署步骤执行，启动路径不执行 DDL（§1）。
+///
+/// # Errors
+/// 文件不存在、权限不足或连接失败时返回 [`StorageError`]。
+pub async fn connect_pool(path: &Path) -> Result<SqlitePool, StorageError> {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(Duration::from_secs(5));
+    SqlitePool::connect_with(options).await.map_err(StorageError::from)
+}
+
+impl SqliteUserRepo {
+    /// 等价于 [`connect_pool`] 后 [`Self::from_pool`]。
+    ///
+    /// # Errors
+    /// 见 [`connect_pool`]。
+    pub async fn open(path: &Path) -> Result<Self, StorageError> {
+        Ok(Self { pool: connect_pool(path).await? })
+    }
+
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteRefreshRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
 }
 
 impl From<SqlxError> for StorageError {
@@ -29,20 +76,9 @@ impl From<SqlxError> for UserRepoError {
     }
 }
 
-impl SqliteUserRepo {
-    /// 打开既有数据库文件建立连接池；不创建文件、不跑迁移——迁移由
-    /// `sqlx migrate` 作为独立部署步骤执行，启动路径不执行 DDL（§1）。
-    ///
-    /// # Errors
-    /// 文件不存在、权限不足或连接失败时返回 [`StorageError`]。
-    pub async fn open(path: &Path) -> Result<Self, StorageError> {
-        let options = SqliteConnectOptions::new()
-            .filename(path)
-            .foreign_keys(true)
-            .journal_mode(SqliteJournalMode::Wal)
-            .busy_timeout(Duration::from_secs(5));
-        let pool = SqlitePool::connect_with(options).await?;
-        Ok(Self { pool })
+impl From<SqlxError> for RotateRefreshError {
+    fn from(err: SqlxError) -> Self {
+        Self::Storage(err.into())
     }
 }
 
@@ -111,4 +147,155 @@ impl UserRepo for SqliteUserRepo {
             email_verified: r.email_verified,
         }))
     }
+}
+
+impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
+    async fn create_family(
+        &self,
+        token: &NewRefreshToken,
+        created_at: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            "INSERT INTO refresh_token_families (id, user_id, state, created_at)
+             VALUES (?1, ?2, 'active', ?3)",
+            token.family_id,
+            token.user_id.as_uuid(),
+            created_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            Uuid::now_v7(),
+            token.family_id,
+            token.token_hash,
+            created_at,
+            token.expires_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn rotate(
+        &self,
+        presented_hash: &str,
+        new_hash: &str,
+        new_expires_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), RotateRefreshError> {
+        let mut tx = self.pool.begin().await?;
+
+        let presented = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", family_id AS "family_id: uuid::Uuid", state,
+                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
+               FROM refresh_tokens WHERE token_hash = ?1"#,
+            presented_hash,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let Some(presented) = presented else {
+            return Err(RotateRefreshError::Invalid);
+        };
+
+        match presented.state.as_str() {
+            // 呈递已轮转 token = 重放：整族撤销后拒绝（事务保证撤销也落库）
+            "rotated" => {
+                revoke_family_in_tx(&mut tx, presented.family_id, now).await?;
+                tx.commit().await?;
+                Err(RotateRefreshError::Replay)
+            }
+            "active" => {
+                if presented.expires_at <= now {
+                    return Err(RotateRefreshError::Invalid);
+                }
+                let family = sqlx::query!(
+                    "SELECT state FROM refresh_token_families WHERE id = ?1",
+                    presented.family_id,
+                )
+                .fetch_one(&mut *tx)
+                .await?;
+                if family.state != "active" {
+                    return Err(RotateRefreshError::Invalid);
+                }
+
+                let rotated = sqlx::query!(
+                    "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
+                     WHERE id = ?1 AND state = 'active'",
+                    presented.id,
+                    now,
+                )
+                .execute(&mut *tx)
+                .await?;
+                // 并发下状态可能已被他者改变；0 行受影响说明此刻不再是 active，按重放处置
+                if rotated.rows_affected() != 1 {
+                    revoke_family_in_tx(&mut tx, presented.family_id, now).await?;
+                    tx.commit().await?;
+                    return Err(RotateRefreshError::Replay);
+                }
+
+                sqlx::query!(
+                    "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
+                     VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+                    Uuid::now_v7(),
+                    presented.family_id,
+                    new_hash,
+                    now,
+                    new_expires_at,
+                )
+                .execute(&mut *tx)
+                .await?;
+                tx.commit().await?;
+                Ok(())
+            }
+            // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
+            _ => Err(RotateRefreshError::Invalid),
+        }
+    }
+
+    async fn revoke_all_for_user(
+        &self,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let families = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid" FROM refresh_token_families
+               WHERE user_id = ?1 AND state = 'active'"#,
+            user_id.as_uuid(),
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        for family in families {
+            revoke_family_in_tx(&mut tx, family.id, now).await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+}
+
+/// 在事务内撤销一个家族：家族置 revoked，族内未撤销 token 全部置 revoked。
+async fn revoke_family_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    family_id: Uuid,
+    now: DateTime<Utc>,
+) -> Result<(), StorageError> {
+    sqlx::query!(
+        "UPDATE refresh_token_families SET state = 'revoked', revoked_at = ?2 WHERE id = ?1",
+        family_id,
+        now,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE refresh_tokens SET state = 'revoked' WHERE family_id = ?1 AND state != 'revoked'",
+        family_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }

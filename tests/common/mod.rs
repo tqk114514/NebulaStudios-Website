@@ -49,3 +49,23 @@ pub async fn app() -> (axum::Router, AppState, Arc<ManualClock>, tempfile::TempD
     let (state, clock, dir) = app_state().await;
     (api::router(state.clone()), state, clock, dir)
 }
+
+/// 装配共享同一连接池的用户与 refresh 仓储（仓储层测试用）。
+pub async fn repos() -> (
+    nebula_server::storage::sqlite::SqliteUserRepo,
+    nebula_server::storage::sqlite::SqliteRefreshRepo,
+    tempfile::TempDir,
+) {
+    let dir = tempfile::tempdir().expect("临时目录必须可创建");
+    let bootstrap = migrated_pool(dir.path()).await;
+    bootstrap.close().await;
+
+    let pool = nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db"))
+        .await
+        .expect("已迁移的库必须可打开");
+    (
+        nebula_server::storage::sqlite::SqliteUserRepo::from_pool(pool.clone()),
+        nebula_server::storage::sqlite::SqliteRefreshRepo::from_pool(pool),
+        dir,
+    )
+}

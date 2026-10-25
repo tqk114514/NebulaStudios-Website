@@ -8,6 +8,7 @@ use std::fmt;
 use std::future::Future;
 
 use crate::model::password::PasswordHash;
+use crate::model::tokens::NewRefreshToken;
 use crate::model::user::User;
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
@@ -70,4 +71,58 @@ pub trait UserRepo: Send + Sync {
         &self,
         username: &str,
     ) -> impl Future<Output = Result<Option<User>, UserRepoError>> + Send;
+}
+
+/// refresh token 轮转错误。
+#[derive(Debug, thiserror::Error)]
+pub enum RotateRefreshError {
+    /// 复用已轮转 token：判定为重放，家族已整族撤销（§10 保留 v3 姿态）。
+    #[error("refresh token 已被轮转，家族整族撤销")]
+    Replay,
+    /// token 不存在、已撤销、已过期或所属家族已撤销。
+    #[error("refresh token 无效")]
+    Invalid,
+    /// 底层存储故障，细节见 source。
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+/// refresh token 家族仓储；轮转与重放检测必须原子完成。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+pub trait RefreshTokenRepo: Send + Sync {
+    /// 创建家族并落第一个 token（登录成功后调用）。
+    ///
+    /// # Errors
+    /// 仅存储故障；家族创建不存在冲突路径。
+    fn create_family(
+        &self,
+        token: &NewRefreshToken,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 原子轮转：呈递 token 须 Active 且未过期、家族须 Active；成功则旧置
+    /// Rotated、同族插入新 token。呈递已 Rotated 的 token 判定重放——整族撤销
+    /// 后返回 [`RotateRefreshError::Replay`]。
+    ///
+    /// # Errors
+    /// 重放返回 [`RotateRefreshError::Replay`]；无效呈递返回
+    /// [`RotateRefreshError::Invalid`]；存储故障返回 [`RotateRefreshError::Storage`]。
+    fn rotate(
+        &self,
+        presented_hash: &str,
+        new_hash: &str,
+        new_expires_at: chrono::DateTime<chrono::Utc>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), RotateRefreshError>> + Send;
+
+    /// 撤销用户全部家族；登出、改密、关闭 TOTP、注销共用同一路径（红线 #1）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn revoke_all_for_user(
+        &self,
+        user_id: &crate::model::user::UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
 }

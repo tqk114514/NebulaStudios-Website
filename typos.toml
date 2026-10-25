@@ -1,0 +1,3 @@
+# 嵌入测试的 PEM 密钥是 base64，会被当成拼写噪声；长 base64 串整体跳过
+[default]
+extend-ignore-re = ["[A-Za-z0-9+/]{40,}={0,2}"]
