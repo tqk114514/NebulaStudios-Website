@@ -1,0 +1,11 @@
+# 依赖许可白名单，恰好覆盖当前依赖树，新增依赖带新许可时在此追加并注明归属。
+# OR 型双许可满足其一即可：aho-corasick / memchr 取 MIT，r-efi / ryu 取 Apache-2.0，
+# wasi 有 MIT 分支兜底。
+# AND 型例外：matchit = MIT AND BSD-3-Clause；unicode-ident = (MIT OR Apache-2.0) AND Unicode-3.0。
+
+[licenses]
+# 本 crate 的 LICENSE 是自定义文本（license-file），非 SPDX 表达式，跳过自检
+private = { ignore = true }
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause"]
+
+# advisories / bans / sources 维持默认（未配置的节不放松）
