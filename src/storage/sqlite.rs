@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::user::{LoginCredentials, User, UserId};
-use crate::model::verification::{EmailVerification, NewEmailVerification};
+use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -29,6 +29,12 @@ pub struct SqliteRefreshRepo {
 /// SQLite 邮箱验证码仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteEmailVerificationRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 账户删除仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteAccountRepo {
     pool: SqlitePool,
 }
 
@@ -71,6 +77,14 @@ impl SqliteRefreshRepo {
 }
 
 impl SqliteEmailVerificationRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteAccountRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -163,6 +177,41 @@ impl UserRepo for SqliteUserRepo {
         }))
     }
 
+    async fn find_by_id(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<LoginCredentials>, UserRepoError> {
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", username, email,
+                      email_verified AS "email_verified: bool",
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>",
+                      password_hash
+               FROM users WHERE id = ?1"#,
+            user_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else { return Ok(None) };
+        // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
+        let hash = row
+            .password_hash
+            .map(PasswordHash::from_encoded)
+            .transpose()
+            .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
+
+        Ok(hash.map(|password_hash| LoginCredentials {
+            user: User {
+                id: UserId::from_uuid(row.id),
+                username: row.username,
+                email: row.email,
+                created_at: row.created_at,
+                email_verified: row.email_verified,
+            },
+            password_hash,
+        }))
+    }
+
     async fn find_login_credentials(
         &self,
         identifier: &str,
@@ -197,6 +246,21 @@ impl UserRepo for SqliteUserRepo {
             },
             password_hash,
         }))
+    }
+
+    async fn update_password_hash(
+        &self,
+        user_id: &UserId,
+        password: &PasswordHash,
+    ) -> Result<(), UserRepoError> {
+        sqlx::query!(
+            "UPDATE users SET password_hash = ?2 WHERE id = ?1",
+            user_id.as_uuid(),
+            password.as_str(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 
@@ -360,13 +424,14 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         sqlx::query!(
-            "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at)
-             VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at, purpose)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)",
             Uuid::now_v7(),
             entry.user_id.as_uuid(),
             entry.code_hash,
             entry.expires_at,
             created_at,
+            entry.purpose.as_str(),
         )
         .execute(&self.pool)
         .await?;
@@ -376,15 +441,17 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
     async fn latest_unconsumed(
         &self,
         user_id: &UserId,
+        purpose: VerificationPurpose,
     ) -> Result<Option<EmailVerification>, StorageError> {
         let row = sqlx::query!(
             r#"SELECT id AS "id: uuid::Uuid", code_hash, attempts AS "attempts: u32",
                       expires_at AS "expires_at: chrono::DateTime<chrono::Utc>",
                       created_at AS "created_at: chrono::DateTime<chrono::Utc>"
                FROM email_verifications
-               WHERE user_id = ?1 AND consumed_at IS NULL
+               WHERE user_id = ?1 AND consumed_at IS NULL AND purpose = ?2
                ORDER BY created_at DESC LIMIT 1"#,
             user_id.as_uuid(),
+            purpose.as_str(),
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -429,5 +496,45 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
             .await?;
         tx.commit().await?;
         Ok(true)
+    }
+
+    async fn consume(
+        &self,
+        verification_id: &Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let consumed = sqlx::query!(
+            "UPDATE email_verifications SET consumed_at = ?2
+             WHERE id = ?1 AND consumed_at IS NULL",
+            verification_id,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(consumed.rows_affected() == 1)
+    }
+}
+
+impl crate::storage::AccountRepo for SqliteAccountRepo {
+    async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("DELETE FROM email_verifications WHERE user_id = ?1", user_id.as_uuid(),)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query!(
+            "DELETE FROM refresh_tokens WHERE family_id IN
+             (SELECT id FROM refresh_token_families WHERE user_id = ?1)",
+            user_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!("DELETE FROM refresh_token_families WHERE user_id = ?1", user_id.as_uuid(),)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query!("DELETE FROM users WHERE id = ?1", user_id.as_uuid())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 }

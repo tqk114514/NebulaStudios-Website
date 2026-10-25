@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM refresh_token_families WHERE user_id = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "6b6f5ff1d9150d46c90fbe883c9affc0c1f51cbc0307b33e18b7566999a76f99"
+}

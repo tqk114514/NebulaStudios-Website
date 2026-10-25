@@ -5,7 +5,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{OneshotPost, cookie_header, register_user, set_cookie_of};
+use common::{OneshotPost, Session, cookie_header, login_session, register_user, set_cookie_of};
 
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";
@@ -14,23 +14,6 @@ const PASSWORD: &str = "Nebula!Passw0rd-2026";
 async fn login(app: &axum::Router, identifier: &str, password: &str) -> axum::response::Response {
     let body = format!(r#"{{"identifier":"{identifier}","password":"{password}"}}"#);
     app.clone().oneshot_post("/api/auth/login", &body).await
-}
-
-/// 登录后的整套会话凭据（三 cookie 明文值）。
-struct Session {
-    access: String,
-    refresh: String,
-    csrf: String,
-}
-
-async fn login_session(app: &axum::Router) -> Session {
-    let response = login(app, EMAIL, PASSWORD).await;
-    assert_eq!(response.status(), StatusCode::OK, "登录助手必须成功");
-    Session {
-        access: set_cookie_of(&response, "nebula_access").unwrap(),
-        refresh: set_cookie_of(&response, "nebula_refresh").unwrap(),
-        csrf: set_cookie_of(&response, "nebula_csrf").unwrap(),
-    }
 }
 
 /// 带 CSRF 配对的 refresh 请求。

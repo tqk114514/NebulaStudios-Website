@@ -18,7 +18,9 @@ use tower_governor::governor::GovernorConfigBuilder;
 
 use crate::context::Clock;
 use crate::mailer::Mailer;
-use crate::storage::sqlite::{SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo};
+use crate::storage::sqlite::{
+    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo,
+};
 
 /// access 会话 cookie 名；全站路径。
 pub const ACCESS_COOKIE: &str = "nebula_access";
@@ -108,6 +110,8 @@ pub struct AppState {
     pub session: SessionPolicy,
     /// 邮箱验证码仓储；与用户仓储共享连接池。
     pub verification_repo: SqliteEmailVerificationRepo,
+    /// 账户删除仓储；与用户仓储共享连接池。
+    pub account_repo: SqliteAccountRepo,
     /// 邮件端口。
     pub mailer: std::sync::Arc<dyn Mailer>,
 }
@@ -128,7 +132,9 @@ pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))
         .route("/api/auth/refresh", post(auth::refresh::refresh))
-        .route("/api/auth/logout", post(auth::logout::logout));
+        .route("/api/auth/logout", post(auth::logout::logout))
+        .route("/api/auth/password/change", post(auth::change_password::change_password))
+        .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request));
 
     // 限额参数沿用 v3：注册突发 3、每 20 秒补 1（per_second 语义是「补 1 个
     // 令牌的间隔秒数」，tower_governor 命名反直觉）；finish() 对常量参数必然
@@ -160,8 +166,10 @@ pub fn router(state: AppState) -> Router {
     );
 
     // v3 参数：验证码校验突发 5、每 10 秒补 1
-    let verify_limited =
-        Router::new().route("/api/auth/register/verify", post(auth::verify::verify)).layer(
+    let verify_limited = Router::new()
+        .route("/api/auth/register/verify", post(auth::verify::verify))
+        .route("/api/auth/account/delete/confirm", post(auth::delete_confirm::delete_confirm))
+        .layer(
             GovernorLayer::new(
                 GovernorConfigBuilder::default()
                     .per_second(10)

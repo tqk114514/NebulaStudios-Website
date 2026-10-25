@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM refresh_tokens WHERE family_id IN\n             (SELECT id FROM refresh_token_families WHERE user_id = ?1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "25debfa6a05fb7f73ce19a020fd5a7b12bf8f3b71ccf6041149fafb6b6cb1b7e"
+}

@@ -10,7 +10,7 @@ use std::future::Future;
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::user::{LoginCredentials, User};
-use crate::model::verification::{EmailVerification, NewEmailVerification};
+use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
 /// 接缝之上只见「存储故障」，不见驱动类型。
@@ -74,6 +74,15 @@ pub trait UserRepo: Send + Sync {
         email: &str,
     ) -> impl Future<Output = Result<Option<User>, UserRepoError>> + Send;
 
+    /// 按用户 id 取登录凭据（含口令哈希）；不存在返回 `None`。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]。
+    fn find_by_id(
+        &self,
+        user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<Option<LoginCredentials>, UserRepoError>> + Send;
+
     /// 按登录标识（邮箱或用户名）取登录凭据，大小写不敏感；用户不存在或
     /// 该用户无口令哈希均返回 `None`，由调用方走时序对齐路径。
     ///
@@ -83,6 +92,16 @@ pub trait UserRepo: Send + Sync {
         &self,
         identifier: &str,
     ) -> impl Future<Output = Result<Option<LoginCredentials>, UserRepoError>> + Send;
+
+    /// 更新用户口令哈希；不触碰会话（撤销由调用方负责，红线 #1）。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]。
+    fn update_password_hash(
+        &self,
+        user_id: &crate::model::user::UserId,
+        password: &PasswordHash,
+    ) -> impl Future<Output = Result<(), UserRepoError>> + Send;
 
     /// 按用户名查找，大小写不敏感。
     ///
@@ -162,13 +181,14 @@ pub trait EmailVerificationRepo: Send + Sync {
         created_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 
-    /// 用户最新一条未消费的验证码。
+    /// 用户某用途下最新一条未消费的验证码。
     ///
     /// # Errors
     /// 仅存储故障。
     fn latest_unconsumed(
         &self,
         user_id: &crate::model::user::UserId,
+        purpose: VerificationPurpose,
     ) -> impl Future<Output = Result<Option<EmailVerification>, StorageError>> + Send;
 
     /// 错误尝试计数 +1。
@@ -190,4 +210,28 @@ pub trait EmailVerificationRepo: Send + Sync {
         user_id: &crate::model::user::UserId,
         now: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<bool, StorageError>> + Send;
+
+    /// 消费该验证码（不附带任何用户状态变更）；已被消费时返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn consume(
+        &self,
+        verification_id: &uuid::Uuid,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, StorageError>> + Send;
+}
+
+/// 账户删除仓储；删除即最终撤销。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+pub trait AccountRepo: Send + Sync {
+    /// 硬删除用户及其全部从属数据（验证码、refresh 家族与 token），单事务。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在不视为错误（幂等）。
+    fn delete_user(
+        &self,
+        user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
 }

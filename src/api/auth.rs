@@ -1,6 +1,9 @@
 //! 认证域端点与会话 cookie 约定（§10 保留 v3 姿态：HttpOnly + Secure +
 //! `SameSite` 的 access/refresh 分离 cookie）。
 
+pub mod change_password;
+pub mod delete_confirm;
+pub mod delete_request;
 pub mod login;
 pub mod logout;
 pub mod refresh;
@@ -14,10 +17,13 @@ use axum::http::{HeaderMap, HeaderValue};
 use super::{ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE};
 use crate::api::AppState;
 use crate::error::ApiError;
+use crate::extractors::constant_time_eq;
 use crate::mailer::EmailMessage;
-use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sign_access};
+use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sha256_hex, sign_access};
 use crate::model::user::{User, UserId};
-use crate::model::verification::{NewEmailVerification, VERIFICATION_TTL, VerificationCode};
+use crate::model::verification::{
+    MAX_ATTEMPTS, NewEmailVerification, VERIFICATION_TTL, VerificationCode, VerificationPurpose,
+};
 use crate::storage::{EmailVerificationRepo, RefreshTokenRepo};
 use uuid::Uuid;
 
@@ -118,10 +124,11 @@ fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
 }
 
 /// 签发验证码并异步发送邮件（发送不阻塞调用方响应）；落库失败才是请求失败，
-/// 发送失败只记日志——用户可经重发端点补发。
-pub(crate) async fn issue_and_send_verification(
+/// 发送失败只记日志——用户可经对应端点补发。邮件主题随用途区分。
+pub(crate) async fn issue_and_send_code(
     state: &AppState,
     user: &User,
+    purpose: VerificationPurpose,
 ) -> Result<(), ApiError> {
     let code = VerificationCode::generate();
     let now = state.clock.now();
@@ -129,13 +136,18 @@ pub(crate) async fn issue_and_send_verification(
         user_id: user.id,
         code_hash: code.to_hash_hex(),
         expires_at: now + VERIFICATION_TTL,
+        purpose,
     };
     state.verification_repo.issue(&entry, now).await.map_err(anyhow::Error::from)?;
 
+    let subject = match purpose {
+        VerificationPurpose::VerifyEmail => "Nebula 邮箱验证码",
+        VerificationPurpose::DeleteAccount => "Nebula 账户注销确认码",
+    };
     let mailer = state.mailer.clone();
     let message = EmailMessage {
         to: user.email.clone(),
-        subject: "Nebula 邮箱验证码".to_owned(),
+        subject: subject.to_owned(),
         body: format!("验证码：{}，{} 分钟内有效。", code.as_str(), VERIFICATION_TTL.num_minutes()),
     };
     tokio::spawn(async move {
@@ -144,4 +156,70 @@ pub(crate) async fn issue_and_send_verification(
         }
     });
     Ok(())
+}
+
+/// 校验某用途下的验证码：时效、限次、恒时比较，错码自动计数。
+/// 成功返回验证码记录 id，由调用方决定消费后的附带动作。
+///
+/// # Errors
+/// 无未消费验证码、过期、打满限次或比对不符时返回
+/// [`ApiError::InvalidVerificationCode`]。
+pub(crate) async fn check_verification_code(
+    state: &AppState,
+    user_id: &UserId,
+    code: &str,
+    purpose: VerificationPurpose,
+) -> Result<uuid::Uuid, ApiError> {
+    let invalid = ApiError::InvalidVerificationCode;
+    let Some(verification) = state
+        .verification_repo
+        .latest_unconsumed(user_id, purpose)
+        .await
+        .map_err(anyhow::Error::from)?
+    else {
+        return Err(invalid);
+    };
+    if verification.expires_at <= state.clock.now() || verification.attempts >= MAX_ATTEMPTS {
+        return Err(invalid);
+    }
+    let candidate = sha256_hex(code);
+    if !constant_time_eq(candidate.as_bytes(), verification.code_hash.as_bytes()) {
+        state
+            .verification_repo
+            .record_attempt(&verification.id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        return Err(invalid);
+    }
+    Ok(verification.id)
+}
+
+/// 口令强度规则（v3 语义，注册与改密共用）：16–64 位且含大小写、数字、标点。
+/// 返回第一个不满足项的 code；合规返回 `None`。
+#[must_use]
+pub(crate) fn password_problem(password: &str) -> Option<&'static str> {
+    let len = password.chars().count();
+    if len < 16 {
+        return Some("password_too_short");
+    }
+    if len > 64 {
+        return Some("password_too_long");
+    }
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_special = password.chars().any(|c| c.is_ascii_punctuation());
+    if !has_digit {
+        return Some("password_missing_digit");
+    }
+    if !has_lower {
+        return Some("password_missing_lowercase");
+    }
+    if !has_upper {
+        return Some("password_missing_uppercase");
+    }
+    if !has_special {
+        return Some("password_missing_special");
+    }
+    None
 }

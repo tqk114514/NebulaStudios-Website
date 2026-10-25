@@ -9,9 +9,7 @@ use serde::Deserialize;
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::constant_time_eq;
-use crate::model::tokens::sha256_hex;
-use crate::model::verification::MAX_ATTEMPTS;
+use crate::model::verification::VerificationPurpose;
 use crate::storage::{EmailVerificationRepo, UserRepo};
 
 /// 验证请求。
@@ -49,30 +47,17 @@ pub async fn verify(State(state): State<AppState>, body: Bytes) -> Result<Respon
         return Err(invalid);
     };
 
-    let Some(verification) =
-        state.verification_repo.latest_unconsumed(&user.id).await.map_err(anyhow::Error::from)?
-    else {
-        return Err(invalid);
-    };
-
-    let now = state.clock.now();
-    if verification.expires_at <= now || verification.attempts >= MAX_ATTEMPTS {
-        return Err(invalid);
-    }
-
-    let candidate = sha256_hex(req.code.trim());
-    if !constant_time_eq(candidate.as_bytes(), verification.code_hash.as_bytes()) {
-        state
-            .verification_repo
-            .record_attempt(&verification.id)
-            .await
-            .map_err(anyhow::Error::from)?;
-        return Err(invalid);
-    }
+    let verification_id = super::check_verification_code(
+        &state,
+        &user.id,
+        req.code.trim(),
+        VerificationPurpose::VerifyEmail,
+    )
+    .await?;
 
     let consumed = state
         .verification_repo
-        .consume_and_mark_verified(&verification.id, &user.id, now)
+        .consume_and_mark_verified(&verification_id, &user.id, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
     if !consumed {

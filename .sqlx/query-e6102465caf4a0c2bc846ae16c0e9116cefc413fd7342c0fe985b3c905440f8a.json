@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id: uuid::Uuid\", code_hash, attempts AS \"attempts: u32\",\n                      expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\",\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n               FROM email_verifications\n               WHERE user_id = ?1 AND consumed_at IS NULL\n               ORDER BY created_at DESC LIMIT 1",
+  "query": "SELECT id AS \"id: uuid::Uuid\", code_hash, attempts AS \"attempts: u32\",\n                      expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\",\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n               FROM email_verifications\n               WHERE user_id = ?1 AND consumed_at IS NULL AND purpose = ?2\n               ORDER BY created_at DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -60,7 +60,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [
       false,
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "4fb69c80fc37156560c87b257f83d0a441167439e9dc8bb3fa3708a978202a50"
+  "hash": "e6102465caf4a0c2bc846ae16c0e9116cefc413fd7342c0fe985b3c905440f8a"
 }

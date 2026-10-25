@@ -60,6 +60,8 @@ pub enum ApiError {
     InvalidVerificationCode,
     /// 重发冷却中；429，`details.retry_after` 为剩余秒数。
     ResendCooldown(u64),
+    /// 邮箱未验证，操作不可进行；409。
+    EmailUnverified,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -126,6 +128,9 @@ impl IntoResponse for ApiError {
             }
             Self::InvalidVerificationCode => {
                 (StatusCode::UNAUTHORIZED, "invalid_code", "验证码错误或已失效".to_owned(), None)
+            }
+            Self::EmailUnverified => {
+                (StatusCode::CONFLICT, "email_unverified", "邮箱未验证".to_owned(), None)
             }
             Self::ResendCooldown(remaining) => (
                 StatusCode::TOO_MANY_REQUESTS,

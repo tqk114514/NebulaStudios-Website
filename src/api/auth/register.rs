@@ -43,25 +43,12 @@ impl RegisterRequest {
     }
 }
 
-/// 密码四类字符规则（v3 语义）；缺失的每一类各自一条 code。
+/// 密码规则委托共享助手 [`super::password_problem`]（与改密一致）。
 fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
-    let has_digit = password.chars().any(|c| c.is_ascii_digit());
-    let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
-    let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
-    // 标点取 ASCII 标点全集，覆盖 v3 显式列出的字符表
-    let has_special = password.chars().any(|c| c.is_ascii_punctuation());
-
-    for (missing, code) in [
-        (!has_digit, "password_missing_digit"),
-        (!has_lower, "password_missing_lowercase"),
-        (!has_upper, "password_missing_uppercase"),
-        (!has_special, "password_missing_special"),
-    ] {
-        if missing {
-            return Err(ValidationError::new(code));
-        }
+    match super::password_problem(password) {
+        Some(code) => Err(ValidationError::new(code)),
+        None => Ok(()),
     }
-    Ok(())
 }
 
 /// 把 validator 错误映射为字段级 code。长度类错误按归一化后的值重算方向，
@@ -133,7 +120,12 @@ pub async fn register(
     match state.user_repo.insert(&user, &hash).await {
         Ok(()) => {
             // 注册即发首封验证邮件；发送失败可经重发端点补发
-            super::issue_and_send_verification(&state, &user).await?;
+            super::issue_and_send_code(
+                &state,
+                &user,
+                crate::model::verification::VerificationPurpose::VerifyEmail,
+            )
+            .await?;
             Ok((StatusCode::CREATED, Json(user)))
         }
         Err(UserRepoError::Conflict) => Err(classify_conflict(&state.user_repo, &user).await),
