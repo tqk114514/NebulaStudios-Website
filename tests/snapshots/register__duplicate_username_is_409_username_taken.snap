@@ -1,0 +1,6 @@
+---
+source: tests/register.rs
+assertion_line: 150
+expression: body_text(response).await
+---
+{"code":"username_taken","message":"用户名已被注册"}

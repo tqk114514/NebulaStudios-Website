@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id: uuid::Uuid\", username, email,\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n               FROM users WHERE email = ?1",
+  "query": "SELECT id AS \"id: uuid::Uuid\", username, email,\n                      email_verified AS \"email_verified: bool\",\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n               FROM users WHERE username = ?1",
   "describe": {
     "columns": [
       {
@@ -37,8 +37,19 @@
         }
       },
       {
-        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "name": "email_verified: bool",
         "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_verified"
+          }
+        }
+      },
+      {
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 4,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -55,8 +66,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "85b51f35cec51731d004f9f84367ea6c644f826843b10b89e8363be3544dfac6"
+  "hash": "c6704a7548c4d15a108c8b1880971aa501f59a47e54d979277b87d23366f74fd"
 }
