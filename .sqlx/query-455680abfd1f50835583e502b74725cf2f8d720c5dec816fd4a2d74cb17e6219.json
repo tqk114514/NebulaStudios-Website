@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE refresh_token_families SET state = 'revoked', revoked_at = ?2 WHERE id = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "455680abfd1f50835583e502b74725cf2f8d720c5dec816fd4a2d74cb17e6219"
+}

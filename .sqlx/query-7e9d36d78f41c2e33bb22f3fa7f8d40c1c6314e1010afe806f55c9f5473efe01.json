@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2\n                     WHERE id = ?1 AND state = 'active'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7e9d36d78f41c2e33bb22f3fa7f8d40c1c6314e1010afe806f55c9f5473efe01"
+}

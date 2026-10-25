@@ -2,11 +2,22 @@
 # OR 型双许可满足其一即可：aho-corasick / memchr 取 MIT，r-efi / ryu 取 Apache-2.0，
 # wasi 有 MIT 分支兜底。
 # AND 型例外：matchit = MIT AND BSD-3-Clause；unicode-ident = (MIT OR Apache-2.0) AND Unicode-3.0。
-# Zlib 归属 foldhash（sqlx 0.9 的哈希器）。
+# Zlib 归属 foldhash（sqlx 0.9 的哈希器）；ISC 归属 simple_asn1（jsonwebtoken 的 PEM 解析）。
 
 [licenses]
 # 本 crate 的 LICENSE 是自定义文本（license-file），非 SPDX 表达式，跳过自检
 private = { ignore = true }
-allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause", "Zlib"]
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause", "Zlib", "ISC"]
 
-# advisories / bans / sources 维持默认（未配置的节不放松）
+[advisories]
+ignore = [
+  # RustCrypto rsa 的 Marvin Attack（时序侧信道）。rsa 经 jsonwebtoken 的
+  # rust_crypto 捆绑进依赖树，但本服务只用 ES256，无任何 RS* 调用路径；
+  # 上游修复发布后移除本条。
+  "RUSTSEC-2023-0071",
+  # crypto-bigint 的常量时间性缺口，位于 p256/ecdsa（ES256）路径。当前无修复
+  # 版本可升级（上游未发 patch），威胁模型为远程网络攻击者、需海量高精度时序
+  # 采样，风险已知并接受；出现补丁版本后立即移除本条并升级。
+  # 替代方案 aws_lc_rs（审计过的 C 实现）需本机装 NASM，暂不采用。
+  "RUSTSEC-2026-0387",
+]
