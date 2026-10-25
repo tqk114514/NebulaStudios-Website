@@ -2,5 +2,6 @@
 
 pub mod password;
 pub mod tokens;
+pub mod totp;
 pub mod user;
 pub mod verification;

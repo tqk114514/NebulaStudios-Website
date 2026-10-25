@@ -5,6 +5,7 @@ pub mod change_password;
 pub mod delete_confirm;
 pub mod delete_request;
 pub mod login;
+pub mod login_totp;
 pub mod logout;
 pub mod refresh;
 pub mod register;
@@ -13,12 +14,14 @@ pub mod verify;
 
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, HeaderValue};
+use axum::response::IntoResponse;
 
 use super::{ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE};
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::constant_time_eq;
 use crate::mailer::EmailMessage;
+use crate::model::password::PasswordHash;
 use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sha256_hex, sign_access};
 use crate::model::user::{User, UserId};
 use crate::model::verification::{
@@ -123,6 +126,22 @@ fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
     }
 }
 
+/// 组装带会话 cookie 的响应；登录与二段共用（ADR-0004 裸数据）。
+pub(crate) fn session_response(
+    status: axum::http::StatusCode,
+    state: &AppState,
+    user: &User,
+    tokens: &SessionTokens,
+) -> axum::response::Response {
+    use axum::Json;
+
+    let mut headers = HeaderMap::new();
+    set_access_cookie(&mut headers, &tokens.access, cookie_max_age(state.session.access_ttl));
+    set_refresh_cookie(&mut headers, &tokens.refresh, cookie_max_age(state.session.refresh_ttl));
+    set_csrf_cookie(&mut headers, &tokens.csrf, cookie_max_age(state.session.refresh_ttl));
+    (status, headers, Json(user)).into_response()
+}
+
 /// 签发验证码并异步发送邮件（发送不阻塞调用方响应）；落库失败才是请求失败，
 /// 发送失败只记日志——用户可经对应端点补发。邮件主题随用途区分。
 pub(crate) async fn issue_and_send_code(
@@ -222,4 +241,23 @@ pub(crate) fn password_problem(password: &str) -> Option<&'static str> {
         return Some("password_missing_special");
     }
     None
+}
+
+/// 在阻塞线程池上校验口令；存储哈希损坏（非口令错）按 500 处理。
+pub(crate) async fn verify_password_in_background(
+    hash: PasswordHash,
+    plain: String,
+) -> Result<bool, ApiError> {
+    tokio::task::spawn_blocking(move || hash.verify(&plain))
+        .await
+        .map_err(anyhow::Error::from)?
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
+}
+
+/// 在阻塞线程池上计算口令哈希。
+pub(crate) async fn hash_password_in_background(plain: String) -> Result<PasswordHash, ApiError> {
+    tokio::task::spawn_blocking(move || PasswordHash::hash(&plain))
+        .await
+        .map_err(anyhow::Error::from)?
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
 }

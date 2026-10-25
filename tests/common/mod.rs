@@ -15,7 +15,8 @@ use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::context::ManualClock;
 use nebula_server::mailer::{EmailMessage, MailError, Mailer};
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteTotpRepo,
+    SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -113,7 +114,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         jwt: test_jwt(),
         session: test_session(),
         verification_repo: SqliteEmailVerificationRepo::from_pool(pool.clone()),
-        account_repo: SqliteAccountRepo::from_pool(pool),
+        account_repo: SqliteAccountRepo::from_pool(pool.clone()),
+        totp_repo: SqliteTotpRepo::from_pool(pool),
         mailer: Arc::new(mailbox.clone()),
     };
     (state, manual, mailbox, dir)
@@ -280,4 +282,25 @@ pub async fn login_session(app: &axum::Router) -> Session {
         refresh: set_cookie_of(&response, "nebula_refresh").unwrap(),
         csrf: set_cookie_of(&response, "nebula_csrf").unwrap(),
     }
+}
+
+/// 读响应体为字符串（测试断言用）。
+pub async fn body_text(response: axum::response::Response) -> String {
+    let bytes = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .expect("读体必须成功")
+        .to_bytes();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// 从响应的 Set-Cookie 原始头里找指定 cookie 那一条。
+pub fn raw_set_cookie(response: &axum::response::Response, name: &str) -> String {
+    response
+        .headers()
+        .get_all(axum::http::header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap_or_default())
+        .find(|v| v.starts_with(name))
+        .unwrap_or_default()
+        .to_owned()
 }

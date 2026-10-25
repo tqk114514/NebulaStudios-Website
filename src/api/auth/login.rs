@@ -1,23 +1,18 @@
 //! POST /api/auth/login：口令登录（ADR-0002 语义；TOTP 二段随 TOTP 切片接入，
 //! 接入后此处改为签发中转 token 而非直接建会话）。
 
-use std::sync::OnceLock;
-
-use axum::Json;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::http::StatusCode;
+use axum::response::Response;
 use serde::Deserialize;
 
-use super::{
-    SessionTokens, cookie_max_age, issue_session, set_access_cookie, set_csrf_cookie,
-    set_refresh_cookie,
-};
+use super::{issue_session, session_response, verify_password_in_background};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::password::PasswordHash;
-use crate::model::user::User;
+use crate::model::totp::{CHALLENGE_TTL, TotpState};
+use crate::storage::TotpRepo;
 use crate::storage::UserRepo;
 
 /// 登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。
@@ -60,22 +55,37 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
     let Some(credentials) = credentials else {
         // 时序对齐（v3 同款）：用户不存在也跑一次等价 argon2，耗时与密码错误不可区分
         let dummy = dummy_hash()?;
-        let _ = verify_in_background(dummy, req.password.clone()).await?;
+        let _ = verify_password_in_background(dummy, req.password.clone()).await?;
         return Err(ApiError::InvalidCredentials);
     };
 
-    let ok = verify_in_background(credentials.password_hash, req.password.clone()).await?;
+    let ok = verify_password_in_background(credentials.password_hash, req.password.clone()).await?;
     if !ok {
         return Err(ApiError::InvalidCredentials);
     }
     let user = credentials.user;
+
+    // 已启用 TOTP：不建会话，签发单次挑战走二段（v3 pendingToken 语义，入库哈希）
+    if let Some((TotpState::Enabled, _)) =
+        state.totp_repo.find(&user.id).await.map_err(anyhow::Error::from)?
+    {
+        let challenge = crate::model::tokens::RefreshToken::generate();
+        let now = state.clock.now();
+        state
+            .totp_repo
+            .issue_challenge(&user.id, &challenge.to_hash_hex(), now + CHALLENGE_TTL, now)
+            .await
+            .map_err(anyhow::Error::from)?;
+        return Err(ApiError::TotpRequired(challenge.as_str().to_owned()));
+    }
+
     let tokens = issue_session(&state, user.id).await?;
     Ok(session_response(StatusCode::OK, &state, &user, &tokens))
 }
 
 /// 哑哈希只用于对齐「用户不存在」路径的耗时；生成失败（OS 随机源故障）按 500，
 /// 此故障下签发真会话同样不可能。
-static DUMMY_HASH: OnceLock<Result<PasswordHash, String>> = OnceLock::new();
+static DUMMY_HASH: std::sync::OnceLock<Result<PasswordHash, String>> = std::sync::OnceLock::new();
 
 fn dummy_hash() -> Result<PasswordHash, ApiError> {
     let stored = DUMMY_HASH.get_or_init(|| {
@@ -85,26 +95,4 @@ fn dummy_hash() -> Result<PasswordHash, ApiError> {
         Ok(hash) => Ok(hash.clone()),
         Err(msg) => Err(ApiError::Internal(anyhow::anyhow!("哑哈希不可用: {msg}"))),
     }
-}
-
-/// 在阻塞线程池上校验口令；存储哈希损坏（非口令错）按 500 处理。
-async fn verify_in_background(hash: PasswordHash, plain: String) -> Result<bool, ApiError> {
-    tokio::task::spawn_blocking(move || hash.verify(&plain))
-        .await
-        .map_err(anyhow::Error::from)?
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
-}
-
-/// 组装带会话 cookie 的响应；登录返回用户本体（ADR-0004 裸数据）。
-fn session_response(
-    status: StatusCode,
-    state: &AppState,
-    user: &User,
-    tokens: &SessionTokens,
-) -> Response {
-    let mut headers = HeaderMap::new();
-    set_access_cookie(&mut headers, &tokens.access, cookie_max_age(state.session.access_ttl));
-    set_refresh_cookie(&mut headers, &tokens.refresh, cookie_max_age(state.session.refresh_ttl));
-    set_csrf_cookie(&mut headers, &tokens.csrf, cookie_max_age(state.session.refresh_ttl));
-    (status, headers, Json(user)).into_response()
 }

@@ -9,6 +9,7 @@ use std::future::Future;
 
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
+use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{LoginCredentials, User};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 
@@ -233,5 +234,131 @@ pub trait AccountRepo: Send + Sync {
     fn delete_user(
         &self,
         user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+}
+
+/// TOTP 仓储：状态与密钥、恢复码批次、登录二段挑战。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+pub trait TotpRepo: Send + Sync {
+    /// 读用户 TOTP 状态与密钥（pending/enabled 时密钥非空）。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在返回 `None`。
+    fn find(
+        &self,
+        user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<Option<(TotpState, Option<String>)>, StorageError>> + Send;
+
+    /// 写入 pending 密钥（setup；重试即换新密钥）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn set_pending(
+        &self,
+        user_id: &crate::model::user::UserId,
+        secret: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 启用：pending 密钥转正为 enabled（调用方须已验证该密钥下的码）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn enable(
+        &self,
+        user_id: &crate::model::user::UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 关闭：清状态与密钥并作废全部恢复码（调用方须已双因素验证）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn disable(
+        &self,
+        user_id: &crate::model::user::UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 批量落恢复码哈希（启用时生成）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn add_recovery_codes(
+        &self,
+        user_id: &crate::model::user::UserId,
+        hashes: Vec<String>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 原子消费匹配的恢复码；未命中或已消费返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn consume_recovery_code(
+        &self,
+        user_id: &crate::model::user::UserId,
+        code_hash: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, StorageError>> + Send;
+
+    /// 用户全部恢复码（disable 前的余量展示等）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn recovery_codes(
+        &self,
+        user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<Vec<RecoveryCodeRecord>, StorageError>> + Send;
+
+    /// 签发登录二段挑战（密码通过后）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn issue_challenge(
+        &self,
+        user_id: &crate::model::user::UserId,
+        token_hash: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 按哈希取挑战记录。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn find_challenge(
+        &self,
+        token_hash: &str,
+    ) -> impl Future<Output = Result<Option<TotpChallenge>, StorageError>> + Send;
+
+    /// 挑战错误尝试 +1。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn record_challenge_attempt(
+        &self,
+        id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 原子消费挑战（成功二段验证时）；已被消费返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn consume_challenge(
+        &self,
+        id: &uuid::Uuid,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, StorageError>> + Send;
+
+    /// 作废用户全部未消费挑战（disable / 改密后调用）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn invalidate_challenges(
+        &self,
+        user_id: &crate::model::user::UserId,
+        now: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 }

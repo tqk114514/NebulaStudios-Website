@@ -8,11 +8,13 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{clear_session_cookies, password_problem};
+use super::{
+    clear_session_cookies, hash_password_in_background, password_problem,
+    verify_password_in_background,
+};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::AuthUser;
-use crate::model::password::PasswordHash;
 use crate::storage::{RefreshTokenRepo, UserRepo};
 
 /// 改密请求。
@@ -55,7 +57,8 @@ pub async fn change_password(
     // JWT 保证用户存在；无凭据（哈希缺失）在此路径不可能出现，按口令错处理
     let verified = match credentials {
         Some(credentials) => {
-            verify_in_background(credentials.password_hash, req.current_password.clone()).await?
+            verify_password_in_background(credentials.password_hash, req.current_password.clone())
+                .await?
         }
         None => false,
     };
@@ -63,7 +66,7 @@ pub async fn change_password(
         return Err(ApiError::InvalidCredentials);
     }
 
-    let new_hash = hash_in_background(req.new_password.clone()).await?;
+    let new_hash = hash_password_in_background(req.new_password.clone()).await?;
     state
         .user_repo
         .update_password_hash(&user.user_id, &new_hash)
@@ -80,19 +83,4 @@ pub async fn change_password(
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);
     Ok((StatusCode::NO_CONTENT, headers).into_response())
-}
-
-/// 在阻塞线程池上校验口令；存储哈希损坏按 500 处理。
-async fn verify_in_background(hash: PasswordHash, plain: String) -> Result<bool, ApiError> {
-    tokio::task::spawn_blocking(move || hash.verify(&plain))
-        .await
-        .map_err(anyhow::Error::from)?
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
-}
-
-async fn hash_in_background(plain: String) -> Result<PasswordHash, ApiError> {
-    tokio::task::spawn_blocking(move || PasswordHash::hash(&plain))
-        .await
-        .map_err(anyhow::Error::from)?
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
 }
