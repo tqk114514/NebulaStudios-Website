@@ -20,6 +20,9 @@ Thumbs.db
 
 # 本地数据
 data/avatars/
+*.db
+*.db-wal
+*.db-shm
 
 # v3 归档：留在本地供比对，不进入 v4 的构建、测试与检索
 Reference/
