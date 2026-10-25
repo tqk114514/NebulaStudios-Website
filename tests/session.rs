@@ -145,6 +145,9 @@ async fn refresh_replay_is_detected_and_revokes_family() {
         .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&first)))
         .await;
     assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    // 头先读（body 消费后 Response 不可再用）
+    let cleared = raw_set_cookie(&replay, "nebula_refresh");
+    assert!(cleared.contains("Max-Age=0"), "401 应附带清 cookie: {cleared}");
     assert!(body_text(replay).await.contains("refresh_reused"));
 
     // 撤销波及第二代（本为合法 token）
@@ -163,6 +166,8 @@ async fn refresh_without_cookie_is_401() {
     let response = app.clone().oneshot_post("/api/auth/refresh", "").await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let cleared = raw_set_cookie(&response, "nebula_access");
+    assert!(cleared.contains("Max-Age=0"), "401 应附带清 cookie: {cleared}");
     assert!(body_text(response).await.contains("refresh_invalid"));
 }
 
