@@ -34,7 +34,7 @@
 
 ## 1. 栈
 
-后端：Rust（edition 2024）、`axum 0.8` + `tower-http`、`tokio 1`（`macros`/`rt-multi-thread`/`signal`/`time`）、`sqlx` + Postgres、`argon2`、`jsonwebtoken`、`totp-rs`、`oauth2` + `openidconnect` + `reqwest`、`lettre`、`rand 0.10`、`validator`、`config`、`uuid`(v7)、`chrono`、`tracing` + `tracing-subscriber`、`metrics` + `axum-prometheus`、`tower_governor`、`image` + `webp`；测试用 `testcontainers`(+`-modules`)、`insta`、`rstest`、`cargo-llvm-cov`。
+后端：Rust（edition 2024）、`axum 0.8` + `tower-http`、`tokio 1`（`macros`/`rt-multi-thread`/`signal`/`time`）、`sqlx` + SQLite（bundled C，ADR-0003）、`argon2`、`jsonwebtoken`、`totp-rs`、`oauth2` + `openidconnect` + `reqwest`、`lettre`、`rand 0.10`、`validator`、`config`、`uuid`(v7)、`chrono`、`tracing` + `tracing-subscriber`、`metrics` + `axum-prometheus`、`tower_governor`、`image` + `webp`；测试用 `tempfile`、`insta`、`rstest`、`cargo-llvm-cov`。
 
 前端：Nuxt 4、Node 22+、`@nuxtjs/i18n`、`@nuxt/test-utils`、`@nuxt/eslint`、`knip`、`lychee`、`renovate`；组件库 `@nuxt/ui`，用于替代手写 Modal/Toast。
 
@@ -42,7 +42,7 @@
 
 **axum 0.8 的三处破坏性变更**：路径参数写 `/{name}` 不是 `/:name`；`State` layer 最后应用；消费 body 的抽取器必须是最后一个参数。
 
-**API 约束**：`jsonwebtoken` 的 ES256 `EncodingKey::from_ec_pem` 只接受 PKCS#8，SEC1 `BEGIN EC PRIVATE KEY` 需转换；`rand 0.10` 改名 `thread_rng()`→`rng()`、`Standard`→`StandardUniform`；`lettre` 连接池绑定当前 runtime；`testcontainers-modules` 版本滞后于 core，需配对钉版本。
+**API 约束**：`jsonwebtoken` 的 ES256 `EncodingKey::from_ec_pem` 只接受 PKCS#8，SEC1 `BEGIN EC PRIVATE KEY` 需转换；`rand 0.10` 改名 `thread_rng()`→`rng()`、`Standard`→`StandardUniform`；`lettre` 连接池绑定当前 runtime；SQLite 默认不启用外键与 WAL，连接须显式设 `foreign_keys=ON`、`journal_mode=WAL`、`busy_timeout`，且 sqlx 下 `:memory:` 每连接各一份，测试用临时文件库（ADR-0003）。
 
 **硬约束**：Rust 生态没有可用的 OAuth 2.0 授权服务器 crate，Provider 必须手写。计划阶段不得假设存在此类库。
 
@@ -64,7 +64,7 @@ src/
   model/           纯领域，零 I/O：user / password / tokens / grant / totp
   oauth2/          协议类型，与 HTTP 无关：requests / responses / errors / pkce / scope
   storage/mod.rs   trait 定义（repository seam）
-  storage/pg/      sqlx 实现
+  storage/sqlite/  sqlx 实现
   api/             一个端点一个文件（vertical slice）：auth/ user/ admin/ oauth/
   extractors.rs    AuthUser 等 FromRequestParts
   jobs/            过期清理
@@ -174,7 +174,7 @@ test/{unit,nuxt,e2e}
 
 **测试规模 ≠ 测试层次**：small = 单进程、无 I/O、不 sleep；medium = 多进程、仅 localhost；large = 任意机器。不以"金字塔三层"作为覆盖率指标。
 
-1. `storage` 实现在真实 Postgres 上测（`testcontainers`）。v3 把 `internal/models`（全部手写 SQL）排除在覆盖率之外，是最大风险敞口。
+1. `storage` 实现在真实 SQLite 上测（每用例临时文件库，ADR-0003）。v3 把 `internal/models`（全部手写 SQL）排除在覆盖率之外，是最大风险敞口。
 2. 覆盖率排除必须逐条附理由；新增排除项需 ADR。
 3. 协议纯逻辑写不变量测试（property-based）：PKCE 校验、token 轮转与家族撤销、恢复码原子消费、封禁判定。
 4. given/when/then，一个用例一个行为；DAMP 优先于 DRY——关心的具体值写进断言，不放共享 setup。
