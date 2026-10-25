@@ -46,6 +46,14 @@ pub enum ApiError {
     UsernameTaken,
     /// 唯一约束冲突但无法归因到具体字段（并发竞态下的兜底）；409。
     UserExists,
+    /// 未认证：无或无效的 access token；401。
+    Unauthorized,
+    /// 凭据错误；用户不存在与密码错误同体（防枚举）；401。
+    InvalidCredentials,
+    /// refresh token 缺失、未知、已撤销或已过期；401。
+    RefreshInvalid,
+    /// refresh token 重放，家族已整族撤销；401。
+    RefreshReused,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -89,6 +97,24 @@ impl IntoResponse for ApiError {
             Self::UserExists => {
                 (StatusCode::CONFLICT, "user_exists", "用户名或邮箱已被注册".to_owned(), None)
             }
+            Self::Unauthorized => {
+                (StatusCode::UNAUTHORIZED, "unauthorized", "未认证".to_owned(), None)
+            }
+            Self::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "invalid_credentials",
+                "登录标识或密码错误".to_owned(),
+                None,
+            ),
+            Self::RefreshInvalid => {
+                (StatusCode::UNAUTHORIZED, "refresh_invalid", "refresh token 无效".to_owned(), None)
+            }
+            Self::RefreshReused => (
+                StatusCode::UNAUTHORIZED,
+                "refresh_reused",
+                "refresh token 已被重放，会话已撤销".to_owned(),
+                None,
+            ),
         };
 
         let body = ErrorBody { code, message, details };

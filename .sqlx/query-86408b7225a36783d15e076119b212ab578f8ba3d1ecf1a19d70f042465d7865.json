@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT state, user_id AS \"user_id: uuid::Uuid\"\n                       FROM refresh_token_families WHERE id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "state",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "name": "user_id: uuid::Uuid",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "86408b7225a36783d15e076119b212ab578f8ba3d1ecf1a19d70f042465d7865"
+}

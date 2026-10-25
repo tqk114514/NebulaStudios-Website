@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
-use crate::model::user::{User, UserId};
+use crate::model::user::{LoginCredentials, User, UserId};
 use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -147,6 +147,42 @@ impl UserRepo for SqliteUserRepo {
             email_verified: r.email_verified,
         }))
     }
+
+    async fn find_login_credentials(
+        &self,
+        identifier: &str,
+    ) -> Result<Option<LoginCredentials>, UserRepoError> {
+        // 哈希列可空：无口令用户按 None 返回，调用方据此走时序对齐路径
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", username, email,
+                      email_verified AS "email_verified: bool",
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>",
+                      password_hash
+               FROM users WHERE email = ?1 OR username = ?1"#,
+            identifier,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else { return Ok(None) };
+        // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
+        let hash = row
+            .password_hash
+            .map(PasswordHash::from_encoded)
+            .transpose()
+            .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
+
+        Ok(hash.map(|password_hash| LoginCredentials {
+            user: User {
+                id: UserId::from_uuid(row.id),
+                username: row.username,
+                email: row.email,
+                created_at: row.created_at,
+                email_verified: row.email_verified,
+            },
+            password_hash,
+        }))
+    }
 }
 
 impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
@@ -186,7 +222,7 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         new_hash: &str,
         new_expires_at: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> Result<(), RotateRefreshError> {
+    ) -> Result<UserId, RotateRefreshError> {
         let mut tx = self.pool.begin().await?;
 
         let presented = sqlx::query!(
@@ -214,7 +250,8 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                     return Err(RotateRefreshError::Invalid);
                 }
                 let family = sqlx::query!(
-                    "SELECT state FROM refresh_token_families WHERE id = ?1",
+                    r#"SELECT state, user_id AS "user_id: uuid::Uuid"
+                       FROM refresh_token_families WHERE id = ?1"#,
                     presented.family_id,
                 )
                 .fetch_one(&mut *tx)
@@ -222,6 +259,7 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                 if family.state != "active" {
                     return Err(RotateRefreshError::Invalid);
                 }
+                let user_id = UserId::from_uuid(family.user_id);
 
                 let rotated = sqlx::query!(
                     "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
@@ -250,7 +288,7 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                 .execute(&mut *tx)
                 .await?;
                 tx.commit().await?;
-                Ok(())
+                Ok(user_id)
             }
             // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
             _ => Err(RotateRefreshError::Invalid),

@@ -61,3 +61,12 @@ pub struct User {
     /// 邮箱是否已验证；注册时为 false，验证端点置 true。
     pub email_verified: bool,
 }
+
+/// 登录凭据查询结果：用户快照与口令哈希一并返回，供登录端点一次性取得。
+#[derive(Debug, Clone)]
+pub struct LoginCredentials {
+    /// 用户快照。
+    pub user: User,
+    /// 已存口令哈希；无口令的用户不会出现在本结构中（不可口令登录）。
+    pub password_hash: crate::model::password::PasswordHash,
+}

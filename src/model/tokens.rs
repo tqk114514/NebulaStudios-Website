@@ -112,7 +112,13 @@ impl RefreshToken {
     /// SHA-256 十六进制摘要，即入库形态。
     #[must_use]
     pub fn to_hash_hex(&self) -> String {
-        hex(&Sha256::digest(self.0.as_bytes()))
+        Self::hash_of(&self.0)
+    }
+
+    /// 明文（如 cookie 中读出的值）的入库哈希形态，与 [`Self::to_hash_hex`] 同源。
+    #[must_use]
+    pub fn hash_of(plain: &str) -> String {
+        hex(&Sha256::digest(plain.as_bytes()))
     }
 }
 
