@@ -75,7 +75,7 @@ fn unauthorized_with_cleared_cookies(err: ApiError) -> Response {
     let mut response = err.into_response();
     let mut clear = HeaderMap::new();
     clear_session_cookies(&mut clear);
-    for (name, value) in clear.iter() {
+    for (name, value) in &clear {
         response.headers_mut().append(name, value.clone());
     }
     response
