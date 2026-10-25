@@ -7,8 +7,12 @@ use std::fmt;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use chrono::TimeDelta;
+use tower_governor::GovernorLayer;
+use tower_governor::governor::GovernorConfigBuilder;
 
 use crate::context::Clock;
 use crate::storage::sqlite::{SqliteRefreshRepo, SqliteUserRepo};
@@ -112,12 +116,64 @@ impl fmt::Debug for AppState {
 }
 
 /// 组装全部路由；新增端点在此登记。
+/// 限额路由按端点分组：governor 在内层按 IP 拦断，信封化中间件在外层把
+/// 其 429 纯文本体改写为 ADR-0004 统一信封。
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let open = Router::new()
         .route("/healthz", get(healthz::healthz))
-        .route("/api/auth/register", post(auth::register::register))
-        .route("/api/auth/login", post(auth::login::login))
         .route("/api/auth/refresh", post(auth::refresh::refresh))
-        .route("/api/auth/logout", post(auth::logout::logout))
-        .with_state(state)
+        .route("/api/auth/logout", post(auth::logout::logout));
+
+    // 限额参数沿用 v3：注册突发 3、每 20 秒补 1；登录突发 5、每 12 秒补 1。
+    // per_second 语义是「补 1 个令牌的间隔秒数」（tower_governor 命名反直觉）。
+    // finish() 对常量参数必然 Some；None 只可能是实现笔误，启动即暴露优于带病运行。
+    let register_limited = Router::new()
+        .route("/api/auth/register", post(auth::register::register))
+        .layer(GovernorLayer::new(
+            GovernorConfigBuilder::default()
+                .per_second(20)
+                .burst_size(3)
+                .finish()
+                .unwrap_or_else(|| unreachable!("注册限额常量非法")),
+        ))
+        .layer(axum::middleware::from_fn(envelope_rate_limited));
+
+    let login_limited = Router::new()
+        .route("/api/auth/login", post(auth::login::login))
+        .layer(GovernorLayer::new(
+            GovernorConfigBuilder::default()
+                .per_second(12)
+                .burst_size(5)
+                .finish()
+                .unwrap_or_else(|| unreachable!("登录限额常量非法")),
+        ))
+        .layer(axum::middleware::from_fn(envelope_rate_limited));
+
+    open.merge(register_limited).merge(login_limited).with_state(state)
+}
+
+/// `tower_governor` 的 429 是纯文本体，不符合 ADR-0004；改写为统一信封，
+/// `retry_after` 取自其 `retry-after` 头（该头默认启用）。命中同时打 warn——
+/// 指标体系（§9.8）接入前的可观测替代。
+async fn envelope_rate_limited(request: axum::extract::Request, next: Next) -> Response {
+    let response = next.run(request).await;
+    if response.status() != axum::http::StatusCode::TOO_MANY_REQUESTS {
+        return response;
+    }
+    let retry_after = response
+        .headers()
+        .get("retry-after")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+    tracing::warn!(?retry_after, "rate limited");
+
+    let (mut parts, _) = response.into_parts();
+    // 原 text 体的长度头对新 body 不再适用，移除后由 Json 重建
+    parts.headers.remove(axum::http::header::CONTENT_LENGTH);
+    let body = crate::error::ErrorBody {
+        code: "rate_limited",
+        message: "请求过于频繁".to_owned(),
+        details: retry_after.map(|secs| serde_json::json!({ "retry_after": secs })),
+    };
+    (parts.status, parts.headers, axum::Json(body)).into_response()
 }
