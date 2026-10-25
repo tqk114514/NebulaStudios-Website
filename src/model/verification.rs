@@ -13,6 +13,26 @@ pub const MAX_ATTEMPTS: u32 = 5;
 /// 同邮箱重发冷却。
 pub const RESEND_COOLDOWN: TimeDelta = TimeDelta::seconds(60);
 
+/// 验证码用途；不同用途的码互不相通（列 `purpose`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerificationPurpose {
+    /// 注册邮箱验证。
+    VerifyEmail,
+    /// 账户注销确认。
+    DeleteAccount,
+}
+
+impl VerificationPurpose {
+    /// 入库字符串。
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::VerifyEmail => "email_verify",
+            Self::DeleteAccount => "account_delete",
+        }
+    }
+}
+
 /// v3 同款无歧义字母表（剔除 0/O/I/L/l），57 个字符。
 const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
 /// 拒绝采样阈值：256 = 4×57 + 28，byte < 228 时取模无偏差。
@@ -71,6 +91,8 @@ pub struct NewEmailVerification {
     pub code_hash: String,
     /// 过期时刻。
     pub expires_at: DateTime<Utc>,
+    /// 用途。
+    pub purpose: VerificationPurpose,
 }
 
 /// 库中读出的验证码记录。

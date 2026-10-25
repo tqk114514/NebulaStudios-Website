@@ -15,7 +15,7 @@ use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::context::ManualClock;
 use nebula_server::mailer::{EmailMessage, MailError, Mailer};
 use nebula_server::storage::sqlite::{
-    self, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -112,7 +112,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         clock: manual.clone(),
         jwt: test_jwt(),
         session: test_session(),
-        verification_repo: SqliteEmailVerificationRepo::from_pool(pool),
+        verification_repo: SqliteEmailVerificationRepo::from_pool(pool.clone()),
+        account_repo: SqliteAccountRepo::from_pool(pool),
         mailer: Arc::new(mailbox.clone()),
     };
     (state, manual, mailbox, dir)
@@ -257,4 +258,26 @@ impl OneshotPost for axum::Router {
 fn inject_connect_info(request: &mut Request<Body>) {
     let addr: std::net::SocketAddr = "127.0.0.1:40000".parse().expect("默认地址必须合法");
     request.extensions_mut().insert(axum::extract::ConnectInfo(addr));
+}
+
+/// 登录后的整套会话凭据（三 cookie 明文值）。
+pub struct Session {
+    /// access JWT。
+    pub access: String,
+    /// refresh 明文。
+    pub refresh: String,
+    /// csrf 双提交令牌。
+    pub csrf: String,
+}
+
+/// 以默认账号登录并取回会话三件套。
+pub async fn login_session(app: &axum::Router) -> Session {
+    let body = r#"{"identifier":"nova@nebula.st","password":"Nebula!Passw0rd-2026"}"#;
+    let response = app.clone().oneshot_post("/api/auth/login", body).await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK, "登录助手必须成功");
+    Session {
+        access: set_cookie_of(&response, "nebula_access").unwrap(),
+        refresh: set_cookie_of(&response, "nebula_refresh").unwrap(),
+        csrf: set_cookie_of(&response, "nebula_csrf").unwrap(),
+    }
 }

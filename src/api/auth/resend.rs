@@ -8,10 +8,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::issue_and_send_verification;
+use super::issue_and_send_code;
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::model::verification::RESEND_COOLDOWN;
+use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 use crate::storage::{EmailVerificationRepo, UserRepo};
 
 /// 重发请求。
@@ -44,7 +44,7 @@ pub async fn resend(State(state): State<AppState>, body: Bytes) -> Result<Respon
     {
         if let Some(latest) = state
             .verification_repo
-            .latest_unconsumed(&user.id)
+            .latest_unconsumed(&user.id, VerificationPurpose::VerifyEmail)
             .await
             .map_err(anyhow::Error::from)?
         {
@@ -54,7 +54,7 @@ pub async fn resend(State(state): State<AppState>, body: Bytes) -> Result<Respon
                 return Err(ApiError::ResendCooldown(remaining.cast_unsigned()));
             }
         }
-        issue_and_send_verification(&state, &user).await?;
+        issue_and_send_code(&state, &user, VerificationPurpose::VerifyEmail).await?;
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
