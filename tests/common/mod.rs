@@ -98,8 +98,8 @@ pub fn set_cookie_of(response: &axum::response::Response, name: &str) -> Option<
     })
 }
 
-/// 供后续请求回带的 cookie 头。
-pub fn cookie_header(access: Option<&str>, refresh: Option<&str>) -> String {
+/// 供后续请求回带的 cookie 头（含 csrf 双提交的 cookie 半边）。
+pub fn cookie_header(access: Option<&str>, refresh: Option<&str>, csrf: Option<&str>) -> String {
     let mut parts = Vec::new();
     if let Some(access) = access {
         parts.push(format!("nebula_access={access}"));
@@ -107,30 +107,41 @@ pub fn cookie_header(access: Option<&str>, refresh: Option<&str>) -> String {
     if let Some(refresh) = refresh {
         parts.push(format!("nebula_refresh={refresh}"));
     }
+    if let Some(csrf) = csrf {
+        parts.push(format!("nebula_csrf={csrf}"));
+    }
     parts.join("; ")
 }
 
-/// oneshot POST JSON 的快捷方式。
+/// oneshot POST JSON 的快捷方式；csrf 为 `X-CSRF-Token` 头的值。
 pub trait OneshotPost {
     async fn oneshot_post(self, uri: &str, body: &str) -> axum::response::Response;
-    async fn oneshot_post_with_cookie(
+    async fn oneshot_post_with(
         self,
         uri: &str,
         body: &str,
         cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response;
+    async fn oneshot_post_bearer(
+        self,
+        uri: &str,
+        body: &str,
+        token: &str,
     ) -> axum::response::Response;
 }
 
 impl OneshotPost for axum::Router {
     async fn oneshot_post(self, uri: &str, body: &str) -> axum::response::Response {
-        self.oneshot_post_with_cookie(uri, body, "").await
+        self.oneshot_post_with(uri, body, "", None).await
     }
 
-    async fn oneshot_post_with_cookie(
+    async fn oneshot_post_with(
         self,
         uri: &str,
         body: &str,
         cookie: &str,
+        csrf: Option<&str>,
     ) -> axum::response::Response {
         use tower::ServiceExt;
         let mut request = Request::post(uri)
@@ -142,6 +153,24 @@ impl OneshotPost for axum::Router {
                 .headers_mut()
                 .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
         }
+        if let Some(csrf) = csrf {
+            request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));
+        }
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_post_bearer(
+        self,
+        uri: &str,
+        body: &str,
+        token: &str,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let request = Request::post(uri)
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::from(body.to_owned()))
+            .expect("请求构造必须成功");
         self.oneshot(request).await.expect("oneshot 必须成功")
     }
 }

@@ -1,4 +1,5 @@
-//! 会话三端点集成测试：登录、刷新轮转、登出撤销（ADR-0004、红线 #1、§8.1）。
+//! 会话端点集成测试：登录、CSRF 门禁（ADR-0005）、刷新轮转、登出撤销
+//! （ADR-0004、红线 #1、§8.1）。
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod common;
@@ -15,9 +16,49 @@ async fn login(app: &axum::Router, identifier: &str, password: &str) -> axum::re
     app.clone().oneshot_post("/api/auth/login", &body).await
 }
 
+/// 登录后的整套会话凭据（三 cookie 明文值）。
+struct Session {
+    access: String,
+    refresh: String,
+    csrf: String,
+}
+
+async fn login_session(app: &axum::Router) -> Session {
+    let response = login(app, EMAIL, PASSWORD).await;
+    assert_eq!(response.status(), StatusCode::OK, "登录助手必须成功");
+    Session {
+        access: set_cookie_of(&response, "nebula_access").unwrap(),
+        refresh: set_cookie_of(&response, "nebula_refresh").unwrap(),
+        csrf: set_cookie_of(&response, "nebula_csrf").unwrap(),
+    }
+}
+
+/// 带 CSRF 配对的 refresh 请求。
+async fn refresh_with_csrf(app: &axum::Router, session: &Session) -> axum::response::Response {
+    app.clone()
+        .oneshot_post_with(
+            "/api/auth/refresh",
+            "",
+            &cookie_header(None, Some(&session.refresh), Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await
+}
+
 async fn body_text(response: axum::response::Response) -> String {
     let bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
     String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn raw_set_cookie(response: &axum::response::Response, name: &str) -> String {
+    response
+        .headers()
+        .get_all(axum::http::header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap_or_default())
+        .find(|v| v.starts_with(name))
+        .unwrap_or_default()
+        .to_owned()
 }
 
 #[tokio::test]
@@ -31,6 +72,7 @@ async fn login_returns_user_and_sets_split_cookies() {
     // 头先读（Response 不可 Clone，消费 body 前取 Set-Cookie）
     let access = set_cookie_of(&response, "nebula_access").expect("必须下发 access cookie");
     let refresh = set_cookie_of(&response, "nebula_refresh").expect("必须下发 refresh cookie");
+    let csrf = set_cookie_of(&response, "nebula_csrf").expect("必须下发 csrf cookie");
     let raw_access = raw_set_cookie(&response, "nebula_access");
     assert!(raw_access.contains("Path=/"), "access 应全站路径: {raw_access}");
     let raw_refresh = raw_set_cookie(&response, "nebula_refresh");
@@ -40,24 +82,18 @@ async fn login_returns_user_and_sets_split_cookies() {
         assert!(raw.contains("Secure"));
         assert!(raw.contains("SameSite=Lax"));
     }
-    // access 是 JWT（三段式），refresh 是 32 字节十六进制
+    // csrf cookie 非 HttpOnly（SPA 读取回显，ADR-0005）
+    let raw_csrf = raw_set_cookie(&response, "nebula_csrf");
+    assert!(raw_csrf.contains("Secure"));
+    assert!(!raw_csrf.contains("HttpOnly"), "csrf 不可 HttpOnly: {raw_csrf}");
+    // access 是 JWT（三段式），refresh 与 csrf 是 64 位十六进制
     assert_eq!(access.split('.').count(), 3);
     assert_eq!(refresh.len(), 64);
+    assert_eq!(csrf.len(), 64);
 
     let json: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
     assert_eq!(json["email"], EMAIL);
     assert_eq!(json["username"], USERNAME);
-}
-
-fn raw_set_cookie(response: &axum::response::Response, name: &str) -> String {
-    response
-        .headers()
-        .get_all(axum::http::header::SET_COOKIE)
-        .iter()
-        .map(|v| v.to_str().unwrap_or_default())
-        .find(|v| v.starts_with(name))
-        .unwrap_or_default()
-        .to_owned()
 }
 
 #[tokio::test]
@@ -106,21 +142,60 @@ async fn empty_identifier_is_422() {
 }
 
 #[tokio::test]
-async fn refresh_rotates_and_sets_new_cookies() {
+async fn refresh_without_csrf_header_is_403() {
     let (app, _state, _clock, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
-    let login_response = login(&app, EMAIL, PASSWORD).await;
-    let refresh = set_cookie_of(&login_response, "nebula_refresh").unwrap();
+    let session = login_session(&app).await;
+
+    // 带 csrf cookie 但不回头，门禁必须拦下
+    let response = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/refresh",
+            "",
+            &cookie_header(None, Some(&session.refresh), Some(&session.csrf)),
+            None,
+        )
+        .await;
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(body_text(response).await.contains("csrf_invalid"));
+}
+
+#[tokio::test]
+async fn refresh_with_mismatched_csrf_is_403() {
+    let (app, _state, _clock, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
 
     let response = app
         .clone()
-        .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&refresh)))
+        .oneshot_post_with(
+            "/api/auth/refresh",
+            "",
+            &cookie_header(None, Some(&session.refresh), Some(&session.csrf)),
+            Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+        )
         .await;
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(body_text(response).await.contains("csrf_invalid"));
+}
+
+#[tokio::test]
+async fn refresh_rotates_and_sets_new_cookies() {
+    let (app, _state, _clock, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
+
+    let response = refresh_with_csrf(&app, &session).await;
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let new_access = set_cookie_of(&response, "nebula_access").expect("续发 access");
     let new_refresh = set_cookie_of(&response, "nebula_refresh").expect("轮转出新的 refresh");
-    assert_ne!(new_refresh, refresh);
+    let new_csrf = set_cookie_of(&response, "nebula_csrf").expect("轮转出新的 csrf");
+    assert_ne!(new_refresh, session.refresh);
+    assert_ne!(new_csrf, session.csrf);
     assert_eq!(new_access.split('.').count(), 3);
 }
 
@@ -128,21 +203,26 @@ async fn refresh_rotates_and_sets_new_cookies() {
 async fn refresh_replay_is_detected_and_revokes_family() {
     let (app, _state, _clock, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
-    let login_response = login(&app, EMAIL, PASSWORD).await;
-    let first = set_cookie_of(&login_response, "nebula_refresh").unwrap();
+    let session = login_session(&app).await;
 
     // 第一次轮转成功，拿到链上第二代
-    let second_response = app
-        .clone()
-        .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&first)))
-        .await;
+    let second_response = refresh_with_csrf(&app, &session).await;
     assert_eq!(second_response.status(), StatusCode::NO_CONTENT);
-    let second = set_cookie_of(&second_response, "nebula_refresh").unwrap();
+    let second = Session {
+        access: set_cookie_of(&second_response, "nebula_access").unwrap(),
+        refresh: set_cookie_of(&second_response, "nebula_refresh").unwrap(),
+        csrf: set_cookie_of(&second_response, "nebula_csrf").unwrap(),
+    };
 
-    // 重放第一代：401 refresh_reused，家族整族撤销
+    // 重放第一代：门禁配对有效（旧 cookie 自带旧 csrf），重放判定在其后
     let replay = app
         .clone()
-        .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&first)))
+        .oneshot_post_with(
+            "/api/auth/refresh",
+            "",
+            &cookie_header(None, Some(&session.refresh), Some(&session.csrf)),
+            Some(&session.csrf),
+        )
         .await;
     assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
     // 头先读（body 消费后 Response 不可再用）
@@ -151,10 +231,7 @@ async fn refresh_replay_is_detected_and_revokes_family() {
     assert!(body_text(replay).await.contains("refresh_reused"));
 
     // 撤销波及第二代（本为合法 token）
-    let after = app
-        .clone()
-        .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&second)))
-        .await;
+    let after = refresh_with_csrf(&app, &second).await;
     assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
     assert!(body_text(after).await.contains("refresh_invalid"));
 }
@@ -162,8 +239,19 @@ async fn refresh_replay_is_detected_and_revokes_family() {
 #[tokio::test]
 async fn refresh_without_cookie_is_401() {
     let (app, _state, _clock, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
 
-    let response = app.clone().oneshot_post("/api/auth/refresh", "").await;
+    // CSRF 配对有效，仅缺 refresh cookie
+    let response = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/refresh",
+            "",
+            &cookie_header(None, None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let cleared = raw_set_cookie(&response, "nebula_access");
@@ -176,22 +264,69 @@ async fn logout_without_authentication_is_401() {
     // 红线 #1 回归：登出必须挂在鉴权前置之后——无凭据时 handler 不得执行
     let (app, _state, _clock, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
-    let login_response = login(&app, EMAIL, PASSWORD).await;
-    let refresh = set_cookie_of(&login_response, "nebula_refresh").unwrap();
+    let session = login_session(&app).await;
 
-    // 只有 refresh cookie、无有效 access：仍须 401
+    // 只有 refresh + csrf cookie、无 access：仍须 401
     let response = app
         .clone()
-        .oneshot_post_with_cookie("/api/auth/logout", "", &cookie_header(None, Some(&refresh)))
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(None, Some(&session.refresh), Some(&session.csrf)),
+            Some(&session.csrf),
+        )
         .await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     // 未鉴权即未撤销：refresh 仍可轮转
-    let still_valid = app
-        .clone()
-        .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&refresh)))
-        .await;
+    let still_valid = refresh_with_csrf(&app, &session).await;
     assert_eq!(still_valid.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn logout_with_cookie_requires_csrf() {
+    let (app, _state, _clock, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
+
+    // cookie 认证的写方法：缺 X-CSRF-Token 头 → 403（ADR-0005）
+    let blocked = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            None,
+        )
+        .await;
+    assert_eq!(blocked.status(), StatusCode::FORBIDDEN);
+
+    // 配对齐全 → 204
+    let ok = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(ok.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn logout_with_bearer_skips_csrf() {
+    // Bearer 认证豁免 CSRF：跨站页面无法携带自定义头（ADR-0005）
+    let (app, _state, _clock, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
+
+    let response = app.clone().oneshot_post_bearer("/api/auth/logout", "", &session.access).await;
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    // 撤销确实发生：refresh 家族已死
+    let after = refresh_with_csrf(&app, &session).await;
+    assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -201,15 +336,17 @@ async fn logout_revokes_all_sessions() {
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     // 两个并行会话（两次登录 = 两个家族）
-    let first_login = login(&app, EMAIL, PASSWORD).await;
-    let first_refresh = set_cookie_of(&first_login, "nebula_refresh").unwrap();
-    let first_access = set_cookie_of(&first_login, "nebula_access").unwrap();
-    let second_login = login(&app, EMAIL, PASSWORD).await;
-    let second_refresh = set_cookie_of(&second_login, "nebula_refresh").unwrap();
+    let first = login_session(&app).await;
+    let second = login_session(&app).await;
 
     let response = app
         .clone()
-        .oneshot_post_with_cookie("/api/auth/logout", "", &cookie_header(Some(&first_access), None))
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(Some(&first.access), None, Some(&first.csrf)),
+            Some(&first.csrf),
+        )
         .await;
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
@@ -217,11 +354,8 @@ async fn logout_revokes_all_sessions() {
     assert!(cleared.contains("Max-Age=0"), "登出须清 cookie: {cleared}");
 
     // 两个家族都被撤销——不只是当前会话
-    for refresh in [first_refresh, second_refresh] {
-        let outcome = app
-            .clone()
-            .oneshot_post_with_cookie("/api/auth/refresh", "", &cookie_header(None, Some(&refresh)))
-            .await;
+    for session in [&first, &second] {
+        let outcome = refresh_with_csrf(&app, session).await;
         assert_eq!(outcome.status(), StatusCode::UNAUTHORIZED, "登出后任一会话不得再轮转");
     }
 }
