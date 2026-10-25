@@ -7,6 +7,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
 
+use crate::model::password::PasswordHash;
 use crate::model::user::User;
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
@@ -41,12 +42,16 @@ pub enum UserRepoError {
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 pub trait UserRepo: Send + Sync {
-    /// 插入新用户。
+    /// 插入新用户与其口令哈希，一条 INSERT 同行落库。
     ///
     /// # Errors
     /// 用户名或邮箱已被占用返回 [`UserRepoError::Conflict`]；底层故障返回
     /// [`UserRepoError::Storage`]。
-    fn insert(&self, user: &User) -> impl Future<Output = Result<(), UserRepoError>> + Send;
+    fn insert(
+        &self,
+        user: &User,
+        password: &PasswordHash,
+    ) -> impl Future<Output = Result<(), UserRepoError>> + Send;
 
     /// 按邮箱查找，大小写不敏感（列 COLLATE NOCASE）。
     ///

@@ -1,0 +1,6 @@
+---
+source: tests/register.rs
+assertion_line: 87
+expression: body_text(response).await
+---
+{"code":"validation_failed","message":"请求字段未通过校验","details":{"fields":[{"code":"invalid_email","field":"email"}]}}

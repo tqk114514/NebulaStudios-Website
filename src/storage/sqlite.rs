@@ -6,6 +6,7 @@ use std::time::Duration;
 use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 
+use crate::model::password::PasswordHash;
 use crate::model::user::{User, UserId};
 use crate::storage::{StorageError, UserRepo, UserRepoError};
 
@@ -46,13 +47,16 @@ impl SqliteUserRepo {
 }
 
 impl UserRepo for SqliteUserRepo {
-    async fn insert(&self, user: &User) -> Result<(), UserRepoError> {
+    async fn insert(&self, user: &User, password: &PasswordHash) -> Result<(), UserRepoError> {
         let result = sqlx::query!(
-            "INSERT INTO users (id, username, email, created_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO users (id, username, email, created_at, password_hash, email_verified)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             user.id.as_uuid(),
             user.username,
             user.email,
             user.created_at,
+            password.as_str(),
+            user.email_verified,
         )
         .execute(&self.pool)
         .await;
@@ -71,6 +75,7 @@ impl UserRepo for SqliteUserRepo {
         // SQLite TEXT 列被推断为 String，uuid/chrono 解码须经列类型覆盖声明
         let row = sqlx::query!(
             r#"SELECT id AS "id: uuid::Uuid", username, email,
+                      email_verified AS "email_verified: bool",
                       created_at AS "created_at: chrono::DateTime<chrono::Utc>"
                FROM users WHERE email = ?1"#,
             email,
@@ -83,12 +88,14 @@ impl UserRepo for SqliteUserRepo {
             username: r.username,
             email: r.email,
             created_at: r.created_at,
+            email_verified: r.email_verified,
         }))
     }
 
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, UserRepoError> {
         let row = sqlx::query!(
             r#"SELECT id AS "id: uuid::Uuid", username, email,
+                      email_verified AS "email_verified: bool",
                       created_at AS "created_at: chrono::DateTime<chrono::Utc>"
                FROM users WHERE username = ?1"#,
             username,
@@ -101,6 +108,7 @@ impl UserRepo for SqliteUserRepo {
             username: r.username,
             email: r.email,
             created_at: r.created_at,
+            email_verified: r.email_verified,
         }))
     }
 }

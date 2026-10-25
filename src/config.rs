@@ -1,14 +1,25 @@
 //! 环境变量到类型化配置的加载，值非法时启动即失败。
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 
-/// 服务配置；字段经 `NEBULA_` 前缀环境变量覆盖（如 `NEBULA_BIND`）。
+/// 服务配置；字段经 `NEBULA_` 前缀环境变量覆盖（如 `NEBULA_BIND`、
+/// `NEBULA_DATABASE__PATH`，双下划线表层级）。
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// HTTP 监听地址。
     pub bind: SocketAddr,
+    /// 数据库子配置。
+    pub database: DatabaseConfig,
+}
+
+/// SQLite 数据库配置（ADR-0003）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatabaseConfig {
+    /// 数据库文件路径；须先经 `sqlx migrate` 迁移，启动不建表。
+    pub path: PathBuf,
 }
 
 /// 配置加载或校验失败。
@@ -24,7 +35,8 @@ impl Config {
     pub fn load() -> Result<Self, LoadConfigError> {
         let settings = config::Config::builder()
             .set_default("bind", "127.0.0.1:8080")?
-            .add_source(config::Environment::with_prefix("NEBULA"))
+            .set_default("database.path", "nebula.db")?
+            .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         Ok(settings.try_deserialize()?)
     }
@@ -38,11 +50,12 @@ mod tests {
     use super::Config;
     use std::net::SocketAddr;
 
-    // 测试进程未设置 NEBULA_BIND，走默认值路径；不改环境变量（edition 2024 中
+    // 测试进程未设置 NEBULA_*，走默认值路径；不改环境变量（edition 2024 中
     // set_var 是 unsafe，本 crate forbid unsafe）
     #[test]
-    fn default_bind_is_loopback() {
+    fn defaults_are_loopback_and_local_file() {
         let config = Config::load().expect("未设置环境变量时必须成功");
         assert_eq!(config.bind, SocketAddr::from(([127, 0, 0, 1], 8080)));
+        assert_eq!(config.database.path, std::path::Path::new("nebula.db"));
     }
 }

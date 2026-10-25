@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 /// 用户标识，uuid v7；创建时生成，此后不变。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct UserId(Uuid);
 
 impl UserId {
@@ -48,14 +48,16 @@ impl std::fmt::Display for UserId {
 
 /// 注册用户快照。登录标识为邮箱或用户名（ADR-0002）；
 /// 字段合法形状（长度、字符集）在注册端点经 `validator` 校验，领域层不重复编码规则。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct User {
     /// 永久标识。
     pub id: UserId,
     /// 展示用用户名，全库唯一（大小写不敏感）。
     pub username: String,
-    /// 邮箱地址，全库唯一（大小写不敏感）。
+    /// 邮箱地址，全库唯一（大小写不敏感），入库前小写化。
     pub email: String,
     /// 注册时刻；RFC3339 存储于数据库（ADR-0003）。
     pub created_at: DateTime<Utc>,
+    /// 邮箱是否已验证；注册时为 false，验证端点置 true。
+    pub email_verified: bool,
 }
