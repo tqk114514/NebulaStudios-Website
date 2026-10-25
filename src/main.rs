@@ -3,20 +3,41 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use nebula_server::api;
+use chrono::TimeDelta;
+use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
 use nebula_server::context::SystemClock;
-use nebula_server::storage::sqlite::SqliteUserRepo;
+use nebula_server::storage::sqlite::{self, SqliteRefreshRepo, SqliteUserRepo};
 use nebula_server::telemetry;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     telemetry::init();
     let config = Config::load().context("读取配置")?;
-    let user_repo = SqliteUserRepo::open(&config.database.path)
+
+    let pool = sqlite::connect_pool(&config.database.path)
         .await
         .with_context(|| format!("打开数据库 {}", config.database.path.display()))?;
-    let state = api::AppState { user_repo, clock: Arc::new(SystemClock) };
+
+    let private_pem = std::fs::read(&config.jwt.private_key_path)
+        .with_context(|| format!("读取 JWT 私钥 {}", config.jwt.private_key_path.display()))?;
+    let public_pem = std::fs::read(&config.jwt.public_key_path)
+        .with_context(|| format!("读取 JWT 公钥 {}", config.jwt.public_key_path.display()))?;
+    let jwt = JwtKeys::from_pem(&private_pem, &public_pem).context("解析 JWT 密钥")?;
+
+    let state = AppState {
+        user_repo: SqliteUserRepo::from_pool(pool.clone()),
+        refresh_repo: SqliteRefreshRepo::from_pool(pool),
+        clock: Arc::new(SystemClock),
+        jwt,
+        session: SessionPolicy {
+            access_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.access_ttl_secs)?)
+                .context("access ttl 超出可表示范围")?,
+            refresh_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.refresh_ttl_secs)?)
+                .context("refresh ttl 超出可表示范围")?,
+        },
+    };
+
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .with_context(|| format!("监听 {}", config.bind))?;

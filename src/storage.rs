@@ -9,7 +9,7 @@ use std::future::Future;
 
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
-use crate::model::user::User;
+use crate::model::user::{LoginCredentials, User};
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
 /// 接缝之上只见「存储故障」，不见驱动类型。
@@ -19,6 +19,16 @@ pub struct StorageError(Box<dyn StdError + Send + Sync>);
 impl fmt::Display for StorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "存储故障: {}", self.0)
+    }
+}
+
+impl StorageError {
+    /// 封装任意底层错误（非 sqlx 驱动的实现侧错误，如坏哈希解析）。
+    pub fn wrap<E>(source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        Self(Box::new(source))
     }
 }
 
@@ -63,6 +73,16 @@ pub trait UserRepo: Send + Sync {
         email: &str,
     ) -> impl Future<Output = Result<Option<User>, UserRepoError>> + Send;
 
+    /// 按登录标识（邮箱或用户名）取登录凭据，大小写不敏感；用户不存在或
+    /// 该用户无口令哈希均返回 `None`，由调用方走时序对齐路径。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]；读取不产生 Conflict。
+    fn find_login_credentials(
+        &self,
+        identifier: &str,
+    ) -> impl Future<Output = Result<Option<LoginCredentials>, UserRepoError>> + Send;
+
     /// 按用户名查找，大小写不敏感。
     ///
     /// # Errors
@@ -102,8 +122,8 @@ pub trait RefreshTokenRepo: Send + Sync {
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 
     /// 原子轮转：呈递 token 须 Active 且未过期、家族须 Active；成功则旧置
-    /// Rotated、同族插入新 token。呈递已 Rotated 的 token 判定重放——整族撤销
-    /// 后返回 [`RotateRefreshError::Replay`]。
+    /// Rotated、同族插入新 token，并返回所属用户（供签发新 access）。
+    /// 呈递已 Rotated 的 token 判定重放——整族撤销后返回 [`RotateRefreshError::Replay`]。
     ///
     /// # Errors
     /// 重放返回 [`RotateRefreshError::Replay`]；无效呈递返回
@@ -114,7 +134,7 @@ pub trait RefreshTokenRepo: Send + Sync {
         new_hash: &str,
         new_expires_at: chrono::DateTime<chrono::Utc>,
         now: chrono::DateTime<chrono::Utc>,
-    ) -> impl Future<Output = Result<(), RotateRefreshError>> + Send;
+    ) -> impl Future<Output = Result<crate::model::user::UserId, RotateRefreshError>> + Send;
 
     /// 撤销用户全部家族；登出、改密、关闭 TOTP、注销共用同一路径（红线 #1）。
     ///

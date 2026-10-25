@@ -68,10 +68,11 @@ async fn rotation_chains_within_active_family() {
         .expect("第一次轮转必须成功");
 
     let third_hash = RefreshToken::generate().to_hash_hex();
-    refreshes
+    let rotated_user = refreshes
         .rotate(&second_hash, &third_hash, now() + TimeDelta::days(30), now())
         .await
         .expect("链上的第二次轮转必须成功");
+    assert_eq!(rotated_user, user);
 }
 
 #[tokio::test]
