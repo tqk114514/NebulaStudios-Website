@@ -131,7 +131,11 @@ pub async fn register(
     };
 
     match state.user_repo.insert(&user, &hash).await {
-        Ok(()) => Ok((StatusCode::CREATED, Json(user))),
+        Ok(()) => {
+            // 注册即发首封验证邮件；发送失败可经重发端点补发
+            super::issue_and_send_verification(&state, &user).await?;
+            Ok((StatusCode::CREATED, Json(user)))
+        }
         Err(UserRepoError::Conflict) => Err(classify_conflict(&state.user_repo, &user).await),
         Err(err) => Err(anyhow::Error::new(err).into()),
     }

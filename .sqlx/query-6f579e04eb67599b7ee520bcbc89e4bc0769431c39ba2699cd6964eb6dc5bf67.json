@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE email_verifications SET consumed_at = ?2\n             WHERE id = ?1 AND consumed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "6f579e04eb67599b7ee520bcbc89e4bc0769431c39ba2699cd6964eb6dc5bf67"
+}

@@ -5,6 +5,8 @@ pub mod login;
 pub mod logout;
 pub mod refresh;
 pub mod register;
+pub mod resend;
+pub mod verify;
 
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, HeaderValue};
@@ -12,9 +14,11 @@ use axum::http::{HeaderMap, HeaderValue};
 use super::{ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE};
 use crate::api::AppState;
 use crate::error::ApiError;
+use crate::mailer::EmailMessage;
 use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sign_access};
-use crate::model::user::UserId;
-use crate::storage::RefreshTokenRepo;
+use crate::model::user::{User, UserId};
+use crate::model::verification::{NewEmailVerification, VERIFICATION_TTL, VerificationCode};
+use crate::storage::{EmailVerificationRepo, RefreshTokenRepo};
 use uuid::Uuid;
 
 /// 一次会话签发的三个明文凭据；csrf 与 refresh 同步轮转（ADR-0005）。
@@ -111,4 +115,33 @@ fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
         }
         Err(_) => unreachable!("cookie 值含非法头字符: {cookie}"),
     }
+}
+
+/// 签发验证码并异步发送邮件（发送不阻塞调用方响应）；落库失败才是请求失败，
+/// 发送失败只记日志——用户可经重发端点补发。
+pub(crate) async fn issue_and_send_verification(
+    state: &AppState,
+    user: &User,
+) -> Result<(), ApiError> {
+    let code = VerificationCode::generate();
+    let now = state.clock.now();
+    let entry = NewEmailVerification {
+        user_id: user.id,
+        code_hash: code.to_hash_hex(),
+        expires_at: now + VERIFICATION_TTL,
+    };
+    state.verification_repo.issue(&entry, now).await.map_err(anyhow::Error::from)?;
+
+    let mailer = state.mailer.clone();
+    let message = EmailMessage {
+        to: user.email.clone(),
+        subject: "Nebula 邮箱验证码".to_owned(),
+        body: format!("验证码：{}，{} 分钟内有效。", code.as_str(), VERIFICATION_TTL.num_minutes()),
+    };
+    tokio::spawn(async move {
+        if let Err(err) = mailer.send(message).await {
+            tracing::warn!(error = %err, "验证邮件发送失败");
+        }
+    });
+    Ok(())
 }

@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::user::{LoginCredentials, User, UserId};
+use crate::model::verification::{EmailVerification, NewEmailVerification};
 use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -22,6 +23,12 @@ pub struct SqliteUserRepo {
 /// SQLite refresh 家族仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteRefreshRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 邮箱验证码仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteEmailVerificationRepo {
     pool: SqlitePool,
 }
 
@@ -56,6 +63,14 @@ impl SqliteUserRepo {
 }
 
 impl SqliteRefreshRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteEmailVerificationRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -336,4 +351,83 @@ async fn revoke_family_in_tx(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
+    async fn issue(
+        &self,
+        entry: &NewEmailVerification,
+        created_at: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            Uuid::now_v7(),
+            entry.user_id.as_uuid(),
+            entry.code_hash,
+            entry.expires_at,
+            created_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn latest_unconsumed(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<EmailVerification>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", code_hash, attempts AS "attempts: u32",
+                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>",
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+               FROM email_verifications
+               WHERE user_id = ?1 AND consumed_at IS NULL
+               ORDER BY created_at DESC LIMIT 1"#,
+            user_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| EmailVerification {
+            id: r.id,
+            user_id: *user_id,
+            code_hash: r.code_hash,
+            attempts: r.attempts,
+            expires_at: r.expires_at,
+            created_at: r.created_at,
+        }))
+    }
+
+    async fn record_attempt(&self, id: &Uuid) -> Result<(), StorageError> {
+        sqlx::query!("UPDATE email_verifications SET attempts = attempts + 1 WHERE id = ?1", id,)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn consume_and_mark_verified(
+        &self,
+        verification_id: &Uuid,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let consumed = sqlx::query!(
+            "UPDATE email_verifications SET consumed_at = ?2
+             WHERE id = ?1 AND consumed_at IS NULL",
+            verification_id,
+            now,
+        )
+        .execute(&mut *tx)
+        .await?;
+        if consumed.rows_affected() != 1 {
+            return Ok(false);
+        }
+        sqlx::query!("UPDATE users SET email_verified = 1 WHERE id = ?1", user_id.as_uuid(),)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
 }

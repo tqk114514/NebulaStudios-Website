@@ -10,6 +10,7 @@ use std::future::Future;
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::user::{LoginCredentials, User};
+use crate::model::verification::{EmailVerification, NewEmailVerification};
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
 /// 接缝之上只见「存储故障」，不见驱动类型。
@@ -145,4 +146,48 @@ pub trait RefreshTokenRepo: Send + Sync {
         user_id: &crate::model::user::UserId,
         now: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
+}
+
+/// 邮箱验证码仓储。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+pub trait EmailVerificationRepo: Send + Sync {
+    /// 为用户落一条新验证码；历史记录保留，生效的是「最新未消费」。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn issue(
+        &self,
+        entry: &NewEmailVerification,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 用户最新一条未消费的验证码。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn latest_unconsumed(
+        &self,
+        user_id: &crate::model::user::UserId,
+    ) -> impl Future<Output = Result<Option<EmailVerification>, StorageError>> + Send;
+
+    /// 错误尝试计数 +1。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn record_attempt(
+        &self,
+        id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 原子完成验证：消费该验证码并把用户置为已验证；验证码已被消费时返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn consume_and_mark_verified(
+        &self,
+        verification_id: &uuid::Uuid,
+        user_id: &crate::model::user::UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, StorageError>> + Send;
 }

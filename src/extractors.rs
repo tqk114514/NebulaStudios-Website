@@ -100,8 +100,8 @@ fn verify_csrf(parts: &Parts) -> Result<(), ApiError> {
     }
 }
 
-/// 异或折叠的恒定时间比较；长度不等直接拒绝——长度不是秘密（token 定长 64）。
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+/// 异或折叠的恒定时间比较；长度不等直接拒绝——长度不是秘密（定长摘要）。
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }

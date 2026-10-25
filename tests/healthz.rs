@@ -12,7 +12,7 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn healthz_responds_ok_with_empty_body() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response =
         app.oneshot(Request::get("/healthz").body(Body::empty()).unwrap()).await.unwrap();

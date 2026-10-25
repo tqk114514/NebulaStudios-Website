@@ -6,16 +6,19 @@ pub mod healthz;
 use std::fmt;
 use std::sync::Arc;
 
+use axum::Json;
 use axum::Router;
-use axum::middleware::Next;
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use chrono::TimeDelta;
 use tower_governor::GovernorLayer;
+use tower_governor::errors::GovernorError;
 use tower_governor::governor::GovernorConfigBuilder;
 
 use crate::context::Clock;
-use crate::storage::sqlite::{SqliteRefreshRepo, SqliteUserRepo};
+use crate::mailer::Mailer;
+use crate::storage::sqlite::{SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteUserRepo};
 
 /// access 会话 cookie 名；全站路径。
 pub const ACCESS_COOKIE: &str = "nebula_access";
@@ -103,6 +106,10 @@ pub struct AppState {
     pub jwt: JwtKeys,
     /// 会话时长。
     pub session: SessionPolicy,
+    /// 邮箱验证码仓储；与用户仓储共享连接池。
+    pub verification_repo: SqliteEmailVerificationRepo,
+    /// 邮件端口。
+    pub mailer: std::sync::Arc<dyn Mailer>,
 }
 
 impl fmt::Debug for AppState {
@@ -115,65 +122,77 @@ impl fmt::Debug for AppState {
     }
 }
 
-/// 组装全部路由；新增端点在此登记。
-/// 限额路由按端点分组：governor 在内层按 IP 拦断，信封化中间件在外层把
-/// 其 429 纯文本体改写为 ADR-0004 统一信封。
+/// 组装全部路由；新增端点在此登记。限额层以对端 IP 为键，429 经
+/// [`governor_error_response`] 直接产出 ADR-0004 信封。
 pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))
         .route("/api/auth/refresh", post(auth::refresh::refresh))
         .route("/api/auth/logout", post(auth::logout::logout));
 
-    // 限额参数沿用 v3：注册突发 3、每 20 秒补 1；登录突发 5、每 12 秒补 1。
-    // per_second 语义是「补 1 个令牌的间隔秒数」（tower_governor 命名反直觉）。
-    // finish() 对常量参数必然 Some；None 只可能是实现笔误，启动即暴露优于带病运行。
+    // 限额参数沿用 v3：注册突发 3、每 20 秒补 1（per_second 语义是「补 1 个
+    // 令牌的间隔秒数」，tower_governor 命名反直觉）；finish() 对常量参数必然
+    // Some，None 只可能是实现笔误，启动即暴露优于带病运行。
     let register_limited = Router::new()
         .route("/api/auth/register", post(auth::register::register))
-        .layer(GovernorLayer::new(
-            GovernorConfigBuilder::default()
-                .per_second(20)
-                .burst_size(3)
-                .finish()
-                .unwrap_or_else(|| unreachable!("注册限额常量非法")),
-        ))
-        .layer(axum::middleware::from_fn(envelope_rate_limited));
+        .route("/api/auth/register/resend", post(auth::resend::resend))
+        .layer(
+            GovernorLayer::new(
+                GovernorConfigBuilder::default()
+                    .per_second(20)
+                    .burst_size(3)
+                    .finish()
+                    .unwrap_or_else(|| unreachable!("注册限额常量非法")),
+            )
+            .error_handler(|error| governor_error_response(&error)),
+        );
 
-    let login_limited = Router::new()
-        .route("/api/auth/login", post(auth::login::login))
-        .layer(GovernorLayer::new(
+    // v3 参数：登录突发 5、每 12 秒补 1
+    let login_limited = Router::new().route("/api/auth/login", post(auth::login::login)).layer(
+        GovernorLayer::new(
             GovernorConfigBuilder::default()
                 .per_second(12)
                 .burst_size(5)
                 .finish()
                 .unwrap_or_else(|| unreachable!("登录限额常量非法")),
-        ))
-        .layer(axum::middleware::from_fn(envelope_rate_limited));
+        )
+        .error_handler(|error| governor_error_response(&error)),
+    );
 
-    open.merge(register_limited).merge(login_limited).with_state(state)
+    // v3 参数：验证码校验突发 5、每 10 秒补 1
+    let verify_limited =
+        Router::new().route("/api/auth/register/verify", post(auth::verify::verify)).layer(
+            GovernorLayer::new(
+                GovernorConfigBuilder::default()
+                    .per_second(10)
+                    .burst_size(5)
+                    .finish()
+                    .unwrap_or_else(|| unreachable!("验证限额常量非法")),
+            )
+            .error_handler(|error| governor_error_response(&error)),
+        );
+
+    open.merge(register_limited).merge(login_limited).merge(verify_limited).with_state(state)
 }
 
-/// `tower_governor` 的 429 是纯文本体，不符合 ADR-0004；改写为统一信封，
-/// `retry_after` 取自其 `retry-after` 头（该头默认启用）。命中同时打 warn——
-/// 指标体系（§9.8）接入前的可观测替代。
-async fn envelope_rate_limited(request: axum::extract::Request, next: Next) -> Response {
-    let response = next.run(request).await;
-    if response.status() != axum::http::StatusCode::TOO_MANY_REQUESTS {
-        return response;
+/// 限额 429 的统一信封；`wait_time` 直接进 `details.retry_after`（ADR-0004）。
+/// 命中同时打 warn——指标体系（§9.8）接入前的可观测替代。
+/// 键提取失败（缺连接信息）按 500 信封处理：属装配错误而非客户端问题。
+fn governor_error_response(error: &GovernorError) -> Response {
+    if let GovernorError::TooManyRequests { wait_time, .. } = error {
+        tracing::warn!(retry_after = wait_time, "rate limited");
+        let body = crate::error::ErrorBody {
+            code: "rate_limited",
+            message: "请求过于频繁".to_owned(),
+            details: Some(serde_json::json!({ "retry_after": wait_time })),
+        };
+        return (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
     }
-    let retry_after = response
-        .headers()
-        .get("retry-after")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
-    tracing::warn!(?retry_after, "rate limited");
-
-    let (mut parts, _) = response.into_parts();
-    // 原 text 体的长度头对新 body 不再适用，移除后由 Json 重建
-    parts.headers.remove(axum::http::header::CONTENT_LENGTH);
+    tracing::error!(%error, "限额键提取失败");
     let body = crate::error::ErrorBody {
-        code: "rate_limited",
-        message: "请求过于频繁".to_owned(),
-        details: retry_after.map(|secs| serde_json::json!({ "retry_after": secs })),
+        code: "internal_error",
+        message: "internal server error".to_owned(),
+        details: None,
     };
-    (parts.status, parts.headers, axum::Json(body)).into_response()
+    (StatusCode::INTERNAL_SERVER_ERROR, Json(body)).into_response()
 }

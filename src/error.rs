@@ -56,6 +56,10 @@ pub enum ApiError {
     RefreshReused,
     /// CSRF 校验失败（缺头、缺 cookie 或不相等）；403。
     CsrfInvalid,
+    /// 验证码错误、过期、耗尽尝试或对应用户不存在（同体，防枚举）；401。
+    InvalidVerificationCode,
+    /// 重发冷却中；429，`details.retry_after` 为剩余秒数。
+    ResendCooldown(u64),
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -120,6 +124,15 @@ impl IntoResponse for ApiError {
             Self::CsrfInvalid => {
                 (StatusCode::FORBIDDEN, "csrf_invalid", "CSRF 校验失败".to_owned(), None)
             }
+            Self::InvalidVerificationCode => {
+                (StatusCode::UNAUTHORIZED, "invalid_code", "验证码错误或已失效".to_owned(), None)
+            }
+            Self::ResendCooldown(remaining) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "resend_cooldown",
+                "发送过于频繁，请稍后再试".to_owned(),
+                Some(serde_json::json!({ "retry_after": remaining })),
+            ),
         };
 
         let body = ErrorBody { code, message, details };
