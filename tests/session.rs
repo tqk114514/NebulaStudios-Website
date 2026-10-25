@@ -63,7 +63,7 @@ fn raw_set_cookie(response: &axum::response::Response, name: &str) -> String {
 
 #[tokio::test]
 async fn login_returns_user_and_sets_split_cookies() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let response = login(&app, EMAIL, PASSWORD).await;
@@ -98,7 +98,7 @@ async fn login_returns_user_and_sets_split_cookies() {
 
 #[tokio::test]
 async fn login_accepts_username_identifier() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let response = login(&app, USERNAME, PASSWORD).await;
@@ -109,7 +109,7 @@ async fn login_accepts_username_identifier() {
 
 #[tokio::test]
 async fn wrong_password_is_401_invalid_credentials() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let response = login(&app, EMAIL, "Wrong!Passw0rd-2026").await;
@@ -120,7 +120,7 @@ async fn wrong_password_is_401_invalid_credentials() {
 
 #[tokio::test]
 async fn unknown_identifier_yields_identical_body_to_wrong_password() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let wrong_password = body_text(login(&app, EMAIL, "Wrong!Passw0rd-2026").await).await;
@@ -133,7 +133,7 @@ async fn unknown_identifier_yields_identical_body_to_wrong_password() {
 
 #[tokio::test]
 async fn empty_identifier_is_422() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = login(&app, " ", PASSWORD).await;
 
@@ -143,7 +143,7 @@ async fn empty_identifier_is_422() {
 
 #[tokio::test]
 async fn refresh_without_csrf_header_is_403() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -164,7 +164,7 @@ async fn refresh_without_csrf_header_is_403() {
 
 #[tokio::test]
 async fn refresh_with_mismatched_csrf_is_403() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -184,7 +184,7 @@ async fn refresh_with_mismatched_csrf_is_403() {
 
 #[tokio::test]
 async fn refresh_rotates_and_sets_new_cookies() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -201,7 +201,7 @@ async fn refresh_rotates_and_sets_new_cookies() {
 
 #[tokio::test]
 async fn refresh_replay_is_detected_and_revokes_family() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -238,7 +238,7 @@ async fn refresh_replay_is_detected_and_revokes_family() {
 
 #[tokio::test]
 async fn refresh_without_cookie_is_401() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -262,7 +262,7 @@ async fn refresh_without_cookie_is_401() {
 #[tokio::test]
 async fn logout_without_authentication_is_401() {
     // 红线 #1 回归：登出必须挂在鉴权前置之后——无凭据时 handler 不得执行
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -285,7 +285,7 @@ async fn logout_without_authentication_is_401() {
 
 #[tokio::test]
 async fn logout_with_cookie_requires_csrf() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -317,7 +317,7 @@ async fn logout_with_cookie_requires_csrf() {
 #[tokio::test]
 async fn logout_with_bearer_skips_csrf() {
     // Bearer 认证豁免 CSRF：跨站页面无法携带自定义头（ADR-0005）
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
 
@@ -332,7 +332,7 @@ async fn logout_with_bearer_skips_csrf() {
 #[tokio::test]
 async fn logout_revokes_all_sessions() {
     // 红线 #1 回归：登出必须真的撤销会话
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     // 两个并行会话（两次登录 = 两个家族）

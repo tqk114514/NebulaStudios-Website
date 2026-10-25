@@ -15,6 +15,8 @@ pub struct Config {
     pub database: DatabaseConfig,
     /// JWT 子配置。
     pub jwt: JwtConfig,
+    /// 邮件子配置。
+    pub mail: MailConfig,
 }
 
 /// JWT 会话令牌配置。
@@ -28,6 +30,21 @@ pub struct JwtConfig {
     pub access_ttl_secs: u64,
     /// refresh token 有效秒数。
     pub refresh_ttl_secs: u64,
+}
+
+/// 邮件配置；`smtp_host` 为空表示不投递（日志模式，开发用）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct MailConfig {
+    /// SMTP 主机；空串启用 [`crate::mailer::LogMailer`]。
+    pub smtp_host: String,
+    /// SMTP 端口。
+    pub smtp_port: u16,
+    /// SMTP 用户名；空串不带凭据。
+    pub smtp_username: String,
+    /// SMTP 密码。
+    pub smtp_password: String,
+    /// 发件人，`名字 <地址>` 形式。
+    pub from: String,
 }
 
 /// SQLite 数据库配置（ADR-0003）。
@@ -61,6 +78,11 @@ impl Config {
             .set_default("jwt.public_key_path", "jwt-public.pem")?
             .set_default("jwt.access_ttl_secs", 3_600)?
             .set_default("jwt.refresh_ttl_secs", 2_592_000)?
+            .set_default("mail.smtp_host", "")?
+            .set_default("mail.smtp_port", 587)?
+            .set_default("mail.smtp_username", "")?
+            .set_default("mail.smtp_password", "")?
+            .set_default("mail.from", "Nebula <no-reply@nebula.st>")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;

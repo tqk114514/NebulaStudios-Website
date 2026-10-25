@@ -26,7 +26,7 @@ fn sample_hash() -> PasswordHash {
 
 #[tokio::test]
 async fn insert_then_find_by_email_roundtrips() {
-    let (state, _clock, _dir) = common::app_state().await;
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     let user = sample_user();
     repo.insert(&user, &sample_hash()).await.expect("首次插入必须成功");
@@ -37,7 +37,7 @@ async fn insert_then_find_by_email_roundtrips() {
 
 #[tokio::test]
 async fn find_by_email_matches_case_insensitive_and_missing_is_none() {
-    let (state, _clock, _dir) = common::app_state().await;
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     repo.insert(&sample_user(), &sample_hash()).await.expect("插入必须成功");
 
@@ -47,7 +47,7 @@ async fn find_by_email_matches_case_insensitive_and_missing_is_none() {
 
 #[tokio::test]
 async fn find_by_username_matches_case_insensitive_and_missing_is_none() {
-    let (state, _clock, _dir) = common::app_state().await;
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     repo.insert(&sample_user(), &sample_hash()).await.expect("插入必须成功");
 
@@ -57,7 +57,7 @@ async fn find_by_username_matches_case_insensitive_and_missing_is_none() {
 
 #[tokio::test]
 async fn duplicate_email_is_rejected_as_conflict() {
-    let (state, _clock, _dir) = common::app_state().await;
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     repo.insert(&sample_user(), &sample_hash()).await.expect("首次插入必须成功");
 
@@ -71,7 +71,7 @@ async fn duplicate_email_is_rejected_as_conflict() {
 
 #[tokio::test]
 async fn duplicate_username_is_rejected_as_conflict() {
-    let (state, _clock, _dir) = common::app_state().await;
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     repo.insert(&sample_user(), &sample_hash()).await.expect("首次插入必须成功");
 

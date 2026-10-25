@@ -25,11 +25,28 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("读取 JWT 公钥 {}", config.jwt.public_key_path.display()))?;
     let jwt = JwtKeys::from_pem(&private_pem, &public_pem).context("解析 JWT 密钥")?;
 
+    let mailer: Arc<dyn nebula_server::mailer::Mailer> = if config.mail.smtp_host.is_empty() {
+        tracing::warn!("未配置 SMTP 主机，邮件仅记日志（开发模式）");
+        Arc::new(nebula_server::mailer::LogMailer)
+    } else {
+        Arc::new(nebula_server::mailer::SmtpMailer::connect(
+            &config.mail.smtp_host,
+            config.mail.smtp_port,
+            &config.mail.smtp_username,
+            &config.mail.smtp_password,
+            &config.mail.from,
+        )?)
+    };
+
     let state = AppState {
         user_repo: SqliteUserRepo::from_pool(pool.clone()),
-        refresh_repo: SqliteRefreshRepo::from_pool(pool),
+        refresh_repo: SqliteRefreshRepo::from_pool(pool.clone()),
         clock: Arc::new(SystemClock),
         jwt,
+        verification_repo: nebula_server::storage::sqlite::SqliteEmailVerificationRepo::from_pool(
+            pool,
+        ),
+        mailer,
         session: SessionPolicy {
             access_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.access_ttl_secs)?)
                 .context("access ttl 超出可表示范围")?,

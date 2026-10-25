@@ -17,7 +17,7 @@ async fn body_text(response: axum::response::Response) -> String {
 
 #[tokio::test]
 async fn login_burst_exhausts_into_enveloped_429() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     common::register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let login_body = format!(r#"{{"identifier":"{EMAIL}","password":"Wrong!Passw0rd-2026"}}"#);
@@ -42,7 +42,7 @@ async fn login_burst_exhausts_into_enveloped_429() {
 
 #[tokio::test]
 async fn different_ip_has_independent_budget() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     common::register_user(&app, EMAIL, USERNAME, PASSWORD).await;
 
     let login_body = format!(r#"{{"identifier":"{EMAIL}","password":"Wrong!Passw0rd-2026"}}"#);
@@ -59,7 +59,7 @@ async fn different_ip_has_independent_budget() {
 
 #[tokio::test]
 async fn register_burst_is_three() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     let body = format!(r#"{{"email":"{EMAIL}","username":"{USERNAME}","password":"{PASSWORD}"}}"#);
 
     for i in 0..3 {
@@ -77,7 +77,7 @@ async fn register_burst_is_three() {
 
 #[tokio::test]
 async fn login_and_register_limits_are_independent() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     let login_body = r#"{"identifier":"ghost@nebula.st","password":"Wrong!Passw0rd-2026"}"#;
     // 打满登录额度（5 次后第 6 次 429）
     for _ in 0..6 {

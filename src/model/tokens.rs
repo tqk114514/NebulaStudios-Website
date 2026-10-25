@@ -116,8 +116,14 @@ impl RefreshToken {
     /// 明文（如 cookie 中读出的值）的入库哈希形态，与 [`Self::to_hash_hex`] 同源。
     #[must_use]
     pub fn hash_of(plain: &str) -> String {
-        hex(&Sha256::digest(plain.as_bytes()))
+        sha256_hex(plain)
     }
+}
+
+/// 任意明文的 SHA-256 十六进制摘要；refresh、csrf 与验证码的入库哈希共用。
+#[must_use]
+pub fn sha256_hex(plain: &str) -> String {
+    hex(&Sha256::digest(plain.as_bytes()))
 }
 
 /// 生成 32 字节密码学随机数的十六进制串（64 字符）；refresh 与 csrf 令牌共用。

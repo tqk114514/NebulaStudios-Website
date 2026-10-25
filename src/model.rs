@@ -3,3 +3,4 @@
 pub mod password;
 pub mod tokens;
 pub mod user;
+pub mod verification;

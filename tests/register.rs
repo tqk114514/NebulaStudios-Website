@@ -30,7 +30,7 @@ async fn body_text(response: axum::response::Response) -> String {
 
 #[tokio::test]
 async fn register_creates_unverified_user_with_normalized_email() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = app.oneshot(post_register(VALID_BODY)).await.unwrap();
 
@@ -49,7 +49,7 @@ async fn register_creates_unverified_user_with_normalized_email() {
 
 #[tokio::test]
 async fn register_persists_verifiable_password_hash() {
-    let (app, _state, _clock, dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, dir) = common::app().await;
     let pool = common::migrated_pool(dir.path()).await;
 
     app.oneshot(post_register(VALID_BODY)).await.unwrap();
@@ -67,7 +67,7 @@ async fn register_persists_verifiable_password_hash() {
 
 #[tokio::test]
 async fn malformed_json_is_400_with_envelope() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = app.oneshot(post_register(r#"{"email": broken"#)).await.unwrap();
 
@@ -78,7 +78,7 @@ async fn malformed_json_is_400_with_envelope() {
 
 #[tokio::test]
 async fn invalid_email_is_422_with_snapshot() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = app
         .oneshot(post_register(
@@ -93,7 +93,7 @@ async fn invalid_email_is_422_with_snapshot() {
 
 #[tokio::test]
 async fn weak_password_reports_missing_class_codes() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     // 长度够但缺大写与标点
     let response = app
@@ -109,7 +109,7 @@ async fn weak_password_reports_missing_class_codes() {
 
 #[tokio::test]
 async fn short_password_is_422_with_snapshot() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = app
         .oneshot(post_register(
@@ -124,7 +124,7 @@ async fn short_password_is_422_with_snapshot() {
 
 #[tokio::test]
 async fn duplicate_email_is_409_email_taken() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     app.clone().oneshot(post_register(VALID_BODY)).await.unwrap();
 
     let response = app
@@ -140,7 +140,7 @@ async fn duplicate_email_is_409_email_taken() {
 
 #[tokio::test]
 async fn duplicate_username_is_409_username_taken() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     app.clone().oneshot(post_register(VALID_BODY)).await.unwrap();
 
     let response = app
@@ -156,7 +156,7 @@ async fn duplicate_username_is_409_username_taken() {
 
 #[tokio::test]
 async fn overlong_username_is_422() {
-    let (app, _state, _clock, _dir) = common::app().await;
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     // 16 个字符，超出 v3 上限 15
     let response = app
