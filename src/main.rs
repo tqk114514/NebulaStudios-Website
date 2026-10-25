@@ -42,10 +42,14 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("监听 {}", config.bind))?;
     tracing::info!(bind = %config.bind, "listening");
-    axum::serve(listener, api::router(state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("服务退出")?;
+    // 限额层以对端 IP 为键（tower_governor PeerIpKeyExtractor），须带连接信息
+    axum::serve(
+        listener,
+        api::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("服务退出")?;
     Ok(())
 }
 

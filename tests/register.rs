@@ -13,10 +13,14 @@ const VALID_BODY: &str =
     r#"{"email":"Nova@Nebula.st","username":"nova","password":"Nebula!Passw0rd-2026"}"#;
 
 fn post_register(body: &str) -> Request<Body> {
-    Request::post("/api/auth/register")
+    let mut request = Request::post("/api/auth/register")
         .header("content-type", "application/json")
         .body(Body::from(body.to_owned()))
-        .unwrap()
+        .unwrap();
+    // 注册路由挂了 IP 限额层，缺 ConnectInfo 会 500（同 tests/common 的注入理由）
+    let addr: std::net::SocketAddr = "127.0.0.1:40000".parse().unwrap();
+    request.extensions_mut().insert(axum::extract::ConnectInfo(addr));
+    request
 }
 
 async fn body_text(response: axum::response::Response) -> String {

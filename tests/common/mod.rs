@@ -129,6 +129,13 @@ pub trait OneshotPost {
         body: &str,
         token: &str,
     ) -> axum::response::Response;
+    /// 以指定源 IP 发起（限额测试用）。
+    async fn oneshot_post_from_ip(
+        self,
+        ip: &str,
+        uri: &str,
+        body: &str,
+    ) -> axum::response::Response;
 }
 
 impl OneshotPost for axum::Router {
@@ -156,6 +163,7 @@ impl OneshotPost for axum::Router {
         if let Some(csrf) = csrf {
             request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));
         }
+        inject_connect_info(&mut request);
         self.oneshot(request).await.expect("oneshot 必须成功")
     }
 
@@ -166,11 +174,34 @@ impl OneshotPost for axum::Router {
         token: &str,
     ) -> axum::response::Response {
         use tower::ServiceExt;
-        let request = Request::post(uri)
+        let mut request = Request::post(uri)
             .header("content-type", "application/json")
             .header("authorization", format!("Bearer {token}"))
             .body(Body::from(body.to_owned()))
             .expect("请求构造必须成功");
+        inject_connect_info(&mut request);
         self.oneshot(request).await.expect("oneshot 必须成功")
     }
+
+    async fn oneshot_post_from_ip(
+        self,
+        ip: &str,
+        uri: &str,
+        body: &str,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = Request::post(uri)
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_owned()))
+            .expect("请求构造必须成功");
+        let addr: std::net::SocketAddr = format!("{ip}:44444").parse().expect("测试 IP 必须合法");
+        request.extensions_mut().insert(axum::extract::ConnectInfo(addr));
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+}
+
+/// 注入默认对端地址（限额键提取需要）。
+fn inject_connect_info(request: &mut Request<Body>) {
+    let addr: std::net::SocketAddr = "127.0.0.1:40000".parse().expect("默认地址必须合法");
+    request.extensions_mut().insert(axum::extract::ConnectInfo(addr));
 }
