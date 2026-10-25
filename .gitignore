@@ -3,6 +3,7 @@ node_modules/
 .nuxt/
 .output/
 dist/
+target/
 
 # 环境变量
 .env
