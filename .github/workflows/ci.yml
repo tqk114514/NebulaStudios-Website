@@ -49,6 +49,9 @@ jobs:
 
   server:
     runs-on: ubuntu-latest
+    env:
+      # §1：CI 用离线查询缓存（.sqlx/ 已提交），不连数据库
+      SQLX_OFFLINE: "true"
     steps:
       - uses: actions/checkout@v7.0.1
 
