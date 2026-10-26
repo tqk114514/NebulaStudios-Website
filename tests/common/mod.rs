@@ -13,7 +13,8 @@ use axum::http::{Request, StatusCode, header::SET_COOKIE};
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::context::ManualClock;
-use nebula_server::mailer::{EmailMessage, MailError, Mailer};
+pub use nebula_server::mailer::EmailMessage;
+use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::storage::sqlite::{
     self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteTotpRepo,
     SqliteUserRepo,

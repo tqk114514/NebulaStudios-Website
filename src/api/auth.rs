@@ -7,6 +7,7 @@ pub mod delete_request;
 pub mod login;
 pub mod login_totp;
 pub mod logout;
+pub mod password_reset;
 pub mod refresh;
 pub mod register;
 pub mod resend;
@@ -162,6 +163,7 @@ pub(crate) async fn issue_and_send_code(
     let subject = match purpose {
         VerificationPurpose::VerifyEmail => "Nebula 邮箱验证码",
         VerificationPurpose::DeleteAccount => "Nebula 账户注销确认码",
+        VerificationPurpose::PasswordReset => "Nebula 密码重置验证码",
     };
     let mailer = state.mailer.clone();
     let message = EmailMessage {
