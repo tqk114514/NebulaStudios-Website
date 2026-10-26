@@ -144,6 +144,21 @@ pub fn router(state: AppState) -> Router {
         .route("/api/user/totp/enable", post(user::totp_enable::enable))
         .route("/api/user/totp/disable", post(user::totp_disable::disable));
 
+    // v3 参数：密码重置发码突发 3、每 20 秒补 1
+    let reset_limited = Router::new()
+        .route("/api/auth/password/reset/request", post(auth::password_reset::reset_request))
+        .route("/api/auth/password/reset/confirm", post(auth::password_reset::reset_confirm))
+        .layer(
+            GovernorLayer::new(
+                GovernorConfigBuilder::default()
+                    .per_second(20)
+                    .burst_size(3)
+                    .finish()
+                    .unwrap_or_else(|| unreachable!("重置限额常量非法")),
+            )
+            .error_handler(|error| governor_error_response(&error)),
+        );
+
     // 限额参数沿用 v3：注册突发 3、每 20 秒补 1（per_second 语义是「补 1 个
     // 令牌的间隔秒数」，tower_governor 命名反直觉）；finish() 对常量参数必然
     // Some，None 只可能是实现笔误，启动即暴露优于带病运行。
@@ -188,7 +203,11 @@ pub fn router(state: AppState) -> Router {
             .error_handler(|error| governor_error_response(&error)),
         );
 
-    open.merge(register_limited).merge(login_limited).merge(verify_limited).with_state(state)
+    open.merge(register_limited)
+        .merge(login_limited)
+        .merge(verify_limited)
+        .merge(reset_limited)
+        .with_state(state)
 }
 
 /// 限额 429 的统一信封；`wait_time` 直接进 `details.retry_after`（ADR-0004）。

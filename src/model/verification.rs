@@ -20,6 +20,8 @@ pub enum VerificationPurpose {
     VerifyEmail,
     /// 账户注销确认。
     DeleteAccount,
+    /// 密码重置（未登录态；v3 边界：邮箱所有权即凭证，不要求 TOTP）。
+    PasswordReset,
 }
 
 impl VerificationPurpose {
@@ -29,6 +31,7 @@ impl VerificationPurpose {
         match self {
             Self::VerifyEmail => "email_verify",
             Self::DeleteAccount => "account_delete",
+            Self::PasswordReset => "password_reset",
         }
     }
 }
