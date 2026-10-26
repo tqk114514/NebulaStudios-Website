@@ -68,6 +68,8 @@ pub enum ApiError {
     TotpInvalid,
     /// 对未启用 TOTP 的账户执行启用态操作；409。
     TotpNotEnabled,
+    /// OAuth authorize 参数非法；400，`code` 为子错误码。
+    OAuthAuthorize(&'static str),
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -150,6 +152,12 @@ impl IntoResponse for ApiError {
             Self::TotpNotEnabled => {
                 (StatusCode::CONFLICT, "totp_not_enabled", "两步验证未启用".to_owned(), None)
             }
+            Self::OAuthAuthorize(sub) => (
+                StatusCode::BAD_REQUEST,
+                "oauth_authorize_invalid",
+                "授权请求参数非法".to_owned(),
+                Some(serde_json::json!({ "reason": sub })),
+            ),
             Self::ResendCooldown(remaining) => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "resend_cooldown",

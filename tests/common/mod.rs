@@ -16,8 +16,8 @@ use nebula_server::context::ManualClock;
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteTotpRepo,
-    SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteOAuthRepo, SqliteRefreshRepo,
+    SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -116,7 +116,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         session: test_session(),
         verification_repo: SqliteEmailVerificationRepo::from_pool(pool.clone()),
         account_repo: SqliteAccountRepo::from_pool(pool.clone()),
-        totp_repo: SqliteTotpRepo::from_pool(pool),
+        totp_repo: SqliteTotpRepo::from_pool(pool.clone()),
+        oauth_repo: SqliteOAuthRepo::from_pool(pool),
         mailer: Arc::new(mailbox.clone()),
     };
     (state, manual, mailbox, dir)
@@ -193,6 +194,15 @@ pub trait OneshotPost {
         uri: &str,
         body: &str,
     ) -> axum::response::Response;
+    /// GET with cookie。
+    async fn oneshot_get_with_cookie(
+        self,
+        uri: &str,
+        query: &str,
+        cookie: &str,
+    ) -> axum::response::Response;
+    /// POST form-urlencoded。
+    async fn oneshot_post_form(self, uri: &str, form: &str) -> axum::response::Response;
 }
 
 impl OneshotPost for axum::Router {
@@ -253,6 +263,34 @@ impl OneshotPost for axum::Router {
             .expect("请求构造必须成功");
         let addr: std::net::SocketAddr = format!("{ip}:44444").parse().expect("测试 IP 必须合法");
         request.extensions_mut().insert(axum::extract::ConnectInfo(addr));
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_get_with_cookie(
+        self,
+        uri: &str,
+        query: &str,
+        cookie: &str,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request =
+            Request::get(format!("{uri}?{query}")).body(Body::empty()).expect("请求构造必须成功");
+        if !cookie.is_empty() {
+            request
+                .headers_mut()
+                .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
+        }
+        inject_connect_info(&mut request);
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_post_form(self, uri: &str, form: &str) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = Request::post(uri)
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form.to_owned()))
+            .expect("请求构造必须成功");
+        inject_connect_info(&mut request);
         self.oneshot(request).await.expect("oneshot 必须成功")
     }
 }

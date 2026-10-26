@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT secret_hash FROM oauth_clients WHERE id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "secret_hash",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_clients",
+            "name": "secret_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "59b1656ef85b11967bcd758afe0b1b5146346288d4f501728747881b4e3a3d39"
+}

@@ -47,7 +47,8 @@ async fn main() -> anyhow::Result<()> {
             pool.clone(),
         ),
         account_repo: nebula_server::storage::sqlite::SqliteAccountRepo::from_pool(pool.clone()),
-        totp_repo: nebula_server::storage::sqlite::SqliteTotpRepo::from_pool(pool),
+        totp_repo: nebula_server::storage::sqlite::SqliteTotpRepo::from_pool(pool.clone()),
+        oauth_repo: nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(pool),
         mailer,
         session: SessionPolicy {
             access_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.access_ttl_secs)?)

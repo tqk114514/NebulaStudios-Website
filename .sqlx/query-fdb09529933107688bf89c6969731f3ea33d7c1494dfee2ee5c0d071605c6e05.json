@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id: uuid::Uuid\", client_id, user_id AS \"user_id: uuid::Uuid\",\n                      redirect_uri, scope, code_challenge,\n                      expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\"\n               FROM oauth_authorization_codes WHERE code_hash = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "client_id",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "name": "user_id: uuid::Uuid",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "redirect_uri",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "redirect_uri"
+          }
+        }
+      },
+      {
+        "name": "scope",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "scope"
+          }
+        }
+      },
+      {
+        "name": "code_challenge",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "code_challenge"
+          }
+        }
+      },
+      {
+        "name": "expires_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_authorization_codes",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fdb09529933107688bf89c6969731f3ea33d7c1494dfee2ee5c0d071605c6e05"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE oauth_authorization_codes SET consumed_at = ?2\n             WHERE id = ?1 AND consumed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "89de34ed763b5a401fc277020e4b3b2a65fd17d69e3f36dc3e4b01444a8f4b5f"
+}

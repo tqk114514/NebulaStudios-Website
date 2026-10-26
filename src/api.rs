@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod healthz;
+pub mod oauth;
 pub mod user;
 
 use std::fmt;
@@ -20,8 +21,8 @@ use tower_governor::governor::GovernorConfigBuilder;
 use crate::context::Clock;
 use crate::mailer::Mailer;
 use crate::storage::sqlite::{
-    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteRefreshRepo, SqliteTotpRepo,
-    SqliteUserRepo,
+    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteOAuthRepo, SqliteRefreshRepo,
+    SqliteTotpRepo, SqliteUserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -116,6 +117,8 @@ pub struct AppState {
     pub account_repo: SqliteAccountRepo,
     /// TOTP 仓储；与用户仓储共享连接池。
     pub totp_repo: SqliteTotpRepo,
+    /// `OAuth2` 仓储；与用户仓储共享连接池。
+    pub oauth_repo: SqliteOAuthRepo,
     /// 邮件端口。
     pub mailer: std::sync::Arc<dyn Mailer>,
 }
@@ -142,7 +145,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
         .route("/api/user/totp/setup", post(user::totp_setup::setup))
         .route("/api/user/totp/enable", post(user::totp_enable::enable))
-        .route("/api/user/totp/disable", post(user::totp_disable::disable));
+        .route("/api/user/totp/disable", post(user::totp_disable::disable))
+        .route("/api/oauth/authorize", get(oauth::authorize::authorize))
+        .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
+        .route("/api/oauth/token", post(oauth::token::token));
 
     // v3 参数：密码重置发码突发 3、每 20 秒补 1
     let reset_limited = Router::new()
