@@ -8,6 +8,7 @@ use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use uuid::Uuid;
 
+use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
@@ -42,6 +43,12 @@ pub struct SqliteAccountRepo {
 /// SQLite TOTP 仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteTotpRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite `OAuth2` 仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteOAuthRepo {
     pool: SqlitePool,
 }
 
@@ -100,6 +107,14 @@ impl SqliteAccountRepo {
 }
 
 impl SqliteTotpRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteOAuthRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -287,11 +302,12 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query!(
-            "INSERT INTO refresh_token_families (id, user_id, state, created_at)
-             VALUES (?1, ?2, 'active', ?3)",
+            "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id)
+             VALUES (?1, ?2, 'active', ?3, ?4)",
             token.family_id,
             token.user_id.as_uuid(),
             created_at,
+            token.client_id,
         )
         .execute(&mut *tx)
         .await?;
@@ -761,5 +777,88 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+}
+
+impl crate::storage::OAuthRepo for SqliteOAuthRepo {
+    async fn find_client(&self, client_id: &str) -> Result<Option<OAuthClient>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT id, name, redirect_uri, enabled AS "enabled: bool"
+               FROM oauth_clients WHERE id = ?1"#,
+            client_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| OAuthClient {
+            id: r.id,
+            name: r.name,
+            redirect_uri: r.redirect_uri,
+            enabled: r.enabled,
+        }))
+    }
+
+    async fn find_client_secret(&self, client_id: &str) -> Result<Option<String>, StorageError> {
+        let row = sqlx::query!("SELECT secret_hash FROM oauth_clients WHERE id = ?1", client_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.and_then(|r| r.secret_hash))
+    }
+
+    async fn create_code(
+        &self,
+        code_hash: &str,
+        code: &NewAuthorizationCode,
+        created_at: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "INSERT INTO oauth_authorization_codes
+             (id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge, expires_at, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            Uuid::now_v7(),
+            code_hash,
+            code.client_id,
+            code.user_id.as_uuid(),
+            code.redirect_uri,
+            code.scope,
+            code.code_challenge,
+            code.expires_at,
+            created_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn find_code(&self, code_hash: &str) -> Result<Option<AuthorizationCode>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", client_id, user_id AS "user_id: uuid::Uuid",
+                      redirect_uri, scope, code_challenge,
+                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
+               FROM oauth_authorization_codes WHERE code_hash = ?1"#,
+            code_hash,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| AuthorizationCode {
+            id: r.id,
+            client_id: r.client_id,
+            user_id: UserId::from_uuid(r.user_id),
+            redirect_uri: r.redirect_uri,
+            scope: r.scope,
+            code_challenge: r.code_challenge,
+            expires_at: r.expires_at,
+        }))
+    }
+
+    async fn consume_code(&self, code_id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
+        let consumed = sqlx::query!(
+            "UPDATE oauth_authorization_codes SET consumed_at = ?2
+             WHERE id = ?1 AND consumed_at IS NULL",
+            code_id,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(consumed.rows_affected() == 1)
     }
 }

@@ -33,6 +33,7 @@ fn fresh_entry(user_id: UserId, family_id: Uuid, expires_at: DateTime<Utc>) -> N
         user_id,
         token_hash: RefreshToken::generate().to_hash_hex(),
         expires_at,
+        client_id: None,
     }
 }
 

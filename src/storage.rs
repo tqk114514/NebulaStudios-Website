@@ -7,6 +7,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
 
+use crate::model::oauth2::{AuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshToken;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
@@ -361,4 +362,57 @@ pub trait TotpRepo: Send + Sync {
         user_id: &crate::model::user::UserId,
         now: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
+}
+
+/// `OAuth2` Provider 仓储。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+pub trait OAuthRepo: Send + Sync {
+    /// 按 `client_id` 取客户端。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn find_client(
+        &self,
+        client_id: &str,
+    ) -> impl Future<Output = Result<Option<OAuthClient>, StorageError>> + Send;
+
+    /// 取客户端密钥哈希（PHC 串）；公共客户端（未设密钥）返回 `None`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn find_client_secret(
+        &self,
+        client_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, StorageError>> + Send;
+
+    /// 落一条授权码（Fulfilled）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn create_code(
+        &self,
+        code_hash: &str,
+        code: &crate::model::oauth2::NewAuthorizationCode,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), StorageError>> + Send;
+
+    /// 按哈希取授权码。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn find_code(
+        &self,
+        code_hash: &str,
+    ) -> impl Future<Output = Result<Option<AuthorizationCode>, StorageError>> + Send;
+
+    /// 原子消费授权码（Fulfilled → Exchanged）；已被消费返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    fn consume_code(
+        &self,
+        code_id: &uuid::Uuid,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<bool, StorageError>> + Send;
 }

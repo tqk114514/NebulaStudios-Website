@@ -204,6 +204,8 @@ pub struct NewRefreshToken {
     pub token_hash: String,
     /// 过期时刻。
     pub expires_at: DateTime<Utc>,
+    /// 归属客户端；`None` 为第一方用户会话。
+    pub client_id: Option<String>,
 }
 
 #[cfg(test)]

@@ -62,6 +62,7 @@ pub(crate) async fn issue_session(
         user_id,
         token_hash: refresh.to_hash_hex(),
         expires_at: state.clock.now() + state.session.refresh_ttl,
+        client_id: None,
     };
     state
         .refresh_repo
@@ -262,4 +263,23 @@ pub(crate) async fn hash_password_in_background(plain: String) -> Result<Passwor
         .await
         .map_err(anyhow::Error::from)?
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
+}
+
+/// form/查询参数值的最小百分号编码（RFC 3986 保留字符；state 回传用）。
+pub(crate) fn form_urlencode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => {
+                out.push('%');
+                out.push(HEX[usize::from(byte >> 4)] as char);
+                out.push(HEX[usize::from(byte & 0x0f)] as char);
+            }
+        }
+    }
+    out
 }
