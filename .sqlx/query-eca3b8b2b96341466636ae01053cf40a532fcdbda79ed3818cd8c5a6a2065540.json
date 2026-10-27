@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.email,\n                      u.email_verified AS \"email_verified: bool\",\n                      b.kind,\n                      b.expires_at AS \"expires_at: Option<chrono::DateTime<chrono::Utc>>\"\n               FROM users u\n               LEFT JOIN user_bans b ON b.user_id = u.id\n               WHERE u.id = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "email",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "name": "email_verified: bool",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_verified"
+          }
+        }
+      },
+      {
+        "name": "kind",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_bans",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "name": "expires_at: Option<chrono::DateTime<chrono::Utc>>",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_bans",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "eca3b8b2b96341466636ae01053cf40a532fcdbda79ed3818cd8c5a6a2065540"
+}

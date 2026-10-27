@@ -1,11 +1,13 @@
 //! HTTP API：路由装配与请求处理依赖；一个端点一个文件（§2 vertical slice）。
 
+pub mod admin;
 pub mod auth;
 pub mod healthz;
 pub mod metrics;
 pub mod oauth;
 pub mod user;
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -31,8 +33,8 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use crate::context::{Clock, RequestId};
 use crate::mailer::Mailer;
 use crate::storage::{
-    AccountRepo, EmailVerificationRepo, MaintenanceRepo, OAuthRepo, RefreshTokenRepo, TotpRepo,
-    UserRepo,
+    AccountRepo, AdminRepo, EmailVerificationRepo, MaintenanceRepo, OAuthRepo, RefreshTokenRepo,
+    TotpRepo, UserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -202,6 +204,10 @@ pub struct AppState {
     pub oauth_repo: Arc<dyn OAuthRepo>,
     /// 过期数据清理仓储；与用户仓储共享连接池。
     pub maintenance_repo: Arc<dyn MaintenanceRepo>,
+    /// 管理后台仓储：统计、用户列表、封禁/解封与审计。
+    pub admin_repo: Arc<dyn AdminRepo>,
+    /// 配置化管理员邮箱（已 trim + 小写）；`AdminUser` 提取器据此判定。
+    pub admin_emails: Arc<HashSet<String>>,
     /// 邮件端口。
     pub mailer: Arc<dyn Mailer>,
     /// Prometheus 指标句柄；测试装配为 `None`，`/metrics` 返回 404。
@@ -231,6 +237,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/user/totp/setup", post(user::totp_setup::setup))
         .route("/api/user/totp/enable", post(user::totp_enable::enable))
         .route("/api/user/totp/disable", post(user::totp_disable::disable))
+        .route("/api/admin/stats", get(admin::stats::stats))
+        .route("/api/admin/users", get(admin::users::users))
+        .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
+        .route("/api/admin/audit", get(admin::audit::audit))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
         .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
         .route("/api/oauth/token", post(oauth::token::token));

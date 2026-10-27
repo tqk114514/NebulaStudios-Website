@@ -9,15 +9,16 @@ use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use uuid::Uuid;
 
+use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
-use crate::model::user::{LoginCredentials, User, UserId};
+use crate::model::user::{Ban, LoginCredentials, User, UserAccess, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{
-    CleanupReport, ClientBinding, RotateRefreshError, RotatedSession, StorageError, UserRepo,
-    UserRepoError,
+    AdminStats, AdminUserRow, CleanupReport, ClientBinding, RotateRefreshError, RotatedSession,
+    StorageError, UserRepo, UserRepoError,
 };
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -59,6 +60,12 @@ pub struct SqliteOAuthRepo {
 /// SQLite 维护仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteMaintenanceRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 管理后台仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteAdminRepo {
     pool: SqlitePool,
 }
 
@@ -133,6 +140,14 @@ impl SqliteOAuthRepo {
 }
 
 impl SqliteMaintenanceRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteAdminRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -259,6 +274,30 @@ impl UserRepo for SqliteUserRepo {
             },
             password_hash,
         }))
+    }
+
+    async fn find_access_state(
+        &self,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<Option<UserAccess>, UserRepoError> {
+        let row = sqlx::query!(
+            r#"SELECT u.email,
+                      u.email_verified AS "email_verified: bool",
+                      b.kind,
+                      b.expires_at AS "expires_at: Option<chrono::DateTime<chrono::Utc>>"
+               FROM users u
+               LEFT JOIN user_bans b ON b.user_id = u.id
+               WHERE u.id = ?1"#,
+            user_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else { return Ok(None) };
+        let ban = decode_ban(row.kind.as_deref(), row.expires_at.flatten(), now)
+            .map_err(UserRepoError::Storage)?;
+        Ok(Some(UserAccess { email: row.email, email_verified: row.email_verified, ban }))
     }
 
     async fn find_login_credentials(
@@ -441,18 +480,52 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        let families = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid" FROM refresh_token_families
-               WHERE user_id = ?1 AND state = 'active'"#,
-            user_id.as_uuid(),
-        )
-        .fetch_all(&mut *tx)
-        .await?;
-        for family in families {
-            revoke_family_in_tx(&mut tx, family.id, now).await?;
-        }
+        revoke_all_for_user_in_tx(&mut tx, user_id, now).await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+/// 在事务内撤销用户全部 active 家族；封禁与登出/改密共用。
+async fn revoke_all_for_user_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    user_id: &UserId,
+    now: DateTime<Utc>,
+) -> Result<(), StorageError> {
+    let families = sqlx::query!(
+        r#"SELECT id AS "id: uuid::Uuid" FROM refresh_token_families
+           WHERE user_id = ?1 AND state = 'active'"#,
+        user_id.as_uuid(),
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    for family in families {
+        revoke_family_in_tx(tx, family.id, now).await?;
+    }
+    Ok(())
+}
+
+/// 把 `user_bans` 的 (`kind`, `expires_at`) 解码为领域状态；到期临时封禁归为 `None`。
+fn decode_ban(
+    kind: Option<&str>,
+    expires_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<Option<Ban>, StorageError> {
+    match kind {
+        None => Ok(None),
+        Some("permanent") => Ok(Some(Ban::Permanent)),
+        Some("temporary") => match expires_at {
+            Some(expires_at) if expires_at > now => Ok(Some(Ban::Temporary(expires_at))),
+            Some(_) => Ok(None),
+            None => Err(StorageError::wrap(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "temporary ban missing expires_at",
+            ))),
+        },
+        Some(other) => Err(StorageError::wrap(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("unknown ban kind: {other}"),
+        ))),
     }
 }
 
@@ -955,6 +1028,14 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
         .await?
         .rows_affected();
 
+        let expired_bans = sqlx::query!(
+            "DELETE FROM user_bans WHERE kind = 'temporary' AND expires_at <= ?1",
+            now,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
         tx.commit().await?;
         Ok(CleanupReport {
             refresh_tokens,
@@ -963,6 +1044,207 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
             totp_recovery_codes,
             totp_login_challenges,
             oauth_authorization_codes,
+            expired_bans,
         })
+    }
+}
+
+#[async_trait]
+impl crate::storage::AdminRepo for SqliteAdminRepo {
+    async fn stats(
+        &self,
+        now: DateTime<Utc>,
+        since: DateTime<Utc>,
+    ) -> Result<AdminStats, StorageError> {
+        let total_users: i64 =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM users").fetch_one(&self.pool).await?;
+        let banned_users: i64 = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM user_bans WHERE kind = 'permanent' OR expires_at > ?1",
+            now,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let new_users_today: i64 =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE created_at >= ?1", since,)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(AdminStats { total_users, banned_users, new_users_today })
+    }
+
+    async fn list_users(
+        &self,
+        search: Option<&str>,
+        limit: i64,
+        offset: i64,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<AdminUserRow>, StorageError> {
+        let rows = sqlx::query!(
+            r#"SELECT u.id AS "id: uuid::Uuid",
+                      u.username,
+                      u.email,
+                      u.email_verified AS "email_verified: bool",
+                      u.created_at AS "created_at: chrono::DateTime<chrono::Utc>",
+                      b.kind,
+                      b.expires_at AS "expires_at: Option<chrono::DateTime<chrono::Utc>>"
+               FROM users u
+               LEFT JOIN user_bans b ON b.user_id = u.id
+               WHERE ?1 = ''
+                  OR u.email LIKE '%' || ?1 || '%'
+                  OR u.username LIKE '%' || ?1 || '%'
+               ORDER BY u.created_at DESC
+               LIMIT ?2 OFFSET ?3"#,
+            search.unwrap_or(""),
+            limit,
+            offset,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let ban = decode_ban(row.kind.as_deref(), row.expires_at.flatten(), now)?;
+                Ok(AdminUserRow {
+                    id: UserId::from_uuid(row.id),
+                    username: row.username,
+                    email: row.email,
+                    email_verified: row.email_verified,
+                    created_at: row.created_at,
+                    ban,
+                })
+            })
+            .collect()
+    }
+
+    async fn count_users(&self, search: Option<&str>) -> Result<i64, StorageError> {
+        let total: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM users u
+               WHERE ?1 = ''
+                  OR u.email LIKE '%' || ?1 || '%'
+                  OR u.username LIKE '%' || ?1 || '%'"#,
+            search.unwrap_or(""),
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(total)
+    }
+
+    async fn ban_user(
+        &self,
+        user_id: &UserId,
+        ban: &Ban,
+        reason: &str,
+        actor_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let exists: i64 =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE id = ?1", user_id.as_uuid())
+                .fetch_one(&mut *tx)
+                .await?;
+        if exists == 0 {
+            return Ok(false);
+        }
+
+        let (kind, expires_at) = match ban {
+            Ban::Permanent => ("permanent", None),
+            Ban::Temporary(expires_at) => ("temporary", Some(*expires_at)),
+        };
+        sqlx::query!(
+            "INSERT INTO user_bans (user_id, kind, expires_at, reason, created_at, created_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(user_id) DO UPDATE SET
+                 kind = excluded.kind,
+                 expires_at = excluded.expires_at,
+                 reason = excluded.reason,
+                 created_at = excluded.created_at,
+                 created_by = excluded.created_by",
+            user_id.as_uuid(),
+            kind,
+            expires_at,
+            reason,
+            now,
+            actor_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        // 封禁与撤销会话必须同事务：避免封禁生效但旧 refresh 仍可轮转
+        revoke_all_for_user_in_tx(&mut tx, user_id, now).await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn unban_user(&self, user_id: &UserId) -> Result<bool, StorageError> {
+        let deleted = sqlx::query!("DELETE FROM user_bans WHERE user_id = ?1", user_id.as_uuid())
+            .execute(&self.pool)
+            .await?;
+        Ok(deleted.rows_affected() == 1)
+    }
+
+    async fn record_audit(
+        &self,
+        entry: &NewAuditEntry,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let details = entry
+            .details
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(StorageError::wrap)?;
+        sqlx::query!(
+            "INSERT INTO audit_logs (id, actor_id, action, target_id, details, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            Uuid::now_v7(),
+            entry.actor_id.as_uuid(),
+            entry.action,
+            entry.target_id.as_ref().map(UserId::as_uuid),
+            details,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn list_audit(&self, limit: i64, offset: i64) -> Result<Vec<AuditEntry>, StorageError> {
+        let rows = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid",
+                      actor_id AS "actor_id: uuid::Uuid",
+                      action,
+                      target_id AS "target_id: Option<uuid::Uuid>",
+                      details,
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+               FROM audit_logs
+               ORDER BY created_at DESC
+               LIMIT ?1 OFFSET ?2"#,
+            limit,
+            offset,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let details: Option<serde_json::Value> = row
+                    .details
+                    .map(|raw| serde_json::from_str(&raw))
+                    .transpose()
+                    .map_err(StorageError::wrap)?;
+                Ok(AuditEntry {
+                    id: row.id,
+                    actor_id: UserId::from_uuid(row.actor_id),
+                    action: row.action,
+                    target_id: row.target_id.flatten().map(UserId::from_uuid),
+                    details,
+                    created_at: row.created_at,
+                })
+            })
+            .collect()
+    }
+
+    async fn count_audit(&self) -> Result<i64, StorageError> {
+        let total: i64 =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM audit_logs").fetch_one(&self.pool).await?;
+        Ok(total)
     }
 }

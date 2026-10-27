@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_bans (user_id, kind, expires_at, reason, created_at, created_by)\n             VALUES (?1, ?2, ?3, ?4, ?5, ?6)\n             ON CONFLICT(user_id) DO UPDATE SET\n                 kind = excluded.kind,\n                 expires_at = excluded.expires_at,\n                 reason = excluded.reason,\n                 created_at = excluded.created_at,\n                 created_by = excluded.created_by",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "eb82caf97ae30ea51f7e103a91fa1f10f933ccb357420cf6b9dcb94a9be8bb50"
+}

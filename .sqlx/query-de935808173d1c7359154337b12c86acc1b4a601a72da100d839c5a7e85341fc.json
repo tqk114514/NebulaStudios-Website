@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT u.id AS \"id: uuid::Uuid\",\n                      u.username,\n                      u.email,\n                      u.email_verified AS \"email_verified: bool\",\n                      u.created_at AS \"created_at: chrono::DateTime<chrono::Utc>\",\n                      b.kind,\n                      b.expires_at AS \"expires_at: Option<chrono::DateTime<chrono::Utc>>\"\n               FROM users u\n               LEFT JOIN user_bans b ON b.user_id = u.id\n               WHERE ?1 = ''\n                  OR u.email LIKE '%' || ?1 || '%'\n                  OR u.username LIKE '%' || ?1 || '%'\n               ORDER BY u.created_at DESC\n               LIMIT ?2 OFFSET ?3",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "username",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "name": "email",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "name": "email_verified: bool",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email_verified"
+          }
+        }
+      },
+      {
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "name": "kind",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_bans",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "name": "expires_at: Option<chrono::DateTime<chrono::Utc>>",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "user_bans",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "de935808173d1c7359154337b12c86acc1b4a601a72da100d839c5a7e85341fc"
+}

@@ -1,5 +1,6 @@
 //! 装配与监听，无业务逻辑（AGENTS.md §2）。
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
 use nebula_server::context::SystemClock;
 use nebula_server::storage::sqlite::{
-    self, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
+    self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
 };
 use nebula_server::telemetry;
 
@@ -49,6 +50,19 @@ async fn main() -> anyhow::Result<()> {
             Some(config.cors.allowed_origin.parse().context("解析 CORS allowed_origin")?)
         };
     let (metrics_layer, metrics_handle) = PrometheusMetricLayer::pair();
+    let admin_emails: Arc<HashSet<String>> = Arc::new(
+        config
+            .admin
+            .emails
+            .split(',')
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(str::to_lowercase)
+            .collect(),
+    );
+    if admin_emails.is_empty() {
+        tracing::warn!("未配置管理员邮箱，/api/admin/* 不可用");
+    }
 
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
@@ -67,7 +81,9 @@ async fn main() -> anyhow::Result<()> {
         oauth_repo: Arc::new(nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(
             pool.clone(),
         )),
-        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool)),
+        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
+        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
+        admin_emails,
         mailer,
         metrics: Some(Arc::new(metrics_handle)),
         cors_allowed_origin,

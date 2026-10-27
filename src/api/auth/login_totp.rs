@@ -53,6 +53,19 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
         return Err(invalid);
     }
 
+    // 挑战签发后可能被封禁；二段完成前再查一次实时状态
+    let Some(access) = state
+        .user_repo
+        .find_access_state(&challenge.user_id, now)
+        .await
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
+    else {
+        return Err(invalid);
+    };
+    if access.ban.is_some() {
+        return Err(ApiError::Banned);
+    }
+
     // 用户须仍处于 Enabled（disable 后挑战已全部作废，此处是纵深防御）
     let Some((crate::model::totp::TotpState::Enabled, Some(secret))) =
         state.totp_repo.find(&challenge.user_id).await.map_err(anyhow::Error::from)?

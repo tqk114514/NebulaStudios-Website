@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id: uuid::Uuid\",\n                      actor_id AS \"actor_id: uuid::Uuid\",\n                      action,\n                      target_id AS \"target_id: Option<uuid::Uuid>\",\n                      details,\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n               FROM audit_logs\n               ORDER BY created_at DESC\n               LIMIT ?1 OFFSET ?2",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "actor_id: uuid::Uuid",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "actor_id"
+          }
+        }
+      },
+      {
+        "name": "action",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "name": "target_id: Option<uuid::Uuid>",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "target_id"
+          }
+        }
+      },
+      {
+        "name": "details",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "details"
+          }
+        }
+      },
+      {
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "audit_logs",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "38e122bde6c7919884c57dda343dfe5882e4e089ba4536554dc09f2a228bea8a"
+}

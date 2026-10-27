@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id: uuid::Uuid\" FROM refresh_token_families\n               WHERE user_id = ?1 AND state = 'active'",
+  "query": "SELECT id AS \"id: uuid::Uuid\" FROM refresh_token_families\n           WHERE user_id = ?1 AND state = 'active'",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "e9184f72eaac0be5d272c8c722072427930863bd8acd1e0880f83c08d30fc5f7"
+  "hash": "5ec5828f8433bd0c44bbd9d1da49cbcf1c430368d98eda5c6cc1b8b80316df3d"
 }

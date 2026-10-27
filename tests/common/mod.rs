@@ -5,6 +5,7 @@
 // 测试装配内的 expect 同样属于测试语义
 #![allow(clippy::expect_used, dead_code)]
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -16,8 +17,8 @@ use nebula_server::context::ManualClock;
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteMaintenanceRepo, SqliteOAuthRepo,
-    SqliteRefreshRepo, SqliteTotpRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteAdminRepo, SqliteEmailVerificationRepo, SqliteMaintenanceRepo,
+    SqliteOAuthRepo, SqliteRefreshRepo, SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -95,6 +96,19 @@ pub async fn await_first_mail(mailbox: &Mailbox) -> EmailMessage {
     panic!("验证邮件未在预期时间内发出");
 }
 
+/// 等待发给指定收件人的邮件；同一测试注册多个账号时避免拿到别人的码。
+pub async fn await_mail_for(mailbox: &Mailbox, email: &str) -> EmailMessage {
+    for _ in 0..200 {
+        if let Some(message) =
+            mailbox.messages().into_iter().find(|message| message.to.eq_ignore_ascii_case(email))
+        {
+            return message;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("发给 {email} 的验证邮件未在预期时间内发出");
+}
+
 /// 装配 `AppState`：临时库 + 固定时钟 + 测试密钥 + 捕获信箱；`TempDir` 钉住文件生命周期。
 pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");
@@ -118,7 +132,9 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         account_repo: Arc::new(SqliteAccountRepo::from_pool(pool.clone())),
         totp_repo: Arc::new(SqliteTotpRepo::from_pool(pool.clone())),
         oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool.clone())),
-        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool)),
+        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
+        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
+        admin_emails: Arc::new(HashSet::new()),
         mailer: Arc::new(mailbox.clone()),
         metrics: None,
         cors_allowed_origin: None,
@@ -148,6 +164,22 @@ pub async fn register_user(app: &axum::Router, email: &str, username: &str, pass
     let body = format!(r#"{{"email":"{email}","username":"{username}","password":"{password}"}}"#);
     let response = app.clone().oneshot_post("/api/auth/register", &body).await;
     assert_eq!(response.status(), StatusCode::CREATED, "注册助手必须成功");
+}
+
+/// 注册并完成邮箱验证；需要管理员权限的测试必须走这里。
+pub async fn register_verified_user(
+    app: &axum::Router,
+    email: &str,
+    username: &str,
+    password: &str,
+    mailbox: &Mailbox,
+) {
+    register_user(app, email, username, password).await;
+    let message = await_mail_for(mailbox, email).await;
+    let code = extract_code(&message);
+    let body = serde_json::json!({ "email": email, "code": code }).to_string();
+    let response = app.clone().oneshot_post("/api/auth/register/verify", &body).await;
+    assert_eq!(response.status(), StatusCode::NO_CONTENT, "邮箱验证助手必须成功");
 }
 
 /// 从响应的 Set-Cookie 里取出指定 cookie 的值。
@@ -316,8 +348,13 @@ pub struct Session {
 
 /// 以默认账号登录并取回会话三件套。
 pub async fn login_session(app: &axum::Router) -> Session {
-    let body = r#"{"identifier":"nova@nebula.st","password":"Nebula!Passw0rd-2026"}"#;
-    let response = app.clone().oneshot_post("/api/auth/login", body).await;
+    login_as(app, "nova@nebula.st", "Nebula!Passw0rd-2026").await
+}
+
+/// 以指定标识与口令登录并取回会话三件套。
+pub async fn login_as(app: &axum::Router, identifier: &str, password: &str) -> Session {
+    let body = serde_json::json!({ "identifier": identifier, "password": password }).to_string();
+    let response = app.clone().oneshot_post("/api/auth/login", &body).await;
     assert_eq!(response.status(), axum::http::StatusCode::OK, "登录助手必须成功");
     Session {
         access: set_cookie_of(&response, "nebula_access").unwrap(),
