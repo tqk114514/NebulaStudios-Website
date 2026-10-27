@@ -39,16 +39,20 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let state = AppState {
-        user_repo: SqliteUserRepo::from_pool(pool.clone()),
-        refresh_repo: SqliteRefreshRepo::from_pool(pool.clone()),
+        user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
+        refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
         clock: Arc::new(SystemClock),
         jwt,
-        verification_repo: nebula_server::storage::sqlite::SqliteEmailVerificationRepo::from_pool(
-            pool.clone(),
+        verification_repo: Arc::new(
+            nebula_server::storage::sqlite::SqliteEmailVerificationRepo::from_pool(pool.clone()),
         ),
-        account_repo: nebula_server::storage::sqlite::SqliteAccountRepo::from_pool(pool.clone()),
-        totp_repo: nebula_server::storage::sqlite::SqliteTotpRepo::from_pool(pool.clone()),
-        oauth_repo: nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(pool),
+        account_repo: Arc::new(nebula_server::storage::sqlite::SqliteAccountRepo::from_pool(
+            pool.clone(),
+        )),
+        totp_repo: Arc::new(nebula_server::storage::sqlite::SqliteTotpRepo::from_pool(
+            pool.clone(),
+        )),
+        oauth_repo: Arc::new(nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(pool)),
         mailer,
         session: SessionPolicy {
             access_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.access_ttl_secs)?)

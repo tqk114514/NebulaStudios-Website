@@ -68,7 +68,12 @@ pub enum ApiError {
     TotpInvalid,
     /// 对未启用 TOTP 的账户执行启用态操作；409。
     TotpNotEnabled,
-    /// OAuth authorize 参数非法；400，`code` 为子错误码。
+    /// 已启用 TOTP 的账户再次 setup；409。
+    TotpAlreadyEnabled,
+    /// TOTP 不处于待验证态，不能 enable；409。
+    TotpNotPending,
+    /// 第一方 consent 端点的 OAuth 参数非法；400，`code` 为子错误码。
+    /// 标准 authorize GET 在 handler 层转为 RFC 6749 错误形状。
     OAuthAuthorize(&'static str),
 }
 
@@ -152,6 +157,15 @@ impl IntoResponse for ApiError {
             Self::TotpNotEnabled => {
                 (StatusCode::CONFLICT, "totp_not_enabled", "两步验证未启用".to_owned(), None)
             }
+            Self::TotpAlreadyEnabled => {
+                (StatusCode::CONFLICT, "totp_already_enabled", "两步验证已启用".to_owned(), None)
+            }
+            Self::TotpNotPending => (
+                StatusCode::CONFLICT,
+                "totp_not_pending",
+                "两步验证不处于待验证状态".to_owned(),
+                None,
+            ),
             Self::OAuthAuthorize(sub) => (
                 StatusCode::BAD_REQUEST,
                 "oauth_authorize_invalid",

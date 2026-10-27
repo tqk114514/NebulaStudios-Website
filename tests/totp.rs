@@ -8,7 +8,6 @@ use common::{
     Mailbox, OneshotPost, Session, await_first_mail, body_text, cookie_header, login_session,
     register_user, set_cookie_of,
 };
-use nebula_server::storage::{TotpRepo, UserRepo};
 
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";
@@ -100,7 +99,37 @@ async fn setup_is_illegal_when_already_enabled() {
         .await;
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
-    assert!(body_text(response).await.contains("totp_not_enabled"));
+    assert!(body_text(response).await.contains("totp_already_enabled"));
+}
+
+#[tokio::test]
+async fn enable_without_pending_is_409_totp_not_pending() {
+    let (app, _state, _clock, mailbox, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let code = common::extract_code(&await_first_mail(&mailbox).await);
+    let verified = app
+        .clone()
+        .oneshot_post(
+            "/api/auth/register/verify",
+            &format!(r#"{{"email":"{EMAIL}","code":"{code}"}}"#),
+        )
+        .await;
+    assert_eq!(verified.status(), StatusCode::NO_CONTENT);
+    let session = login_session(&app).await;
+
+    // 未 setup（Disabled）直接 enable：不是 Pending，必须返回专门的状态错误
+    let response = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/enable",
+            r#"{"code":"123456"}"#,
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(body_text(response).await.contains("totp_not_pending"));
 }
 
 #[tokio::test]

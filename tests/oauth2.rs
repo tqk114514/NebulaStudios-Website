@@ -268,7 +268,8 @@ async fn plain_pkce_method_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
-    assert_eq!(json["details"]["reason"], "invalid_request");
+    // authorize 面向第三方客户端，错误按 RFC 6749 形状返回（ADR-0004 §5）
+    assert_eq!(json["error"], "invalid_request");
 }
 
 #[tokio::test]
@@ -301,6 +302,19 @@ async fn missing_challenge_is_rejected() {
 }
 
 #[tokio::test]
+async fn authorize_missing_query_param_is_rfc_error() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+
+    // 缺 client_id 等必填项：查询串解析失败必须走 RFC 错误，而非 axum 默认文本 400
+    let response =
+        app.clone().oneshot_get_with_cookie("/api/oauth/authorize", "scope=profile", "").await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
+    assert_eq!(json["error"], "invalid_request");
+}
+
+#[tokio::test]
 async fn redirect_mismatch_is_rejected() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
     seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
@@ -320,6 +334,7 @@ async fn redirect_mismatch_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
+    // consent 是第一方 SPA 的 JSON 端点，错误仍走统一信封（ADR-0004 §5）
     assert_eq!(json["details"]["reason"], "invalid_redirect_uri");
 }
 
@@ -438,7 +453,7 @@ async fn disabled_client_is_rejected_at_authorize() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
-    assert_eq!(json["details"]["reason"], "invalid_client");
+    assert_eq!(json["error"], "invalid_client");
 }
 
 #[tokio::test]
@@ -459,5 +474,5 @@ async fn unknown_scope_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
-    assert_eq!(json["details"]["reason"], "invalid_scope");
+    assert_eq!(json["error"], "invalid_scope");
 }

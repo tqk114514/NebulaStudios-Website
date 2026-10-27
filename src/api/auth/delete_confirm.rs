@@ -7,12 +7,11 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{check_verification_code, clear_session_cookies};
-use crate::api::AppState;
+use super::check_verification_code;
+use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 use crate::model::verification::VerificationPurpose;
-use crate::storage::{AccountRepo, EmailVerificationRepo};
 
 /// 注销确认请求。
 #[derive(Debug, Deserialize)]

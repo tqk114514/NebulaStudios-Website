@@ -11,6 +11,8 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::http::StatusCode;
+use axum::http::header::SET_COOKIE;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use chrono::TimeDelta;
@@ -20,9 +22,8 @@ use tower_governor::governor::GovernorConfigBuilder;
 
 use crate::context::Clock;
 use crate::mailer::Mailer;
-use crate::storage::sqlite::{
-    SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteOAuthRepo, SqliteRefreshRepo,
-    SqliteTotpRepo, SqliteUserRepo,
+use crate::storage::{
+    AccountRepo, EmailVerificationRepo, OAuthRepo, RefreshTokenRepo, TotpRepo, UserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -44,6 +45,62 @@ pub fn cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<Strin
                 .find_map(|pair| pair.strip_prefix(&prefix).map(ToOwned::to_owned))
         },
     )
+}
+
+/// cookie 的 Max-Age 取整秒；负值（异常配置）钳到 0。
+pub(crate) fn cookie_max_age(ttl: TimeDelta) -> u64 {
+    ttl.num_seconds().max(0).cast_unsigned()
+}
+
+/// 追加 access cookie 到响应头。
+pub(crate) fn set_access_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
+    append_cookie(
+        headers,
+        &format!(
+            "{ACCESS_COOKIE}={token}; Path=/; Max-Age={max_age_secs}; HttpOnly; Secure; SameSite=Lax"
+        ),
+    );
+}
+
+/// 追加 csrf cookie 到响应头；非 HttpOnly——SPA 要读取它经头回显（ADR-0005）。
+pub(crate) fn set_csrf_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
+    append_cookie(
+        headers,
+        &format!("{CSRF_COOKIE}={token}; Path=/; Max-Age={max_age_secs}; Secure; SameSite=Lax"),
+    );
+}
+
+/// 追加 refresh cookie 到响应头（路径收窄到 /api/auth）。
+pub(crate) fn set_refresh_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
+    append_cookie(
+        headers,
+        &format!(
+            "{REFRESH_COOKIE}={token}; Path=/api/auth; Max-Age={max_age_secs}; HttpOnly; Secure; SameSite=Lax"
+        ),
+    );
+}
+
+/// 追加三条失效 cookie（Max-Age=0）清除会话。
+pub(crate) fn clear_session_cookies(headers: &mut HeaderMap) {
+    append_cookie(
+        headers,
+        &format!("{ACCESS_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
+    );
+    append_cookie(
+        headers,
+        &format!("{REFRESH_COOKIE}=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
+    );
+    append_cookie(headers, &format!("{CSRF_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Lax"));
+}
+
+fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
+    // cookie 各组成部分均为 token 安全字符，parse 失败只可能是实现 bug
+    match cookie.parse::<HeaderValue>() {
+        Ok(value) => {
+            headers.append(SET_COOKIE, value);
+        }
+        Err(_) => unreachable!("cookie 值含非法头字符: {cookie}"),
+    }
 }
 
 /// JWT 密钥对（ES256）；从配置指定的 PEM 文件加载。
@@ -102,9 +159,9 @@ pub struct SessionPolicy {
 #[derive(Clone)]
 pub struct AppState {
     /// 用户仓储。
-    pub user_repo: SqliteUserRepo,
+    pub user_repo: Arc<dyn UserRepo>,
     /// refresh 家族仓储；与用户仓储共享连接池。
-    pub refresh_repo: SqliteRefreshRepo,
+    pub refresh_repo: Arc<dyn RefreshTokenRepo>,
     /// 时钟；所有时间取值经此（§2 时钟注入），handler 不得直接 `Utc::now()`。
     pub clock: Arc<dyn Clock>,
     /// JWT 密钥对。
@@ -112,24 +169,20 @@ pub struct AppState {
     /// 会话时长。
     pub session: SessionPolicy,
     /// 邮箱验证码仓储；与用户仓储共享连接池。
-    pub verification_repo: SqliteEmailVerificationRepo,
+    pub verification_repo: Arc<dyn EmailVerificationRepo>,
     /// 账户删除仓储；与用户仓储共享连接池。
-    pub account_repo: SqliteAccountRepo,
+    pub account_repo: Arc<dyn AccountRepo>,
     /// TOTP 仓储；与用户仓储共享连接池。
-    pub totp_repo: SqliteTotpRepo,
+    pub totp_repo: Arc<dyn TotpRepo>,
     /// `OAuth2` 仓储；与用户仓储共享连接池。
-    pub oauth_repo: SqliteOAuthRepo,
+    pub oauth_repo: Arc<dyn OAuthRepo>,
     /// 邮件端口。
-    pub mailer: std::sync::Arc<dyn Mailer>,
+    pub mailer: Arc<dyn Mailer>,
 }
 
 impl fmt::Debug for AppState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AppState")
-            .field("user_repo", &self.user_repo)
-            .field("refresh_repo", &self.refresh_repo)
-            .field("session", &self.session)
-            .finish_non_exhaustive()
+        f.debug_struct("AppState").field("session", &self.session).finish_non_exhaustive()
     }
 }
 

@@ -4,17 +4,17 @@
 //! 第三方错误页回传（RFC 6749 §4.1.2.1）由后续切片按已验证前提交接。
 
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{RawQuery, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
+use super::{form_urlencode, rfc_error};
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
 use crate::model::oauth2::{AUTH_CODE_TTL, NewAuthorizationCode, valid_challenge, valid_scope};
 use crate::model::tokens::RefreshToken;
-use crate::storage::OAuthRepo;
 
 /// authorize 查询参数（RFC 6749 §4.1.1）。
 #[derive(Debug, Deserialize)]
@@ -93,20 +93,33 @@ fn bad(code: &'static str) -> ApiError {
 }
 
 /// 处理 GET：返回 consent 页渲染所需的客户端信息（ADR-0004 裸数据）。
-///
-/// # Errors
-/// 参数非法 400；内部故障 500。
-pub async fn authorize(
-    State(state): State<AppState>,
-    axum::extract::Query(query): axum::extract::Query<AuthorizeQuery>,
-) -> Result<Response, ApiError> {
-    let client = validate_authorize(&state, &query).await?;
-    Ok(axum::Json(serde_json::json!({
-        "client_name": client.name,
-        "scope": query.scope,
-        "state": query.state,
-    }))
-    .into_response())
+/// 本端点面向第三方客户端，错误按 RFC 6749 `{error}` 返回（ADR-0004 §5）；
+/// 查询串解析失败也归一为 `invalid_request`，不用 axum 默认的文本 400。
+pub async fn authorize(State(state): State<AppState>, RawQuery(raw): RawQuery) -> Response {
+    let Some(raw) = raw else {
+        return rfc_error(StatusCode::BAD_REQUEST, "invalid_request");
+    };
+    let query: AuthorizeQuery = match serde_urlencoded::from_str(&raw) {
+        Ok(query) => query,
+        Err(_) => return rfc_error(StatusCode::BAD_REQUEST, "invalid_request"),
+    };
+
+    match validate_authorize(&state, &query).await {
+        Ok(client) => (
+            StatusCode::OK,
+            axum::Json(serde_json::json!({
+                "client_name": client.name,
+                "scope": query.scope,
+                "state": query.state,
+            })),
+        )
+            .into_response(),
+        Err(ApiError::OAuthAuthorize(code)) => rfc_error(StatusCode::BAD_REQUEST, code),
+        Err(err) => {
+            tracing::error!(error = ?err, "oauth authorize internal error");
+            rfc_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
+        }
+    }
 }
 
 /// 处理 consent：重复全量校验（防 TOCTOU）→ 签发授权码 → 302 回携码。
@@ -157,7 +170,7 @@ pub async fn consent(
     location.push_str(code.as_str());
     if !query.state.is_empty() {
         location.push_str("&state=");
-        location.push_str(&crate::api::auth::form_urlencode(&query.state));
+        location.push_str(&form_urlencode(&query.state));
     }
 
     let mut headers = HeaderMap::new();

@@ -109,15 +109,15 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
     let manual = Arc::new(ManualClock::new(start));
     let mailbox = Mailbox::default();
     let state = AppState {
-        user_repo: SqliteUserRepo::from_pool(pool.clone()),
-        refresh_repo: SqliteRefreshRepo::from_pool(pool.clone()),
+        user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
+        refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
         clock: manual.clone(),
         jwt: test_jwt(),
         session: test_session(),
-        verification_repo: SqliteEmailVerificationRepo::from_pool(pool.clone()),
-        account_repo: SqliteAccountRepo::from_pool(pool.clone()),
-        totp_repo: SqliteTotpRepo::from_pool(pool.clone()),
-        oauth_repo: SqliteOAuthRepo::from_pool(pool),
+        verification_repo: Arc::new(SqliteEmailVerificationRepo::from_pool(pool.clone())),
+        account_repo: Arc::new(SqliteAccountRepo::from_pool(pool.clone())),
+        totp_repo: Arc::new(SqliteTotpRepo::from_pool(pool.clone())),
+        oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool)),
         mailer: Arc::new(mailbox.clone()),
     };
     (state, manual, mailbox, dir)

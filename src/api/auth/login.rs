@@ -1,5 +1,6 @@
-//! POST /api/auth/login：口令登录（ADR-0002 语义；TOTP 二段随 TOTP 切片接入，
-//! 接入后此处改为签发中转 token 而非直接建会话）。
+//! POST /api/auth/login：口令登录（ADR-0002 语义）。启用 TOTP 的账户不直接建会话，
+//! 而是签发单次登录挑战（`totp_required` + `details.challenge_token`），由
+//! `/api/auth/login/totp` 完成二段验证。
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -12,8 +13,6 @@ use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::password::PasswordHash;
 use crate::model::totp::{CHALLENGE_TTL, TotpState};
-use crate::storage::TotpRepo;
-use crate::storage::UserRepo;
 
 /// 登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。
 #[derive(Debug, Deserialize)]

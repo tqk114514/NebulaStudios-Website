@@ -10,7 +10,6 @@ use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
 use crate::model::totp::{generate_secret, otpauth_uri};
-use crate::storage::{TotpRepo, UserRepo};
 
 /// setup 响应；密钥与 URI 由用户导入验证器 App。
 #[derive(Debug, Serialize)]
@@ -40,7 +39,7 @@ pub async fn setup(
         return Err(ApiError::Internal(anyhow::anyhow!("JWT 指向的用户不存在: {}", user.user_id)));
     };
 
-    totp_state.on_setup().map_err(|_| ApiError::TotpNotEnabled)?;
+    totp_state.on_setup().map_err(|_| ApiError::TotpAlreadyEnabled)?;
 
     let secret = generate_secret();
     state

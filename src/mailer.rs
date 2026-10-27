@@ -48,7 +48,7 @@ impl StdError for MailError {
 }
 
 /// 邮件端口；handler 只见本 trait。装箱 future 以支持 trait 对象（运行时切换
-/// SMTP / 日志实现），与仓储层的 RPITIT 不同形是有意的。
+/// SMTP / 日志实现；仓储层同样经 `async_trait` 装箱）。
 pub trait Mailer: Send + Sync {
     /// 发送一封邮件。
     ///

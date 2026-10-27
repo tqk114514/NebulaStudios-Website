@@ -11,7 +11,6 @@ use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
-use crate::storage::TotpRepo;
 
 /// enable 请求。
 #[derive(Debug, Deserialize)]
@@ -30,7 +29,7 @@ pub struct EnableResponse {
 /// 处理 enable：Pending 态 + pending 密钥下的码验证通过 → Enabled。
 ///
 /// # Errors
-/// 未认证 401；码错 401 `totp_invalid`；非 Pending 态 409 `totp_not_enabled`；
+/// 未认证 401；码错 401 `totp_invalid`；非 Pending 态 409 `totp_not_pending`；
 /// 内部故障 500。
 pub async fn enable(
     State(state): State<AppState>,
@@ -46,15 +45,20 @@ pub async fn enable(
         }]));
     }
 
-    let Some((totp_state, Some(secret))) =
+    let Some((totp_state, secret)) =
         state.totp_repo.find(&user.user_id).await.map_err(anyhow::Error::from)?
     else {
-        return Err(ApiError::TotpNotEnabled);
+        return Err(ApiError::Internal(anyhow::anyhow!("JWT 指向的用户不存在: {}", user.user_id)));
     };
-    // Pending 且密钥在位才可启用；Enabled 再 enable 是非法转移
-    if totp_state.on_enable().is_err() {
-        return Err(ApiError::TotpNotEnabled);
-    }
+    // 仅 Pending 可启用；Enabled 再 enable、Disabled 直接 enable 都是非法转移
+    totp_state.on_enable().map_err(|_| ApiError::TotpNotPending)?;
+    // Pending 态密钥必须存在；缺失属数据损坏，不能当作客户端错误
+    let Some(secret) = secret else {
+        return Err(ApiError::Internal(anyhow::anyhow!(
+            "pending 状态缺少 TOTP 密钥: {}",
+            user.user_id
+        )));
+    };
     if !verify_code(&secret, req.code.trim(), state.clock.now()) {
         return Err(ApiError::TotpInvalid);
     }

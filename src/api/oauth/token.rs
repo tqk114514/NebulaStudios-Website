@@ -9,12 +9,13 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
+use super::rfc_error;
 use crate::api::AppState;
 use crate::model::oauth2::{TokenError, verify_pkce_s256};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::{AccessClaims, NewRefreshFamily, RefreshToken, sign_access};
 use crate::model::user::UserId;
-use crate::storage::{ClientBinding, OAuthRepo, RefreshTokenRepo, RotateRefreshError};
+use crate::storage::{ClientBinding, RotateRefreshError};
 use uuid::Uuid;
 
 /// 兑换请求（`application/x-www-form-urlencoded`）。
@@ -63,25 +64,31 @@ pub struct TokenResponse {
 pub async fn token(State(state): State<AppState>, body: Bytes) -> Response {
     let req: TokenRequest = match serde_urlencoded::from_bytes(&body) {
         Ok(req) => req,
-        Err(_) => return rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidRequest),
+        Err(_) => return rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidRequest.as_str()),
     };
     match req.grant_type.as_str() {
         "authorization_code" => authorization_code_grant(state, req).await,
         "refresh_token" => refresh_grant(state, req).await,
-        _ => rfc_error(StatusCode::BAD_REQUEST, TokenError::UnsupportedGrantType),
+        _ => rfc_error(StatusCode::BAD_REQUEST, TokenError::UnsupportedGrantType.as_str()),
     }
 }
 
 /// 授权码兑换：client 认证 → 码校验（归属/时效/redirect/PKCE）→ 原子消费 → 签发对。
 async fn authorization_code_grant(state: AppState, req: TokenRequest) -> Response {
-    let Some(client) = authenticated_client(&state, &req).await else {
-        return rfc_error(StatusCode::UNAUTHORIZED, TokenError::InvalidClient);
+    let client = match authenticated_client(&state, &req).await {
+        Ok(Some(client)) => client,
+        Ok(None) => {
+            return rfc_error(StatusCode::UNAUTHORIZED, TokenError::InvalidClient.as_str());
+        }
+        Err(err) => return internal(err),
     };
 
-    let invalid = || rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidGrant);
+    let invalid = || rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidGrant.as_str());
     let code_hash = RefreshToken::hash_of(req.code.trim());
-    let Ok(Some(record)) = state.oauth_repo.find_code(&code_hash).await else {
-        return invalid();
+    let record = match state.oauth_repo.find_code(&code_hash).await {
+        Ok(Some(record)) => record,
+        Ok(None) => return invalid(),
+        Err(err) => return internal(anyhow::Error::new(err)),
     };
     let now = state.clock.now();
     if record.expires_at <= now {
@@ -109,11 +116,15 @@ async fn authorization_code_grant(state: AppState, req: TokenRequest) -> Respons
 
 /// `refresh` 流：在原家族内轮转，家族客户端与 scope 由存储层校验并返回。
 async fn refresh_grant(state: AppState, req: TokenRequest) -> Response {
-    let Some(client) = authenticated_client(&state, &req).await else {
-        return rfc_error(StatusCode::UNAUTHORIZED, TokenError::InvalidClient);
+    let client = match authenticated_client(&state, &req).await {
+        Ok(Some(client)) => client,
+        Ok(None) => {
+            return rfc_error(StatusCode::UNAUTHORIZED, TokenError::InvalidClient.as_str());
+        }
+        Err(err) => return internal(err),
     };
 
-    let invalid = || rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidGrant);
+    let invalid = || rfc_error(StatusCode::BAD_REQUEST, TokenError::InvalidGrant.as_str());
     let presented = RefreshToken::hash_of(req.refresh_token.trim());
     let replacement = RefreshToken::generate();
     let now = state.clock.now();
@@ -150,28 +161,35 @@ async fn refresh_grant(state: AppState, req: TokenRequest) -> Response {
 }
 
 /// client 认证：存在且启用 + 密钥 Argon2id 校验；哑哈希对齐无密钥路径的耗时。
+/// `Ok(None)` 表示认证失败；存储故障与哈希数据损坏走 `Err`，不得伪装成客户端错误。
 async fn authenticated_client(
     state: &AppState,
     req: &TokenRequest,
-) -> Option<crate::model::oauth2::OAuthClient> {
-    let client = state
-        .oauth_repo
-        .find_client(&req.client_id)
-        .await
-        .ok()
-        .flatten()
-        .filter(|client| client.enabled)?;
-    let stored = state.oauth_repo.find_client_secret(&client.id).await.ok().flatten();
+) -> Result<Option<crate::model::oauth2::OAuthClient>, anyhow::Error> {
+    let Some(client) =
+        state.oauth_repo.find_client(&req.client_id).await.map_err(anyhow::Error::new)?
+    else {
+        return Ok(None);
+    };
+    if !client.enabled {
+        return Ok(None);
+    }
+
+    let stored =
+        state.oauth_repo.find_client_secret(&client.id).await.map_err(anyhow::Error::new)?;
     let plain = req.client_secret.clone();
     let ok = if let Some(encoded) = stored {
-        let hash = PasswordHash::from_encoded(encoded).ok()?;
-        tokio::task::spawn_blocking(move || hash.verify(&plain)).await.ok()?.ok()?
+        let hash = PasswordHash::from_encoded(encoded).map_err(anyhow::Error::new)?;
+        tokio::task::spawn_blocking(move || hash.verify(&plain))
+            .await
+            .map_err(anyhow::Error::from)?
+            .map_err(anyhow::Error::new)?
     } else {
         // 公共客户端（未设密钥）拒绝；哑哈希对齐耗时，`client_id` 枚举不可测
         let _ = dummy_verify(req.client_secret.clone()).await;
         false
     };
-    ok.then_some(client)
+    Ok(ok.then_some(client))
 }
 
 /// 哑哈希只用于对齐「客户端无密钥」路径的耗时（与 login 同策略）。
@@ -246,18 +264,7 @@ fn token_response(access: String, refresh: &str, scope: &str, expires_in: i64) -
         .into_response()
 }
 
-/// RFC 6749 错误响应（`{"error": "..."}`，no-store）。
-fn rfc_error(status: StatusCode, error: TokenError) -> Response {
-    (
-        status,
-        [(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")],
-        axum::Json(serde_json::json!({ "error": error.as_str() })),
-    )
-        .into_response()
-}
-
 fn internal(err: impl Into<anyhow::Error>) -> Response {
     tracing::error!(error = ?err.into(), "oauth token internal error");
-    (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(serde_json::json!({ "error": "server_error" })))
-        .into_response()
+    super::rfc_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
 }

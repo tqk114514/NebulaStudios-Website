@@ -9,13 +9,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{
-    clear_session_cookies, hash_password_in_background, issue_and_send_code, password_problem,
-};
-use crate::api::AppState;
+use super::{hash_password_in_background, issue_and_send_code, password_problem};
+use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
-use crate::storage::{EmailVerificationRepo, RefreshTokenRepo, TotpRepo, UserRepo};
 
 /// 重置请求（request 端点）。
 #[derive(Debug, Deserialize)]

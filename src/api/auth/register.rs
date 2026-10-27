@@ -128,14 +128,16 @@ pub async fn register(
             .await?;
             Ok((StatusCode::CREATED, Json(user)))
         }
-        Err(UserRepoError::Conflict) => Err(classify_conflict(&state.user_repo, &user).await),
+        Err(UserRepoError::Conflict) => {
+            Err(classify_conflict(state.user_repo.as_ref(), &user).await)
+        }
         Err(err) => Err(anyhow::Error::new(err).into()),
     }
 }
 
 /// 唯一约束已触发后用只读查询归因错误码。归因查询失败时落到 `user_exists`：
 /// 仍是正确的 409，只是少了字段级信息，不值得为它返回 500。
-async fn classify_conflict(repo: &impl UserRepo, candidate: &User) -> ApiError {
+async fn classify_conflict(repo: &dyn UserRepo, candidate: &User) -> ApiError {
     let email_taken = repo.find_by_email(&candidate.email).await.is_ok_and(|user| user.is_some());
     if email_taken {
         return ApiError::EmailTaken;

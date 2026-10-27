@@ -8,13 +8,11 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use crate::api::AppState;
-use crate::api::auth::clear_session_cookies;
+use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 use crate::model::tokens::sha256_hex;
 use crate::model::totp::verify_code;
-use crate::storage::{RefreshTokenRepo, TotpRepo, UserRepo};
 
 /// disable 请求。
 #[derive(Debug, Deserialize)]

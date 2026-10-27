@@ -13,12 +13,12 @@ pub mod register;
 pub mod resend;
 pub mod verify;
 
-use axum::http::header::SET_COOKIE;
-use axum::http::{HeaderMap, HeaderValue};
+use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 
-use super::{ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE};
-use crate::api::AppState;
+use crate::api::{
+    AppState, cookie_max_age, set_access_cookie, set_csrf_cookie, set_refresh_cookie,
+};
 use crate::error::ApiError;
 use crate::extractors::constant_time_eq;
 use crate::mailer::EmailMessage;
@@ -28,7 +28,6 @@ use crate::model::user::{User, UserId};
 use crate::model::verification::{
     MAX_ATTEMPTS, NewEmailVerification, VERIFICATION_TTL, VerificationCode, VerificationPurpose,
 };
-use crate::storage::{EmailVerificationRepo, RefreshTokenRepo};
 use uuid::Uuid;
 
 /// 一次会话签发的三个明文凭据；csrf 与 refresh 同步轮转（ADR-0005）。
@@ -71,62 +70,6 @@ pub(crate) async fn issue_session(
         .await
         .map_err(anyhow::Error::from)?;
     Ok(SessionTokens { access, refresh: refresh.as_str().to_owned(), csrf: random_hex_32() })
-}
-
-/// cookie 的 Max-Age 取整秒；负值（异常配置）钳到 0。
-pub(crate) fn cookie_max_age(ttl: chrono::TimeDelta) -> u64 {
-    ttl.num_seconds().max(0).cast_unsigned()
-}
-
-/// 追加 access cookie 到响应头。
-pub(crate) fn set_access_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
-    append_cookie(
-        headers,
-        &format!(
-            "{ACCESS_COOKIE}={token}; Path=/; Max-Age={max_age_secs}; HttpOnly; Secure; SameSite=Lax"
-        ),
-    );
-}
-
-/// 追加 csrf cookie 到响应头；非 HttpOnly——SPA 要读取它经头回显（ADR-0005）。
-pub(crate) fn set_csrf_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
-    append_cookie(
-        headers,
-        &format!("{CSRF_COOKIE}={token}; Path=/; Max-Age={max_age_secs}; Secure; SameSite=Lax"),
-    );
-}
-
-/// 追加 refresh cookie 到响应头（路径收窄到 /api/auth）。
-pub(crate) fn set_refresh_cookie(headers: &mut HeaderMap, token: &str, max_age_secs: u64) {
-    append_cookie(
-        headers,
-        &format!(
-            "{REFRESH_COOKIE}={token}; Path=/api/auth; Max-Age={max_age_secs}; HttpOnly; Secure; SameSite=Lax"
-        ),
-    );
-}
-
-/// 追加三条失效 cookie（Max-Age=0）清除会话。
-pub(crate) fn clear_session_cookies(headers: &mut HeaderMap) {
-    append_cookie(
-        headers,
-        &format!("{ACCESS_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
-    );
-    append_cookie(
-        headers,
-        &format!("{REFRESH_COOKIE}=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
-    );
-    append_cookie(headers, &format!("{CSRF_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Lax"));
-}
-
-fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
-    // cookie 各组成部分均为 token 安全字符，parse 失败只可能是实现 bug
-    match cookie.parse::<HeaderValue>() {
-        Ok(value) => {
-            headers.append(SET_COOKIE, value);
-        }
-        Err(_) => unreachable!("cookie 值含非法头字符: {cookie}"),
-    }
 }
 
 /// 组装带会话 cookie 的响应；登录与二段共用（ADR-0004 裸数据）。
@@ -264,23 +207,4 @@ pub(crate) async fn hash_password_in_background(plain: String) -> Result<Passwor
         .await
         .map_err(anyhow::Error::from)?
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
-}
-
-/// form/查询参数值的最小百分号编码（RFC 3986 保留字符；state 回传用）。
-pub(crate) fn form_urlencode(value: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char);
-            }
-            _ => {
-                out.push('%');
-                out.push(HEX[usize::from(byte >> 4)] as char);
-                out.push(HEX[usize::from(byte & 0x0f)] as char);
-            }
-        }
-    }
-    out
 }

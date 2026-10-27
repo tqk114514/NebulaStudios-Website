@@ -8,14 +8,10 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{
-    clear_session_cookies, hash_password_in_background, password_problem,
-    verify_password_in_background,
-};
-use crate::api::AppState;
+use super::{hash_password_in_background, password_problem, verify_password_in_background};
+use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
-use crate::storage::{RefreshTokenRepo, UserRepo};
 
 /// 改密请求。
 #[derive(Debug, Deserialize)]
