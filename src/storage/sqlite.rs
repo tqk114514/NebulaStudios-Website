@@ -411,9 +411,11 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                       f.state AS "family_state",
                       f.user_id AS "user_id: uuid::Uuid",
                       f.client_id,
-                      f.scope
+                      f.scope,
+                      u.token_version AS "token_version: i64"
                FROM refresh_tokens t
                JOIN refresh_token_families f ON f.id = t.family_id
+               JOIN users u ON u.id = f.user_id
                WHERE t.token_hash = ?1"#,
             presented_hash,
         )
@@ -473,7 +475,11 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                 .execute(&mut *tx)
                 .await?;
                 tx.commit().await?;
-                Ok(RotatedSession { user_id, scope: presented.scope })
+                Ok(RotatedSession {
+                    user_id,
+                    scope: presented.scope,
+                    token_version: presented.token_version,
+                })
             }
             // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
             _ => Err(RotateRefreshError::Invalid),
