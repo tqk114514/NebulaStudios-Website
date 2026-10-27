@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM oauth_authorization_codes\n             WHERE expires_at < ?1\n                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "82be442736d90cded9d388c4e4713a599403e081b2502b61f2015b18f6f57246"
+}

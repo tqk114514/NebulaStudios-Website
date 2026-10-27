@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM totp_login_challenges\n             WHERE expires_at < ?1\n                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "c027f9de256e0dea806a846a88716306265bb3477a7ecc256835d63b5a3e70b2"
+}

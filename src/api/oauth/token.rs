@@ -150,12 +150,12 @@ async fn refresh_grant(state: AppState, req: TokenRequest) -> Response {
                 Err(err) => internal(err),
             }
         }
-        // 重放、无效与跨客户端呈递都按 invalid_grant 返回，不向调用方泄露令牌归属
-        Err(
-            RotateRefreshError::Replay
-            | RotateRefreshError::Invalid
-            | RotateRefreshError::ClientMismatch,
-        ) => invalid(),
+        Err(RotateRefreshError::Replay) => {
+            metrics::counter!("nebula_refresh_replay_total", "surface" => "oauth").increment(1);
+            invalid()
+        }
+        // 无效与跨客户端呈递都按 invalid_grant 返回，不向调用方泄露令牌归属
+        Err(RotateRefreshError::Invalid | RotateRefreshError::ClientMismatch) => invalid(),
         Err(RotateRefreshError::Storage(err)) => internal(anyhow::Error::new(err)),
     }
 }

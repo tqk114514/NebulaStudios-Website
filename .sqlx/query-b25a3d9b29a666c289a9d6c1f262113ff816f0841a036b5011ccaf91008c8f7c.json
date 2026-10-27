@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM refresh_token_families\n               WHERE created_at < ?1\n                 AND NOT EXISTS (\n                     SELECT 1 FROM refresh_tokens WHERE family_id = refresh_token_families.id\n                 )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b25a3d9b29a666c289a9d6c1f262113ff816f0841a036b5011ccaf91008c8f7c"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM email_verifications\n             WHERE expires_at < ?1\n                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "90c602360074703fad79fd7d281151b64a84c8f798b4cddd0e0d12d264bf21e8"
+}

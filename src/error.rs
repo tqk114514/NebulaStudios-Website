@@ -38,6 +38,8 @@ pub enum ApiError {
     Internal(anyhow::Error),
     /// 请求体不是合法 JSON；400。
     MalformedJson(String),
+    /// 请求体超过全局上限；413。
+    PayloadTooLarge,
     /// 请求字段未通过校验；422，字段级错误在 `details.fields`。
     Validation(Vec<FieldInvalid>),
     /// 邮箱已被注册；409。
@@ -83,14 +85,10 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message, details): (
-            StatusCode,
-            &'static str,
-            String,
-            Option<JsonValue>,
-        ) = match self {
+impl ApiError {
+    /// 把错误映射为 HTTP 状态、稳定 code、消息与 details；映射表只此一处。
+    fn parts(self) -> (StatusCode, &'static str, String, Option<JsonValue>) {
+        match self {
             Self::Internal(err) => {
                 tracing::error!(error = ?err, "internal error");
                 (
@@ -103,6 +101,12 @@ impl IntoResponse for ApiError {
             Self::MalformedJson(reason) => {
                 (StatusCode::BAD_REQUEST, "malformed_json", reason, None)
             }
+            Self::PayloadTooLarge => (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "payload_too_large",
+                "请求体超过上限".to_owned(),
+                None,
+            ),
             Self::Validation(fields) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "validation_failed",
@@ -178,8 +182,13 @@ impl IntoResponse for ApiError {
                 "发送过于频繁，请稍后再试".to_owned(),
                 Some(serde_json::json!({ "retry_after": remaining })),
             ),
-        };
+        }
+    }
+}
 
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message, details) = self.parts();
         let body = ErrorBody { code, message, details };
         (status, Json(body)).into_response()
     }

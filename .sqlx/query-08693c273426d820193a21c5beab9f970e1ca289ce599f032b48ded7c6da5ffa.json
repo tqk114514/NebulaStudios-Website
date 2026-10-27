@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM totp_recovery_codes\n             WHERE consumed_at IS NOT NULL AND consumed_at < ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "08693c273426d820193a21c5beab9f970e1ca289ce599f032b48ded7c6da5ffa"
+}

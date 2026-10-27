@@ -255,6 +255,36 @@ pub trait AccountRepo: Send + Sync {
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError>;
 }
 
+/// 过期数据清理结果；各字段为本次删除的行数。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CleanupReport {
+    /// 删除的 refresh token 行数。
+    pub refresh_tokens: u64,
+    /// 删除的无 token 家族行数。
+    pub refresh_families: u64,
+    /// 删除的邮箱验证码行数。
+    pub email_verifications: u64,
+    /// 删除的已消费恢复码行数。
+    pub totp_recovery_codes: u64,
+    /// 删除的 TOTP 登录挑战行数。
+    pub totp_login_challenges: u64,
+    /// 删除的 OAuth 授权码行数。
+    pub oauth_authorization_codes: u64,
+}
+
+/// 维护仓储：过期数据清理；删除在同一事务内完成。
+#[async_trait]
+pub trait MaintenanceRepo: Send + Sync {
+    /// 删除过期或超过保留期的认证数据，返回各类删除行数。
+    ///
+    /// # Errors
+    /// 仅存储故障；部分删除不会留下半完成状态（单事务）。
+    async fn purge_expired(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<CleanupReport, StorageError>;
+}
+
 /// TOTP 仓储：状态与密钥、恢复码批次、登录二段挑战。
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
