@@ -1,8 +1,9 @@
 # useNebulaField
 
 在指定区域内渲染 WebGL 粒子星云：N 字标粒子雕塑、三重星环、外围星尘与全视锥背景星场。
-透视相机 + 自定义 `ShaderMaterial` 点精灵，入场汇聚、轨道运动、闪烁、辉光扫描与透视点尺寸
-全部在顶点着色器每帧计算；后期链为 `RenderPass → UnrealBloomPass → OutputPass → 抖动`。
+透视相机 + 自持 WebGL2 点精灵着色器，入场汇聚、轨道运动、闪烁、辉光扫描与透视点尺寸
+全部在顶点着色器每帧计算；后期链为 `背景填充 → 粒子层 → 高通 → 五级高斯 mip → 加权合成 → OETF + 抖动`
+（见 ADR-0001，不依赖 three）。
 
 仅客户端执行。WebGL2 不可用时静默跳过；`prefers-reduced-motion` 下渲染一帧静态图后不进循环。
 hero 滚出视口或标签页隐藏时跳过渲染，rAF 保持心跳。
