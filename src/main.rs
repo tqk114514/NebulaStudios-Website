@@ -1,13 +1,17 @@
 //! 装配与监听，无业务逻辑（AGENTS.md §2）。
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
+use axum_prometheus::PrometheusMetricLayer;
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
 use nebula_server::context::SystemClock;
-use nebula_server::storage::sqlite::{self, SqliteRefreshRepo, SqliteUserRepo};
+use nebula_server::storage::sqlite::{
+    self, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
+};
 use nebula_server::telemetry;
 
 #[tokio::main]
@@ -38,6 +42,14 @@ async fn main() -> anyhow::Result<()> {
         )?)
     };
 
+    let cors_allowed_origin: Option<axum::http::HeaderValue> =
+        if config.cors.allowed_origin.is_empty() {
+            None
+        } else {
+            Some(config.cors.allowed_origin.parse().context("解析 CORS allowed_origin")?)
+        };
+    let (metrics_layer, metrics_handle) = PrometheusMetricLayer::pair();
+
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
         refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
@@ -52,8 +64,13 @@ async fn main() -> anyhow::Result<()> {
         totp_repo: Arc::new(nebula_server::storage::sqlite::SqliteTotpRepo::from_pool(
             pool.clone(),
         )),
-        oauth_repo: Arc::new(nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(pool)),
+        oauth_repo: Arc::new(nebula_server::storage::sqlite::SqliteOAuthRepo::from_pool(
+            pool.clone(),
+        )),
+        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool)),
         mailer,
+        metrics: Some(Arc::new(metrics_handle)),
+        cors_allowed_origin,
         session: SessionPolicy {
             access_ttl: TimeDelta::try_seconds(i64::try_from(config.jwt.access_ttl_secs)?)
                 .context("access ttl 超出可表示范围")?,
@@ -66,14 +83,23 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("监听 {}", config.bind))?;
     tracing::info!(bind = %config.bind, "listening");
+    // 监听成功后再启动后台任务，避免端口占用时留下无意义的清理循环
+    let cleanup = nebula_server::jobs::spawn_cleanup(
+        state.clone(),
+        Duration::from_secs(config.jobs.cleanup_interval_secs),
+    );
     // 限额层以对端 IP 为键（tower_governor PeerIpKeyExtractor），须带连接信息
-    axum::serve(
+    let result = axum::serve(
         listener,
-        api::router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        api::router(state)
+            .layer(metrics_layer)
+            .into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal())
     .await
-    .context("服务退出")?;
+    .context("服务退出");
+    cleanup.abort();
+    result?;
     Ok(())
 }
 

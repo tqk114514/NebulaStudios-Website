@@ -17,6 +17,24 @@ pub struct Config {
     pub jwt: JwtConfig,
     /// 邮件子配置。
     pub mail: MailConfig,
+    /// 后台任务子配置。
+    pub jobs: JobsConfig,
+    /// CORS 子配置。
+    pub cors: CorsConfig,
+}
+
+/// 后台任务配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct JobsConfig {
+    /// 过期数据清理任务运行间隔（秒）。
+    pub cleanup_interval_secs: u64,
+}
+
+/// CORS 配置；`allowed_origin` 为空表示同源部署、不启用 CORS。
+#[derive(Debug, Clone, Deserialize)]
+pub struct CorsConfig {
+    /// 允许的前端来源，如 `http://localhost:3000`。
+    pub allowed_origin: String,
 }
 
 /// JWT 会话令牌配置。
@@ -83,12 +101,19 @@ impl Config {
             .set_default("mail.smtp_username", "")?
             .set_default("mail.smtp_password", "")?
             .set_default("mail.from", "Nebula <no-reply@nebula.st>")?
+            .set_default("jobs.cleanup_interval_secs", 300)?
+            .set_default("cors.allowed_origin", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;
         // 红线 #7：配置必须存在即生效——TTL 在此校验并由会话签发实际使用
         if config.jwt.access_ttl_secs == 0 || config.jwt.refresh_ttl_secs == 0 {
             return Err(LoadConfigError::Invalid("jwt ttl 必须为正秒数".to_owned()));
+        }
+        if config.jobs.cleanup_interval_secs == 0 {
+            return Err(LoadConfigError::Invalid(
+                "jobs.cleanup_interval_secs 必须为正秒数".to_owned(),
+            ));
         }
         Ok(config)
     }
@@ -111,5 +136,7 @@ mod tests {
         assert_eq!(config.database.path, std::path::Path::new("nebula.db"));
         assert_eq!(config.jwt.access_ttl_secs, 3_600);
         assert_eq!(config.jwt.refresh_ttl_secs, 2_592_000);
+        assert_eq!(config.jobs.cleanup_interval_secs, 300);
+        assert_eq!(config.cors.allowed_origin, "");
     }
 }

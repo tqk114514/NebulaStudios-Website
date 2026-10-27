@@ -16,8 +16,8 @@ use nebula_server::context::ManualClock;
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteOAuthRepo, SqliteRefreshRepo,
-    SqliteTotpRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteEmailVerificationRepo, SqliteMaintenanceRepo, SqliteOAuthRepo,
+    SqliteRefreshRepo, SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -117,8 +117,11 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         verification_repo: Arc::new(SqliteEmailVerificationRepo::from_pool(pool.clone())),
         account_repo: Arc::new(SqliteAccountRepo::from_pool(pool.clone())),
         totp_repo: Arc::new(SqliteTotpRepo::from_pool(pool.clone())),
-        oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool)),
+        oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool.clone())),
+        maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool)),
         mailer: Arc::new(mailbox.clone()),
+        metrics: None,
+        cors_allowed_origin: None,
     };
     (state, manual, mailbox, dir)
 }

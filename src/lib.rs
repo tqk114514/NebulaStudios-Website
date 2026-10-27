@@ -6,6 +6,7 @@ pub mod config;
 pub mod context;
 pub mod error;
 pub mod extractors;
+pub mod jobs;
 pub mod mailer;
 pub mod model;
 pub mod storage;

@@ -47,6 +47,8 @@ pub async fn refresh(
     let user_id = match rotated {
         Ok(session) => session.user_id,
         Err(RotateRefreshError::Replay) => {
+            metrics::counter!("nebula_refresh_replay_total", "surface" => "first_party")
+                .increment(1);
             return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshReused));
         }
         Err(RotateRefreshError::Invalid | RotateRefreshError::ClientMismatch) => {

@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use uuid::Uuid;
@@ -16,7 +16,8 @@ use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{LoginCredentials, User, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{
-    ClientBinding, RotateRefreshError, RotatedSession, StorageError, UserRepo, UserRepoError,
+    CleanupReport, ClientBinding, RotateRefreshError, RotatedSession, StorageError, UserRepo,
+    UserRepoError,
 };
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -52,6 +53,12 @@ pub struct SqliteTotpRepo {
 /// SQLite `OAuth2` 仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteOAuthRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 维护仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteMaintenanceRepo {
     pool: SqlitePool,
 }
 
@@ -118,6 +125,14 @@ impl SqliteTotpRepo {
 }
 
 impl SqliteOAuthRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteMaintenanceRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -866,5 +881,88 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
+    }
+}
+
+/// 已消费记录保留期：保留一天便于排查，之后清理。
+const CONSUMED_RETENTION: TimeDelta = TimeDelta::days(1);
+/// 空 refresh 家族保留期：留出观察窗口，不因一次清理立即抹掉。
+const EMPTY_FAMILY_RETENTION: TimeDelta = TimeDelta::days(30);
+
+#[async_trait]
+impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
+    async fn purge_expired(&self, now: DateTime<Utc>) -> Result<CleanupReport, StorageError> {
+        let consumed_cutoff = now - CONSUMED_RETENTION;
+        let family_cutoff = now - EMPTY_FAMILY_RETENTION;
+        let mut tx = self.pool.begin().await?;
+
+        let refresh_tokens = sqlx::query!("DELETE FROM refresh_tokens WHERE expires_at < ?1", now,)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+
+        let refresh_families = sqlx::query!(
+            r#"DELETE FROM refresh_token_families
+               WHERE created_at < ?1
+                 AND NOT EXISTS (
+                     SELECT 1 FROM refresh_tokens WHERE family_id = refresh_token_families.id
+                 )"#,
+            family_cutoff,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        let email_verifications = sqlx::query!(
+            "DELETE FROM email_verifications
+             WHERE expires_at < ?1
+                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+            now,
+            consumed_cutoff,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        let totp_recovery_codes = sqlx::query!(
+            "DELETE FROM totp_recovery_codes
+             WHERE consumed_at IS NOT NULL AND consumed_at < ?1",
+            consumed_cutoff,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        let totp_login_challenges = sqlx::query!(
+            "DELETE FROM totp_login_challenges
+             WHERE expires_at < ?1
+                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+            now,
+            consumed_cutoff,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        let oauth_authorization_codes = sqlx::query!(
+            "DELETE FROM oauth_authorization_codes
+             WHERE expires_at < ?1
+                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+            now,
+            consumed_cutoff,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+        Ok(CleanupReport {
+            refresh_tokens,
+            refresh_families,
+            email_verifications,
+            totp_recovery_codes,
+            totp_login_challenges,
+            oauth_authorization_codes,
+        })
     }
 }
