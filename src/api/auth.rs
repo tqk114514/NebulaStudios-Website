@@ -41,9 +41,9 @@ pub(crate) struct SessionTokens {
     pub csrf: String,
 }
 
-/// 只签 access JWT；登录与刷新共用。
+/// 只签第一方 access JWT；登录与刷新共用。
 pub(crate) fn sign_access_for(state: &AppState, user_id: UserId) -> Result<String, ApiError> {
-    let claims = AccessClaims::new(user_id, state.clock.now(), state.session.access_ttl);
+    let claims = AccessClaims::user_session(user_id, state.clock.now(), state.session.access_ttl);
     sign_access(&claims, state.jwt.encode())
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
 }
@@ -57,16 +57,17 @@ pub(crate) async fn issue_session(
     let access = sign_access_for(state, user_id)?;
 
     let refresh = RefreshToken::generate();
-    let entry = crate::model::tokens::NewRefreshToken {
+    let family = crate::model::tokens::NewRefreshFamily {
         family_id: Uuid::now_v7(),
         user_id,
+        client_id: None,
+        scope: String::new(),
         token_hash: refresh.to_hash_hex(),
         expires_at: state.clock.now() + state.session.refresh_ttl,
-        client_id: None,
     };
     state
         .refresh_repo
-        .create_family(&entry, state.clock.now())
+        .create_family(&family, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
     Ok(SessionTokens { access, refresh: refresh.as_str().to_owned(), csrf: random_hex_32() })

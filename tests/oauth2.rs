@@ -19,19 +19,27 @@ const CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 const REDIRECT: &str = "https://app.example.com/callback";
 const CLIENT_ID: &str = "client-0001";
 const CLIENT_SECRET: &str = "Nebula!Client-2026";
+const OTHER_CLIENT_ID: &str = "client-0002";
+const OTHER_CLIENT_SECRET: &str = "Other!Client-2026";
+const OTHER_REDIRECT: &str = "https://other.example.com/callback";
 
 /// 直插一个机密客户端（client 管理改配置文件的方案见 ADR-0002，测试自开连接造数）。
-async fn seed_client(dir: &std::path::Path, enabled: bool) {
-    let hash =
-        nebula_server::model::password::PasswordHash::hash(CLIENT_SECRET).expect("哈希必须成功");
+async fn seed_client(
+    dir: &std::path::Path,
+    id: &str,
+    secret: &str,
+    redirect_uri: &str,
+    enabled: bool,
+) {
+    let hash = nebula_server::model::password::PasswordHash::hash(secret).expect("哈希必须成功");
     let pool = nebula_server::storage::sqlite::connect_pool(&dir.join("users.db"))
         .await
         .expect("测试库必须可打开");
     sqlx::query("INSERT INTO oauth_clients (id, name, secret_hash, redirect_uri, enabled, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-        .bind(CLIENT_ID)
+        .bind(id)
         .bind("Example App")
         .bind(hash.as_str())
-        .bind(REDIRECT)
+        .bind(redirect_uri)
         .bind(enabled)
         .bind("2026-10-26T00:00:00+00:00")
         .execute(&pool)
@@ -40,10 +48,60 @@ async fn seed_client(dir: &std::path::Path, enabled: bool) {
     pool.close().await;
 }
 
+/// 走 consent → 授权码 → token 兑换，返回 RFC 成功响应。
+async fn exchange_authorization_code(
+    app: &axum::Router,
+    session: &Session,
+    client_id: &str,
+    client_secret: &str,
+    redirect_uri: &str,
+    scope: &str,
+) -> serde_json::Value {
+    let consent = app
+        .clone()
+        .oneshot_post_with(
+            "/api/oauth/authorize/consent",
+            &serde_json::json!({
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "scope": scope,
+                "code_challenge": CHALLENGE,
+                "state": "xyz",
+            })
+            .to_string(),
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(consent.status(), StatusCode::FOUND);
+    let location = consent.headers().get(header::LOCATION).unwrap().to_str().unwrap();
+    let code = location.split("code=").nth(1).unwrap().split('&').next().unwrap();
+
+    let form = format!(
+        "grant_type=authorization_code&code={code}&redirect_uri={redirect_uri}&code_verifier={VERIFIER}&client_id={client_id}&client_secret={client_secret}"
+    );
+    let token = app.clone().oneshot_post_form("/api/oauth/token", &form).await;
+    assert_eq!(token.status(), StatusCode::OK);
+    serde_json::from_str(&common::body_text(token).await).unwrap()
+}
+
+/// 第三方 refresh 请求。
+async fn refresh_token(
+    app: &axum::Router,
+    refresh: &str,
+    client_id: &str,
+    client_secret: &str,
+) -> axum::response::Response {
+    let form = format!(
+        "grant_type=refresh_token&refresh_token={refresh}&client_id={client_id}&client_secret={client_secret}"
+    );
+    app.clone().oneshot_post_form("/api/oauth/token", &form).await
+}
+
 #[tokio::test]
 async fn full_authorization_code_flow() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
     let session = seeded_session(&app).await;
 
     // GET authorize：参数校验通过，返回 consent 页信息
@@ -102,9 +160,100 @@ async fn full_authorization_code_flow() {
 }
 
 #[tokio::test]
+async fn oauth_access_token_cannot_use_first_party_endpoints() {
+    let (app, state, _clock, _mailbox, dir) = common::app().await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
+    let session = seeded_session(&app).await;
+    let json =
+        exchange_authorization_code(&app, &session, CLIENT_ID, CLIENT_SECRET, REDIRECT, "profile")
+            .await;
+    let access = json["access_token"].as_str().unwrap();
+
+    // 令牌本身必须是合法的客户端授权，否则下面的 401 可能只是坏 token
+    let verified =
+        nebula_server::model::tokens::verify_access(access, state.jwt.decode(), state.clock.now())
+            .expect("客户端令牌必须通过签名与 audience 校验");
+    assert!(matches!(
+        verified,
+        nebula_server::model::tokens::VerifiedAccessToken::ClientGrant { .. }
+    ));
+
+    for uri in ["/api/auth/logout", "/api/user/totp/setup"] {
+        let response = app.clone().oneshot_post_bearer(uri, "", access).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri} 必须拒绝客户端令牌");
+    }
+}
+
+#[tokio::test]
+async fn refresh_stays_in_family_and_replay_revokes_descendants() {
+    let (app, _state, _clock, _mailbox, dir) = common::app().await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
+    let session = seeded_session(&app).await;
+    let first =
+        exchange_authorization_code(&app, &session, CLIENT_ID, CLIENT_SECRET, REDIRECT, "profile")
+            .await;
+    let first_refresh = first["refresh_token"].as_str().unwrap();
+
+    let second_response = refresh_token(&app, first_refresh, CLIENT_ID, CLIENT_SECRET).await;
+    assert_eq!(second_response.status(), StatusCode::OK);
+    let second: serde_json::Value =
+        serde_json::from_str(&common::body_text(second_response).await).unwrap();
+    let second_refresh = second["refresh_token"].as_str().unwrap();
+
+    // 重放第一代：整族撤销
+    let replay = refresh_token(&app, first_refresh, CLIENT_ID, CLIENT_SECRET).await;
+    assert_eq!(replay.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&common::body_text(replay).await).unwrap();
+    assert_eq!(body["error"], "invalid_grant");
+
+    // 后代在同一个家族内，重放必须波及它；另建家族的实现会让这里返回 200
+    let after = refresh_token(&app, second_refresh, CLIENT_ID, CLIENT_SECRET).await;
+    assert_eq!(after.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn refresh_token_is_bound_to_its_client() {
+    let (app, _state, _clock, _mailbox, dir) = common::app().await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
+    seed_client(dir.path(), OTHER_CLIENT_ID, OTHER_CLIENT_SECRET, OTHER_REDIRECT, true).await;
+    let session = seeded_session(&app).await;
+    let json =
+        exchange_authorization_code(&app, &session, CLIENT_ID, CLIENT_SECRET, REDIRECT, "profile")
+            .await;
+    let refresh = json["refresh_token"].as_str().unwrap();
+
+    // 另一个已认证客户端不能兑换该 token
+    let cross = refresh_token(&app, refresh, OTHER_CLIENT_ID, OTHER_CLIENT_SECRET).await;
+    assert_eq!(cross.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&common::body_text(cross).await).unwrap();
+    assert_eq!(body["error"], "invalid_grant");
+
+    // 绑定失败不轮转：归属客户端仍可使用原 token
+    let ok = refresh_token(&app, refresh, CLIENT_ID, CLIENT_SECRET).await;
+    assert_eq!(ok.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn empty_scope_survives_refresh() {
+    let (app, _state, _clock, _mailbox, dir) = common::app().await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
+    let session = seeded_session(&app).await;
+    let json =
+        exchange_authorization_code(&app, &session, CLIENT_ID, CLIENT_SECRET, REDIRECT, "").await;
+    assert_eq!(json["scope"], "");
+    let refresh = json["refresh_token"].as_str().unwrap();
+
+    let response = refresh_token(&app, refresh, CLIENT_ID, CLIENT_SECRET).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let rotated: serde_json::Value =
+        serde_json::from_str(&common::body_text(response).await).unwrap();
+    assert_eq!(rotated["scope"], "");
+}
+
+#[tokio::test]
 async fn plain_pkce_method_is_rejected() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
 
     let response = app
         .clone()
@@ -125,7 +274,7 @@ async fn plain_pkce_method_is_rejected() {
 #[tokio::test]
 async fn missing_challenge_is_rejected() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
 
     let response = app
         .clone()
@@ -154,7 +303,7 @@ async fn missing_challenge_is_rejected() {
 #[tokio::test]
 async fn redirect_mismatch_is_rejected() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
     let session = seeded_session(&app).await;
 
     let response = app
@@ -177,7 +326,7 @@ async fn redirect_mismatch_is_rejected() {
 #[tokio::test]
 async fn authorization_code_is_single_use() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
     let session = seeded_session(&app).await;
 
     let consent = app
@@ -210,7 +359,7 @@ async fn authorization_code_is_single_use() {
 #[tokio::test]
 async fn wrong_verifier_is_rejected_and_code_survives() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
     let session = seeded_session(&app).await;
 
     let consent = app
@@ -245,7 +394,7 @@ async fn wrong_verifier_is_rejected_and_code_survives() {
 #[tokio::test]
 async fn wrong_client_secret_is_401() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
     let session = seeded_session(&app).await;
 
     let consent = app
@@ -274,7 +423,7 @@ async fn wrong_client_secret_is_401() {
 #[tokio::test]
 async fn disabled_client_is_rejected_at_authorize() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), false).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, false).await;
 
     let response = app
         .clone()
@@ -295,7 +444,7 @@ async fn disabled_client_is_rejected_at_authorize() {
 #[tokio::test]
 async fn unknown_scope_is_rejected() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    seed_client(dir.path(), true).await;
+    seed_client(dir.path(), CLIENT_ID, CLIENT_SECRET, REDIRECT, true).await;
 
     let response = app
         .clone()

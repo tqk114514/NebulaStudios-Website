@@ -13,8 +13,7 @@ use crate::api::{REFRESH_COOKIE, cookie_value};
 use crate::error::ApiError;
 use crate::extractors::CsrfGuard;
 use crate::model::tokens::{RefreshToken, random_hex_32};
-use crate::storage::RefreshTokenRepo;
-use crate::storage::RotateRefreshError;
+use crate::storage::{ClientBinding, RefreshTokenRepo, RotateRefreshError};
 
 /// 处理刷新：CSRF 门禁（cookie-only 写端点，ADR-0005）→ 呈递 cookie 中的
 /// refresh 明文 → 原子轮转 → 续发 access 与新 csrf。
@@ -42,15 +41,16 @@ pub async fn refresh(
             &replacement.to_hash_hex(),
             now + state.session.refresh_ttl,
             now,
+            ClientBinding::FirstParty,
         )
         .await;
 
     let user_id = match rotated {
-        Ok(user_id) => user_id,
+        Ok(session) => session.user_id,
         Err(RotateRefreshError::Replay) => {
             return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshReused));
         }
-        Err(RotateRefreshError::Invalid) => {
+        Err(RotateRefreshError::Invalid | RotateRefreshError::ClientMismatch) => {
             return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshInvalid));
         }
         Err(RotateRefreshError::Storage(err)) => {

@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use super::issue_and_send_code;
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 use crate::storage::{EmailVerificationRepo, UserRepo};
 
@@ -20,7 +20,7 @@ use crate::storage::{EmailVerificationRepo, UserRepo};
 /// `resend_cooldown`；内部故障 500。
 pub async fn delete_request(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
 ) -> Result<Response, ApiError> {
     let Some(credentials) =
         state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?

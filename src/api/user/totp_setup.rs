@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::totp::{generate_secret, otpauth_uri};
 use crate::storage::{TotpRepo, UserRepo};
 
@@ -25,7 +25,10 @@ pub struct SetupResponse {
 ///
 /// # Errors
 /// 未认证 401；已启用 409 `totp_not_enabled`；内部故障 500。
-pub async fn setup(State(state): State<AppState>, user: AuthUser) -> Result<Response, ApiError> {
+pub async fn setup(
+    State(state): State<AppState>,
+    user: FirstPartyUser,
+) -> Result<Response, ApiError> {
     // setup 响应的 otpauth URI 用真实邮箱作 label
     let credentials =
         state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?.ok_or_else(

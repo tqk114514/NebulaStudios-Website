@@ -10,11 +10,13 @@ use uuid::Uuid;
 
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
-use crate::model::tokens::NewRefreshToken;
+use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{LoginCredentials, User, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
-use crate::storage::{RotateRefreshError, StorageError, UserRepo, UserRepoError};
+use crate::storage::{
+    ClientBinding, RotateRefreshError, RotatedSession, StorageError, UserRepo, UserRepoError,
+};
 
 /// SQLite 用户仓储；克隆共享同一连接池。
 #[derive(Debug, Clone)]
@@ -297,17 +299,18 @@ impl UserRepo for SqliteUserRepo {
 impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
     async fn create_family(
         &self,
-        token: &NewRefreshToken,
+        family: &NewRefreshFamily,
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query!(
-            "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id)
-             VALUES (?1, ?2, 'active', ?3, ?4)",
-            token.family_id,
-            token.user_id.as_uuid(),
+            "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id, scope)
+             VALUES (?1, ?2, 'active', ?3, ?4, ?5)",
+            family.family_id,
+            family.user_id.as_uuid(),
             created_at,
-            token.client_id,
+            family.client_id,
+            family.scope,
         )
         .execute(&mut *tx)
         .await?;
@@ -315,10 +318,10 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
             "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
             Uuid::now_v7(),
-            token.family_id,
-            token.token_hash,
+            family.family_id,
+            family.token_hash,
             created_at,
-            token.expires_at,
+            family.expires_at,
         )
         .execute(&mut *tx)
         .await?;
@@ -332,13 +335,23 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         new_hash: &str,
         new_expires_at: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> Result<UserId, RotateRefreshError> {
+        binding: ClientBinding<'_>,
+    ) -> Result<RotatedSession, RotateRefreshError> {
         let mut tx = self.pool.begin().await?;
 
+        // 家族字段与 token 一次带出：绑定校验与轮转在同一个事务内完成
         let presented = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", family_id AS "family_id: uuid::Uuid", state,
-                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
-               FROM refresh_tokens WHERE token_hash = ?1"#,
+            r#"SELECT t.id AS "id: uuid::Uuid",
+                      t.family_id AS "family_id: uuid::Uuid",
+                      t.state,
+                      t.expires_at AS "expires_at: chrono::DateTime<chrono::Utc>",
+                      f.state AS "family_state",
+                      f.user_id AS "user_id: uuid::Uuid",
+                      f.client_id,
+                      f.scope
+               FROM refresh_tokens t
+               JOIN refresh_token_families f ON f.id = t.family_id
+               WHERE t.token_hash = ?1"#,
             presented_hash,
         )
         .fetch_optional(&mut *tx)
@@ -348,6 +361,15 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
             return Err(RotateRefreshError::Invalid);
         };
 
+        // 先于状态判断：绑定不符的呈递不触碰家族状态
+        let binding_matches = match binding {
+            ClientBinding::FirstParty => presented.client_id.is_none(),
+            ClientBinding::Client(client_id) => presented.client_id.as_deref() == Some(client_id),
+        };
+        if !binding_matches {
+            return Err(RotateRefreshError::ClientMismatch);
+        }
+
         match presented.state.as_str() {
             // 呈递已轮转 token = 重放：整族撤销后拒绝（事务保证撤销也落库）
             "rotated" => {
@@ -356,20 +378,10 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                 Err(RotateRefreshError::Replay)
             }
             "active" => {
-                if presented.expires_at <= now {
+                if presented.expires_at <= now || presented.family_state != "active" {
                     return Err(RotateRefreshError::Invalid);
                 }
-                let family = sqlx::query!(
-                    r#"SELECT state, user_id AS "user_id: uuid::Uuid"
-                       FROM refresh_token_families WHERE id = ?1"#,
-                    presented.family_id,
-                )
-                .fetch_one(&mut *tx)
-                .await?;
-                if family.state != "active" {
-                    return Err(RotateRefreshError::Invalid);
-                }
-                let user_id = UserId::from_uuid(family.user_id);
+                let user_id = UserId::from_uuid(presented.user_id);
 
                 let rotated = sqlx::query!(
                     "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
@@ -398,7 +410,7 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
                 .execute(&mut *tx)
                 .await?;
                 tx.commit().await?;
-                Ok(user_id)
+                Ok(RotatedSession { user_id, scope: presented.scope })
             }
             // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
             _ => Err(RotateRefreshError::Invalid),
@@ -548,24 +560,11 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
 
 impl crate::storage::AccountRepo for SqliteAccountRepo {
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query!("DELETE FROM email_verifications WHERE user_id = ?1", user_id.as_uuid(),)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query!(
-            "DELETE FROM refresh_tokens WHERE family_id IN
-             (SELECT id FROM refresh_token_families WHERE user_id = ?1)",
-            user_id.as_uuid(),
-        )
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query!("DELETE FROM refresh_token_families WHERE user_id = ?1", user_id.as_uuid(),)
-            .execute(&mut *tx)
-            .await?;
+        // 用户从属表统一以 ON DELETE CASCADE 引用 users（ADR-0007）；
+        // 单条 DELETE 由 SQLite 在同一事务内完成级联。
         sqlx::query!("DELETE FROM users WHERE id = ?1", user_id.as_uuid())
-            .execute(&mut *tx)
+            .execute(&self.pool)
             .await?;
-        tx.commit().await?;
         Ok(())
     }
 }

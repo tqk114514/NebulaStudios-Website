@@ -10,7 +10,7 @@ use serde::Deserialize;
 use super::{check_verification_code, clear_session_cookies};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::verification::VerificationPurpose;
 use crate::storage::{AccountRepo, EmailVerificationRepo};
 
@@ -27,7 +27,7 @@ pub struct DeleteConfirmRequest {
 /// 未认证 401；码错/过期/耗尽 401 `invalid_code`；内部故障 500。
 pub async fn delete_confirm(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: DeleteConfirmRequest =

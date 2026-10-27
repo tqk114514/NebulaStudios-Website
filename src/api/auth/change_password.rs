@@ -1,6 +1,6 @@
 //! POST /api/auth/password/change：已登录改密。验证当前口令 → 更新哈希 →
 //! 整族撤销全部会话并清 cookie（红线 #1：与登出、注销同一条撤销路径）。
-//! CSRF 由 [`AuthUser`] 内建门禁承担（cookie 来源的写方法）。
+//! CSRF 由 [`FirstPartyUser`] 内建门禁承担（cookie 来源的写方法）。
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -14,7 +14,7 @@ use super::{
 };
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::storage::{RefreshTokenRepo, UserRepo};
 
 /// 改密请求。
@@ -33,7 +33,7 @@ pub struct ChangePasswordRequest {
 /// 内部故障 500。成功 204 并清除会话。
 pub async fn change_password(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: ChangePasswordRequest =

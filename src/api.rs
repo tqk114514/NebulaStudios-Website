@@ -134,7 +134,7 @@ impl fmt::Debug for AppState {
 }
 
 /// 组装全部路由；新增端点在此登记。限额层以对端 IP 为键，429 经
-/// [`governor_error_response`] 直接产出 ADR-0004 信封。
+/// `governor_error_response` 直接产出 ADR-0004 信封。
 pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))

@@ -9,9 +9,9 @@ use std::future::Future;
 
 use crate::model::oauth2::{AuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
-use crate::model::tokens::NewRefreshToken;
+use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
-use crate::model::user::{LoginCredentials, User};
+use crate::model::user::{LoginCredentials, User, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
@@ -115,6 +115,24 @@ pub trait UserRepo: Send + Sync {
     ) -> impl Future<Output = Result<Option<User>, UserRepoError>> + Send;
 }
 
+/// 刷新轮转时期望的客户端绑定；第一方会话与第三方客户端互不通用（ADR-0006）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientBinding<'a> {
+    /// 第一方用户会话：家族不得带 `client_id`。
+    FirstParty,
+    /// 第三方客户端：家族 `client_id` 必须与给定值相等。
+    Client(&'a str),
+}
+
+/// 一次成功轮转后的会话元数据；新 refresh 明文由调用方持有。
+#[derive(Debug, Clone)]
+pub struct RotatedSession {
+    /// 会话所属用户。
+    pub user_id: UserId,
+    /// 家族创建时固定的授权范围。
+    pub scope: String,
+}
+
 /// refresh token 轮转错误。
 #[derive(Debug, thiserror::Error)]
 pub enum RotateRefreshError {
@@ -124,39 +142,49 @@ pub enum RotateRefreshError {
     /// token 不存在、已撤销、已过期或所属家族已撤销。
     #[error("refresh token 无效")]
     Invalid,
+    /// token 属于另一个客户端（或第一方），不得在该绑定下兑换。
+    #[error("refresh token 不属于当前客户端")]
+    ClientMismatch,
     /// 底层存储故障，细节见 source。
     #[error(transparent)]
     Storage(#[from] StorageError),
 }
 
-/// refresh token 家族仓储；轮转与重放检测必须原子完成。
+/// refresh token 家族仓储；轮转、绑定校验与重放检测必须原子完成。
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 pub trait RefreshTokenRepo: Send + Sync {
-    /// 创建家族并落第一个 token（登录成功后调用）。
+    /// 创建家族并落第一个 token（登录或授权码兑换时调用）。
     ///
     /// # Errors
     /// 仅存储故障；家族创建不存在冲突路径。
     fn create_family(
         &self,
-        token: &NewRefreshToken,
+        family: &NewRefreshFamily,
         created_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 
-    /// 原子轮转：呈递 token 须 Active 且未过期、家族须 Active；成功则旧置
-    /// Rotated、同族插入新 token，并返回所属用户（供签发新 access）。
-    /// 呈递已 Rotated 的 token 判定重放——整族撤销后返回 [`RotateRefreshError::Replay`]。
+    /// 原子轮转：呈递 token 须 Active 且未过期、家族须 Active、且家族客户端
+    /// 与 `binding` 相符；成功则旧置 Rotated、同族插入新 token，并返回家族固定的
+    /// `user_id` 与 `scope`，供签发新 access。
+    ///
+    /// 呈递已 Rotated 的 token 判定重放——整族撤销后返回
+    /// [`RotateRefreshError::Replay`]。绑定不符返回
+    /// [`RotateRefreshError::ClientMismatch`]，且不触碰家族状态。
     ///
     /// # Errors
     /// 重放返回 [`RotateRefreshError::Replay`]；无效呈递返回
-    /// [`RotateRefreshError::Invalid`]；存储故障返回 [`RotateRefreshError::Storage`]。
+    /// [`RotateRefreshError::Invalid`]；绑定不符返回
+    /// [`RotateRefreshError::ClientMismatch`]；存储故障返回
+    /// [`RotateRefreshError::Storage`]。
     fn rotate(
         &self,
         presented_hash: &str,
         new_hash: &str,
         new_expires_at: chrono::DateTime<chrono::Utc>,
         now: chrono::DateTime<chrono::Utc>,
-    ) -> impl Future<Output = Result<crate::model::user::UserId, RotateRefreshError>> + Send;
+        binding: ClientBinding<'_>,
+    ) -> impl Future<Output = Result<RotatedSession, RotateRefreshError>> + Send;
 
     /// 撤销用户全部家族；登出、改密、关闭 TOTP、注销共用同一路径（红线 #1）。
     ///
@@ -164,7 +192,7 @@ pub trait RefreshTokenRepo: Send + Sync {
     /// 仅存储故障。
     fn revoke_all_for_user(
         &self,
-        user_id: &crate::model::user::UserId,
+        user_id: &UserId,
         now: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 }
@@ -228,13 +256,13 @@ pub trait EmailVerificationRepo: Send + Sync {
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 pub trait AccountRepo: Send + Sync {
-    /// 硬删除用户及其全部从属数据（验证码、refresh 家族与 token），单事务。
+    /// 硬删除用户；从属数据由 `ON DELETE CASCADE` 在同一事务内删除（ADR-0007）。
     ///
     /// # Errors
     /// 仅存储故障；用户不存在不视为错误（幂等）。
     fn delete_user(
         &self,
-        user_id: &crate::model::user::UserId,
+        user_id: &UserId,
     ) -> impl Future<Output = Result<(), StorageError>> + Send;
 }
 

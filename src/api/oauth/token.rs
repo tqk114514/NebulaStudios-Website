@@ -12,9 +12,9 @@ use serde::Deserialize;
 use crate::api::AppState;
 use crate::model::oauth2::{TokenError, verify_pkce_s256};
 use crate::model::password::PasswordHash;
-use crate::model::tokens::{AccessClaims, NewRefreshToken, RefreshToken, sign_access};
+use crate::model::tokens::{AccessClaims, NewRefreshFamily, RefreshToken, sign_access};
 use crate::model::user::UserId;
-use crate::storage::{OAuthRepo, RefreshTokenRepo, RotateRefreshError};
+use crate::storage::{ClientBinding, OAuthRepo, RefreshTokenRepo, RotateRefreshError};
 use uuid::Uuid;
 
 /// 兑换请求（`application/x-www-form-urlencoded`）。
@@ -59,7 +59,7 @@ pub struct TokenResponse {
 /// 处理 token 端点：分发 `grant_type`。
 ///
 /// # Errors
-/// 本端点错误以 RFC 6749 形状经 [`rfc_error`] 返回，不经统一信封。
+/// 本端点错误以 RFC 6749 形状经 `rfc_error` 返回，不经统一信封。
 pub async fn token(State(state): State<AppState>, body: Bytes) -> Response {
     let req: TokenRequest = match serde_urlencoded::from_bytes(&body) {
         Ok(req) => req,
@@ -101,13 +101,13 @@ async fn authorization_code_grant(state: AppState, req: TokenRequest) -> Respons
         return invalid();
     }
 
-    match issue_pair(&state, record.user_id, Some(client.id.clone()), record.scope).await {
+    match issue_client_grant(&state, record.user_id, &client.id, &record.scope).await {
         Ok(response) => response,
         Err(err) => internal(err),
     }
 }
 
-/// `refresh` 流：与第一方同一轮转/重放机制（家族带 `client_id` 归属）。
+/// `refresh` 流：在原家族内轮转，家族客户端与 scope 由存储层校验并返回。
 async fn refresh_grant(state: AppState, req: TokenRequest) -> Response {
     let Some(client) = authenticated_client(&state, &req).await else {
         return rfc_error(StatusCode::UNAUTHORIZED, TokenError::InvalidClient);
@@ -119,20 +119,32 @@ async fn refresh_grant(state: AppState, req: TokenRequest) -> Response {
     let now = state.clock.now();
     let rotated = state
         .refresh_repo
-        .rotate(&presented, &replacement.to_hash_hex(), now + state.session.refresh_ttl, now)
+        .rotate(
+            &presented,
+            &replacement.to_hash_hex(),
+            now + state.session.refresh_ttl,
+            now,
+            ClientBinding::Client(&client.id),
+        )
         .await;
     match rotated {
-        Ok(user_id) => {
-            if let Ok(response) =
-                issue_pair(&state, user_id, Some(client.id.clone()), "profile".to_owned()).await
-            {
-                response
-            } else {
-                internal(anyhow::anyhow!("签发第三方令牌对失败"))
+        Ok(session) => {
+            match sign_client_access(&state, session.user_id, &client.id, &session.scope, now) {
+                Ok(access) => token_response(
+                    access,
+                    replacement.as_str(),
+                    &session.scope,
+                    state.session.access_ttl.num_seconds(),
+                ),
+                Err(err) => internal(err),
             }
         }
-        // 第三方重放同样整族撤销（该 client 名下的全部会话）
-        Err(RotateRefreshError::Replay | RotateRefreshError::Invalid) => invalid(),
+        // 重放、无效与跨客户端呈递都按 invalid_grant 返回，不向调用方泄露令牌归属
+        Err(
+            RotateRefreshError::Replay
+            | RotateRefreshError::Invalid
+            | RotateRefreshError::ClientMismatch,
+        ) => invalid(),
         Err(RotateRefreshError::Storage(err)) => internal(anyhow::Error::new(err)),
     }
 }
@@ -182,37 +194,56 @@ async fn dummy_verify(plain: String) -> bool {
     }
 }
 
-/// 签发第三方对：access JWT + 挂 `client_id` 的 refresh 家族。
-async fn issue_pair(
+/// 授权码首次兑换：创建以 client + scope 固定的家族并返回令牌对。
+async fn issue_client_grant(
     state: &AppState,
     user_id: UserId,
-    client_id: Option<String>,
-    scope: String,
+    client_id: &str,
+    scope: &str,
 ) -> Result<Response, anyhow::Error> {
     let now = state.clock.now();
-    let claims = AccessClaims::new(user_id, now, state.session.access_ttl);
-    let access = sign_access(&claims, state.jwt.encode())?;
+    // 先签 access：非法 scope 在落库前失败，不会留下没有对应响应的孤儿家族
+    let access = sign_client_access(state, user_id, client_id, scope, now)?;
     let refresh = RefreshToken::generate();
-    let entry = NewRefreshToken {
+    let family = NewRefreshFamily {
         family_id: Uuid::now_v7(),
         user_id,
+        client_id: Some(client_id.to_owned()),
+        scope: scope.to_owned(),
         token_hash: refresh.to_hash_hex(),
         expires_at: now + state.session.refresh_ttl,
-        client_id,
     };
-    state.refresh_repo.create_family(&entry, now).await?;
-    Ok((
+    state.refresh_repo.create_family(&family, now).await?;
+    Ok(token_response(access, refresh.as_str(), scope, state.session.access_ttl.num_seconds()))
+}
+
+/// 签发第三方 access JWT；`audience`、`client_id` 与 `scope` 由 claims 构造函数固定。
+fn sign_client_access(
+    state: &AppState,
+    user_id: UserId,
+    client_id: &str,
+    scope: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<String, anyhow::Error> {
+    let claims =
+        AccessClaims::client_grant(user_id, client_id, scope, now, state.session.access_ttl)?;
+    Ok(sign_access(&claims, state.jwt.encode())?)
+}
+
+/// RFC 6749 成功响应；refresh 明文由调用方持有，本函数不触碰存储。
+fn token_response(access: String, refresh: &str, scope: &str, expires_in: i64) -> Response {
+    (
         StatusCode::OK,
         [(header::CACHE_CONTROL, "no-store"), (header::PRAGMA, "no-cache")],
         axum::Json(TokenResponse {
             access_token: access,
             token_type: "Bearer",
-            expires_in: state.session.access_ttl.num_seconds(),
-            refresh_token: refresh.as_str().to_owned(),
-            scope,
+            expires_in,
+            refresh_token: refresh.to_owned(),
+            scope: scope.to_owned(),
         }),
     )
-        .into_response())
+        .into_response()
 }
 
 /// RFC 6749 错误响应（`{"error": "..."}`，no-store）。
