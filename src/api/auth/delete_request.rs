@@ -10,7 +10,6 @@ use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
-use crate::storage::{EmailVerificationRepo, UserRepo};
 
 /// 处理注销发起：对未验证邮箱拒绝（注销确认码发往邮箱，邮箱不可达则注销
 /// 不可完成）；随后与重发同款 60 秒冷却。

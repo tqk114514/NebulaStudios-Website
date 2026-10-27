@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::verification::VerificationPurpose;
-use crate::storage::{EmailVerificationRepo, UserRepo};
 
 /// 验证请求。
 #[derive(Debug, Deserialize)]

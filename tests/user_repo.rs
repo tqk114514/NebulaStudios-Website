@@ -6,7 +6,7 @@ mod common;
 use chrono::{DateTime, Utc};
 use nebula_server::model::password::PasswordHash;
 use nebula_server::model::user::{User, UserId};
-use nebula_server::storage::{UserRepo, UserRepoError};
+use nebula_server::storage::UserRepoError;
 
 fn sample_user() -> User {
     User {

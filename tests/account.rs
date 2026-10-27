@@ -6,7 +6,6 @@ mod common;
 
 use axum::http::StatusCode;
 use common::{Mailbox, OneshotPost, Session, await_first_mail, cookie_header, extract_code};
-use nebula_server::storage::UserRepo;
 
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";

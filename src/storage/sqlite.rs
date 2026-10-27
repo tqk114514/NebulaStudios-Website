@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
@@ -143,6 +144,7 @@ impl From<SqlxError> for RotateRefreshError {
     }
 }
 
+#[async_trait]
 impl UserRepo for SqliteUserRepo {
     async fn insert(&self, user: &User, password: &PasswordHash) -> Result<(), UserRepoError> {
         let result = sqlx::query!(
@@ -296,6 +298,7 @@ impl UserRepo for SqliteUserRepo {
     }
 }
 
+#[async_trait]
 impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
     async fn create_family(
         &self,
@@ -460,6 +463,7 @@ async fn revoke_family_in_tx(
     Ok(())
 }
 
+#[async_trait]
 impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
     async fn issue(
         &self,
@@ -558,6 +562,7 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
     }
 }
 
+#[async_trait]
 impl crate::storage::AccountRepo for SqliteAccountRepo {
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
         // 用户从属表统一以 ON DELETE CASCADE 引用 users（ADR-0007）；
@@ -569,6 +574,7 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
     }
 }
 
+#[async_trait]
 impl crate::storage::TotpRepo for SqliteTotpRepo {
     async fn find(
         &self,
@@ -779,6 +785,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
     }
 }
 
+#[async_trait]
 impl crate::storage::OAuthRepo for SqliteOAuthRepo {
     async fn find_client(&self, client_id: &str) -> Result<Option<OAuthClient>, StorageError> {
         let row = sqlx::query!(

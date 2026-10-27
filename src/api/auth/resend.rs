@@ -12,7 +12,6 @@ use super::issue_and_send_code;
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
-use crate::storage::{EmailVerificationRepo, UserRepo};
 
 /// 重发请求。
 #[derive(Debug, Deserialize)]

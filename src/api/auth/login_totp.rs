@@ -12,7 +12,6 @@ use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::tokens::{RefreshToken, sha256_hex};
 use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code};
-use crate::storage::{TotpRepo, UserRepo};
 
 /// 二段请求。
 #[derive(Debug, Deserialize)]
