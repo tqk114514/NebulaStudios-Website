@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 站点顶栏。v3 的顶栏只有字标与语言切换器，没有导航链接。
-// tools 插槽由使用方填入语言切换器（依赖 @nuxtjs/i18n，尚未接入）。
+// tools 插槽由使用方填入语言切换器（已由 @nuxtjs/i18n 驱动的 LangSwitcher 承担）。
 import { LOGO_PATHS, LOGO_VIEW_BOX } from '~/utils/logo-mark'
 </script>
 

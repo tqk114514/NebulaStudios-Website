@@ -3,7 +3,7 @@ import { LOGO_PATHS } from '~/utils/logo-mark'
 export interface LogoPoint {
   x: number
   y: number
-  /** 5×5 邻域实心率：1=深处内部，0=贴边 */
+  /** 3×3 邻域实心率（步长 4px）：1=深处内部，0=贴边 */
   t: number
 }
 
