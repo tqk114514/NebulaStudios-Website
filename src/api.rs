@@ -31,7 +31,9 @@ use tower_http::request_id::{
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::context::{Clock, RequestId};
+use crate::error::ApiError;
 use crate::mailer::Mailer;
+use crate::model::user::{User, UserId};
 use crate::storage::{
     AccountRepo, AdminRepo, EmailVerificationRepo, MaintenanceRepo, OAuthRepo, RefreshTokenRepo,
     TotpRepo, UserRepo,
@@ -222,6 +224,28 @@ impl fmt::Debug for AppState {
     }
 }
 
+/// 校验当前口令并返回用户快照；口令错误 401，用户缺失/存储故障 500。
+pub(crate) async fn verify_current_password(
+    state: &AppState,
+    user_id: &UserId,
+    password: &str,
+) -> Result<User, ApiError> {
+    let Some(credentials) = state
+        .user_repo
+        .find_by_id(user_id)
+        .await
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
+    else {
+        return Err(ApiError::Internal(anyhow::anyhow!("JWT 指向的用户不存在: {user_id}")));
+    };
+    let plain = password.to_owned();
+    let ok = tokio::task::spawn_blocking(move || credentials.password_hash.verify(&plain))
+        .await
+        .map_err(anyhow::Error::from)?
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
+    if ok { Ok(credentials.user) } else { Err(ApiError::InvalidCredentials) }
+}
+
 /// 组装全部路由；新增端点在此登记。限额层以对端 IP 为键，429 经
 /// `governor_error_response` 直接产出 ADR-0004 信封。
 pub fn router(state: AppState) -> Router {
@@ -233,10 +257,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/logout", post(auth::logout::logout))
         .route("/api/auth/password/change", post(auth::change_password::change_password))
         .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request))
-        .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
-        .route("/api/user/totp/setup", post(user::totp_setup::setup))
-        .route("/api/user/totp/enable", post(user::totp_enable::enable))
-        .route("/api/user/totp/disable", post(user::totp_disable::disable))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
@@ -304,11 +324,29 @@ pub fn router(state: AppState) -> Router {
             .error_handler(|error| governor_error_response(&error)),
         );
 
+    // TOTP 二段与账户 TOTP 管理：突发 10、每 2 秒补 1；挑战本身另有 5 次上限
+    let totp_limited = Router::new()
+        .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
+        .route("/api/user/totp/setup", post(user::totp_setup::setup))
+        .route("/api/user/totp/enable", post(user::totp_enable::enable))
+        .route("/api/user/totp/disable", post(user::totp_disable::disable))
+        .layer(
+            GovernorLayer::new(
+                GovernorConfigBuilder::default()
+                    .per_second(2)
+                    .burst_size(10)
+                    .finish()
+                    .unwrap_or_else(|| unreachable!("TOTP 限额常量非法")),
+            )
+            .error_handler(|error| governor_error_response(&error)),
+        );
+
     let mut router = open
         .merge(register_limited)
         .merge(login_limited)
         .merge(verify_limited)
         .merge(reset_limited)
+        .merge(totp_limited)
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(middleware::map_response(envelope_payload_too_large));

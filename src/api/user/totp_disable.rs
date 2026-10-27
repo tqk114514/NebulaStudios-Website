@@ -57,18 +57,7 @@ pub async fn disable(
     }
 
     // 因素一：当前口令
-    let credentials =
-        state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?.ok_or_else(
-            || ApiError::Internal(anyhow::anyhow!("JWT 指向的用户不存在: {}", user.user_id)),
-        )?;
-    let password_ok =
-        tokio::task::spawn_blocking(move || credentials.password_hash.verify(&req.password))
-            .await
-            .map_err(anyhow::Error::from)?
-            .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
-    if !password_ok {
-        return Err(ApiError::InvalidCredentials);
-    }
+    crate::api::verify_current_password(&state, &user.user_id, &req.password).await?;
 
     // 因素二：TOTP 码或恢复码（六位数字走 TOTP，其余按恢复码）
     let code = req.code.trim();

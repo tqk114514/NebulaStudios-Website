@@ -15,6 +15,8 @@ use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
 /// enable 请求。
 #[derive(Debug, Deserialize)]
 pub struct EnableRequest {
+    /// 当前登录口令；启用前再认证。
+    pub password: String,
     /// 验证器 App 当前展示的六位码。
     pub code: String,
 }
@@ -26,11 +28,11 @@ pub struct EnableResponse {
     pub recovery_codes: Vec<String>,
 }
 
-/// 处理 enable：Pending 态 + pending 密钥下的码验证通过 → Enabled。
+/// 处理 enable：口令再认证 → Pending 态 + pending 密钥下的码验证通过 → Enabled。
 ///
 /// # Errors
-/// 未认证 401；码错 401 `totp_invalid`；非 Pending 态 409 `totp_not_pending`；
-/// 内部故障 500。
+/// 未认证 401；口令错 401 `invalid_credentials`；码错 401 `totp_invalid`；
+/// 非 Pending 态 409 `totp_not_pending`；内部故障 500。
 pub async fn enable(
     State(state): State<AppState>,
     user: FirstPartyUser,
@@ -38,12 +40,17 @@ pub async fn enable(
 ) -> Result<Response, ApiError> {
     let req: EnableRequest =
         serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    if req.code.trim().is_empty() {
-        return Err(ApiError::Validation(vec![FieldInvalid {
-            field: "code",
-            code: "code_missing".to_owned(),
-        }]));
+    let mut issues = Vec::new();
+    if req.password.is_empty() {
+        issues.push(FieldInvalid { field: "password", code: "password_missing".to_owned() });
     }
+    if req.code.trim().is_empty() {
+        issues.push(FieldInvalid { field: "code", code: "code_missing".to_owned() });
+    }
+    if !issues.is_empty() {
+        return Err(ApiError::Validation(issues));
+    }
+    crate::api::verify_current_password(&state, &user.user_id, &req.password).await?;
 
     let Some((totp_state, secret)) =
         state.totp_repo.find(&user.user_id).await.map_err(anyhow::Error::from)?

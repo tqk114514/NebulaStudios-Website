@@ -1,6 +1,6 @@
 //! POST /api/auth/password/change：已登录改密。验证当前口令 → 更新哈希 →
-//! 整族撤销全部会话并清 cookie（红线 #1：与登出、注销同一条撤销路径）。
-//! CSRF 由 [`FirstPartyUser`] 内建门禁承担（cookie 来源的写方法）。
+//! 整族撤销全部会话、作废未消费 TOTP 挑战并清 cookie（红线 #1：与登出、注销
+//! 同一条撤销路径）。CSRF 由 [`FirstPartyUser`] 内建门禁承担（cookie 来源的写方法）。
 
 use axum::body::Bytes;
 use axum::extract::State;
@@ -8,8 +8,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::{hash_password_in_background, password_problem, verify_password_in_background};
-use crate::api::{AppState, clear_session_cookies};
+use super::{hash_password_in_background, password_problem};
+use crate::api::{AppState, clear_session_cookies, verify_current_password};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 
@@ -47,20 +47,8 @@ pub async fn change_password(
         return Err(ApiError::Validation(issues));
     }
 
-    // 当前口令校验：按 id 取哈希 → spawn_blocking 验证
-    let credentials =
-        state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?;
-    // JWT 保证用户存在；无凭据（哈希缺失）在此路径不可能出现，按口令错处理
-    let verified = match credentials {
-        Some(credentials) => {
-            verify_password_in_background(credentials.password_hash, req.current_password.clone())
-                .await?
-        }
-        None => false,
-    };
-    if !verified {
-        return Err(ApiError::InvalidCredentials);
-    }
+    // 当前口令校验：与 TOTP 启用/关闭共用同一再认证助手
+    verify_current_password(&state, &user.user_id, &req.current_password).await?;
 
     let new_hash = hash_password_in_background(req.new_password.clone()).await?;
     state
@@ -69,12 +57,14 @@ pub async fn change_password(
         .await
         .map_err(anyhow::Error::from)?;
 
-    // 改密即全端下线（红线 #1）：撤销全部家族再清 cookie
+    // 改密即全端下线（红线 #1）：撤销全部家族、作废未消费的 TOTP 挑战，再清 cookie
+    let now = state.clock.now();
     state
         .refresh_repo
-        .revoke_all_for_user(&user.user_id, state.clock.now())
+        .revoke_all_for_user(&user.user_id, now)
         .await
         .map_err(anyhow::Error::from)?;
+    state.totp_repo.invalidate_challenges(&user.user_id, now).await.map_err(anyhow::Error::from)?;
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);
