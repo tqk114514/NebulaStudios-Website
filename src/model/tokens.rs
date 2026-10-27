@@ -52,10 +52,19 @@ impl AccessClaims {
 #[error("access token 签发失败: {0}")]
 pub struct SignAccessTokenError(#[source] jsonwebtoken::errors::Error);
 
+/// access token 过期宽限，吸收跨节点时钟偏差；数值与 `jsonwebtoken` 默认一致。
+const EXPIRY_LEEWAY_SECS: i64 = 60;
+
 /// access token 校验失败（签名不符、过期、格式非法等）。
 #[derive(Debug, thiserror::Error)]
-#[error("access token 校验失败: {0}")]
-pub struct VerifyAccessTokenError(#[source] jsonwebtoken::errors::Error);
+pub enum VerifyAccessTokenError {
+    /// 签名不符、格式非法或缺少必需声明。
+    #[error("access token 无效: {0}")]
+    Invalid(#[source] jsonwebtoken::errors::Error),
+    /// 已过期：`now` 超过 `exp + EXPIRY_LEEWAY_SECS`。
+    #[error("access token 已过期")]
+    Expired,
+}
 
 /// 以 ES256 签发 access token。
 ///
@@ -68,17 +77,27 @@ pub fn sign_access(
     jsonwebtoken::encode(&Header::new(Algorithm::ES256), claims, key).map_err(SignAccessTokenError)
 }
 
-/// 校验签名与有效期（exp 校验开启，leeway 用库默认 60 秒）。
+/// 校验签名与有效期；时间基准由调用方注入（§2 时钟注入），leeway 60 秒。
+///
+/// `jsonwebtoken` 内建的 `exp` 校验只能读墙上时钟，故在此关闭，改由 `now` 判定。
 ///
 /// # Errors
-/// 签名不符、已过期或格式非法时返回错误。
+/// 签名不符、格式非法或缺少 `exp` 时返回 [`VerifyAccessTokenError::Invalid`]；
+/// `now` 超过 `exp + 60s` 时返回 [`VerifyAccessTokenError::Expired`]。
 pub fn verify_access(
     token: &str,
     key: &DecodingKey,
+    now: DateTime<Utc>,
 ) -> Result<AccessClaims, VerifyAccessTokenError> {
-    jsonwebtoken::decode::<AccessClaims>(token, key, &Validation::new(Algorithm::ES256))
-        .map_err(VerifyAccessTokenError)
-        .map(|data| data.claims)
+    let mut validation = Validation::new(Algorithm::ES256);
+    validation.validate_exp = false;
+    let claims = jsonwebtoken::decode::<AccessClaims>(token, key, &validation)
+        .map_err(VerifyAccessTokenError::Invalid)?
+        .claims;
+    if now.timestamp() > claims.exp.saturating_add(EXPIRY_LEEWAY_SECS) {
+        return Err(VerifyAccessTokenError::Expired);
+    }
+    Ok(claims)
 }
 
 /// 不透明 refresh token 明文；仅在签发处出现一次，库中只存其 SHA-256。
@@ -213,7 +232,7 @@ mod tests {
     // 断言失败即 panic 是测试的正确失败语义；unwrap/expect 禁令面向生产路径
     #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-    use super::{AccessClaims, RefreshToken, sign_access, verify_access};
+    use super::{AccessClaims, RefreshToken, VerifyAccessTokenError, sign_access, verify_access};
     use crate::model::user::UserId;
     use chrono::{DateTime, TimeDelta, Utc};
 
@@ -236,23 +255,38 @@ mod tests {
         let token = sign_access(&claims, &key).expect("签发必须成功");
 
         let public = jsonwebtoken::DecodingKey::from_ec_pem(TEST_PUBLIC_PEM.as_bytes()).unwrap();
-        let decoded = verify_access(&token, &public).expect("合法 token 必须可校验");
+        // 校验基准是同一注入时刻，而非墙上时钟；换一天跑也仍应通过
+        let decoded = verify_access(&token, &public, now).expect("合法 token 必须可校验");
         assert_eq!(decoded, claims);
     }
 
     #[test]
-    fn expired_access_token_is_rejected() {
-        // exp 校验以真实墙上时钟为基准，须相对 Utc::now 构造出确定过期
-        let stale = AccessClaims::new(
-            UserId::new(),
-            Utc::now() - TimeDelta::hours(2),
-            TimeDelta::minutes(10),
-        );
+    fn expired_access_token_is_rejected_by_injected_now() {
+        let now = fixed_now();
+        let stale = AccessClaims::new(UserId::new(), now, TimeDelta::minutes(10));
         let key = jsonwebtoken::EncodingKey::from_ec_pem(TEST_PRIVATE_PEM.as_bytes()).unwrap();
         let token = sign_access(&stale, &key).expect("签发必须成功");
 
         let public = jsonwebtoken::DecodingKey::from_ec_pem(TEST_PUBLIC_PEM.as_bytes()).unwrap();
-        assert!(verify_access(&token, &public).is_err());
+        let expired_at = now + TimeDelta::minutes(10) + TimeDelta::seconds(61);
+        assert!(matches!(
+            verify_access(&token, &public, expired_at),
+            Err(VerifyAccessTokenError::Expired)
+        ));
+    }
+
+    #[test]
+    fn expiry_leeway_matches_jsonwebtoken_default() {
+        let now = fixed_now();
+        let claims = AccessClaims::new(UserId::new(), now, TimeDelta::minutes(10));
+        let key = jsonwebtoken::EncodingKey::from_ec_pem(TEST_PRIVATE_PEM.as_bytes()).unwrap();
+        let token = sign_access(&claims, &key).expect("签发必须成功");
+        let public = jsonwebtoken::DecodingKey::from_ec_pem(TEST_PUBLIC_PEM.as_bytes()).unwrap();
+        let exp = now + TimeDelta::minutes(10);
+
+        assert!(verify_access(&token, &public, exp).is_ok(), "exp 当秒仍有效");
+        assert!(verify_access(&token, &public, exp + TimeDelta::seconds(60)).is_ok());
+        assert!(verify_access(&token, &public, exp + TimeDelta::seconds(61)).is_err());
     }
 
     #[test]

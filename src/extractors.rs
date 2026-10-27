@@ -62,7 +62,8 @@ fn auth_user_of(parts: &Parts, state: &AppState) -> Result<AuthUser, ApiError> {
     if from_cookie && is_write_method(&parts.method) {
         verify_csrf(parts)?;
     }
-    let claims = verify_access(&token, state.jwt.decode()).map_err(|_| ApiError::Unauthorized)?;
+    let claims = verify_access(&token, state.jwt.decode(), state.clock.now())
+        .map_err(|_| ApiError::Unauthorized)?;
     let id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| ApiError::Unauthorized)?;
     Ok(AuthUser { user_id: UserId::from_uuid(id) })
 }
