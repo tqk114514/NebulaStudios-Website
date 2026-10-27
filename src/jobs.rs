@@ -38,6 +38,8 @@ pub fn spawn_cleanup(state: AppState, interval: Duration) -> JoinHandle<()> {
                         .increment(report.totp_login_challenges);
                     metrics::counter!("nebula_cleanup_deleted_oauth_authorization_codes_total")
                         .increment(report.oauth_authorization_codes);
+                    metrics::counter!("nebula_cleanup_deleted_expired_bans_total")
+                        .increment(report.expired_bans);
                     tracing::info!(?report, "过期数据清理完成");
                 }
                 Err(err) => {

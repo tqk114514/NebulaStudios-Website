@@ -64,6 +64,19 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
     }
     let user = credentials.user;
 
+    // 封禁必须在签发会话前拦截；已签发 access token 由 FirstPartyUser 同一判定拦截
+    let Some(access) = state
+        .user_repo
+        .find_access_state(&user.id, state.clock.now())
+        .await
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
+    else {
+        return Err(ApiError::InvalidCredentials);
+    };
+    if access.ban.is_some() {
+        return Err(ApiError::Banned);
+    }
+
     // 已启用 TOTP：不建会话，签发单次挑战走二段（v3 pendingToken 语义，入库哈希）
     if let Some((TotpState::Enabled, _)) =
         state.totp_repo.find(&user.id).await.map_err(anyhow::Error::from)?

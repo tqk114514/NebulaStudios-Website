@@ -8,11 +8,12 @@ use std::fmt;
 
 use async_trait::async_trait;
 
+use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::oauth2::{AuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
-use crate::model::user::{LoginCredentials, User, UserId};
+use crate::model::user::{Ban, LoginCredentials, User, UserAccess, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 
 /// 不透明存储错误：实现侧（sqlx 等）的具体错误装箱封存，
@@ -79,6 +80,17 @@ pub trait UserRepo: Send + Sync {
         &self,
         user_id: &crate::model::user::UserId,
     ) -> Result<Option<LoginCredentials>, UserRepoError>;
+
+    /// 读取认证接缝所需的实时状态；用户不存在返回 `None`，已到期的临时封禁归为
+    /// `UserAccess::ban = None`。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]；封禁行数据非法也按存储故障返回。
+    async fn find_access_state(
+        &self,
+        user_id: &UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<UserAccess>, UserRepoError>;
 
     /// 按登录标识（邮箱或用户名）取登录凭据，大小写不敏感；用户不存在或
     /// 该用户无口令哈希均返回 `None`，由调用方走时序对齐路径。
@@ -270,6 +282,8 @@ pub struct CleanupReport {
     pub totp_login_challenges: u64,
     /// 删除的 OAuth 授权码行数。
     pub oauth_authorization_codes: u64,
+    /// 删除的已到期临时封禁行数。
+    pub expired_bans: u64,
 }
 
 /// 维护仓储：过期数据清理；删除在同一事务内完成。
@@ -283,6 +297,110 @@ pub trait MaintenanceRepo: Send + Sync {
         &self,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<CleanupReport, StorageError>;
+}
+
+/// 管理后台统计。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdminStats {
+    /// 用户总数。
+    pub total_users: i64,
+    /// 当前生效的封禁数。
+    pub banned_users: i64,
+    /// `since` 之后注册的用户数。
+    pub new_users_today: i64,
+}
+
+/// 管理后台用户列表行。
+#[derive(Debug, Clone)]
+pub struct AdminUserRow {
+    /// 用户标识。
+    pub id: UserId,
+    /// 展示用户名。
+    pub username: String,
+    /// 邮箱。
+    pub email: String,
+    /// 邮箱是否已验证。
+    pub email_verified: bool,
+    /// 注册时刻。
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// 当前生效的封禁；已到期的临时封禁归为 `None`。
+    pub ban: Option<Ban>,
+}
+
+/// 管理后台仓储：统计、用户列表、封禁/解封与审计。
+///
+/// 封禁与撤销 refresh 会话在同一事务内完成；审计写入是独立追加操作。
+#[async_trait]
+pub trait AdminRepo: Send + Sync {
+    /// 取用户总数、当前封禁数与 `since` 之后的新增数。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn stats(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<AdminStats, StorageError>;
+
+    /// 分页列出用户，`search` 同时匹配邮箱与用户名（大小写不敏感的 SQL LIKE）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn list_users(
+        &self,
+        search: Option<&str>,
+        limit: i64,
+        offset: i64,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<AdminUserRow>, StorageError>;
+
+    /// 与 [`Self::list_users`] 同筛选条件的总数。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn count_users(&self, search: Option<&str>) -> Result<i64, StorageError>;
+
+    /// 写入/覆盖封禁，并在同一事务内撤销该用户全部 refresh 家族；用户不存在返回
+    /// `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn ban_user(
+        &self,
+        user_id: &UserId,
+        ban: &Ban,
+        reason: &str,
+        actor_id: &UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, StorageError>;
+
+    /// 删除封禁记录；原本不存在返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn unban_user(&self, user_id: &UserId) -> Result<bool, StorageError>;
+
+    /// 追加一条审计记录。
+    ///
+    /// # Errors
+    /// 仅存储故障；`details` 无法序列化也按存储故障返回。
+    async fn record_audit(
+        &self,
+        entry: &NewAuditEntry,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 按时间倒序分页读取审计记录。
+    ///
+    /// # Errors
+    /// 仅存储故障；存量记录的 UUID/JSON 损坏也按存储故障返回。
+    async fn list_audit(&self, limit: i64, offset: i64) -> Result<Vec<AuditEntry>, StorageError>;
+
+    /// 审计记录总数。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn count_audit(&self) -> Result<i64, StorageError>;
 }
 
 /// TOTP 仓储：状态与密钥、恢复码批次、登录二段挑战。

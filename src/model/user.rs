@@ -70,3 +70,23 @@ pub struct LoginCredentials {
     /// 已存口令哈希；无口令的用户不会出现在本结构中（不可口令登录）。
     pub password_hash: crate::model::password::PasswordHash,
 }
+
+/// 封禁状态；`user_bans` 的两种合法形态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ban {
+    /// 到期自动解除。
+    Temporary(DateTime<Utc>),
+    /// 永不过期，须管理员解封。
+    Permanent,
+}
+
+/// 认证接缝需要的实时用户状态：邮箱（用于配置化管理员判定）与封禁。
+#[derive(Debug, Clone)]
+pub struct UserAccess {
+    /// 已小写化的注册邮箱。
+    pub email: String,
+    /// 邮箱是否已验证；配置化管理员必须同时满足此项。
+    pub email_verified: bool,
+    /// 当前生效的封禁；已到期的临时封禁在读取时归为 `None`。
+    pub ban: Option<Ban>,
+}

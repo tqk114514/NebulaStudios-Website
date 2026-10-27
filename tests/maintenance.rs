@@ -30,6 +30,7 @@ async fn purge_expired_deletes_only_expired_rows() {
     seed_verification_data(&pool).await;
     seed_totp_data(&pool).await;
     seed_oauth_data(&pool).await;
+    seed_ban_data(&pool).await;
     pool.close().await;
 
     let report =
@@ -44,6 +45,7 @@ async fn purge_expired_deletes_only_expired_rows() {
             totp_recovery_codes: 1,
             totp_login_challenges: 1,
             oauth_authorization_codes: 1,
+            expired_bans: 1,
         }
     );
 
@@ -180,6 +182,18 @@ async fn seed_oauth_data(pool: &SqlitePool) {
     }
 }
 
+async fn seed_ban_data(pool: &SqlitePool) {
+    sqlx::query(
+        "INSERT INTO user_bans (user_id, kind, expires_at, reason, created_at, created_by)
+         VALUES (?1, 'temporary', '2026-10-26T07:00:00+00:00', 'old ban', '2026-10-26T06:00:00+00:00', ?2)",
+    )
+    .bind(USER_ID)
+    .bind(USER_ID)
+    .execute(pool)
+    .await
+    .expect("过期封禁必须可插入");
+}
+
 async fn assert_remaining_rows(pool: &SqlitePool) {
     for (table, sql, expected) in [
         ("refresh_tokens", "SELECT COUNT(*) FROM refresh_tokens", 1_i64),
@@ -188,6 +202,7 @@ async fn assert_remaining_rows(pool: &SqlitePool) {
         ("totp_recovery_codes", "SELECT COUNT(*) FROM totp_recovery_codes", 1),
         ("totp_login_challenges", "SELECT COUNT(*) FROM totp_login_challenges", 1),
         ("oauth_authorization_codes", "SELECT COUNT(*) FROM oauth_authorization_codes", 1),
+        ("user_bans", "SELECT COUNT(*) FROM user_bans", 0),
     ] {
         let count: i64 = sqlx::query_scalar(sql).fetch_one(pool).await.expect("计数必须可读");
         assert_eq!(count, expected, "{table} 只应保留未过期行");

@@ -21,6 +21,15 @@ pub struct Config {
     pub jobs: JobsConfig,
     /// CORS 子配置。
     pub cors: CorsConfig,
+    /// 管理员子配置。
+    pub admin: AdminConfig,
+}
+
+/// 管理员配置；邮箱列表逗号分隔，启动时 trim + 小写。
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminConfig {
+    /// 管理员邮箱列表；空串表示没有管理员，admin 端点不可用。
+    pub emails: String,
 }
 
 /// 后台任务配置。
@@ -103,6 +112,7 @@ impl Config {
             .set_default("mail.from", "Nebula <no-reply@nebula.st>")?
             .set_default("jobs.cleanup_interval_secs", 300)?
             .set_default("cors.allowed_origin", "")?
+            .set_default("admin.emails", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;
@@ -138,5 +148,6 @@ mod tests {
         assert_eq!(config.jwt.refresh_ttl_secs, 2_592_000);
         assert_eq!(config.jobs.cleanup_interval_secs, 300);
         assert_eq!(config.cors.allowed_origin, "");
+        assert_eq!(config.admin.emails, "");
     }
 }

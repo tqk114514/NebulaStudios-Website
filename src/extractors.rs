@@ -1,7 +1,5 @@
 //! 请求提取器（§2）：第一方用户会话与 CSRF 门禁（ADR-0005、ADR-0006）。
 
-use std::future::Future;
-
 use axum::extract::FromRequestParts;
 use axum::http::Method;
 use axum::http::request::Parts;
@@ -18,25 +16,52 @@ pub const CSRF_HEADER: &str = "x-csrf-token";
 /// `Authorization: Bearer`。只接受 `aud = nebula:user-session` 的令牌，
 /// OAuth 客户端授权令牌在此不可表达（ADR-0006）。
 ///
-/// 只证明 JWT 有效，不查库；需要用户实时状态（封禁等）的端点必须自行查库。
+/// 解析后查库确认用户仍存在、未被封禁，并带出邮箱供配置化管理员判定（ADR-0008）；
+/// 封禁对已签发的 access token 立即生效。
 ///
 /// CSRF 门禁内建于此（ADR-0005）：cookie 来源的认证遇写方法必须通过
 /// `verify_csrf`，Bearer 来源与读方法豁免——经本提取器的未来写端点自动合规。
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct FirstPartyUser {
     /// token 声明的用户标识。
     pub user_id: UserId,
+    /// 库中读取的注册邮箱（已小写化）。
+    pub email: String,
+    /// 邮箱是否已验证；配置化管理员要求此项为真。
+    pub email_verified: bool,
 }
 
-// 解析全程同步，用 ready future 满足 trait 的 RPITIT 签名，不引入 async fn
 impl FromRequestParts<AppState> for FirstPartyUser {
     type Rejection = ApiError;
 
-    fn from_request_parts(
+    async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        std::future::ready(first_party_user_of(parts, state))
+    ) -> Result<Self, Self::Rejection> {
+        first_party_user_of(parts, state).await
+    }
+}
+
+/// 管理员会话；在 `FirstPartyUser` 之后按配置邮箱判定，不落库（ADR-0008）。
+#[derive(Debug, Clone)]
+pub struct AdminUser {
+    /// 已通过第一方认证与封禁检查的用户。
+    pub user: FirstPartyUser,
+}
+
+impl FromRequestParts<AppState> for AdminUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let user = FirstPartyUser::from_request_parts(parts, state).await?;
+        if user.email_verified && state.admin_emails.contains(&user.email) {
+            Ok(Self { user })
+        } else {
+            Err(ApiError::Forbidden)
+        }
     }
 }
 
@@ -59,17 +84,32 @@ impl FromRequestParts<AppState> for CsrfGuard {
     }
 }
 
-fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPartyUser, ApiError> {
+async fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPartyUser, ApiError> {
     let (token, from_cookie) = access_token_of(parts).ok_or(ApiError::Unauthorized)?;
     // 跨站页面无法携带自定义头，Bearer 认证豁免 CSRF（ADR-0005）
     if from_cookie && is_write_method(&parts.method) {
         verify_csrf(parts)?;
     }
-    match verify_access(&token, state.jwt.decode(), state.clock.now()) {
-        Ok(VerifiedAccessToken::UserSession { user_id }) => Ok(FirstPartyUser { user_id }),
+    let now = state.clock.now();
+    let user_id = match verify_access(&token, state.jwt.decode(), now) {
+        Ok(VerifiedAccessToken::UserSession { user_id }) => user_id,
         // 第三方客户端令牌不是第一方会话；与无效令牌同体返回，避免泄露令牌类型
-        Ok(VerifiedAccessToken::ClientGrant { .. }) | Err(_) => Err(ApiError::Unauthorized),
+        Ok(VerifiedAccessToken::ClientGrant { .. }) | Err(_) => return Err(ApiError::Unauthorized),
+    };
+
+    let Some(access) = state
+        .user_repo
+        .find_access_state(&user_id, now)
+        .await
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
+    else {
+        // JWT 仍有效但用户已删除：按未认证处理，避免泄露删除状态
+        return Err(ApiError::Unauthorized);
+    };
+    if access.ban.is_some() {
+        return Err(ApiError::Banned);
     }
+    Ok(FirstPartyUser { user_id, email: access.email, email_verified: access.email_verified })
 }
 
 /// cookie 优先、Bearer 次之；返回 (token, 是否来自 cookie)。

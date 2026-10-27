@@ -77,6 +77,20 @@ pub enum ApiError {
     /// 第一方 consent 端点的 OAuth 参数非法；400，`code` 为子错误码。
     /// 标准 authorize GET 在 handler 层转为 RFC 6749 错误形状。
     OAuthAuthorize(&'static str),
+    /// 账户处于封禁状态；403。
+    Banned,
+    /// 非管理员访问管理端点；403。
+    Forbidden,
+    /// 管理端点目标用户不存在；404。
+    UserNotFound,
+    /// 目标用户当前没有封禁记录；404。
+    BanNotFound,
+    /// 管理员不能封禁自己；409。
+    CannotBanSelf,
+    /// 管理员不能封禁另一名管理员；409。
+    CannotBanAdmin,
+    /// 查询串非法；400。
+    MalformedQuery(String),
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -85,103 +99,115 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
+/// 错误映射的内部表示：状态码、稳定 code、消息与可选 details。
+type ErrorParts = (StatusCode, &'static str, String, Option<JsonValue>);
+
+fn simple(status: StatusCode, code: &'static str, message: &'static str) -> ErrorParts {
+    (status, code, message.to_owned(), None)
+}
+
+fn with_details(
+    status: StatusCode,
+    code: &'static str,
+    message: &'static str,
+    details: JsonValue,
+) -> ErrorParts {
+    (status, code, message.to_owned(), Some(details))
+}
+
 impl ApiError {
-    /// 把错误映射为 HTTP 状态、稳定 code、消息与 details；映射表只此一处。
-    fn parts(self) -> (StatusCode, &'static str, String, Option<JsonValue>) {
+    /// 把错误映射为 HTTP 状态、稳定 code、消息与 details。
+    fn parts(self) -> ErrorParts {
+        match self {
+            Self::Banned => simple(StatusCode::FORBIDDEN, "banned", "账户已被封禁"),
+            Self::Forbidden => simple(StatusCode::FORBIDDEN, "forbidden", "权限不足"),
+            Self::UserNotFound => simple(StatusCode::NOT_FOUND, "user_not_found", "用户不存在"),
+            Self::BanNotFound => simple(StatusCode::NOT_FOUND, "ban_not_found", "封禁记录不存在"),
+            Self::CannotBanSelf => simple(StatusCode::CONFLICT, "cannot_ban_self", "不能封禁自己"),
+            Self::CannotBanAdmin => {
+                simple(StatusCode::CONFLICT, "cannot_ban_admin", "不能封禁管理员")
+            }
+            Self::MalformedQuery(reason) => {
+                (StatusCode::BAD_REQUEST, "malformed_query", reason, None)
+            }
+            other => other.common_parts(),
+        }
+    }
+
+    /// 非 admin 错误的映射；admin 分支由 [`Self::parts`] 先行消费。
+    fn common_parts(self) -> ErrorParts {
         match self {
             Self::Internal(err) => {
                 tracing::error!(error = ?err, "internal error");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal_error",
-                    "internal server error".to_owned(),
-                    None,
-                )
+                simple(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "internal server error")
             }
             Self::MalformedJson(reason) => {
                 (StatusCode::BAD_REQUEST, "malformed_json", reason, None)
             }
-            Self::PayloadTooLarge => (
-                StatusCode::PAYLOAD_TOO_LARGE,
-                "payload_too_large",
-                "请求体超过上限".to_owned(),
-                None,
-            ),
-            Self::Validation(fields) => (
+            Self::PayloadTooLarge => {
+                simple(StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", "请求体超过上限")
+            }
+            Self::Validation(fields) => with_details(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "validation_failed",
-                "请求字段未通过校验".to_owned(),
-                Some(serde_json::json!({ "fields": fields })),
+                "请求字段未通过校验",
+                serde_json::json!({ "fields": fields }),
             ),
-            Self::EmailTaken => {
-                (StatusCode::CONFLICT, "email_taken", "邮箱已被注册".to_owned(), None)
+            Self::EmailTaken => simple(StatusCode::CONFLICT, "email_taken", "邮箱已被注册"),
+            Self::UsernameTaken => simple(StatusCode::CONFLICT, "username_taken", "用户名已被注册"),
+            Self::UserExists => simple(StatusCode::CONFLICT, "user_exists", "用户名或邮箱已被注册"),
+            Self::Unauthorized => simple(StatusCode::UNAUTHORIZED, "unauthorized", "未认证"),
+            Self::InvalidCredentials => {
+                simple(StatusCode::UNAUTHORIZED, "invalid_credentials", "登录标识或密码错误")
             }
-            Self::UsernameTaken => {
-                (StatusCode::CONFLICT, "username_taken", "用户名已被注册".to_owned(), None)
-            }
-            Self::UserExists => {
-                (StatusCode::CONFLICT, "user_exists", "用户名或邮箱已被注册".to_owned(), None)
-            }
-            Self::Unauthorized => {
-                (StatusCode::UNAUTHORIZED, "unauthorized", "未认证".to_owned(), None)
-            }
-            Self::InvalidCredentials => (
-                StatusCode::UNAUTHORIZED,
-                "invalid_credentials",
-                "登录标识或密码错误".to_owned(),
-                None,
-            ),
             Self::RefreshInvalid => {
-                (StatusCode::UNAUTHORIZED, "refresh_invalid", "refresh token 无效".to_owned(), None)
+                simple(StatusCode::UNAUTHORIZED, "refresh_invalid", "refresh token 无效")
             }
-            Self::RefreshReused => (
+            Self::RefreshReused => simple(
                 StatusCode::UNAUTHORIZED,
                 "refresh_reused",
-                "refresh token 已被重放，会话已撤销".to_owned(),
-                None,
+                "refresh token 已被重放，会话已撤销",
             ),
-            Self::CsrfInvalid => {
-                (StatusCode::FORBIDDEN, "csrf_invalid", "CSRF 校验失败".to_owned(), None)
-            }
+            Self::CsrfInvalid => simple(StatusCode::FORBIDDEN, "csrf_invalid", "CSRF 校验失败"),
             Self::InvalidVerificationCode => {
-                (StatusCode::UNAUTHORIZED, "invalid_code", "验证码错误或已失效".to_owned(), None)
+                simple(StatusCode::UNAUTHORIZED, "invalid_code", "验证码错误或已失效")
             }
-            Self::EmailUnverified => {
-                (StatusCode::CONFLICT, "email_unverified", "邮箱未验证".to_owned(), None)
-            }
-            Self::TotpRequired(challenge) => (
+            Self::EmailUnverified => simple(StatusCode::CONFLICT, "email_unverified", "邮箱未验证"),
+            Self::TotpRequired(challenge) => with_details(
                 StatusCode::UNAUTHORIZED,
                 "totp_required",
-                "需要两步验证".to_owned(),
-                Some(serde_json::json!({ "challenge_token": challenge })),
+                "需要两步验证",
+                serde_json::json!({ "challenge_token": challenge }),
             ),
-            Self::TotpInvalid => {
-                (StatusCode::UNAUTHORIZED, "totp_invalid", "两步验证码无效".to_owned(), None)
-            }
+            Self::TotpInvalid => simple(StatusCode::UNAUTHORIZED, "totp_invalid", "两步验证码无效"),
             Self::TotpNotEnabled => {
-                (StatusCode::CONFLICT, "totp_not_enabled", "两步验证未启用".to_owned(), None)
+                simple(StatusCode::CONFLICT, "totp_not_enabled", "两步验证未启用")
             }
             Self::TotpAlreadyEnabled => {
-                (StatusCode::CONFLICT, "totp_already_enabled", "两步验证已启用".to_owned(), None)
+                simple(StatusCode::CONFLICT, "totp_already_enabled", "两步验证已启用")
             }
-            Self::TotpNotPending => (
-                StatusCode::CONFLICT,
-                "totp_not_pending",
-                "两步验证不处于待验证状态".to_owned(),
-                None,
-            ),
-            Self::OAuthAuthorize(sub) => (
+            Self::TotpNotPending => {
+                simple(StatusCode::CONFLICT, "totp_not_pending", "两步验证不处于待验证状态")
+            }
+            Self::OAuthAuthorize(sub) => with_details(
                 StatusCode::BAD_REQUEST,
                 "oauth_authorize_invalid",
-                "授权请求参数非法".to_owned(),
-                Some(serde_json::json!({ "reason": sub })),
+                "授权请求参数非法",
+                serde_json::json!({ "reason": sub }),
             ),
-            Self::ResendCooldown(remaining) => (
+            Self::ResendCooldown(remaining) => with_details(
                 StatusCode::TOO_MANY_REQUESTS,
                 "resend_cooldown",
-                "发送过于频繁，请稍后再试".to_owned(),
-                Some(serde_json::json!({ "retry_after": remaining })),
+                "发送过于频繁，请稍后再试",
+                serde_json::json!({ "retry_after": remaining }),
             ),
+            Self::Banned
+            | Self::Forbidden
+            | Self::UserNotFound
+            | Self::BanNotFound
+            | Self::CannotBanSelf
+            | Self::CannotBanAdmin
+            | Self::MalformedQuery(_) => unreachable!("admin 错误由 parts 路由"),
         }
     }
 }
