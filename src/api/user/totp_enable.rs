@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
 use crate::storage::TotpRepo;
 
@@ -34,7 +34,7 @@ pub struct EnableResponse {
 /// 内部故障 500。
 pub async fn enable(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: EnableRequest =

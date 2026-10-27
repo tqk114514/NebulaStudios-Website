@@ -1,4 +1,4 @@
-//! 请求提取器（§2）：AuthUser 与 CSRF 门禁（ADR-0005）。
+//! 请求提取器（§2）：第一方用户会话与 CSRF 门禁（ADR-0005、ADR-0006）。
 
 use std::future::Future;
 
@@ -8,36 +8,39 @@ use axum::http::request::Parts;
 
 use crate::api::{ACCESS_COOKIE, AppState, CSRF_COOKIE, cookie_value};
 use crate::error::ApiError;
-use crate::model::tokens::verify_access;
+use crate::model::tokens::{VerifiedAccessToken, verify_access};
 use crate::model::user::UserId;
 
 /// 回显 CSRF 值的请求头。
 pub const CSRF_HEADER: &str = "x-csrf-token";
 
-/// 已认证用户；由 access token 解析而来——cookie 优先，其次 `Authorization: Bearer`。
+/// 第一方用户会话；由 access token 解析而来——cookie 优先，其次
+/// `Authorization: Bearer`。只接受 `aud = nebula:user-session` 的令牌，
+/// OAuth 客户端授权令牌在此不可表达（ADR-0006）。
+///
 /// 只证明 JWT 有效，不查库；需要用户实时状态（封禁等）的端点必须自行查库。
 ///
 /// CSRF 门禁内建于此（ADR-0005）：cookie 来源的认证遇写方法必须通过
-/// [`verify_csrf`]，Bearer 来源与读方法豁免——经本提取器的未来写端点自动合规。
+/// `verify_csrf`，Bearer 来源与读方法豁免——经本提取器的未来写端点自动合规。
 #[derive(Debug, Clone, Copy)]
-pub struct AuthUser {
+pub struct FirstPartyUser {
     /// token 声明的用户标识。
     pub user_id: UserId,
 }
 
 // 解析全程同步，用 ready future 满足 trait 的 RPITIT 签名，不引入 async fn
-impl FromRequestParts<AppState> for AuthUser {
+impl FromRequestParts<AppState> for FirstPartyUser {
     type Rejection = ApiError;
 
     fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        std::future::ready(auth_user_of(parts, state))
+        std::future::ready(first_party_user_of(parts, state))
     }
 }
 
-/// 独立 CSRF 门禁：不经 [`AuthUser`] 的 cookie 写端点（如 refresh）显式挂载。
+/// 独立 CSRF 门禁：不经 [`FirstPartyUser`] 的 cookie 写端点（如 refresh）显式挂载。
 #[derive(Debug)]
 pub struct CsrfGuard;
 
@@ -56,16 +59,17 @@ impl FromRequestParts<AppState> for CsrfGuard {
     }
 }
 
-fn auth_user_of(parts: &Parts, state: &AppState) -> Result<AuthUser, ApiError> {
+fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPartyUser, ApiError> {
     let (token, from_cookie) = access_token_of(parts).ok_or(ApiError::Unauthorized)?;
     // 跨站页面无法携带自定义头，Bearer 认证豁免 CSRF（ADR-0005）
     if from_cookie && is_write_method(&parts.method) {
         verify_csrf(parts)?;
     }
-    let claims = verify_access(&token, state.jwt.decode(), state.clock.now())
-        .map_err(|_| ApiError::Unauthorized)?;
-    let id = uuid::Uuid::parse_str(&claims.sub).map_err(|_| ApiError::Unauthorized)?;
-    Ok(AuthUser { user_id: UserId::from_uuid(id) })
+    match verify_access(&token, state.jwt.decode(), state.clock.now()) {
+        Ok(VerifiedAccessToken::UserSession { user_id }) => Ok(FirstPartyUser { user_id }),
+        // 第三方客户端令牌不是第一方会话；与无效令牌同体返回，避免泄露令牌类型
+        Ok(VerifiedAccessToken::ClientGrant { .. }) | Err(_) => Err(ApiError::Unauthorized),
+    }
 }
 
 /// cookie 优先、Bearer 次之；返回 (token, 是否来自 cookie)。

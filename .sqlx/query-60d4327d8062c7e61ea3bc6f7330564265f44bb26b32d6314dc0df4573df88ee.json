@@ -1,0 +1,110 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT t.id AS \"id: uuid::Uuid\",\n                      t.family_id AS \"family_id: uuid::Uuid\",\n                      t.state,\n                      t.expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\",\n                      f.state AS \"family_state\",\n                      f.user_id AS \"user_id: uuid::Uuid\",\n                      f.client_id,\n                      f.scope\n               FROM refresh_tokens t\n               JOIN refresh_token_families f ON f.id = t.family_id\n               WHERE t.token_hash = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: uuid::Uuid",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "family_id: uuid::Uuid",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "family_id"
+          }
+        }
+      },
+      {
+        "name": "state",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "name": "expires_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_tokens",
+            "name": "expires_at"
+          }
+        }
+      },
+      {
+        "name": "family_state",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "name": "user_id: uuid::Uuid",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "client_id",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "name": "scope",
+        "ordinal": 7,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "refresh_token_families",
+            "name": "scope"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "60d4327d8062c7e61ea3bc6f7330564265f44bb26b32d6314dc0df4573df88ee"
+}

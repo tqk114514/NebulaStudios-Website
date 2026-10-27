@@ -189,6 +189,103 @@ async fn delete_flow_requires_verified_email_and_correct_purpose_code() {
 }
 
 #[tokio::test]
+async fn delete_cascades_every_user_owned_row() {
+    let (app, state, _clock, mailbox, dir) = common::app().await;
+    let session = verified_session(&app, &state, &mailbox).await;
+    let user = state.user_repo.find_by_email(EMAIL).await.unwrap().expect("用户必须存在");
+
+    // 造齐 TOTP 与 OAuth 从属行：旧的手写删除会在这里被外键挡住
+    let pool =
+        nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db")).await.unwrap();
+    sqlx::query(
+        "INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)
+         VALUES (?1, ?2, 'recovery-hash', '2026-10-26T08:00:00+00:00')",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(user.id.as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO totp_login_challenges (id, user_id, token_hash, expires_at, created_at)
+         VALUES (?1, ?2, 'challenge-hash', '2026-10-26T08:05:00+00:00', '2026-10-26T08:00:00+00:00')",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(user.id.as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO oauth_clients (id, name, redirect_uri, created_at)
+         VALUES ('client-cascade', 'Cascade', 'https://app.example.com/cb', '2026-10-26T00:00:00+00:00')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO oauth_authorization_codes
+         (id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge, expires_at, created_at)
+         VALUES (?1, 'code-hash', 'client-cascade', ?2, 'https://app.example.com/cb', 'profile', 'challenge', '2026-10-26T08:10:00+00:00', '2026-10-26T08:00:00+00:00')",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(user.id.as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
+    pool.close().await;
+
+    let requested = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/account/delete/request",
+            "",
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(requested.status(), StatusCode::NO_CONTENT);
+
+    // 等第二封邮件（第一封是注册验证码）
+    let mut delete_mail = None;
+    for _ in 0..200 {
+        let messages = mailbox.messages();
+        if messages.len() >= 2 {
+            delete_mail = Some(messages[1].clone());
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    let delete_code = extract_code(&delete_mail.expect("注销确认邮件必须发出"));
+
+    let confirmed = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/account/delete/confirm",
+            &format!(r#"{{"code":"{delete_code}"}}"#),
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(confirmed.status(), StatusCode::NO_CONTENT);
+
+    let pool =
+        nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db")).await.unwrap();
+    for (table, sql) in [
+        ("users", "SELECT COUNT(*) FROM users"),
+        ("refresh_token_families", "SELECT COUNT(*) FROM refresh_token_families"),
+        ("refresh_tokens", "SELECT COUNT(*) FROM refresh_tokens"),
+        ("email_verifications", "SELECT COUNT(*) FROM email_verifications"),
+        ("totp_recovery_codes", "SELECT COUNT(*) FROM totp_recovery_codes"),
+        ("totp_login_challenges", "SELECT COUNT(*) FROM totp_login_challenges"),
+        ("oauth_authorization_codes", "SELECT COUNT(*) FROM oauth_authorization_codes"),
+    ] {
+        let count: i64 = sqlx::query_scalar(sql).fetch_one(&pool).await.unwrap();
+        assert_eq!(count, 0, "{table} 必须被级联清空");
+    }
+    pool.close().await;
+}
+
+#[tokio::test]
 async fn delete_request_rejects_unverified_email() {
     let (app, _state, _clock, mailbox, _dir) = common::app().await;
     // 注册但不验证邮箱

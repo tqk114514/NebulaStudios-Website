@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::oauth2::{AUTH_CODE_TTL, NewAuthorizationCode, valid_challenge, valid_scope};
 use crate::model::tokens::RefreshToken;
 use crate::storage::OAuthRepo;
@@ -110,7 +110,7 @@ pub async fn authorize(
 }
 
 /// 处理 consent：重复全量校验（防 TOCTOU）→ 签发授权码 → 302 回携码。
-/// CSRF 由 [`AuthUser`] 内建门禁承担。
+/// CSRF 由 [`FirstPartyUser`] 内建门禁承担。
 ///
 /// # Panics
 /// 构造的 `Location` 值含非法头字符时 panic——组成部分均经校验或编码，触发即实现缺陷。
@@ -119,7 +119,7 @@ pub async fn authorize(
 /// 未认证 401；参数非法 400；内部故障 500。
 pub async fn consent(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: ConsentRequest =

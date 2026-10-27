@@ -8,15 +8,18 @@ use axum::response::{IntoResponse, Response};
 use super::clear_session_cookies;
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::storage::RefreshTokenRepo;
 
-/// 处理登出：鉴权前置由 [`AuthUser`] 提取器承担——无有效 access token 时
+/// 处理登出：鉴权前置由 [`FirstPartyUser`] 提取器承担——无有效 access token 时
 /// handler 根本不会执行（v3 的登出路由没挂鉴权，撤销逻辑永不执行，红线 #1）。
 ///
 /// # Errors
 /// 未认证 401；撤销失败 500。
-pub async fn logout(State(state): State<AppState>, user: AuthUser) -> Result<Response, ApiError> {
+pub async fn logout(
+    State(state): State<AppState>,
+    user: FirstPartyUser,
+) -> Result<Response, ApiError> {
     // TODO(@tqk114514): CSRF 门禁（double-submit + 恒定时间比较）; 随 CSRF 切片统一落地
     state
         .refresh_repo

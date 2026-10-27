@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::api::AppState;
 use crate::api::auth::clear_session_cookies;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::AuthUser;
+use crate::extractors::FirstPartyUser;
 use crate::model::tokens::sha256_hex;
 use crate::model::totp::verify_code;
 use crate::storage::{RefreshTokenRepo, TotpRepo, UserRepo};
@@ -32,7 +32,7 @@ pub struct DisableRequest {
 /// 未启用 409 `totp_not_enabled`；内部故障 500。
 pub async fn disable(
     State(state): State<AppState>,
-    user: AuthUser,
+    user: FirstPartyUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: DisableRequest =
