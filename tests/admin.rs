@@ -209,7 +209,10 @@ async fn unban_restores_access_and_writes_audit() {
     assert_eq!(setup_totp(&fixture, &normal).await.status(), StatusCode::FORBIDDEN);
 
     assert_eq!(admin_unban(&fixture).await.status(), StatusCode::NO_CONTENT);
-    assert_eq!(setup_totp(&fixture, &normal).await.status(), StatusCode::OK);
+    // 封禁已递增 token_version，旧 access token 永久失效；解封后重新登录
+    assert_eq!(setup_totp(&fixture, &normal).await.status(), StatusCode::UNAUTHORIZED);
+    let fresh = login_as(&fixture.app, "nova@nebula.st", PASSWORD).await;
+    assert_eq!(setup_totp(&fixture, &fresh).await.status(), StatusCode::OK);
 
     let audit = admin_get(&fixture, "/api/admin/audit", "").await;
     let audit_json: serde_json::Value = serde_json::from_str(&body_text(audit).await).unwrap();

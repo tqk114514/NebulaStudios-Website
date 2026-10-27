@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT totp_state, totp_secret FROM users WHERE id = ?1",
+  "query": "SELECT totp_state, totp_secret_enc FROM users WHERE id = ?1",
   "describe": {
     "columns": [
       {
@@ -15,13 +15,13 @@
         }
       },
       {
-        "name": "totp_secret",
+        "name": "totp_secret_enc",
         "ordinal": 1,
         "type_info": "Text",
         "origin": {
           "Table": {
             "table": "users",
-            "name": "totp_secret"
+            "name": "totp_secret_enc"
           }
         }
       }
@@ -34,5 +34,5 @@
       true
     ]
   },
-  "hash": "1ed83fcf4b782ddc0fd620d3fb513d027148a7ac186d4b1253654d781d59b487"
+  "hash": "a2fe7391e0139cf5a1e9508bb92e5e0a3d1c1ec9ff70a89f15d8604ebf280ab5"
 }

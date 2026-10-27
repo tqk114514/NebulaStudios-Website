@@ -28,7 +28,7 @@ pub async fn refresh(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let Some(presented) = cookie_value(&headers, REFRESH_COOKIE) else {
-        return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshInvalid));
+        return Ok(error_with_cleared_cookies(ApiError::RefreshInvalid));
     };
 
     let now = state.clock.now();
@@ -49,10 +49,10 @@ pub async fn refresh(
         Err(RotateRefreshError::Replay) => {
             metrics::counter!("nebula_refresh_replay_total", "surface" => "first_party")
                 .increment(1);
-            return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshReused));
+            return Ok(error_with_cleared_cookies(ApiError::RefreshReused));
         }
         Err(RotateRefreshError::Invalid | RotateRefreshError::ClientMismatch) => {
-            return Ok(unauthorized_with_cleared_cookies(ApiError::RefreshInvalid));
+            return Ok(error_with_cleared_cookies(ApiError::RefreshInvalid));
         }
         Err(RotateRefreshError::Storage(err)) => {
             return Err(ApiError::Internal(err.into()));
@@ -61,7 +61,18 @@ pub async fn refresh(
 
     // 轮转已把 replacement 插进原家族——直接下发它，绝不另建家族（否则重放
     // 撤销原家族时伤不到新代，家族隔离失效）；csrf 与 refresh 同步轮转
-    let access = super::sign_access_for(&state, user_id)?;
+    let Some(user_access) = state
+        .user_repo
+        .find_access_state(&user_id, now)
+        .await
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
+    else {
+        return Ok(error_with_cleared_cookies(ApiError::RefreshInvalid));
+    };
+    if user_access.ban.is_some() {
+        return Ok(error_with_cleared_cookies(ApiError::Banned));
+    }
+    let access = super::sign_access_for(&state, user_id, user_access.token_version)?;
     let mut response_headers = HeaderMap::new();
     set_access_cookie(&mut response_headers, &access, cookie_max_age(state.session.access_ttl));
     set_refresh_cookie(
@@ -79,7 +90,7 @@ pub async fn refresh(
 
 /// 组装带清 cookie 头的错误响应；状态与信封由 [`ApiError`] 单点映射产生，
 /// 此处只叠加 Set-Cookie。
-fn unauthorized_with_cleared_cookies(err: ApiError) -> Response {
+fn error_with_cleared_cookies(err: ApiError) -> Response {
     let mut response = err.into_response();
     let mut clear = HeaderMap::new();
     clear_session_cookies(&mut clear);

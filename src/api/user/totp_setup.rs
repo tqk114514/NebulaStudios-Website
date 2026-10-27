@@ -56,9 +56,13 @@ pub async fn setup(
     totp_state.on_setup().map_err(|_| ApiError::TotpAlreadyEnabled)?;
 
     let secret = generate_secret();
+    let encrypted = state
+        .secret_cipher
+        .encrypt(&secret)
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
     state
         .totp_repo
-        .set_pending(&user.user_id, &secret, state.clock.now())
+        .set_pending(&user.user_id, &encrypted, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
 

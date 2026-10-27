@@ -191,11 +191,12 @@ pub trait RefreshTokenRepo: Send + Sync {
         binding: ClientBinding<'_>,
     ) -> Result<RotatedSession, RotateRefreshError>;
 
-    /// 撤销用户全部家族；登出、改密、关闭 TOTP、注销共用同一路径（红线 #1）。
+    /// 撤销用户全部 refresh 家族并递增 access token 版本；登出、改密、重置、
+    /// 关闭 TOTP、封禁共用同一路径（红线 #1、ADR-0010）。
     ///
     /// # Errors
     /// 仅存储故障。
-    async fn revoke_all_for_user(
+    async fn revoke_all_sessions(
         &self,
         user_id: &UserId,
         now: chrono::DateTime<chrono::Utc>,
@@ -408,7 +409,7 @@ pub trait AdminRepo: Send + Sync {
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 #[async_trait]
 pub trait TotpRepo: Send + Sync {
-    /// 读用户 TOTP 状态与密钥（pending/enabled 时密钥非空）。
+    /// 读用户 TOTP 状态与密钥密文（pending/enabled 时密文非空）。
     ///
     /// # Errors
     /// 仅存储故障；用户不存在返回 `None`。
@@ -417,7 +418,7 @@ pub trait TotpRepo: Send + Sync {
         user_id: &crate::model::user::UserId,
     ) -> Result<Option<(TotpState, Option<String>)>, StorageError>;
 
-    /// 写入 pending 密钥（setup；重试即换新密钥）。
+    /// 写入 pending 密钥密文（setup；重试即换新密钥）。
     ///
     /// # Errors
     /// 仅存储故障。

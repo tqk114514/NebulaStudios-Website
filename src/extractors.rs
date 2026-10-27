@@ -91,8 +91,8 @@ async fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPar
         verify_csrf(parts)?;
     }
     let now = state.clock.now();
-    let user_id = match verify_access(&token, state.jwt.decode(), now) {
-        Ok(VerifiedAccessToken::UserSession { user_id }) => user_id,
+    let (user_id, token_version) = match verify_access(&token, state.jwt.decode(), now) {
+        Ok(VerifiedAccessToken::UserSession { user_id, token_version }) => (user_id, token_version),
         // 第三方客户端令牌不是第一方会话；与无效令牌同体返回，避免泄露令牌类型
         Ok(VerifiedAccessToken::ClientGrant { .. }) | Err(_) => return Err(ApiError::Unauthorized),
     };
@@ -108,6 +108,10 @@ async fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPar
     };
     if access.ban.is_some() {
         return Err(ApiError::Banned);
+    }
+    // 版本不一致说明登出/改密/关闭 TOTP/封禁已撤销该 token
+    if access.token_version != token_version {
+        return Err(ApiError::Unauthorized);
     }
     Ok(FirstPartyUser { user_id, email: access.email, email_verified: access.email_verified })
 }

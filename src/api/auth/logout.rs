@@ -1,5 +1,5 @@
 //! POST /api/auth/logout：撤销用户全部 refresh 家族并清除会话 cookie（红线 #1）。
-//! 与改密、关闭 TOTP、注销共用 `revoke_all_for_user` 同一条撤销路径。
+//! 与改密、关闭 TOTP、注销共用 `revoke_all_sessions` 同一条撤销路径。
 
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
@@ -21,7 +21,7 @@ pub async fn logout(
 ) -> Result<Response, ApiError> {
     state
         .refresh_repo
-        .revoke_all_for_user(&user.user_id, state.clock.now())
+        .revoke_all_sessions(&user.user_id, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
 

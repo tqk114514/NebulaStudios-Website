@@ -10,6 +10,7 @@ use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
 use nebula_server::context::SystemClock;
+use nebula_server::crypto::{AesGcmCipher, SecretCipher};
 use nebula_server::storage::sqlite::{
     self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
 };
@@ -63,6 +64,12 @@ async fn main() -> anyhow::Result<()> {
     if admin_emails.is_empty() {
         tracing::warn!("未配置管理员邮箱，/api/admin/* 不可用");
     }
+    if config.crypto.totp_secret_key.is_empty() {
+        anyhow::bail!("NEBULA_CRYPTO__TOTP_SECRET_KEY 未配置");
+    }
+    let secret_cipher: Arc<dyn SecretCipher> = Arc::new(
+        AesGcmCipher::from_hex(&config.crypto.totp_secret_key).context("解析 TOTP 加密密钥")?,
+    );
 
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
@@ -84,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
         admin_emails,
+        secret_cipher,
         mailer,
         metrics: Some(Arc::new(metrics_handle)),
         cors_allowed_origin,

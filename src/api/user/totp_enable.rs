@@ -60,12 +60,16 @@ pub async fn enable(
     // 仅 Pending 可启用；Enabled 再 enable、Disabled 直接 enable 都是非法转移
     totp_state.on_enable().map_err(|_| ApiError::TotpNotPending)?;
     // Pending 态密钥必须存在；缺失属数据损坏，不能当作客户端错误
-    let Some(secret) = secret else {
+    let Some(encrypted) = secret else {
         return Err(ApiError::Internal(anyhow::anyhow!(
             "pending 状态缺少 TOTP 密钥: {}",
             user.user_id
         )));
     };
+    let secret = state
+        .secret_cipher
+        .decrypt(&encrypted)
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
     if !verify_code(&secret, req.code.trim(), state.clock.now()) {
         return Err(ApiError::TotpInvalid);
     }

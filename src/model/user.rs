@@ -87,6 +87,8 @@ pub struct UserAccess {
     pub email: String,
     /// 邮箱是否已验证；配置化管理员必须同时满足此项。
     pub email_verified: bool,
+    /// access token 版本；撤销会话时递增，token 中的 `ver` 必须与此相等。
+    pub token_version: i64,
     /// 当前生效的封禁；已到期的临时封禁在读取时归为 `None`。
     pub ban: Option<Ban>,
 }

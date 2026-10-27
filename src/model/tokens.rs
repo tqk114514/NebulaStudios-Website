@@ -25,6 +25,9 @@ pub struct AccessClaims {
     iat: i64,
     exp: i64,
     aud: String,
+    /// 第一方 access token 版本；撤销会话时与用户当前版本比对。
+    #[serde(default)]
+    ver: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     client_id: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -32,7 +35,8 @@ pub struct AccessClaims {
 }
 
 impl AccessClaims {
-    /// 第一方用户会话：audience 固定，无客户端与 scope。
+    /// 第一方用户会话：audience 固定，无客户端与 scope；`token_version` 写入
+    /// `ver` claim，撤销会话时递增即可让旧 token 全部失效。
     ///
     /// # Panics
     /// ttl 非正时 panic——属调用侧配置错误，应在启动配置校验即暴露。
@@ -44,14 +48,20 @@ impl AccessClaims {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let now = DateTime::parse_from_rfc3339("2026-10-26T08:00:00Z")?.with_timezone(&Utc);
-    /// let claims = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10));
+    /// let claims =
+    ///     AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10), 0);
     /// assert_eq!(claims.exp() - claims.iat(), 600);
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn user_session(user: UserId, now: DateTime<Utc>, ttl: TimeDelta) -> Self {
-        Self::build(user, now, ttl, USER_SESSION_AUDIENCE, None, String::new())
+    pub fn user_session(
+        user: UserId,
+        now: DateTime<Utc>,
+        ttl: TimeDelta,
+        token_version: i64,
+    ) -> Self {
+        Self::build(user, now, ttl, USER_SESSION_AUDIENCE, token_version, None, String::new())
     }
 
     /// 第三方客户端授权：`audience`、`client_id` 与 `scope` 在签发时固定。
@@ -76,6 +86,7 @@ impl AccessClaims {
             now,
             ttl,
             CLIENT_GRANT_AUDIENCE,
+            0,
             Some(client_id.to_owned()),
             scope.to_owned(),
         ))
@@ -86,6 +97,7 @@ impl AccessClaims {
         now: DateTime<Utc>,
         ttl: TimeDelta,
         aud: &str,
+        ver: i64,
         client_id: Option<String>,
         scope: String,
     ) -> Self {
@@ -97,6 +109,7 @@ impl AccessClaims {
             iat,
             exp: iat + ttl_secs,
             aud: aud.to_owned(),
+            ver,
             client_id,
             scope,
         }
@@ -145,6 +158,8 @@ pub enum VerifiedAccessToken {
     UserSession {
         /// 会话所属用户。
         user_id: UserId,
+        /// token 签发时的用户版本；须与库中当前值相等。
+        token_version: i64,
     },
     /// 第三方客户端授权。
     ClientGrant {
@@ -219,7 +234,9 @@ pub fn verify_access(
         .map(UserId::from_uuid)
         .map_err(|_| VerifyAccessTokenError::Malformed("sub 不是 uuid"))?;
     match (claims.aud.as_str(), claims.client_id.as_deref(), claims.scope.as_str()) {
-        (USER_SESSION_AUDIENCE, None, "") => Ok(VerifiedAccessToken::UserSession { user_id }),
+        (USER_SESSION_AUDIENCE, None, "") => {
+            Ok(VerifiedAccessToken::UserSession { user_id, token_version: claims.ver })
+        }
         (CLIENT_GRANT_AUDIENCE, Some(client_id), scope) if valid_scope(scope) => {
             Ok(VerifiedAccessToken::ClientGrant {
                 user_id,
@@ -397,7 +414,7 @@ mod tests {
     fn user_session_roundtrips_as_user_session() {
         let now = fixed_now();
         let user = UserId::new();
-        let claims = AccessClaims::user_session(user, now, TimeDelta::minutes(10));
+        let claims = AccessClaims::user_session(user, now, TimeDelta::minutes(10), 7);
         assert_eq!(claims.aud(), USER_SESSION_AUDIENCE);
         assert!(claims.client_id().is_none());
         assert_eq!(claims.scope(), "");
@@ -405,7 +422,7 @@ mod tests {
         let token = sign_access(&claims, &private_key()).expect("签发必须成功");
         // 校验基准是同一注入时刻，而非墙上时钟；换一天跑也仍应通过
         let decoded = verify_access(&token, &public_key(), now).expect("合法 token 必须可校验");
-        assert_eq!(decoded, VerifiedAccessToken::UserSession { user_id: user });
+        assert_eq!(decoded, VerifiedAccessToken::UserSession { user_id: user, token_version: 7 });
     }
 
     #[test]
@@ -447,7 +464,7 @@ mod tests {
         let now = fixed_now();
 
         // 第一方 audience 带客户端标识：不是合法会话
-        let mut claims = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10));
+        let mut claims = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10), 0);
         claims.aud = CLIENT_GRANT_AUDIENCE.to_owned();
         let token = sign_access(&claims, &private_key()).expect("签发必须成功");
         assert!(matches!(
@@ -475,7 +492,7 @@ mod tests {
     #[test]
     fn expired_access_token_is_rejected_by_injected_now() {
         let now = fixed_now();
-        let stale = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10));
+        let stale = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10), 0);
         let token = sign_access(&stale, &private_key()).expect("签发必须成功");
 
         let expired_at = now + TimeDelta::minutes(10) + TimeDelta::seconds(61);
@@ -488,7 +505,7 @@ mod tests {
     #[test]
     fn expiry_leeway_matches_jsonwebtoken_default() {
         let now = fixed_now();
-        let claims = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10));
+        let claims = AccessClaims::user_session(UserId::new(), now, TimeDelta::minutes(10), 0);
         let token = sign_access(&claims, &private_key()).expect("签发必须成功");
         let exp = now + TimeDelta::minutes(10);
 
@@ -509,6 +526,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "ttl 必须为正")]
     fn zero_ttl_claims_panics() {
-        let _ = AccessClaims::user_session(UserId::new(), fixed_now(), TimeDelta::zero());
+        let _ = AccessClaims::user_session(UserId::new(), fixed_now(), TimeDelta::zero(), 0);
     }
 }

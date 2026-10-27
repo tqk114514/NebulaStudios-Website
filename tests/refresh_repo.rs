@@ -268,7 +268,7 @@ async fn expired_active_token_is_invalid() {
 }
 
 #[tokio::test]
-async fn revoke_all_for_user_blocks_only_that_user() {
+async fn revoke_all_sessions_blocks_only_that_user() {
     let (users, refreshes, alice, _dir) = setup().await;
     let bob = UserId::new();
     users
@@ -281,7 +281,7 @@ async fn revoke_all_for_user_blocks_only_that_user() {
     refreshes.create_family(&alice_entry, now()).await.expect("建族必须成功");
     refreshes.create_family(&bob_entry, now()).await.expect("建族必须成功");
 
-    refreshes.revoke_all_for_user(&alice, now()).await.expect("批量撤销必须成功");
+    refreshes.revoke_all_sessions(&alice, now()).await.expect("批量撤销必须成功");
 
     let alice_err = refreshes
         .rotate(

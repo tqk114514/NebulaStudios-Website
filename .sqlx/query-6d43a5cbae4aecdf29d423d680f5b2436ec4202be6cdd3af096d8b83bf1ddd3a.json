@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT u.email,\n                      u.email_verified AS \"email_verified: bool\",\n                      b.kind,\n                      b.expires_at AS \"expires_at: Option<chrono::DateTime<chrono::Utc>>\"\n               FROM users u\n               LEFT JOIN user_bans b ON b.user_id = u.id\n               WHERE u.id = ?1",
+  "query": "SELECT u.email,\n                      u.email_verified AS \"email_verified: bool\",\n                      u.token_version AS \"token_version: i64\",\n                      b.kind,\n                      b.expires_at AS \"expires_at: Option<chrono::DateTime<chrono::Utc>>\"\n               FROM users u\n               LEFT JOIN user_bans b ON b.user_id = u.id\n               WHERE u.id = ?1",
   "describe": {
     "columns": [
       {
@@ -26,8 +26,19 @@
         }
       },
       {
-        "name": "kind",
+        "name": "token_version: i64",
         "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "token_version"
+          }
+        }
+      },
+      {
+        "name": "kind",
+        "ordinal": 3,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +49,7 @@
       },
       {
         "name": "expires_at: Option<chrono::DateTime<chrono::Utc>>",
-        "ordinal": 3,
+        "ordinal": 4,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -54,9 +65,10 @@
     "nullable": [
       false,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "eca3b8b2b96341466636ae01053cf40a532fcdbda79ed3818cd8c5a6a2065540"
+  "hash": "6d43a5cbae4aecdf29d423d680f5b2436ec4202be6cdd3af096d8b83bf1ddd3a"
 }

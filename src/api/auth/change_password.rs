@@ -61,7 +61,7 @@ pub async fn change_password(
     let now = state.clock.now();
     state
         .refresh_repo
-        .revoke_all_for_user(&user.user_id, now)
+        .revoke_all_sessions(&user.user_id, now)
         .await
         .map_err(anyhow::Error::from)?;
     state.totp_repo.invalidate_challenges(&user.user_id, now).await.map_err(anyhow::Error::from)?;
