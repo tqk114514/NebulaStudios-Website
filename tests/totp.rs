@@ -12,6 +12,7 @@ use common::{
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";
 const PASSWORD: &str = "Nebula!Passw0rd-2026";
+const NEW_PASSWORD: &str = "Fresh!Passw0rd-2026";
 
 /// 以注入时钟的固定时刻计算六位 TOTP 码（密钥来自 setup 响应）。
 fn totp_code_at_fixed_now(secret: &str, now: chrono::DateTime<chrono::Utc>) -> String {
@@ -28,11 +29,7 @@ fn totp_code_at_fixed_now(secret: &str, now: chrono::DateTime<chrono::Utc>) -> S
 }
 
 /// 造已验证用户 → setup → enable，返回（恢复码，机密）。
-async fn enable_totp(
-    app: &axum::Router,
-    state: &nebula_server::api::AppState,
-    mailbox: &Mailbox,
-) -> (Session, Vec<String>, String) {
+async fn verified_session(app: &axum::Router, mailbox: &Mailbox) -> Session {
     register_user(app, EMAIL, USERNAME, PASSWORD).await;
     let code = common::extract_code(&await_first_mail(mailbox).await);
     let verified = app
@@ -43,13 +40,21 @@ async fn enable_totp(
         )
         .await;
     assert_eq!(verified.status(), StatusCode::NO_CONTENT);
-    let session = login_session(app).await;
+    login_session(app).await
+}
+
+async fn enable_totp(
+    app: &axum::Router,
+    state: &nebula_server::api::AppState,
+    mailbox: &Mailbox,
+) -> (Session, Vec<String>, String) {
+    let session = verified_session(app, mailbox).await;
 
     let setup = app
         .clone()
         .oneshot_post_with(
             "/api/user/totp/setup",
-            "",
+            &format!(r#"{{"password":"{PASSWORD}"}}"#),
             &cookie_header(Some(&session.access), None, Some(&session.csrf)),
             Some(&session.csrf),
         )
@@ -65,7 +70,7 @@ async fn enable_totp(
         .clone()
         .oneshot_post_with(
             "/api/user/totp/enable",
-            &format!(r#"{{"code":"{totp_code}"}}"#),
+            &format!(r#"{{"password":"{PASSWORD}","code":"{totp_code}"}}"#),
             &cookie_header(Some(&session.access), None, Some(&session.csrf)),
             Some(&session.csrf),
         )
@@ -92,7 +97,7 @@ async fn setup_is_illegal_when_already_enabled() {
         .clone()
         .oneshot_post_with(
             "/api/user/totp/setup",
-            "",
+            &format!(r#"{{"password":"{PASSWORD}"}}"#),
             &cookie_header(Some(&session.access), None, Some(&session.csrf)),
             Some(&session.csrf),
         )
@@ -122,7 +127,7 @@ async fn enable_without_pending_is_409_totp_not_pending() {
         .clone()
         .oneshot_post_with(
             "/api/user/totp/enable",
-            r#"{"code":"123456"}"#,
+            &format!(r#"{{"password":"{PASSWORD}","code":"123456"}}"#),
             &cookie_header(Some(&session.access), None, Some(&session.csrf)),
             Some(&session.csrf),
         )
@@ -130,6 +135,96 @@ async fn enable_without_pending_is_409_totp_not_pending() {
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(body_text(response).await.contains("totp_not_pending"));
+}
+
+#[tokio::test]
+async fn setup_and_enable_require_current_password() {
+    let (app, state, _clock, mailbox, _dir) = common::app().await;
+    let session = verified_session(&app, &mailbox).await;
+    let cookie = cookie_header(Some(&session.access), None, Some(&session.csrf));
+
+    let wrong_setup = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/setup",
+            r#"{"password":"Wrong!Passw0rd-2026"}"#,
+            &cookie,
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(wrong_setup.status(), StatusCode::UNAUTHORIZED);
+    assert!(body_text(wrong_setup).await.contains("invalid_credentials"));
+
+    let setup = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/setup",
+            &format!(r#"{{"password":"{PASSWORD}"}}"#),
+            &cookie,
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(setup.status(), StatusCode::OK);
+    let setup_json: serde_json::Value =
+        serde_json::from_str(&common::body_text(setup).await).unwrap();
+    let secret = setup_json["secret"].as_str().unwrap();
+    let code = totp_code_at_fixed_now(secret, state.clock.now());
+
+    let wrong_enable = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/enable",
+            &format!(r#"{{"password":"Wrong!Passw0rd-2026","code":"{code}"}}"#),
+            &cookie,
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(wrong_enable.status(), StatusCode::UNAUTHORIZED);
+    assert!(body_text(wrong_enable).await.contains("invalid_credentials"));
+
+    let enable = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/enable",
+            &format!(r#"{{"password":"{PASSWORD}","code":"{code}"}}"#),
+            &cookie,
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(enable.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn change_password_invalidates_pending_totp_challenge() {
+    let (app, state, _clock, mailbox, _dir) = common::app().await;
+    let (session, _codes, secret) = enable_totp(&app, &state, &mailbox).await;
+
+    let login_body = format!(r#"{{"identifier":"{EMAIL}","password":"{PASSWORD}"}}"#);
+    let first = app.clone().oneshot_post("/api/auth/login", &login_body).await;
+    let json: serde_json::Value = serde_json::from_str(&common::body_text(first).await).unwrap();
+    let challenge = json["details"]["challenge_token"].as_str().unwrap().to_owned();
+
+    let changed = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/password/change",
+            &format!(r#"{{"current_password":"{PASSWORD}","new_password":"{NEW_PASSWORD}"}}"#),
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(changed.status(), StatusCode::NO_CONTENT);
+
+    let code = totp_code_at_fixed_now(&secret, state.clock.now());
+    let after = app
+        .clone()
+        .oneshot_post(
+            "/api/auth/login/totp",
+            &format!(r#"{{"challenge_token":"{challenge}","code":"{code}"}}"#),
+        )
+        .await;
+    assert_eq!(after.status(), StatusCode::UNAUTHORIZED);
+    assert!(body_text(after).await.contains("totp_invalid"));
 }
 
 #[tokio::test]

@@ -76,6 +76,23 @@ async fn register_burst_is_three() {
 }
 
 #[tokio::test]
+async fn totp_login_burst_is_limited() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+    let body = r#"{"challenge_token":"0000000000000000000000000000000000000000000000000000000000000000","code":"123456"}"#;
+
+    // TOTP 登录独立限额：突发 10；未知挑战在额度内返回 401
+    for _ in 0..10 {
+        let response =
+            app.clone().oneshot_post_from_ip("10.6.6.6", "/api/auth/login/totp", body).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let limited = app.clone().oneshot_post_from_ip("10.6.6.6", "/api/auth/login/totp", body).await;
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(body_text(limited).await.contains("rate_limited"));
+}
+
+#[tokio::test]
 async fn login_and_register_limits_are_independent() {
     let (app, _state, _clock, _mailbox, _dir) = common::app().await;
     let login_body = r#"{"identifier":"ghost@nebula.st","password":"Wrong!Passw0rd-2026"}"#;

@@ -74,12 +74,13 @@ async fn admin_unban(fixture: &Fixture) -> axum::response::Response {
 }
 
 async fn setup_totp(fixture: &Fixture, session: &Session) -> axum::response::Response {
+    let body = serde_json::json!({ "password": PASSWORD }).to_string();
     fixture
         .app
         .clone()
         .oneshot_post_with(
             "/api/user/totp/setup",
-            "",
+            &body,
             &cookie_header(Some(&session.access), None, Some(&session.csrf)),
             Some(&session.csrf),
         )
