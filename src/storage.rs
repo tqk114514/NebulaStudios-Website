@@ -135,6 +135,8 @@ pub struct RotatedSession {
     pub user_id: UserId,
     /// 家族创建时固定的授权范围。
     pub scope: String,
+    /// 轮转事务内读到的 access token 版本；签发必须使用它，避免与并发登出交错。
+    pub token_version: i64,
 }
 
 /// refresh token 轮转错误。

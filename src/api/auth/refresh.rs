@@ -44,8 +44,8 @@ pub async fn refresh(
         )
         .await;
 
-    let user_id = match rotated {
-        Ok(session) => session.user_id,
+    let (user_id, token_version) = match rotated {
+        Ok(session) => (session.user_id, session.token_version),
         Err(RotateRefreshError::Replay) => {
             metrics::counter!("nebula_refresh_replay_total", "surface" => "first_party")
                 .increment(1);
@@ -60,19 +60,9 @@ pub async fn refresh(
     };
 
     // 轮转已把 replacement 插进原家族——直接下发它，绝不另建家族（否则重放
-    // 撤销原家族时伤不到新代，家族隔离失效）；csrf 与 refresh 同步轮转
-    let Some(user_access) = state
-        .user_repo
-        .find_access_state(&user_id, now)
-        .await
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?
-    else {
-        return Ok(error_with_cleared_cookies(ApiError::RefreshInvalid));
-    };
-    if user_access.ban.is_some() {
-        return Ok(error_with_cleared_cookies(ApiError::Banned));
-    }
-    let access = super::sign_access_for(&state, user_id, user_access.token_version)?;
+    // 撤销原家族时伤不到新代，家族隔离失效）；版本来自轮转事务，避免并发登出
+    // 在轮转与签发之间递增版本后又被这里读成新版本。csrf 与 refresh 同步轮转。
+    let access = super::sign_access_for(&state, user_id, token_version)?;
     let mut response_headers = HeaderMap::new();
     set_access_cookie(&mut response_headers, &access, cookie_max_age(state.session.access_ttl));
     set_refresh_cookie(

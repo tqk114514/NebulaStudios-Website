@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT t.id AS \"id: uuid::Uuid\",\n                      t.family_id AS \"family_id: uuid::Uuid\",\n                      t.state,\n                      t.expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\",\n                      f.state AS \"family_state\",\n                      f.user_id AS \"user_id: uuid::Uuid\",\n                      f.client_id,\n                      f.scope\n               FROM refresh_tokens t\n               JOIN refresh_token_families f ON f.id = t.family_id\n               WHERE t.token_hash = ?1",
+  "query": "SELECT t.id AS \"id: uuid::Uuid\",\n                      t.family_id AS \"family_id: uuid::Uuid\",\n                      t.state,\n                      t.expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\",\n                      f.state AS \"family_state\",\n                      f.user_id AS \"user_id: uuid::Uuid\",\n                      f.client_id,\n                      f.scope,\n                      u.token_version AS \"token_version: i64\"\n               FROM refresh_tokens t\n               JOIN refresh_token_families f ON f.id = t.family_id\n               JOIN users u ON u.id = f.user_id\n               WHERE t.token_hash = ?1",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,17 @@
             "name": "scope"
           }
         }
+      },
+      {
+        "name": "token_version: i64",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "token_version"
+          }
+        }
       }
     ],
     "parameters": {
@@ -103,8 +114,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "60d4327d8062c7e61ea3bc6f7330564265f44bb26b32d6314dc0df4573df88ee"
+  "hash": "af5773d4abae758d325793e315ac0c09bb86dc97c429f9e53e3b75ee9d6c47b6"
 }
