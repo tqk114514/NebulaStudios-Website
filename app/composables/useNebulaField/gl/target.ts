@@ -70,7 +70,8 @@ function allocate(
     height,
     0,
     gl.RGBA,
-    gl.HALF_FLOAT,
+    // RGBA8 只接受 UNSIGNED_BYTE；HALF_FLOAT 仅对 RGBA16F 合法（WebGL2 格式表）
+    hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE,
     null,
   )
   gl.bindTexture(gl.TEXTURE_2D, null)
