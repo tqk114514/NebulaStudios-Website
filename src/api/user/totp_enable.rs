@@ -1,5 +1,5 @@
 //! POST /api/user/totp/enable：以 pending 密钥下的验证码启用 TOTP，签发
-//! 恢复码批次（明文仅在本次响应出现，库中只存 SHA-256）。
+//! 恢复码批次（明文仅在本次响应出现，库中只存带 pepper 的 HMAC-SHA256）。
 
 use axum::Json;
 use axum::body::Bytes;
@@ -78,7 +78,7 @@ pub async fn enable(
 
     let codes: Vec<RecoveryCode> =
         (0..RECOVERY_CODE_COUNT).map(|_| RecoveryCode::generate()).collect();
-    let hashes = codes.iter().map(RecoveryCode::to_hash_hex).collect();
+    let hashes = codes.iter().map(|code| state.code_hasher.hash(code.as_str())).collect();
     state
         .totp_repo
         .add_recovery_codes(&user.user_id, hashes, state.clock.now())

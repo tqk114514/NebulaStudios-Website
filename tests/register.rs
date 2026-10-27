@@ -155,6 +155,38 @@ async fn duplicate_username_is_409_username_taken() {
 }
 
 #[tokio::test]
+async fn username_with_email_chars_is_422() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+
+    let response = app
+        .oneshot(post_register(
+            r#"{"email":"nova@nebula.st","username":"nova@nebula.st","password":"Nebula!Passw0rd-2026"}"#,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let json: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+    assert_eq!(json["details"]["fields"][0]["code"], "username_invalid_characters");
+}
+
+#[tokio::test]
+async fn one_character_username_is_422() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+
+    let response = app
+        .oneshot(post_register(
+            r#"{"email":"nova@nebula.st","username":"n","password":"Nebula!Passw0rd-2026"}"#,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let json: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+    assert_eq!(json["details"]["fields"][0]["code"], "username_too_short");
+}
+
+#[tokio::test]
 async fn overlong_username_is_422() {
     let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 

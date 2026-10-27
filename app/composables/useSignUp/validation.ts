@@ -3,8 +3,14 @@
  */
 
 const USERNAME_MIN_LENGTH = 3
+const USERNAME_PATTERN = /^[A-Za-z0-9_-]+$/
 
-export type SignUpIssue = 'none' | 'fieldsRequired' | 'usernameTooShort' | 'passwordMismatch'
+export type SignUpIssue =
+  | 'none'
+  | 'fieldsRequired'
+  | 'usernameTooShort'
+  | 'usernameInvalidCharacters'
+  | 'passwordMismatch'
 
 export interface SignUpDraft {
   email: string
@@ -18,6 +24,7 @@ export function checkSignUp(draft: SignUpDraft): SignUpIssue {
   const { email, username, password, confirm } = draft
   if (!email.trim() || !username.trim() || !password.trim() || !confirm.trim()) return 'fieldsRequired'
   if (draft.username.trim().length < USERNAME_MIN_LENGTH) return 'usernameTooShort'
+  if (!USERNAME_PATTERN.test(draft.username.trim())) return 'usernameInvalidCharacters'
   if (draft.password !== draft.confirm) return 'passwordMismatch'
   return 'none'
 }

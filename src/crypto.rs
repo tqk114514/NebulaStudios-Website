@@ -8,6 +8,7 @@ use std::fmt;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use rand::Rng;
+use sha2::{Digest, Sha256};
 
 /// 密钥加解密失败。
 #[derive(Debug, thiserror::Error)]
@@ -59,16 +60,7 @@ impl AesGcmCipher {
     /// # Errors
     /// 长度不是 64 或包含非十六进制字符时返回 [`CipherError::InvalidKey`]。
     pub fn from_hex(encoded: &str) -> Result<Self, CipherError> {
-        if encoded.len() != 64 || !encoded.is_ascii() {
-            return Err(CipherError::InvalidKey);
-        }
-        let mut key = [0u8; 32];
-        for (index, byte) in key.iter_mut().enumerate() {
-            let start = index * 2;
-            *byte = u8::from_str_radix(&encoded[start..start + 2], 16)
-                .map_err(|_| CipherError::InvalidKey)?;
-        }
-        Ok(Self { key })
+        Ok(Self { key: decode_key(encoded)? })
     }
 
     fn cipher(&self) -> Result<Aes256Gcm, CipherError> {
@@ -112,6 +104,84 @@ impl SecretCipher for AesGcmCipher {
     }
 }
 
+/// 低熵验证码的带 pepper 摘要端口；明文验证码不直接做裸 SHA-256。
+pub trait CodeHasher: Send + Sync {
+    /// 返回带 pepper 的 HMAC-SHA256 十六进制摘要。
+    fn hash(&self, code: &str) -> String;
+}
+
+/// HMAC-SHA256 实现；pepper 为 32 字节，部署方通过配置提供。
+#[derive(Clone)]
+pub struct HmacCodeHasher {
+    key: [u8; 32],
+}
+
+impl HmacCodeHasher {
+    /// 从 32 字节 pepper 构建。
+    #[must_use]
+    pub fn from_key(key: [u8; 32]) -> Self {
+        Self { key }
+    }
+
+    /// 从 64 个十六进制字符构建；长度或字符非法返回 [`CipherError::InvalidKey`]。
+    ///
+    /// # Errors
+    /// 长度不是 64 或包含非十六进制字符时返回 [`CipherError::InvalidKey`]。
+    pub fn from_hex(encoded: &str) -> Result<Self, CipherError> {
+        let key = decode_key(encoded)?;
+        Ok(Self { key })
+    }
+}
+
+impl fmt::Debug for HmacCodeHasher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HmacCodeHasher").finish_non_exhaustive()
+    }
+}
+
+impl CodeHasher for HmacCodeHasher {
+    fn hash(&self, code: &str) -> String {
+        hex(&hmac_sha256(&self.key, code.as_bytes()))
+    }
+}
+
+fn decode_key(encoded: &str) -> Result<[u8; 32], CipherError> {
+    if encoded.len() != 64 || !encoded.is_ascii() {
+        return Err(CipherError::InvalidKey);
+    }
+    let mut key = [0u8; 32];
+    for (index, byte) in key.iter_mut().enumerate() {
+        let start = index * 2;
+        *byte = u8::from_str_radix(&encoded[start..start + 2], 16)
+            .map_err(|_| CipherError::InvalidKey)?;
+    }
+    Ok(key)
+}
+
+/// RFC 2104 HMAC-SHA256；实现保持最小，仅服务验证码 pepper。
+fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    let mut key_block = [0u8; 64];
+    if key.len() > 64 {
+        key_block[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner_pad = [0x36u8; 64];
+    let mut outer_pad = [0x5cu8; 64];
+    for (index, byte) in key_block.iter().enumerate() {
+        inner_pad[index] ^= byte;
+        outer_pad[index] ^= byte;
+    }
+    let mut inner = Sha256::new();
+    inner.update(inner_pad);
+    inner.update(message);
+    let inner_hash = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(outer_pad);
+    outer.update(inner_hash);
+    outer.finalize().into()
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {
@@ -135,7 +205,9 @@ mod tests {
     // 断言失败即 panic 是测试的正确失败语义；unwrap/expect 禁令面向生产路径
     #![allow(clippy::expect_used)]
 
-    use super::{AesGcmCipher, CipherError, SecretCipher};
+    use super::{
+        AesGcmCipher, CipherError, CodeHasher, HmacCodeHasher, SecretCipher, hex, hmac_sha256,
+    };
 
     const KEY: [u8; 32] = [7u8; 32];
 
@@ -173,5 +245,24 @@ mod tests {
         assert!(matches!(AesGcmCipher::from_hex(&"z".repeat(64)), Err(CipherError::InvalidKey)));
         assert!(matches!(AesGcmCipher::from_hex(&"é".repeat(32)), Err(CipherError::InvalidKey)));
         assert!(matches!(cipher.decrypt("v1:é:00"), Err(CipherError::Malformed)));
+    }
+
+    #[test]
+    fn hmac_matches_rfc4231_vector() {
+        // RFC 4231 test case 2
+        assert_eq!(
+            hex(&hmac_sha256(b"Jefe", b"what do ya want for nothing?")),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+    }
+
+    #[test]
+    fn code_hasher_is_deterministic_and_keyed() {
+        let first = HmacCodeHasher::from_key([1u8; 32]);
+        let second = HmacCodeHasher::from_key([2u8; 32]);
+
+        assert_eq!(first.hash("ABC123"), first.hash("ABC123"));
+        assert_ne!(first.hash("ABC123"), second.hash("ABC123"));
+        assert_eq!(first.hash("ABC123").len(), 64);
     }
 }

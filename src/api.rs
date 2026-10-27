@@ -31,7 +31,7 @@ use tower_http::request_id::{
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::context::{Clock, RequestId};
-use crate::crypto::SecretCipher;
+use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
 use crate::mailer::Mailer;
 use crate::model::user::{User, UserId};
@@ -213,6 +213,8 @@ pub struct AppState {
     pub admin_emails: Arc<HashSet<String>>,
     /// TOTP 密钥静态加密端口。
     pub secret_cipher: Arc<dyn SecretCipher>,
+    /// 低熵验证码的 HMAC pepper 摘要端口。
+    pub code_hasher: Arc<dyn CodeHasher>,
     /// 邮件端口。
     pub mailer: Arc<dyn Mailer>,
     /// Prometheus 指标句柄；测试装配为 `None`，`/metrics` 返回 404。

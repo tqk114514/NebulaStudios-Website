@@ -12,6 +12,7 @@ openssl ecparam -name prime256v1 -genkey -noout -out ec.pem      # ES256 密钥
 openssl pkcs8 -topk8 -nocrypt -in ec.pem -out jwt-private.pem
 openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
 openssl rand -hex 32     # NEBULA_CRYPTO__TOTP_SECRET_KEY（TOTP 密钥加密）
+openssl rand -hex 32     # NEBULA_CRYPTO__CODE_PEPPER（验证码 HMAC pepper）
 cargo run --release
 ```
 
@@ -21,7 +22,10 @@ cargo run --release
 `NEBULA_JOBS__CLEANUP_INTERVAL_SECS`（默认 300）、`NEBULA_CORS__ALLOWED_ORIGIN`
 （默认空，同源部署；本地前后端分离时设为前端来源，如 `http://localhost:3000`）、
 `NEBULA_ADMIN__EMAILS`（逗号分隔的管理员邮箱，默认空；由配置决定角色，ADR-0008）、
-`NEBULA_CRYPTO__TOTP_SECRET_KEY`（必填，64 个十六进制字符；缺失或格式非法则启动失败）。
+`NEBULA_CRYPTO__TOTP_SECRET_KEY`（必填，64 个十六进制字符；缺失或格式非法则启动失败）、
+`NEBULA_CRYPTO__CODE_PEPPER`（必填，64 个十六进制字符；验证码/恢复码 HMAC pepper）、
+`NEBULA_MAIL__SMTP_HOST`（空则日志模式）、`NEBULA_MAIL__SMTP_PORT`（默认 587）、
+`NEBULA_MAIL__SMTP_TLS`（`starttls` 默认 / `implicit` 用于 465 / `none`）。
 
 ## 运维端点与后台任务
 

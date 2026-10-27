@@ -48,6 +48,11 @@ describe('checkSignUp', () => {
     expect(checkSignUp({ ...valid, username: 'ab' })).toBe('usernameTooShort')
   })
 
+  it('用户名含 @ 或 . 时报非法字符', () => {
+    expect(checkSignUp({ ...valid, username: 'bad@name' })).toBe('usernameInvalidCharacters')
+    expect(checkSignUp({ ...valid, username: 'bad.name' })).toBe('usernameInvalidCharacters')
+  })
+
   it('两次密码不一致时报不一致', () => {
     expect(checkSignUp({ ...valid, confirm: 'hunter3' })).toBe('passwordMismatch')
   })
