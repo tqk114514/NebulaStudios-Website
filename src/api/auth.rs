@@ -40,9 +40,18 @@ pub(crate) struct SessionTokens {
     pub csrf: String,
 }
 
-/// 只签第一方 access JWT；登录与刷新共用。
-pub(crate) fn sign_access_for(state: &AppState, user_id: UserId) -> Result<String, ApiError> {
-    let claims = AccessClaims::user_session(user_id, state.clock.now(), state.session.access_ttl);
+/// 只签第一方 access JWT；登录与刷新共用，`token_version` 写入 `ver` claim。
+pub(crate) fn sign_access_for(
+    state: &AppState,
+    user_id: UserId,
+    token_version: i64,
+) -> Result<String, ApiError> {
+    let claims = AccessClaims::user_session(
+        user_id,
+        state.clock.now(),
+        state.session.access_ttl,
+        token_version,
+    );
     sign_access(&claims, state.jwt.encode())
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
 }
@@ -52,8 +61,9 @@ pub(crate) fn sign_access_for(state: &AppState, user_id: UserId) -> Result<Strin
 pub(crate) async fn issue_session(
     state: &AppState,
     user_id: UserId,
+    token_version: i64,
 ) -> Result<SessionTokens, ApiError> {
-    let access = sign_access_for(state, user_id)?;
+    let access = sign_access_for(state, user_id, token_version)?;
 
     let refresh = RefreshToken::generate();
     let family = crate::model::tokens::NewRefreshFamily {

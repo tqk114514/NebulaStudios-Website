@@ -284,6 +284,7 @@ impl UserRepo for SqliteUserRepo {
         let row = sqlx::query!(
             r#"SELECT u.email,
                       u.email_verified AS "email_verified: bool",
+                      u.token_version AS "token_version: i64",
                       b.kind,
                       b.expires_at AS "expires_at: Option<chrono::DateTime<chrono::Utc>>"
                FROM users u
@@ -297,7 +298,12 @@ impl UserRepo for SqliteUserRepo {
         let Some(row) = row else { return Ok(None) };
         let ban = decode_ban(row.kind.as_deref(), row.expires_at.flatten(), now)
             .map_err(UserRepoError::Storage)?;
-        Ok(Some(UserAccess { email: row.email, email_verified: row.email_verified, ban }))
+        Ok(Some(UserAccess {
+            email: row.email,
+            email_verified: row.email_verified,
+            token_version: row.token_version,
+            ban,
+        }))
     }
 
     async fn find_login_credentials(
@@ -474,24 +480,32 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         }
     }
 
-    async fn revoke_all_for_user(
+    async fn revoke_all_sessions(
         &self,
         user_id: &UserId,
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        revoke_all_for_user_in_tx(&mut tx, user_id, now).await?;
+        revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
         tx.commit().await?;
         Ok(())
     }
 }
 
-/// 在事务内撤销用户全部 active 家族；封禁与登出/改密共用。
-async fn revoke_all_for_user_in_tx(
+/// 在事务内递增 access token 版本并撤销用户全部 active 家族；
+/// 封禁、登出、改密、重置、关闭 TOTP 共用。
+async fn revoke_all_sessions_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     user_id: &UserId,
     now: DateTime<Utc>,
 ) -> Result<(), StorageError> {
+    sqlx::query!(
+        "UPDATE users SET token_version = token_version + 1 WHERE id = ?1",
+        user_id.as_uuid(),
+    )
+    .execute(&mut **tx)
+    .await?;
+
     let families = sqlx::query!(
         r#"SELECT id AS "id: uuid::Uuid" FROM refresh_token_families
            WHERE user_id = ?1 AND state = 'active'"#,
@@ -669,7 +683,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         user_id: &UserId,
     ) -> Result<Option<(TotpState, Option<String>)>, StorageError> {
         let row = sqlx::query!(
-            r#"SELECT totp_state, totp_secret FROM users WHERE id = ?1"#,
+            r#"SELECT totp_state, totp_secret_enc FROM users WHERE id = ?1"#,
             user_id.as_uuid(),
         )
         .fetch_optional(&self.pool)
@@ -677,7 +691,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         Ok(row.map(|r| {
             let state = TotpState::from_str_raw(&r.totp_state)
                 .unwrap_or_else(|| unreachable!("库中 TOTP 状态值非法: {}", r.totp_state));
-            (state, r.totp_secret)
+            (state, r.totp_secret_enc)
         }))
     }
 
@@ -688,7 +702,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         _now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         sqlx::query!(
-            "UPDATE users SET totp_state = 'pending', totp_secret = ?2 WHERE id = ?1",
+            "UPDATE users SET totp_state = 'pending', totp_secret_enc = ?2 WHERE id = ?1",
             user_id.as_uuid(),
             secret,
         )
@@ -710,7 +724,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
     async fn disable(&self, user_id: &UserId, now: DateTime<Utc>) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query!(
-            "UPDATE users SET totp_state = 'disabled', totp_secret = NULL WHERE id = ?1",
+            "UPDATE users SET totp_state = 'disabled', totp_secret_enc = NULL WHERE id = ?1",
             user_id.as_uuid(),
         )
         .execute(&mut *tx)
@@ -1168,7 +1182,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         .execute(&mut *tx)
         .await?;
         // 封禁与撤销会话必须同事务：避免封禁生效但旧 refresh 仍可轮转
-        revoke_all_for_user_in_tx(&mut tx, user_id, now).await?;
+        revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
         tx.commit().await?;
         Ok(true)
     }

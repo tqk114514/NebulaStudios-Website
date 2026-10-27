@@ -67,7 +67,7 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
     }
 
     // 用户须仍处于 Enabled（disable 后挑战已全部作废，此处是纵深防御）
-    let Some((crate::model::totp::TotpState::Enabled, Some(secret))) =
+    let Some((crate::model::totp::TotpState::Enabled, Some(encrypted))) =
         state.totp_repo.find(&challenge.user_id).await.map_err(anyhow::Error::from)?
     else {
         return Err(invalid);
@@ -76,6 +76,10 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
     // 码校验：六位数字走 TOTP，其余按恢复码（字母表不含 0/1，无格式冲突）
     let code = req.code.trim();
     let verified = if code.len() == 6 && code.bytes().all(|b| b.is_ascii_digit()) {
+        let secret = state
+            .secret_cipher
+            .decrypt(&encrypted)
+            .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
         verify_code(&secret, code, now)
     } else {
         state
@@ -100,7 +104,7 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
         return Err(invalid);
     }
 
-    let tokens = issue_session(&state, challenge.user_id).await?;
+    let tokens = issue_session(&state, challenge.user_id, access.token_version).await?;
     let user = state
         .user_repo
         .find_by_id(&challenge.user_id)

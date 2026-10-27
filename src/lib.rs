@@ -4,6 +4,7 @@
 pub mod api;
 pub mod config;
 pub mod context;
+pub mod crypto;
 pub mod error;
 pub mod extractors;
 pub mod jobs;

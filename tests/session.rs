@@ -298,6 +298,37 @@ async fn logout_with_cookie_requires_csrf() {
 }
 
 #[tokio::test]
+async fn logout_invalidates_existing_access_token() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = login_session(&app).await;
+
+    let first = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(first.status(), StatusCode::NO_CONTENT);
+
+    // token_version 已递增；旧 access token 即使未过期也不能再用
+    let replay = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/logout",
+            "",
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    assert!(body_text(replay).await.contains("unauthorized"));
+}
+
+#[tokio::test]
 async fn logout_with_bearer_skips_csrf() {
     // Bearer 认证豁免 CSRF：跨站页面无法携带自定义头（ADR-0005）
     let (app, _state, _clock, _mailbox, _dir) = common::app().await;

@@ -91,7 +91,7 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
         return Err(ApiError::TotpRequired(challenge.as_str().to_owned()));
     }
 
-    let tokens = issue_session(&state, user.id).await?;
+    let tokens = issue_session(&state, user.id, access.token_version).await?;
     Ok(session_response(StatusCode::OK, &state, &user, &tokens))
 }
 

@@ -62,16 +62,21 @@ pub async fn disable(
     // 因素二：TOTP 码或恢复码（六位数字走 TOTP，其余按恢复码）
     let code = req.code.trim();
     let now = state.clock.now();
-    let second_factor_ok =
-        if secret.is_some() && code.bytes().all(|b| b.is_ascii_digit()) && code.len() == 6 {
-            secret.is_some_and(|s| verify_code(&s, code, now))
-        } else {
-            state
-                .totp_repo
-                .consume_recovery_code(&user.user_id, &sha256_hex(code), now)
-                .await
-                .map_err(anyhow::Error::from)?
-        };
+    let totp_shape = code.len() == 6 && code.bytes().all(|b| b.is_ascii_digit());
+    let second_factor_ok = match secret {
+        Some(encrypted) if totp_shape => {
+            let secret = state
+                .secret_cipher
+                .decrypt(&encrypted)
+                .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
+            verify_code(&secret, code, now)
+        }
+        _ => state
+            .totp_repo
+            .consume_recovery_code(&user.user_id, &sha256_hex(code), now)
+            .await
+            .map_err(anyhow::Error::from)?,
+    };
     if !second_factor_ok {
         return Err(ApiError::TotpInvalid);
     }
@@ -80,7 +85,7 @@ pub async fn disable(
     state.totp_repo.disable(&user.user_id, now).await.map_err(anyhow::Error::from)?;
     state
         .refresh_repo
-        .revoke_all_for_user(&user.user_id, now)
+        .revoke_all_sessions(&user.user_id, now)
         .await
         .map_err(anyhow::Error::from)?;
 

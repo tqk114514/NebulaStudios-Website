@@ -11,6 +11,7 @@ cargo sqlx migrate run        # 迁移是独立部署步骤，启动不执行 DD
 openssl ecparam -name prime256v1 -genkey -noout -out ec.pem      # ES256 密钥
 openssl pkcs8 -topk8 -nocrypt -in ec.pem -out jwt-private.pem
 openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
+openssl rand -hex 32     # NEBULA_CRYPTO__TOTP_SECRET_KEY（TOTP 密钥加密）
 cargo run --release
 ```
 
@@ -19,7 +20,8 @@ cargo run --release
 `NEBULA_JWT__PUBLIC_KEY_PATH`、`NEBULA_JWT__ACCESS_TTL_SECS`、`NEBULA_JWT__REFRESH_TTL_SECS`、
 `NEBULA_JOBS__CLEANUP_INTERVAL_SECS`（默认 300）、`NEBULA_CORS__ALLOWED_ORIGIN`
 （默认空，同源部署；本地前后端分离时设为前端来源，如 `http://localhost:3000`）、
-`NEBULA_ADMIN__EMAILS`（逗号分隔的管理员邮箱，默认空；由配置决定角色，ADR-0008）。
+`NEBULA_ADMIN__EMAILS`（逗号分隔的管理员邮箱，默认空；由配置决定角色，ADR-0008）、
+`NEBULA_CRYPTO__TOTP_SECRET_KEY`（必填，64 个十六进制字符；缺失或格式非法则启动失败）。
 
 ## 运维端点与后台任务
 
@@ -42,7 +44,9 @@ cargo run --release
 - `GET /api/admin/audit?limit=&offset=`
 
 封禁在 `FirstPartyUser` 认证接缝实时生效，并在同一事务内撤销该用户全部 refresh
-家族；封禁与解封写入审计。已签发的 access token 在封禁期间会被 403 `banned` 拦截。
+家族、递增 access token 版本；封禁与解封写入审计。登出、改密、密码重置、关闭 TOTP
+与封禁都会递增 `token_version`，已签发的 access token 立即失效（ADR-0010）。
+TOTP 密钥以 AES-256-GCM 密文存储，密钥由 `NEBULA_CRYPTO__TOTP_SECRET_KEY` 提供。
 
 ## 单实例声明（AGENTS.md §9.4）
 

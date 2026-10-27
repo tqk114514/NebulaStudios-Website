@@ -195,6 +195,39 @@ async fn setup_and_enable_require_current_password() {
 }
 
 #[tokio::test]
+async fn totp_secret_is_encrypted_at_rest() {
+    let (app, state, _clock, mailbox, dir) = common::app().await;
+    let session = verified_session(&app, &mailbox).await;
+
+    let setup = app
+        .clone()
+        .oneshot_post_with(
+            "/api/user/totp/setup",
+            &format!(r#"{{"password":"{PASSWORD}"}}"#),
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+    assert_eq!(setup.status(), StatusCode::OK);
+    let setup_json: serde_json::Value =
+        serde_json::from_str(&common::body_text(setup).await).unwrap();
+    let secret = setup_json["secret"].as_str().unwrap().to_owned();
+
+    let pool = nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db"))
+        .await
+        .expect("测试库必须可打开");
+    let stored: String = sqlx::query_scalar("SELECT totp_secret_enc FROM users WHERE email = ?1")
+        .bind(EMAIL)
+        .fetch_one(&pool)
+        .await
+        .expect("密文必须可读");
+    assert!(stored.starts_with("v1:"), "必须是版本化密文: {stored}");
+    assert_ne!(stored, secret, "库中不得出现明文");
+    assert_eq!(state.secret_cipher.decrypt(&stored).unwrap(), secret);
+    pool.close().await;
+}
+
+#[tokio::test]
 async fn change_password_invalidates_pending_totp_challenge() {
     let (app, state, _clock, mailbox, _dir) = common::app().await;
     let (session, _codes, secret) = enable_totp(&app, &state, &mailbox).await;

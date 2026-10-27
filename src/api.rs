@@ -31,6 +31,7 @@ use tower_http::request_id::{
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::context::{Clock, RequestId};
+use crate::crypto::SecretCipher;
 use crate::error::ApiError;
 use crate::mailer::Mailer;
 use crate::model::user::{User, UserId};
@@ -210,6 +211,8 @@ pub struct AppState {
     pub admin_repo: Arc<dyn AdminRepo>,
     /// 配置化管理员邮箱（已 trim + 小写）；`AdminUser` 提取器据此判定。
     pub admin_emails: Arc<HashSet<String>>,
+    /// TOTP 密钥静态加密端口。
+    pub secret_cipher: Arc<dyn SecretCipher>,
     /// 邮件端口。
     pub mailer: Arc<dyn Mailer>,
     /// Prometheus 指标句柄；测试装配为 `None`，`/metrics` 返回 404。

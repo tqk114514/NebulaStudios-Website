@@ -23,6 +23,15 @@ pub struct Config {
     pub cors: CorsConfig,
     /// 管理员子配置。
     pub admin: AdminConfig,
+    /// 加密子配置。
+    pub crypto: CryptoConfig,
+}
+
+/// 加密配置；TOTP 密钥必须由部署方提供 32 字节十六进制密钥。
+#[derive(Debug, Clone, Deserialize)]
+pub struct CryptoConfig {
+    /// AES-256 密钥，64 个十六进制字符。
+    pub totp_secret_key: String,
 }
 
 /// 管理员配置；邮箱列表逗号分隔，启动时 trim + 小写。
@@ -113,6 +122,7 @@ impl Config {
             .set_default("jobs.cleanup_interval_secs", 300)?
             .set_default("cors.allowed_origin", "")?
             .set_default("admin.emails", "")?
+            .set_default("crypto.totp_secret_key", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;
@@ -149,5 +159,6 @@ mod tests {
         assert_eq!(config.jobs.cleanup_interval_secs, 300);
         assert_eq!(config.cors.allowed_origin, "");
         assert_eq!(config.admin.emails, "");
+        assert_eq!(config.crypto.totp_secret_key, "");
     }
 }

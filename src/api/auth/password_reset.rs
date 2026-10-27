@@ -124,7 +124,7 @@ pub async fn reset_confirm(
     // 红线 #1：密码变更即全端下线；未消费的登录挑战一并作废
     state
         .refresh_repo
-        .revoke_all_for_user(&user.id, state.clock.now())
+        .revoke_all_sessions(&user.id, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
     state
