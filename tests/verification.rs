@@ -55,6 +55,31 @@ async fn register_mails_code_and_verification_marks_user_verified() {
 }
 
 #[tokio::test]
+async fn verification_code_hash_uses_hmac_pepper() {
+    let (app, state, _clock, mailbox, dir) = common::app().await;
+    register(&app).await;
+    let code = extract_code(&await_first_mail(&mailbox).await);
+
+    let pool = nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db"))
+        .await
+        .expect("测试库必须可打开");
+    let stored: String = sqlx::query_scalar(
+        "SELECT code_hash FROM email_verifications ORDER BY created_at DESC LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("验证码哈希必须可读");
+    pool.close().await;
+
+    assert_ne!(
+        stored,
+        nebula_server::model::tokens::sha256_hex(&code),
+        "不得使用无 pepper 的裸 SHA-256"
+    );
+    assert_eq!(stored, state.code_hasher.hash(&code));
+}
+
+#[tokio::test]
 async fn wrong_codes_burn_after_max_attempts() {
     let (app, _state, _clock, mailbox, _dir) = common::app().await;
     register(&app).await;

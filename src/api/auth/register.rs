@@ -14,8 +14,9 @@ use crate::model::password::PasswordHash;
 use crate::model::user::{User, UserId};
 use crate::storage::{UserRepo, UserRepoError};
 
-/// 注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 1–15 个
-/// Unicode 字符、密码 16–64 且须含大小写字母、数字与标点。
+/// 注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 3–15 个
+/// ASCII 字母/数字/下划线/连字符、密码 16–64 且须含大小写字母、数字与标点。
+/// 用户名禁止 `@` 等邮箱字符，保证登录标识在 email 与 username 两列之间不歧义。
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
     /// 邮箱；服务端 trim 并小写化后入库（v3 语义）。
@@ -23,12 +24,22 @@ pub struct RegisterRequest {
     #[validate(email)]
     pub email: String,
     /// 展示用户名。
-    #[validate(length(min = 1, max = 15))]
+    #[validate(length(min = 3, max = 15))]
+    #[validate(custom(function = "validate_username_chars"))]
     pub username: String,
     /// 明文口令；只在本端点边界出现，不进日志与响应。
     #[validate(length(min = 16, max = 64))]
     #[validate(custom(function = "validate_password_strength"))]
     pub password: String,
+}
+
+/// 用户名只允许 ASCII 字母、数字、下划线与连字符；不允许 `@`/`.` 等邮箱字符。
+fn validate_username_chars(username: &str) -> Result<(), ValidationError> {
+    if username.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-')) {
+        Ok(())
+    } else {
+        Err(ValidationError::new("username_invalid_characters"))
+    }
 }
 
 impl RegisterRequest {
@@ -66,12 +77,13 @@ fn field_issues(req: &RegisterRequest, errors: &ValidationErrors) -> Vec<FieldIn
             match field.as_ref() {
                 "email" => Some(FieldInvalid { field: "email", code: "invalid_email".to_owned() }),
                 "username" => {
-                    let code = if req.username.chars().count() > 15 {
-                        "username_too_long"
-                    } else {
-                        "username_too_short"
+                    let code = match errs.first().map(|err| err.code.as_ref()) {
+                        Some("length") if req.username.chars().count() > 15 => "username_too_long",
+                        Some("length") => "username_too_short",
+                        Some(custom) => custom,
+                        None => return None,
                     };
-                    errs.first().map(|_| FieldInvalid { field: "username", code: code.to_owned() })
+                    Some(FieldInvalid { field: "username", code: code.to_owned() })
                 }
                 "password" => {
                     let code = match errs.first().map(|err| err.code.as_ref()) {

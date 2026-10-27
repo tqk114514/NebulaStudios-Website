@@ -41,7 +41,7 @@ const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwx
 /// 拒绝采样阈值：256 = 4×57 + 28，byte < 228 时取模无偏差。
 const UNBIASED_LIMIT: u8 = 228;
 
-/// 六位邮箱验证码明文；仅签发与邮件正文出现，入库只存 SHA-256。
+/// 六位邮箱验证码明文；仅签发与邮件正文出现，入库只存带 pepper 的 HMAC-SHA256。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationCode(String);
 
@@ -53,7 +53,6 @@ impl VerificationCode {
     ///
     /// let code = VerificationCode::generate();
     /// assert_eq!(code.as_str().len(), 6);
-    /// assert_eq!(code.to_hash_hex().len(), 64);
     /// ```
     #[must_use]
     pub fn generate() -> Self {
@@ -77,12 +76,6 @@ impl VerificationCode {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    /// SHA-256 十六进制摘要，即入库形态。
-    #[must_use]
-    pub fn to_hash_hex(&self) -> String {
-        crate::model::tokens::sha256_hex(&self.0)
-    }
 }
 
 /// 落库的新验证码描述；明文不入本结构。
@@ -90,7 +83,7 @@ impl VerificationCode {
 pub struct NewEmailVerification {
     /// 所属用户。
     pub user_id: UserId,
-    /// 验证码的 SHA-256 十六进制。
+    /// 验证码的 HMAC-SHA256（带服务端 pepper）十六进制。
     pub code_hash: String,
     /// 过期时刻。
     pub expires_at: DateTime<Utc>,
@@ -103,7 +96,7 @@ pub struct NewEmailVerification {
 pub struct EmailVerification {
     /// 记录标识。
     pub id: Uuid,
-    /// 验证码的 SHA-256 十六进制；校验在 handler 恒时比较。
+    /// 验证码的 HMAC-SHA256（带服务端 pepper）十六进制；校验在 handler 恒时比较。
     pub code_hash: String,
     /// 所属用户。
     pub user_id: UserId,

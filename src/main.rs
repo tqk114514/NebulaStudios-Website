@@ -10,7 +10,7 @@ use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
 use nebula_server::context::SystemClock;
-use nebula_server::crypto::{AesGcmCipher, SecretCipher};
+use nebula_server::crypto::{AesGcmCipher, CodeHasher, HmacCodeHasher, SecretCipher};
 use nebula_server::storage::sqlite::{
     self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
 };
@@ -38,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(nebula_server::mailer::SmtpMailer::connect(
             &config.mail.smtp_host,
             config.mail.smtp_port,
+            &config.mail.smtp_tls,
             &config.mail.smtp_username,
             &config.mail.smtp_password,
             &config.mail.from,
@@ -70,6 +71,12 @@ async fn main() -> anyhow::Result<()> {
     let secret_cipher: Arc<dyn SecretCipher> = Arc::new(
         AesGcmCipher::from_hex(&config.crypto.totp_secret_key).context("解析 TOTP 加密密钥")?,
     );
+    if config.crypto.code_pepper.is_empty() {
+        anyhow::bail!("NEBULA_CRYPTO__CODE_PEPPER 未配置");
+    }
+    let code_hasher: Arc<dyn CodeHasher> = Arc::new(
+        HmacCodeHasher::from_hex(&config.crypto.code_pepper).context("解析验证码 pepper")?,
+    );
 
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
@@ -92,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
         admin_emails,
         secret_cipher,
+        code_hasher,
         mailer,
         metrics: Some(Arc::new(metrics_handle)),
         cors_allowed_origin,

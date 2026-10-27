@@ -33,6 +33,8 @@ export function useSignUp() {
         return t('register.fieldsRequired')
       case 'usernameTooShort':
         return t('register.usernameTooShort')
+      case 'usernameInvalidCharacters':
+        return t('register.usernameInvalidCharacters')
       case 'passwordMismatch':
         return t('register.passwordMismatch')
       default:
@@ -42,7 +44,11 @@ export function useSignUp() {
 
   // 缺项无法归到某一个字段，由表单级错误行承担
   const formError = computed(() => (issue.value === 'fieldsRequired' ? issueText.value : ''))
-  const usernameError = computed(() => (issue.value === 'usernameTooShort' ? issueText.value : ''))
+  const usernameError = computed(() =>
+    issue.value === 'usernameTooShort' || issue.value === 'usernameInvalidCharacters'
+      ? issueText.value
+      : '',
+  )
   const confirmError = computed(() => (issue.value === 'passwordMismatch' ? issueText.value : ''))
 
   function submit() {

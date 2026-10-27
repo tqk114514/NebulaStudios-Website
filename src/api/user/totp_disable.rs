@@ -11,7 +11,6 @@ use serde::Deserialize;
 use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
-use crate::model::tokens::sha256_hex;
 use crate::model::totp::verify_code;
 
 /// disable 请求。
@@ -73,7 +72,7 @@ pub async fn disable(
         }
         _ => state
             .totp_repo
-            .consume_recovery_code(&user.user_id, &sha256_hex(code), now)
+            .consume_recovery_code(&user.user_id, &state.code_hasher.hash(code), now)
             .await
             .map_err(anyhow::Error::from)?,
     };

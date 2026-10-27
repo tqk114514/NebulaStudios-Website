@@ -316,7 +316,10 @@ impl UserRepo for SqliteUserRepo {
                       email_verified AS "email_verified: bool",
                       created_at AS "created_at: chrono::DateTime<chrono::Utc>",
                       password_hash
-               FROM users WHERE email = ?1 OR username = ?1"#,
+               FROM users WHERE email = ?1 OR username = ?1
+               -- 兼容历史数据：若 username 恰好等于他人 email，email 匹配优先
+               ORDER BY CASE WHEN email = ?1 THEN 0 ELSE 1 END, created_at ASC
+               LIMIT 1"#,
             identifier,
         )
         .fetch_optional(&self.pool)

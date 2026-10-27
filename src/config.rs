@@ -32,6 +32,8 @@ pub struct Config {
 pub struct CryptoConfig {
     /// AES-256 密钥，64 个十六进制字符。
     pub totp_secret_key: String,
+    /// 验证码 HMAC pepper，64 个十六进制字符。
+    pub code_pepper: String,
 }
 
 /// 管理员配置；邮箱列表逗号分隔，启动时 trim + 小写。
@@ -75,6 +77,8 @@ pub struct MailConfig {
     pub smtp_host: String,
     /// SMTP 端口。
     pub smtp_port: u16,
+    /// TLS 模式：`starttls`（默认，587）、`implicit`（465）或 `none`。
+    pub smtp_tls: String,
     /// SMTP 用户名；空串不带凭据。
     pub smtp_username: String,
     /// SMTP 密码。
@@ -116,6 +120,7 @@ impl Config {
             .set_default("jwt.refresh_ttl_secs", 2_592_000)?
             .set_default("mail.smtp_host", "")?
             .set_default("mail.smtp_port", 587)?
+            .set_default("mail.smtp_tls", "starttls")?
             .set_default("mail.smtp_username", "")?
             .set_default("mail.smtp_password", "")?
             .set_default("mail.from", "Nebula <no-reply@nebula.st>")?
@@ -123,6 +128,7 @@ impl Config {
             .set_default("cors.allowed_origin", "")?
             .set_default("admin.emails", "")?
             .set_default("crypto.totp_secret_key", "")?
+            .set_default("crypto.code_pepper", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;
@@ -133,6 +139,11 @@ impl Config {
         if config.jobs.cleanup_interval_secs == 0 {
             return Err(LoadConfigError::Invalid(
                 "jobs.cleanup_interval_secs 必须为正秒数".to_owned(),
+            ));
+        }
+        if !matches!(config.mail.smtp_tls.as_str(), "starttls" | "implicit" | "none") {
+            return Err(LoadConfigError::Invalid(
+                "mail.smtp_tls 必须为 starttls/implicit/none".to_owned(),
             ));
         }
         Ok(config)
@@ -160,5 +171,7 @@ mod tests {
         assert_eq!(config.cors.allowed_origin, "");
         assert_eq!(config.admin.emails, "");
         assert_eq!(config.crypto.totp_secret_key, "");
+        assert_eq!(config.crypto.code_pepper, "");
+        assert_eq!(config.mail.smtp_tls, "starttls");
     }
 }

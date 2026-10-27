@@ -177,12 +177,6 @@ impl RecoveryCode {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    /// SHA-256 十六进制摘要，即入库形态。
-    #[must_use]
-    pub fn to_hash_hex(&self) -> String {
-        crate::model::tokens::sha256_hex(&self.0)
-    }
 }
 
 /// 库中读出的恢复码记录。

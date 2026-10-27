@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id AS \"id: uuid::Uuid\", username, email,\n                      email_verified AS \"email_verified: bool\",\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\",\n                      password_hash\n               FROM users WHERE email = ?1 OR username = ?1",
+  "query": "SELECT id AS \"id: uuid::Uuid\", username, email,\n                      email_verified AS \"email_verified: bool\",\n                      created_at AS \"created_at: chrono::DateTime<chrono::Utc>\",\n                      password_hash\n               FROM users WHERE email = ?1 OR username = ?1\n               -- 兼容历史数据：若 username 恰好等于他人 email，email 匹配优先\n               ORDER BY CASE WHEN email = ?1 THEN 0 ELSE 1 END, created_at ASC\n               LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -82,5 +82,5 @@
       true
     ]
   },
-  "hash": "47809bcf673acafcf73d6f86c8e87218dba4dcdf4c243add2efb147168e4e434"
+  "hash": "87be60acf6f571127f290015340ba53456a84b89f6ee312eea18b4e41f71308e"
 }

@@ -68,19 +68,34 @@ pub struct SmtpMailer {
 }
 
 impl SmtpMailer {
-    /// 连接 SMTP 中继；用户名/密码为空串时不带凭据。
+    /// 连接 SMTP 中继；`tls` 为 `starttls`（587）、`implicit`（465）或 `none`。
+    /// 用户名/密码为空串时不带凭据。
     ///
     /// # Errors
-    /// 中继地址或发件人格式非法、TLS 协商失败时返回 [`MailError`]。
+    /// 中继地址、TLS 模式或发件人格式非法、TLS 参数构建失败时返回 [`MailError`]。
     pub fn connect(
         host: &str,
         port: u16,
+        tls: &str,
         username: &str,
         password: &str,
         from: &str,
     ) -> Result<Self, MailError> {
-        let mut builder =
-            AsyncSmtpTransport::<Tokio1Executor>::relay(host).map_err(MailError::wrap)?.port(port);
+        let mut builder = match tls {
+            // 587 惯例：先 plaintext 再 STARTTLS
+            "starttls" => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host),
+            // 465 惯例：连接即 TLS
+            "implicit" => AsyncSmtpTransport::<Tokio1Executor>::relay(host),
+            "none" => Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)),
+            other => {
+                return Err(MailError::wrap(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("smtp_tls 非法: {other}"),
+                )));
+            }
+        }
+        .map_err(MailError::wrap)?
+        .port(port);
         if !username.is_empty() {
             builder =
                 builder.credentials(Credentials::new(username.to_owned(), password.to_owned()));
@@ -122,5 +137,19 @@ impl Mailer for LogMailer {
             tracing::info!(to = %message.to, subject = %message.subject, body = %message.body, "邮件（日志模式）");
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SmtpMailer;
+
+    #[test]
+    fn tls_modes_are_validated_before_connect() {
+        let from = "Nebula <no-reply@nebula.st>";
+        assert!(SmtpMailer::connect("localhost", 587, "starttls", "", "", from).is_ok());
+        assert!(SmtpMailer::connect("localhost", 465, "implicit", "", "", from).is_ok());
+        assert!(SmtpMailer::connect("localhost", 25, "none", "", "", from).is_ok());
+        assert!(SmtpMailer::connect("localhost", 587, "bogus", "", "", from).is_err());
     }
 }

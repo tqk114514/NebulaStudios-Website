@@ -14,7 +14,7 @@ use axum::http::{Request, StatusCode, header::SET_COOKIE};
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::context::ManualClock;
-use nebula_server::crypto::AesGcmCipher;
+use nebula_server::crypto::{AesGcmCipher, HmacCodeHasher};
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::storage::sqlite::{
@@ -137,6 +137,7 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
         admin_emails: Arc::new(HashSet::new()),
         secret_cipher: Arc::new(AesGcmCipher::from_key([7u8; 32])),
+        code_hasher: Arc::new(HmacCodeHasher::from_key([9u8; 32])),
         mailer: Arc::new(mailbox.clone()),
         metrics: None,
         cors_allowed_origin: None,

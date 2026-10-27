@@ -10,7 +10,7 @@ use serde::Deserialize;
 use super::{issue_session, session_response};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::model::tokens::{RefreshToken, sha256_hex};
+use crate::model::tokens::RefreshToken;
 use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code};
 
 /// 二段请求。
@@ -84,7 +84,7 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
     } else {
         state
             .totp_repo
-            .consume_recovery_code(&challenge.user_id, &sha256_hex(code), now)
+            .consume_recovery_code(&challenge.user_id, &state.code_hasher.hash(code), now)
             .await
             .map_err(anyhow::Error::from)?
     };

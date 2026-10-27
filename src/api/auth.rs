@@ -23,7 +23,7 @@ use crate::error::ApiError;
 use crate::extractors::constant_time_eq;
 use crate::mailer::EmailMessage;
 use crate::model::password::PasswordHash;
-use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sha256_hex, sign_access};
+use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sign_access};
 use crate::model::user::{User, UserId};
 use crate::model::verification::{
     MAX_ATTEMPTS, NewEmailVerification, VERIFICATION_TTL, VerificationCode, VerificationPurpose,
@@ -109,7 +109,7 @@ pub(crate) async fn issue_and_send_code(
     let now = state.clock.now();
     let entry = NewEmailVerification {
         user_id: user.id,
-        code_hash: code.to_hash_hex(),
+        code_hash: state.code_hasher.hash(code.as_str()),
         expires_at: now + VERIFICATION_TTL,
         purpose,
     };
@@ -158,7 +158,7 @@ pub(crate) async fn check_verification_code(
     if verification.expires_at <= state.clock.now() || verification.attempts >= MAX_ATTEMPTS {
         return Err(invalid);
     }
-    let candidate = sha256_hex(code);
+    let candidate = state.code_hasher.hash(code);
     if !constant_time_eq(candidate.as_bytes(), verification.code_hash.as_bytes()) {
         state
             .verification_repo
