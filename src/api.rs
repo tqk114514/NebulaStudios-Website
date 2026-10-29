@@ -35,9 +35,10 @@ use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
 use crate::mailer::Mailer;
 use crate::model::user::{User, UserId};
+use crate::social::SocialClients;
 use crate::storage::{
     AccountRepo, AdminRepo, EmailVerificationRepo, MaintenanceRepo, OAuthRepo, RefreshTokenRepo,
-    TotpRepo, UserRepo,
+    SocialRepo, TotpRepo, UserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -209,6 +210,12 @@ pub struct AppState {
     pub maintenance_repo: Arc<dyn MaintenanceRepo>,
     /// 管理后台仓储：统计、用户列表、封禁/解封与审计。
     pub admin_repo: Arc<dyn AdminRepo>,
+    /// 社交身份与 OAuth 中转态仓储（ADR-0012）。
+    pub social_repo: Arc<dyn SocialRepo>,
+    /// 已启用的社交 provider 客户端；未启用的 provider 不在表内。
+    pub social_clients: Arc<SocialClients>,
+    /// 社交回跳后跳转的前端基地址（`social.base_url`）；社交未启用时为空串。
+    pub social_base_url: String,
     /// 配置化管理员邮箱（已 trim + 小写）；`AdminUser` 提取器据此判定。
     pub admin_emails: Arc<HashSet<String>>,
     /// TOTP 密钥静态加密端口。
@@ -266,6 +273,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
         .route("/api/admin/audit", get(admin::audit::audit))
+        .route("/api/auth/{provider}", get(auth::social::start))
+        .route("/api/auth/{provider}/callback", get(auth::social::callback))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
         .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
         .route("/api/oauth/token", post(oauth::token::token));

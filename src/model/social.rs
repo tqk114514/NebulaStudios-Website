@@ -1,9 +1,12 @@
 //! 社交登录领域：provider、绑定身份与 OAuth 中转态（ADR-0012；§2 零 I/O）。
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use uuid::Uuid;
 
 use crate::model::user::UserId;
+
+/// OAuth 中转态有效期；过期即作废，须重新发起授权。
+pub const SOCIAL_STATE_TTL: TimeDelta = TimeDelta::minutes(10);
 
 /// 支持的社交 provider；入库字符串即 OAuth 供应商标识。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

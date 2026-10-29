@@ -11,6 +11,7 @@ pub mod password_reset;
 pub mod refresh;
 pub mod register;
 pub mod resend;
+pub mod social;
 pub mod verify;
 
 use axum::http::HeaderMap;
