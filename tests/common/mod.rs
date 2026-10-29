@@ -17,9 +17,10 @@ use nebula_server::context::ManualClock;
 use nebula_server::crypto::{AesGcmCipher, HmacCodeHasher};
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
+use nebula_server::social::SocialClients;
 use nebula_server::storage::sqlite::{
     self, SqliteAccountRepo, SqliteAdminRepo, SqliteEmailVerificationRepo, SqliteMaintenanceRepo,
-    SqliteOAuthRepo, SqliteRefreshRepo, SqliteTotpRepo, SqliteUserRepo,
+    SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo, SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -134,7 +135,11 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         totp_repo: Arc::new(SqliteTotpRepo::from_pool(pool.clone())),
         oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool.clone())),
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
-        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
+        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
+        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        // 默认不启用任何社交 provider；社交用例自行覆盖本字段注入假客户端
+        social_clients: Arc::new(SocialClients::default()),
+        social_base_url: "https://accounts.nebula.test".to_owned(),
         admin_emails: Arc::new(HashSet::new()),
         secret_cipher: Arc::new(AesGcmCipher::from_key([7u8; 32])),
         code_hasher: Arc::new(HmacCodeHasher::from_key([9u8; 32])),

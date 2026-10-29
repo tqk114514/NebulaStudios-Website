@@ -91,6 +91,12 @@ pub enum ApiError {
     CannotBanAdmin,
     /// 查询串非法；400。
     MalformedQuery(String),
+    /// 社交 provider 未启用或不存在；404。
+    SocialProviderDisabled,
+    /// 社交身份未绑定到任何账户；409。
+    SocialNotLinked,
+    /// 社交身份已绑定到其他账户；409。
+    SocialAlreadyLinked,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -129,6 +135,15 @@ impl ApiError {
             }
             Self::MalformedQuery(reason) => {
                 (StatusCode::BAD_REQUEST, "malformed_query", reason, None)
+            }
+            Self::SocialProviderDisabled => {
+                simple(StatusCode::NOT_FOUND, "social_provider_disabled", "社交登录未启用")
+            }
+            Self::SocialNotLinked => {
+                simple(StatusCode::CONFLICT, "social_not_linked", "社交身份未绑定任何账户")
+            }
+            Self::SocialAlreadyLinked => {
+                simple(StatusCode::CONFLICT, "social_already_linked", "社交身份已绑定其他账户")
             }
             other => other.common_parts(),
         }
@@ -207,7 +222,10 @@ impl ApiError {
             | Self::BanNotFound
             | Self::CannotBanSelf
             | Self::CannotBanAdmin
-            | Self::MalformedQuery(_) => unreachable!("admin 错误由 parts 路由"),
+            | Self::MalformedQuery(_)
+            | Self::SocialProviderDisabled
+            | Self::SocialNotLinked
+            | Self::SocialAlreadyLinked => unreachable!("admin 与社交错误由 parts 路由"),
         }
     }
 }

@@ -9,10 +9,14 @@ use axum_prometheus::PrometheusMetricLayer;
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
 use nebula_server::config::Config;
-use nebula_server::context::SystemClock;
+use nebula_server::context::{Clock, SystemClock};
 use nebula_server::crypto::{AesGcmCipher, CodeHasher, HmacCodeHasher, SecretCipher};
+use nebula_server::social::google::{GoogleClient, GoogleConfig};
+use nebula_server::social::microsoft::{MicrosoftClient, MicrosoftConfig};
+use nebula_server::social::{SocialClients, SocialProviderClient};
 use nebula_server::storage::sqlite::{
-    self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteUserRepo,
+    self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteSocialRepo,
+    SqliteUserRepo,
 };
 use nebula_server::telemetry;
 
@@ -78,10 +82,18 @@ async fn main() -> anyhow::Result<()> {
         HmacCodeHasher::from_hex(&config.crypto.code_pepper).context("解析验证码 pepper")?,
     );
 
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let social_clients = build_social_clients(&config, &clock)?;
+    if social_clients.get(nebula_server::model::social::SocialProvider::Google).is_none()
+        && social_clients.get(nebula_server::model::social::SocialProvider::Microsoft).is_none()
+    {
+        tracing::warn!("未配置社交登录，/api/auth/{{provider}} 不可用");
+    }
+
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
         refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
-        clock: Arc::new(SystemClock),
+        clock,
         jwt,
         verification_repo: Arc::new(
             nebula_server::storage::sqlite::SqliteEmailVerificationRepo::from_pool(pool.clone()),
@@ -96,7 +108,10 @@ async fn main() -> anyhow::Result<()> {
             pool.clone(),
         )),
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
-        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool)),
+        admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
+        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        social_clients: Arc::new(social_clients),
+        social_base_url: config.social.base_url.clone(),
         admin_emails,
         secret_cipher,
         code_hasher,
@@ -133,6 +148,45 @@ async fn main() -> anyhow::Result<()> {
     cleanup.abort();
     result?;
     Ok(())
+}
+
+/// 按配置构建已启用的社交 provider 客户端；未启用的 provider 不构建（ADR-0012）。
+fn build_social_clients(config: &Config, clock: &Arc<dyn Clock>) -> anyhow::Result<SocialClients> {
+    let mut clients: Vec<Arc<dyn SocialProviderClient>> = Vec::new();
+    if config.social.google_enabled() {
+        clients.push(Arc::new(
+            GoogleClient::new(
+                GoogleConfig {
+                    client_id: config.social.google_client_id.clone(),
+                    client_secret: config.social.google_client_secret.clone(),
+                    redirect_uri: config.social.redirect_uri("google"),
+                    proxy_url: config.social.google_proxy_url.clone(),
+                    proxy_access_client_id: config.social.google_proxy_access_client_id.clone(),
+                    proxy_access_client_secret: config
+                        .social
+                        .google_proxy_access_client_secret
+                        .clone(),
+                    worker_signing_public_key: config
+                        .social
+                        .google_worker_signing_public_key
+                        .clone(),
+                },
+                clock.clone(),
+            )
+            .context("构建 Google 社交客户端")?,
+        ));
+    }
+    if config.social.microsoft_enabled() {
+        clients.push(Arc::new(
+            MicrosoftClient::new(MicrosoftConfig {
+                client_id: config.social.microsoft_client_id.clone(),
+                client_secret: config.social.microsoft_client_secret.clone(),
+                redirect_uri: config.social.redirect_uri("microsoft"),
+            })
+            .context("构建 Microsoft 社交客户端")?,
+        ));
+    }
+    Ok(SocialClients::new(clients))
 }
 
 /// 等待 Ctrl-C，收到后进入优雅停机。
