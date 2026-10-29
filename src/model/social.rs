@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::model::user::UserId;
 
 /// 支持的社交 provider；入库字符串即 OAuth 供应商标识。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SocialProvider {
     /// Google；取数经 Cloudflare Worker 代理（ADR-0012）。
     Google,

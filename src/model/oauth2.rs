@@ -2,6 +2,7 @@
 //! 协议纯逻辑，与 HTTP 无关（§2）。
 
 use chrono::{DateTime, TimeDelta, Utc};
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -73,6 +74,39 @@ pub fn verify_pkce_s256(verifier: &str, challenge: &str) -> bool {
         return false;
     }
     base64url_no_pad(&Sha256::digest(verifier.as_bytes())) == challenge
+}
+
+/// 生成 PKCE `code_verifier`：32 字节随机数的 base64url（无填充，43 字符），
+/// 落在 RFC 7636 §4.1 的合法区间内。
+///
+/// ```
+/// use nebula_server::model::oauth2::{generate_code_verifier, valid_verifier};
+///
+/// let verifier = generate_code_verifier();
+/// assert_eq!(verifier.len(), 43);
+/// assert!(valid_verifier(&verifier));
+/// ```
+#[must_use]
+pub fn generate_code_verifier() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    base64url_no_pad(&bytes)
+}
+
+/// S256 challenge：`base64url(SHA256(verifier))`（无填充）；与 [`verify_pkce_s256`] 互逆。
+///
+/// ```
+/// use nebula_server::model::oauth2::{code_challenge_s256, verify_pkce_s256};
+///
+/// // RFC 7636 附录 B 的测试向量
+/// let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+/// let challenge = code_challenge_s256(verifier);
+/// assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+/// assert!(verify_pkce_s256(verifier, &challenge));
+/// ```
+#[must_use]
+pub fn code_challenge_s256(verifier: &str) -> String {
+    base64url_no_pad(&Sha256::digest(verifier.as_bytes()))
 }
 
 /// base64url 编码（RFC 4648 §5，无 padding）。
