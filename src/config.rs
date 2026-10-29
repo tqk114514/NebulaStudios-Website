@@ -25,6 +25,54 @@ pub struct Config {
     pub admin: AdminConfig,
     /// 加密子配置。
     pub crypto: CryptoConfig,
+    /// 社交登录子配置（ADR-0012）。
+    pub social: SocialConfig,
+}
+
+/// 社交登录配置（ADR-0012）；某 provider 的 client id 为空即不启用该 provider。
+///
+/// Google 取数经 Cloudflare Worker 代理，启用时须同时提供代理地址、Access
+/// service token 与 Worker 的 Ed25519 签名公钥。
+#[derive(Debug, Clone, Deserialize)]
+pub struct SocialConfig {
+    /// 站点对外基地址；回跳地址由它派生，启用任一 provider 时必填。
+    pub base_url: String,
+    /// Google OAuth 客户端 id；空串表示不启用 Google。
+    pub google_client_id: String,
+    /// Google OAuth 客户端密钥。
+    pub google_client_secret: String,
+    /// Google 取数代理基地址（Cloudflare Worker）。
+    pub google_proxy_url: String,
+    /// 访问 Worker 的 Cloudflare Access service token client id。
+    pub google_proxy_access_client_id: String,
+    /// 访问 Worker 的 Cloudflare Access service token secret。
+    pub google_proxy_access_client_secret: String,
+    /// Worker 对 Google 响应背书所用的 Ed25519 公钥（PKIX PEM，单行或多行）。
+    pub google_worker_signing_public_key: String,
+    /// Microsoft OAuth 客户端 id；空串表示不启用 Microsoft。
+    pub microsoft_client_id: String,
+    /// Microsoft OAuth 客户端密钥。
+    pub microsoft_client_secret: String,
+}
+
+impl SocialConfig {
+    /// Google 是否启用；判定只看 client id。
+    #[must_use]
+    pub fn google_enabled(&self) -> bool {
+        !self.google_client_id.is_empty()
+    }
+
+    /// Microsoft 是否启用；判定只看 client id。
+    #[must_use]
+    pub fn microsoft_enabled(&self) -> bool {
+        !self.microsoft_client_id.is_empty()
+    }
+
+    /// 派生 provider 的授权回跳地址 `{base_url}/api/auth/{provider}/callback`。
+    #[must_use]
+    pub fn redirect_uri(&self, provider: &str) -> String {
+        format!("{}/api/auth/{provider}/callback", self.base_url.trim_end_matches('/'))
+    }
 }
 
 /// 加密配置；TOTP 密钥必须由部署方提供 32 字节十六进制密钥。
@@ -129,6 +177,15 @@ impl Config {
             .set_default("admin.emails", "")?
             .set_default("crypto.totp_secret_key", "")?
             .set_default("crypto.code_pepper", "")?
+            .set_default("social.base_url", "")?
+            .set_default("social.google_client_id", "")?
+            .set_default("social.google_client_secret", "")?
+            .set_default("social.google_proxy_url", "")?
+            .set_default("social.google_proxy_access_client_id", "")?
+            .set_default("social.google_proxy_access_client_secret", "")?
+            .set_default("social.google_worker_signing_public_key", "")?
+            .set_default("social.microsoft_client_id", "")?
+            .set_default("social.microsoft_client_secret", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let config: Self = settings.try_deserialize()?;
@@ -144,6 +201,29 @@ impl Config {
         if !matches!(config.mail.smtp_tls.as_str(), "starttls" | "implicit" | "none") {
             return Err(LoadConfigError::Invalid(
                 "mail.smtp_tls 必须为 starttls/implicit/none".to_owned(),
+            ));
+        }
+        // 社交登录：启用任一 provider 才校验其配套项，全空即不启用（ADR-0012）
+        let social = &config.social;
+        if (social.google_enabled() || social.microsoft_enabled()) && social.base_url.is_empty() {
+            return Err(LoadConfigError::Invalid(
+                "启用社交登录时 social.base_url 必须配置".to_owned(),
+            ));
+        }
+        if social.google_enabled()
+            && (social.google_proxy_url.is_empty()
+                || social.google_proxy_access_client_id.is_empty()
+                || social.google_proxy_access_client_secret.is_empty()
+                || social.google_worker_signing_public_key.is_empty())
+        {
+            return Err(LoadConfigError::Invalid(
+                "配置 google_client_id 时，google 代理地址、Access token 与签名公钥必须齐全"
+                    .to_owned(),
+            ));
+        }
+        if social.microsoft_enabled() && social.microsoft_client_secret.is_empty() {
+            return Err(LoadConfigError::Invalid(
+                "配置 microsoft_client_id 时 microsoft_client_secret 必须配置".to_owned(),
             ));
         }
         Ok(config)
@@ -173,5 +253,30 @@ mod tests {
         assert_eq!(config.crypto.totp_secret_key, "");
         assert_eq!(config.crypto.code_pepper, "");
         assert_eq!(config.mail.smtp_tls, "starttls");
+        // 社交登录默认全空：两个 provider 都不启用
+        assert!(!config.social.google_enabled());
+        assert!(!config.social.microsoft_enabled());
+        assert_eq!(config.social.base_url, "");
+    }
+
+    #[test]
+    fn social_redirect_uri_derives_from_base_url() {
+        let social = super::SocialConfig {
+            base_url: "https://accounts.nebula.st/".to_owned(),
+            google_client_id: "g".to_owned(),
+            google_client_secret: String::new(),
+            google_proxy_url: "https://proxy.example".to_owned(),
+            google_proxy_access_client_id: "id".to_owned(),
+            google_proxy_access_client_secret: "secret".to_owned(),
+            google_worker_signing_public_key: "pem".to_owned(),
+            microsoft_client_id: String::new(),
+            microsoft_client_secret: String::new(),
+        };
+        assert_eq!(
+            social.redirect_uri("google"),
+            "https://accounts.nebula.st/api/auth/google/callback"
+        );
+        assert!(social.google_enabled());
+        assert!(!social.microsoft_enabled());
     }
 }

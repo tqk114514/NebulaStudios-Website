@@ -12,13 +12,16 @@ use uuid::Uuid;
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
+use crate::model::social::{
+    NewSocialIdentity, SocialIdentity, SocialLoginAction, SocialLoginState, SocialProvider,
+};
 use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{Ban, LoginCredentials, User, UserAccess, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{
-    AdminStats, AdminUserRow, CleanupReport, ClientBinding, RotateRefreshError, RotatedSession,
-    StorageError, UserRepo, UserRepoError,
+    AdminStats, AdminUserRow, CleanupReport, ClientBinding, LinkIdentityError, RotateRefreshError,
+    RotatedSession, StorageError, UserRepo, UserRepoError,
 };
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -66,6 +69,12 @@ pub struct SqliteMaintenanceRepo {
 /// SQLite 管理后台仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteAdminRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 社交身份仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteSocialRepo {
     pool: SqlitePool,
 }
 
@@ -155,6 +164,14 @@ impl SqliteAdminRepo {
     }
 }
 
+impl SqliteSocialRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
 impl From<SqlxError> for StorageError {
     fn from(err: SqlxError) -> Self {
         Self(Box::new(err))
@@ -169,6 +186,13 @@ impl From<SqlxError> for UserRepoError {
 }
 
 impl From<SqlxError> for RotateRefreshError {
+    fn from(err: SqlxError) -> Self {
+        Self::Storage(err.into())
+    }
+}
+
+// 两跳转换（SqlxError → StorageError → LinkIdentityError）拆给 `?` 用
+impl From<SqlxError> for LinkIdentityError {
     fn from(err: SqlxError) -> Self {
         Self::Storage(err.into())
     }
@@ -1059,6 +1083,12 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
         .await?
         .rows_affected();
 
+        let social_login_states =
+            sqlx::query!("DELETE FROM social_login_states WHERE expires_at < ?1", now,)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+
         tx.commit().await?;
         Ok(CleanupReport {
             refresh_tokens,
@@ -1068,6 +1098,7 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
             totp_login_challenges,
             oauth_authorization_codes,
             expired_bans,
+            social_login_states,
         })
     }
 }
@@ -1270,4 +1301,175 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
             sqlx::query_scalar!("SELECT COUNT(*) FROM audit_logs").fetch_one(&self.pool).await?;
         Ok(total)
     }
+}
+
+#[async_trait]
+impl crate::storage::SocialRepo for SqliteSocialRepo {
+    async fn find_identity(
+        &self,
+        provider: SocialProvider,
+        provider_user_id: &str,
+    ) -> Result<Option<SocialIdentity>, StorageError> {
+        let row = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", user_id AS "user_id: uuid::Uuid",
+                      provider, provider_user_id, display_name,
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+               FROM user_social_identities
+               WHERE provider = ?1 AND provider_user_id = ?2"#,
+            provider.as_str(),
+            provider_user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else { return Ok(None) };
+        let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
+            return Err(unknown_social_value("provider", &row.provider));
+        };
+        Ok(Some(SocialIdentity {
+            id: row.id,
+            user_id: UserId::from_uuid(row.user_id),
+            provider,
+            provider_user_id: row.provider_user_id,
+            display_name: row.display_name,
+            created_at: row.created_at,
+        }))
+    }
+
+    async fn link_identity(
+        &self,
+        identity: &NewSocialIdentity,
+        now: DateTime<Utc>,
+    ) -> Result<(), LinkIdentityError> {
+        let result = sqlx::query!(
+            "INSERT INTO user_social_identities
+             (id, user_id, provider, provider_user_id, display_name, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            Uuid::now_v7(),
+            identity.user_id.as_uuid(),
+            identity.provider.as_str(),
+            identity.provider_user_id,
+            identity.display_name,
+            now,
+        )
+        .execute(&self.pool)
+        .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(SqlxError::Database(db)) if db.is_unique_violation() => {
+                Err(LinkIdentityError::Conflict)
+            }
+            Err(err) => Err(LinkIdentityError::from(err)),
+        }
+    }
+
+    async fn unlink(
+        &self,
+        user_id: &UserId,
+        provider: SocialProvider,
+    ) -> Result<bool, StorageError> {
+        let deleted = sqlx::query!(
+            "DELETE FROM user_social_identities WHERE user_id = ?1 AND provider = ?2",
+            user_id.as_uuid(),
+            provider.as_str(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(deleted.rows_affected() == 1)
+    }
+
+    async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<SocialIdentity>, StorageError> {
+        let rows = sqlx::query!(
+            r#"SELECT id AS "id: uuid::Uuid", user_id AS "user_id: uuid::Uuid",
+                      provider, provider_user_id, display_name,
+                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+               FROM user_social_identities
+               WHERE user_id = ?1
+               ORDER BY created_at ASC"#,
+            user_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
+                    return Err(unknown_social_value("provider", &row.provider));
+                };
+                Ok(SocialIdentity {
+                    id: row.id,
+                    user_id: UserId::from_uuid(row.user_id),
+                    provider,
+                    provider_user_id: row.provider_user_id,
+                    display_name: row.display_name,
+                    created_at: row.created_at,
+                })
+            })
+            .collect()
+    }
+
+    async fn put_state(
+        &self,
+        state: &SocialLoginState,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query!(
+            "INSERT INTO social_login_states
+             (state, provider, code_verifier, action, user_id, expires_at, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            state.state,
+            state.provider.as_str(),
+            state.code_verifier,
+            state.action.as_str(),
+            state.user_id.as_ref().map(UserId::as_uuid),
+            state.expires_at,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn take_state(&self, state: &str) -> Result<Option<SocialLoginState>, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query!(
+            r#"SELECT state, provider, code_verifier, action,
+                      user_id AS "user_id: Option<uuid::Uuid>",
+                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
+               FROM social_login_states WHERE state = ?1"#,
+            state,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else { return Ok(None) };
+        // 取出即删除：单次消费，重放同一 state 落到上面的 None 分支
+        sqlx::query!("DELETE FROM social_login_states WHERE state = ?1", state)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+
+        let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
+            return Err(unknown_social_value("provider", &row.provider));
+        };
+        let Some(action) = SocialLoginAction::from_str_raw(&row.action) else {
+            return Err(unknown_social_value("action", &row.action));
+        };
+        Ok(Some(SocialLoginState {
+            state: row.state,
+            provider,
+            code_verifier: row.code_verifier,
+            action,
+            user_id: row.user_id.flatten().map(UserId::from_uuid),
+            expires_at: row.expires_at,
+        }))
+    }
+}
+
+/// 库中枚举列出现未知值时构造存储故障；未知值属数据损坏，不得当作「无记录」。
+fn unknown_social_value(column: &str, value: &str) -> StorageError {
+    StorageError::wrap(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("unknown social {column}: {value}"),
+    ))
 }
