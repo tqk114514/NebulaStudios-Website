@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT state, provider, code_verifier, action,\n                      user_id AS \"user_id: Option<uuid::Uuid>\",\n                      expires_at AS \"expires_at: chrono::DateTime<chrono::Utc>\"\n               FROM social_login_states WHERE state = ?1",
+  "describe": {
+    "columns": [
+      {
+        "name": "state",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "name": "provider",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "provider"
+          }
+        }
+      },
+      {
+        "name": "code_verifier",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "code_verifier"
+          }
+        }
+      },
+      {
+        "name": "action",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "name": "user_id: Option<uuid::Uuid>",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "expires_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "social_login_states",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "20136699dd0c47ec01bafc5dfd8d5a9f887f9cbe601697609ee91c3005dadffe"
+}

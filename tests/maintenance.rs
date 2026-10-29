@@ -19,6 +19,8 @@ const OLD_RECOVERY: &str = "018f0000-0000-7000-8000-00000000000a";
 const NEW_RECOVERY: &str = "018f0000-0000-7000-8000-00000000000b";
 const OLD_CODE: &str = "018f0000-0000-7000-8000-00000000000c";
 const NEW_CODE: &str = "018f0000-0000-7000-8000-00000000000d";
+const OLD_STATE: &str = "social-state-old";
+const NEW_STATE: &str = "social-state-new";
 
 #[tokio::test]
 async fn purge_expired_deletes_only_expired_rows() {
@@ -31,6 +33,7 @@ async fn purge_expired_deletes_only_expired_rows() {
     seed_totp_data(&pool).await;
     seed_oauth_data(&pool).await;
     seed_ban_data(&pool).await;
+    seed_social_states(&pool).await;
     pool.close().await;
 
     let report =
@@ -46,6 +49,7 @@ async fn purge_expired_deletes_only_expired_rows() {
             totp_login_challenges: 1,
             oauth_authorization_codes: 1,
             expired_bans: 1,
+            social_login_states: 1,
         }
     );
 
@@ -194,6 +198,23 @@ async fn seed_ban_data(pool: &SqlitePool) {
     .expect("过期封禁必须可插入");
 }
 
+async fn seed_social_states(pool: &SqlitePool) {
+    for (state, expires_at) in
+        [(OLD_STATE, "2026-10-26T07:00:00+00:00"), (NEW_STATE, "2026-10-26T09:00:00+00:00")]
+    {
+        sqlx::query(
+            "INSERT INTO social_login_states
+             (state, provider, code_verifier, action, user_id, expires_at, created_at)
+             VALUES (?1, 'google', 'verifier', 'login', NULL, ?2, '2026-10-26T08:00:00+00:00')",
+        )
+        .bind(state)
+        .bind(expires_at)
+        .execute(pool)
+        .await
+        .expect("中转态必须可插入");
+    }
+}
+
 async fn assert_remaining_rows(pool: &SqlitePool) {
     for (table, sql, expected) in [
         ("refresh_tokens", "SELECT COUNT(*) FROM refresh_tokens", 1_i64),
@@ -203,6 +224,7 @@ async fn assert_remaining_rows(pool: &SqlitePool) {
         ("totp_login_challenges", "SELECT COUNT(*) FROM totp_login_challenges", 1),
         ("oauth_authorization_codes", "SELECT COUNT(*) FROM oauth_authorization_codes", 1),
         ("user_bans", "SELECT COUNT(*) FROM user_bans", 0),
+        ("social_login_states", "SELECT COUNT(*) FROM social_login_states", 1),
     ] {
         let count: i64 = sqlx::query_scalar(sql).fetch_one(pool).await.expect("计数必须可读");
         assert_eq!(count, expected, "{table} 只应保留未过期行");

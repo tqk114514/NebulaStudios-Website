@@ -3,6 +3,7 @@
 pub mod audit;
 pub mod oauth2;
 pub mod password;
+pub mod social;
 pub mod tokens;
 pub mod totp;
 pub mod user;

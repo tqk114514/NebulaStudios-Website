@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO social_login_states\n             (state, provider, code_verifier, action, user_id, expires_at, created_at)\n             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "02c334af73c5096637d1e3b7dd361010962fac1d564e6fb82e2a21b291e93dd0"
+}

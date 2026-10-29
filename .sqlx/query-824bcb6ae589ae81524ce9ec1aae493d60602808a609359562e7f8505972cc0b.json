@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM user_social_identities WHERE user_id = ?1 AND provider = ?2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "824bcb6ae589ae81524ce9ec1aae493d60602808a609359562e7f8505972cc0b"
+}

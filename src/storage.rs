@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::oauth2::{AuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
+use crate::model::social::{NewSocialIdentity, SocialIdentity, SocialLoginState, SocialProvider};
 use crate::model::tokens::NewRefreshFamily;
 use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{Ban, LoginCredentials, User, UserAccess, UserId};
@@ -287,6 +288,8 @@ pub struct CleanupReport {
     pub oauth_authorization_codes: u64,
     /// 删除的已到期临时封禁行数。
     pub expired_bans: u64,
+    /// 删除的已过期 OAuth 中转态行数。
+    pub social_login_states: u64,
 }
 
 /// 维护仓储：过期数据清理；删除在同一事务内完成。
@@ -571,4 +574,76 @@ pub trait OAuthRepo: Send + Sync {
         code_id: &uuid::Uuid,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
+}
+
+/// 社交身份绑定错误。
+#[derive(Debug, thiserror::Error)]
+pub enum LinkIdentityError {
+    /// 该 provider 身份已绑定到另一个账户。
+    #[error("社交身份已被绑定")]
+    Conflict,
+    /// 底层存储故障，细节见 source。
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+/// 社交身份与 OAuth 中转态仓储（ADR-0012）。
+///
+/// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
+#[async_trait]
+pub trait SocialRepo: Send + Sync {
+    /// 按 `(provider, provider_user_id)` 查绑定身份。
+    ///
+    /// # Errors
+    /// 仅存储故障；库中 provider 值非法也按存储故障返回。
+    async fn find_identity(
+        &self,
+        provider: SocialProvider,
+        provider_user_id: &str,
+    ) -> Result<Option<SocialIdentity>, StorageError>;
+
+    /// 绑定身份；`(provider, provider_user_id)` 已被占用返回
+    /// [`LinkIdentityError::Conflict`]。
+    ///
+    /// # Errors
+    /// 唯一约束冲突返回 [`LinkIdentityError::Conflict`]；底层故障返回
+    /// [`LinkIdentityError::Storage`]。
+    async fn link_identity(
+        &self,
+        identity: &NewSocialIdentity,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), LinkIdentityError>;
+
+    /// 解绑指定 provider；该用户原本未绑定该 provider 返回 `false`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn unlink(
+        &self,
+        user_id: &UserId,
+        provider: SocialProvider,
+    ) -> Result<bool, StorageError>;
+
+    /// 用户已绑定的全部身份，按绑定时刻升序。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<SocialIdentity>, StorageError>;
+
+    /// 落一条 OAuth 中转态。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn put_state(
+        &self,
+        state: &SocialLoginState,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 原子取出并删除中转态；不存在返回 `None`（单次消费，过期与否由调用方按
+    /// `expires_at` 判定）。
+    ///
+    /// # Errors
+    /// 仅存储故障；行内 provider/action 值非法也按存储故障返回。
+    async fn take_state(&self, state: &str) -> Result<Option<SocialLoginState>, StorageError>;
 }

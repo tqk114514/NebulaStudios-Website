@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM social_login_states WHERE state = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "22d762f407115c53d10271496a0b5e1e4bced4aba5ffa8b089981683696624c7"
+}
