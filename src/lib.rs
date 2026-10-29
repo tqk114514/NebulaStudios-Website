@@ -10,5 +10,6 @@ pub mod extractors;
 pub mod jobs;
 pub mod mailer;
 pub mod model;
+pub mod social;
 pub mod storage;
 pub mod telemetry;
