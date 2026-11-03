@@ -9,7 +9,9 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
 use super::{hash_password_in_background, password_problem};
-use crate::api::{AppState, clear_session_cookies, verify_current_password};
+use crate::api::{
+    AppState, SecurityNotice, clear_session_cookies, send_security_notice, verify_current_password,
+};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 
@@ -58,6 +60,8 @@ pub async fn change_password(
         .apply_password_change(&user.user_id, &new_hash, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
+
+    send_security_notice(&state, &user.email, SecurityNotice::PasswordChanged);
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);

@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
 use super::{hash_password_in_background, issue_and_send_code, password_problem};
-use crate::api::{AppState, clear_session_cookies};
+use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
@@ -125,6 +125,8 @@ pub async fn reset_confirm(
         .apply_password_change(&user.id, &new_hash, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
+
+    send_security_notice(&state, &user.email, SecurityNotice::PasswordReset);
 
     let mut headers = axum::http::HeaderMap::new();
     clear_session_cookies(&mut headers);

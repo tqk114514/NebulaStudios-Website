@@ -111,6 +111,40 @@ pub async fn await_mail_for(mailbox: &Mailbox, email: &str) -> EmailMessage {
     panic!("发给 {email} 的验证邮件未在预期时间内发出");
 }
 
+/// 等待主题包含指定片段的邮件；安全通知与验证码邮件共用信箱，按主题区分。
+pub async fn await_mail_subject(mailbox: &Mailbox, needle: &str) -> EmailMessage {
+    for _ in 0..200 {
+        if let Some(message) =
+            mailbox.messages().into_iter().find(|message| message.subject.contains(needle))
+        {
+            return message;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("主题含「{needle}」的邮件未在预期时间内发出");
+}
+
+/// 等待主题包含指定片段的邮件累计到 `count` 封，返回其中最新一封。
+/// 按主题计数，避免安全通知邮件混入后按绝对下标取信取错（一个测试内多次发码时用）。
+pub async fn await_mail_subject_count(
+    mailbox: &Mailbox,
+    needle: &str,
+    count: usize,
+) -> EmailMessage {
+    for _ in 0..400 {
+        let matching: Vec<EmailMessage> = mailbox
+            .messages()
+            .into_iter()
+            .filter(|message| message.subject.contains(needle))
+            .collect();
+        if matching.len() >= count {
+            return matching.into_iter().next_back().expect("已确认非空");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("主题含「{needle}」的邮件未累计到 {count} 封");
+}
+
 /// 装配 `AppState`：临时库 + 固定时钟 + 测试密钥 + 捕获信箱；`TempDir` 钉住文件生命周期。
 pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");

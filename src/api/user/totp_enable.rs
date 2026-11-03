@@ -7,7 +7,7 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::api::AppState;
+use crate::api::{AppState, SecurityNotice, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
@@ -84,6 +84,8 @@ pub async fn enable(
         .add_recovery_codes(&user.user_id, hashes, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
+
+    send_security_notice(&state, &user.email, SecurityNotice::TotpEnabled);
 
     Ok(Json(EnableResponse {
         recovery_codes: codes.iter().map(|c| c.as_str().to_owned()).collect(),
