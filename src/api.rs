@@ -354,81 +354,48 @@ pub fn router(state: AppState) -> Router {
         .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
         .route("/api/oauth/token", post(oauth::token::token));
 
-    // v3 参数：密码重置发码突发 3、每 20 秒补 1
-    let reset_limited = Router::new()
-        .route("/api/auth/password/reset/request", post(auth::password_reset::reset_request))
-        .route("/api/auth/password/reset/confirm", post(auth::password_reset::reset_confirm))
-        .layer(
-            GovernorLayer::new(
-                GovernorConfigBuilder::default()
-                    .per_second(20)
-                    .burst_size(3)
-                    .finish()
-                    .unwrap_or_else(|| unreachable!("重置限额常量非法")),
-            )
-            .error_handler(|error| governor_error_response(&error)),
-        );
-
-    // 限额参数沿用 v3：注册突发 3、每 20 秒补 1（per_second 语义是「补 1 个
-    // 令牌的间隔秒数」，tower_governor 命名反直觉）；finish() 对常量参数必然
-    // Some，None 只可能是实现笔误，启动即暴露优于带病运行。
-    let register_limited = Router::new()
-        .route("/api/auth/register", post(auth::register::register))
-        .route("/api/auth/register/resend", post(auth::resend::resend))
-        .layer(
-            GovernorLayer::new(
-                GovernorConfigBuilder::default()
-                    .per_second(20)
-                    .burst_size(3)
-                    .finish()
-                    .unwrap_or_else(|| unreachable!("注册限额常量非法")),
-            )
-            .error_handler(|error| governor_error_response(&error)),
-        );
-
-    // v3 参数：登录突发 5、每 12 秒补 1
-    let login_limited = Router::new().route("/api/auth/login", post(auth::login::login)).layer(
-        GovernorLayer::new(
-            GovernorConfigBuilder::default()
-                .per_second(12)
-                .burst_size(5)
-                .finish()
-                .unwrap_or_else(|| unreachable!("登录限额常量非法")),
-        )
-        .error_handler(|error| governor_error_response(&error)),
+    // 限额参数沿用 v3（per_second 语义是「补 1 个令牌的间隔秒数」，tower_governor 命名反直觉）
+    // 注册：突发 3、每 20 秒补 1
+    let register_limited = limited(
+        Router::new()
+            .route("/api/auth/register", post(auth::register::register))
+            .route("/api/auth/register/resend", post(auth::resend::resend)),
+        20,
+        3,
     );
 
-    // v3 参数：验证码校验突发 5、每 10 秒补 1
-    let verify_limited = Router::new()
-        .route("/api/auth/register/verify", post(auth::verify::verify))
-        .route("/api/auth/account/delete/confirm", post(auth::delete_confirm::delete_confirm))
-        .layer(
-            GovernorLayer::new(
-                GovernorConfigBuilder::default()
-                    .per_second(10)
-                    .burst_size(5)
-                    .finish()
-                    .unwrap_or_else(|| unreachable!("验证限额常量非法")),
-            )
-            .error_handler(|error| governor_error_response(&error)),
-        );
+    // 登录：突发 5、每 12 秒补 1
+    let login_limited =
+        limited(Router::new().route("/api/auth/login", post(auth::login::login)), 12, 5);
+
+    // 验证码校验：突发 5、每 10 秒补 1
+    let verify_limited = limited(
+        Router::new()
+            .route("/api/auth/register/verify", post(auth::verify::verify))
+            .route("/api/auth/account/delete/confirm", post(auth::delete_confirm::delete_confirm)),
+        10,
+        5,
+    );
+
+    // 密码重置发码：突发 3、每 20 秒补 1
+    let reset_limited = limited(
+        Router::new()
+            .route("/api/auth/password/reset/request", post(auth::password_reset::reset_request))
+            .route("/api/auth/password/reset/confirm", post(auth::password_reset::reset_confirm)),
+        20,
+        3,
+    );
 
     // TOTP 二段与账户 TOTP 管理：突发 10、每 2 秒补 1；挑战本身另有 5 次上限
-    let totp_limited = Router::new()
-        .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
-        .route("/api/user/totp/setup", post(user::totp_setup::setup))
-        .route("/api/user/totp/enable", post(user::totp_enable::enable))
-        .route("/api/user/totp/disable", post(user::totp_disable::disable))
-        .layer(
-            GovernorLayer::new(
-                GovernorConfigBuilder::default()
-                    .per_second(2)
-                    .burst_size(10)
-                    .finish()
-                    .unwrap_or_else(|| unreachable!("TOTP 限额常量非法")),
-            )
-            .error_handler(|error| governor_error_response(&error)),
-        );
+    let totp_limited = limited(
+        Router::new()
+            .route("/api/auth/login/totp", post(auth::login_totp::login_totp))
+            .route("/api/user/totp/setup", post(user::totp_setup::setup))
+            .route("/api/user/totp/enable", post(user::totp_enable::enable))
+            .route("/api/user/totp/disable", post(user::totp_disable::disable)),
+        2,
+        10,
+    );
 
     let mut router = open
         .merge(register_limited)
@@ -450,6 +417,26 @@ pub fn router(state: AppState) -> Router {
     router
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeV7RequestId))
+}
+
+/// 给子路由挂 GCRA 限额层；`per_second` 是补 1 个令牌的间隔秒数，
+/// 429 经 `governor_error_response` 产出统一信封（ADR-0004）。
+///
+/// `finish()` 对合法参数必然 `Some`，`None` 只可能是调用侧写错常量，
+/// 启动即暴露优于带病运行。
+fn limited(routes: Router<AppState>, per_second: u64, burst_size: u32) -> Router<AppState> {
+    routes.layer(
+        GovernorLayer::new(
+            GovernorConfigBuilder::default()
+                .per_second(per_second)
+                .burst_size(burst_size)
+                .finish()
+                .unwrap_or_else(|| {
+                    unreachable!("限额参数非法: per_second={per_second} burst_size={burst_size}")
+                }),
+        )
+        .error_handler(|error| governor_error_response(&error)),
+    )
 }
 
 fn cors_layer(origin: HeaderValue) -> CorsLayer {
