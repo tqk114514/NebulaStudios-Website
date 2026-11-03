@@ -62,6 +62,8 @@ async fn change_password_revolves_hash_and_kills_all_sessions() {
         )
         .await;
     assert_eq!(ok.status(), StatusCode::NO_CONTENT);
+    // 红线 #6：凭据变更须告知账户邮箱
+    common::await_mail_subject(&mailbox, "口令已更改").await;
 
     // 红线 #1：两个会话的 refresh 家族全灭
     for session in [&first, &second] {

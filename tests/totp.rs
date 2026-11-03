@@ -85,6 +85,8 @@ async fn enable_totp(
         .map(|v| v.as_str().unwrap().to_owned())
         .collect();
     assert_eq!(codes.len(), 8);
+    // 红线 #6：认证强度变更须告知账户邮箱
+    common::await_mail_subject(mailbox, "两步验证已启用").await;
     (session, codes, secret)
 }
 
@@ -362,6 +364,8 @@ async fn disable_with_password_and_code_revokes_sessions() {
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     assert!(common::raw_set_cookie(&response, "nebula_access").contains("Max-Age=0"));
+    // 红线 #6：降级认证强度须告知账户邮箱
+    common::await_mail_subject(&mailbox, "两步验证已关闭").await;
 
     // 撤销波及：原 refresh 全灭
     let after = app

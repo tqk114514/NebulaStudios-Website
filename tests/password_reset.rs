@@ -35,15 +35,9 @@ async fn confirm_reset_from(
     app.clone().oneshot_post_from_ip(ip, "/api/auth/password/reset/confirm", &body).await
 }
 
-async fn wait_second_mail(mailbox: &Mailbox) -> common::EmailMessage {
-    for _ in 0..200 {
-        let messages = mailbox.messages();
-        if messages.len() >= 2 {
-            return messages[1].clone();
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    panic!("第二封邮件未在预期时间内发出");
+/// 第 `n` 封密码重置验证码邮件；安全通知邮件不计入（按主题筛选，不按下标）。
+async fn wait_reset_code_mail(mailbox: &Mailbox, n: usize) -> common::EmailMessage {
+    common::await_mail_subject_count(mailbox, "密码重置验证码", n).await
 }
 
 async fn verified_and_logged_in(app: &axum::Router, mailbox: &Mailbox) -> common::Session {
@@ -68,13 +62,15 @@ async fn full_reset_flow_rotates_password_and_kills_sessions() {
     // 发起重置 → 204 收码
     let requested = request_reset(&app, EMAIL).await;
     assert_eq!(requested.status(), StatusCode::NO_CONTENT);
-    let mail = wait_second_mail(&mailbox).await;
+    let mail = wait_reset_code_mail(&mailbox, 1).await;
     assert_eq!(mail.subject, "Nebula 密码重置验证码");
     let code = extract_code(&mail);
 
     // 完成 → 204
     let confirmed = confirm_reset(&app, &code, NEW_PASSWORD).await;
     assert_eq!(confirmed.status(), StatusCode::NO_CONTENT);
+    // 红线 #6：凭据变更须告知账户邮箱
+    common::await_mail_subject(&mailbox, "口令已重置").await;
 
     // 红线 #1：旧会话全灭
     let old_refresh = app
@@ -164,7 +160,7 @@ async fn weak_new_password_is_422() {
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let _ = await_first_mail(&mailbox).await;
     let _first = request_reset(&app, EMAIL).await;
-    let code = extract_code(&wait_second_mail(&mailbox).await);
+    let code = extract_code(&wait_reset_code_mail(&mailbox, 1).await);
 
     let response = confirm_reset(&app, &code, "short").await;
 
@@ -178,24 +174,15 @@ async fn used_code_cannot_reset_twice() {
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let _ = await_first_mail(&mailbox).await;
     let _first = request_reset(&app, EMAIL).await;
-    let code = extract_code(&wait_second_mail(&mailbox).await);
+    let code = extract_code(&wait_reset_code_mail(&mailbox, 1).await);
 
     let first = confirm_reset(&app, &code, NEW_PASSWORD).await;
     assert_eq!(first.status(), StatusCode::NO_CONTENT);
 
     clock.advance(chrono::TimeDelta::seconds(61));
     let _again = request_reset(&app, EMAIL).await;
-    // 此时信箱已有三封（注册、首次重置、本次重置），取最新一封
-    let mut third_mail = None;
-    for _ in 0..200 {
-        let messages = mailbox.messages();
-        if messages.len() >= 3 {
-            third_mail = Some(messages[2].clone());
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-    }
-    let second_code = extract_code(&third_mail.expect("第三封邮件必须发出"));
+    // 第二次发码：按主题取第二封重置验证码（期间还会有口令已重置的通知邮件）
+    let second_code = extract_code(&wait_reset_code_mail(&mailbox, 2).await);
 
     // 已消费的码再试无效（即使新码已发；换源 IP 绕开端点自身的 IP 限额）
     let replay = confirm_reset_from(&app, "10.9.9.1", &code, "Another!Passw0rd-2026").await;

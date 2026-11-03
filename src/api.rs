@@ -33,7 +33,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use crate::context::{Clock, RequestId};
 use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
-use crate::mailer::Mailer;
+use crate::mailer::{EmailMessage, Mailer};
 use crate::model::user::{User, UserId};
 use crate::social::SocialClients;
 use crate::storage::{
@@ -234,6 +234,72 @@ impl fmt::Debug for AppState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AppState").field("session", &self.session).finish_non_exhaustive()
     }
+}
+
+/// 安全变更通知的种类；覆盖凭据变更与两步验证开关（红线 #6）。
+///
+/// 由 `api/` 下多个子模块共用，故与 [`verify_current_password`] 一样放在父模块，
+/// 不放进某一个子模块（§2 依赖方向 3）。
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SecurityNotice {
+    /// 已登录态改密。
+    PasswordChanged,
+    /// 未登录态密码重置。
+    PasswordReset,
+    /// 两步验证启用。
+    TotpEnabled,
+    /// 两步验证关闭；账户认证强度降级。
+    TotpDisabled,
+}
+
+impl SecurityNotice {
+    /// 邮件主题。
+    fn subject(self) -> &'static str {
+        match self {
+            Self::PasswordChanged => "Nebula 安全提醒：登录口令已更改",
+            Self::PasswordReset => "Nebula 安全提醒：登录口令已重置",
+            Self::TotpEnabled => "Nebula 安全提醒：两步验证已启用",
+            Self::TotpDisabled => "Nebula 安全提醒：两步验证已关闭",
+        }
+    }
+
+    /// 邮件正文；提示用户在非本人操作时的处置方式。
+    fn body(self) -> &'static str {
+        match self {
+            Self::PasswordChanged => {
+                "你的 Nebula 账户登录口令刚刚被更改，所有已登录设备已下线。\n\
+                 若这不是你本人的操作，请立即重置口令。"
+            }
+            Self::PasswordReset => {
+                "你的 Nebula 账户口令刚刚通过邮箱验证码重置，所有已登录设备已下线。\n\
+                 若这不是你本人的操作，请立即再次重置口令。"
+            }
+            Self::TotpEnabled => {
+                "你的 Nebula 账户刚刚启用了两步验证。\n\
+                 若这不是你本人的操作，请立即更改口令并关闭两步验证。"
+            }
+            Self::TotpDisabled => {
+                "你的 Nebula 账户刚刚关闭了两步验证，账户安全强度已降低。\n\
+                 若这不是你本人的操作，请立即更改口令并重新启用两步验证。"
+            }
+        }
+    }
+}
+
+/// 发送安全变更通知到账户邮箱。异步发送、失败只记日志，不影响已经完成的状态
+/// 变更——状态已是事实，通知只是告知，处置入口在其它端点。
+pub(crate) fn send_security_notice(state: &AppState, to: &str, notice: SecurityNotice) {
+    let mailer = state.mailer.clone();
+    let message = EmailMessage {
+        to: to.to_owned(),
+        subject: notice.subject().to_owned(),
+        body: notice.body().to_owned(),
+    };
+    tokio::spawn(async move {
+        if let Err(err) = mailer.send(message).await {
+            tracing::warn!(error = %err, "安全通知邮件发送失败");
+        }
+    });
 }
 
 /// 解析路径中的社交 provider；未知值按「未启用」同体返回，避免泄露配置细节。

@@ -8,7 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use crate::api::{AppState, clear_session_cookies};
+use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
 use crate::model::totp::verify_code;
@@ -87,6 +87,8 @@ pub async fn disable(
         .revoke_all_sessions(&user.user_id, now)
         .await
         .map_err(anyhow::Error::from)?;
+
+    send_security_notice(&state, &user.email, SecurityNotice::TotpDisabled);
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);
