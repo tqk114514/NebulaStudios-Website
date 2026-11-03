@@ -66,7 +66,7 @@ pub async fn start(
     State(state): State<AppState>,
     Path(provider): Path<String>,
 ) -> Result<Response, ApiError> {
-    let provider = parse_provider(&provider)?;
+    let provider = crate::api::parse_social_provider(&provider)?;
     let client = state.social_clients.get(provider).ok_or(ApiError::SocialProviderDisabled)?;
 
     let now = state.clock.now();
@@ -208,11 +208,6 @@ async fn complete_link(
             Err(Failure::settings("server_error"))
         }
     }
-}
-
-/// 解析路径中的 provider；未知值按「未启用」同体返回，避免泄露配置细节。
-fn parse_provider(raw: &str) -> Result<SocialProvider, ApiError> {
-    SocialProvider::from_str_raw(raw).ok_or(ApiError::SocialProviderDisabled)
 }
 
 /// 302 到给定的绝对地址；地址非法按内部错误处理。
