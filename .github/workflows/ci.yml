@@ -115,8 +115,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       # AGENTS.md 与 docs/ 的每条条款都要带来源 URL（§16），链接失效即失败。
-      # 检查目标只列实际带来源链接的文档：v4 分支没有 README.md，
-      # composable 的 index.md 里不含 URL。
+      # 目标只列带来源链接的文档；README.md 与 composable 的 index.md 不含外链。
       - uses: lycheeverse/lychee-action@v2.9.0
         with:
           args: --config .lychee.toml 'AGENTS.md' 'docs/**/*.md'
