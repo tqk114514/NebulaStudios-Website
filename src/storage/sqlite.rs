@@ -722,6 +722,33 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
         Ok(())
     }
 
+    async fn apply_totp_disable(
+        &self,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            "UPDATE users SET totp_state = 'disabled', totp_secret_enc = NULL WHERE id = ?1",
+            user_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            "UPDATE totp_recovery_codes SET consumed_at = ?2
+             WHERE user_id = ?1 AND consumed_at IS NULL",
+            user_id.as_uuid(),
+            now,
+        )
+        .execute(&mut *tx)
+        .await?;
+        invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
+        // 关闭即下线（红线 #1）：降级与会话撤销同事务
+        revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
         // 用户从属表统一以 ON DELETE CASCADE 引用 users（ADR-0007）；
         // 单条 DELETE 由 SQLite 在同一事务内完成级联。
@@ -774,27 +801,6 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
-    }
-
-    async fn disable(&self, user_id: &UserId, now: DateTime<Utc>) -> Result<(), StorageError> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query!(
-            "UPDATE users SET totp_state = 'disabled', totp_secret_enc = NULL WHERE id = ?1",
-            user_id.as_uuid(),
-        )
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query!(
-            "UPDATE totp_recovery_codes SET consumed_at = ?2
-             WHERE user_id = ?1 AND consumed_at IS NULL",
-            user_id.as_uuid(),
-            now,
-        )
-        .execute(&mut *tx)
-        .await?;
-        invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
-        tx.commit().await?;
         Ok(())
     }
 
