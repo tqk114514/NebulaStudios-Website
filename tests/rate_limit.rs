@@ -108,3 +108,38 @@ async fn login_and_register_limits_are_independent() {
         app.clone().oneshot_post_from_ip("10.5.5.5", "/api/auth/register", register_body).await;
     assert_eq!(response.status(), StatusCode::CREATED);
 }
+
+#[tokio::test]
+async fn refresh_burst_is_limited() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+
+    // 刷新可被匿名触发；限额层先于提取器执行，缺 CSRF 的请求落到 403 而非 429
+    for _ in 0..30 {
+        let response = app.clone().oneshot_post_from_ip("10.8.8.8", "/api/auth/refresh", "").await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    let limited = app.clone().oneshot_post_from_ip("10.8.8.8", "/api/auth/refresh", "").await;
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    let json: serde_json::Value = serde_json::from_str(&body_text(limited).await).unwrap();
+    assert_eq!(json["code"], "rate_limited");
+}
+
+#[tokio::test]
+async fn delete_request_burst_is_three() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+
+    // 注销发码会触发外发邮件；未认证请求穿过限额层后是 401
+    for _ in 0..3 {
+        let response = app
+            .clone()
+            .oneshot_post_from_ip("10.9.9.9", "/api/auth/account/delete/request", "")
+            .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let limited =
+        app.clone().oneshot_post_from_ip("10.9.9.9", "/api/auth/account/delete/request", "").await;
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(body_text(limited).await.contains("rate_limited"));
+}

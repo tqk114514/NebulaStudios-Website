@@ -338,10 +338,8 @@ pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))
         .route("/metrics", get(metrics::metrics))
-        .route("/api/auth/refresh", post(auth::refresh::refresh))
         .route("/api/auth/logout", post(auth::logout::logout))
         .route("/api/auth/password/change", post(auth::change_password::change_password))
-        .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
@@ -397,12 +395,27 @@ pub fn router(state: AppState) -> Router {
         10,
     );
 
+    // 注销发码会触发外发邮件，限额与注册/重置发码同档（突发 3、每 20 秒补 1）
+    let delete_request_limited = limited(
+        Router::new()
+            .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request)),
+        20,
+        3,
+    );
+
+    // 刷新可被匿名触发并放大一次 DB 查询与潜在的整族撤销，故限额挡放大：
+    // 突发 30、每 1 秒补 1——正常客户端刷新频率远低于此（access TTL 默认 1 小时）
+    let refresh_limited =
+        limited(Router::new().route("/api/auth/refresh", post(auth::refresh::refresh)), 1, 30);
+
     let mut router = open
         .merge(register_limited)
         .merge(login_limited)
         .merge(verify_limited)
         .merge(reset_limited)
         .merge(totp_limited)
+        .merge(delete_request_limited)
+        .merge(refresh_limited)
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(middleware::map_response(envelope_payload_too_large));
