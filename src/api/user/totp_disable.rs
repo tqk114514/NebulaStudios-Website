@@ -80,13 +80,8 @@ pub async fn disable(
         return Err(ApiError::TotpInvalid);
     }
 
-    // 关闭即下线（红线 #1）
-    state.totp_repo.disable(&user.user_id, now).await.map_err(anyhow::Error::from)?;
-    state
-        .refresh_repo
-        .revoke_all_sessions(&user.user_id, now)
-        .await
-        .map_err(anyhow::Error::from)?;
+    // 关闭即下线（红线 #1）：降级、恢复码/挑战作废与会话撤销在同一事务内完成
+    state.account_repo.apply_totp_disable(&user.user_id, now).await.map_err(anyhow::Error::from)?;
 
     send_security_notice(&state, &user.email, SecurityNotice::TotpDisabled);
 

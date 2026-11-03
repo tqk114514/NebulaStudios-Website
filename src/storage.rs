@@ -249,7 +249,10 @@ pub trait EmailVerificationRepo: Send + Sync {
     ) -> Result<bool, StorageError>;
 }
 
-/// 账户生命周期仓储：凭据轮换与账户删除。
+/// 账户生命周期仓储：凭据与两步验证变更、账户删除。
+///
+/// 凡降低认证强度的变更（改密、关闭两步验证）都在同一事务内全端下线，
+/// 撤销路径只有一条（红线 #1）。
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 #[async_trait]
@@ -264,6 +267,18 @@ pub trait AccountRepo: Send + Sync {
         &self,
         user_id: &UserId,
         new_hash: &PasswordHash,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 原子关闭两步验证：清状态与密文、作废全部恢复码与未消费登录挑战，并在同一
+    /// 事务内撤销全部 refresh 家族——不留「两步验证已关但旧会话仍可轮转」的中间态。
+    /// 调用方须已完成双因素验证。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在不视为错误（无行可改）。
+    async fn apply_totp_disable(
+        &self,
+        user_id: &UserId,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), StorageError>;
 
@@ -442,16 +457,6 @@ pub trait TotpRepo: Send + Sync {
     /// # Errors
     /// 仅存储故障。
     async fn enable(
-        &self,
-        user_id: &crate::model::user::UserId,
-        now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<(), StorageError>;
-
-    /// 关闭：清状态与密钥并作废全部恢复码（调用方须已双因素验证）。
-    ///
-    /// # Errors
-    /// 仅存储故障。
-    async fn disable(
         &self,
         user_id: &crate::model::user::UserId,
         now: chrono::DateTime<chrono::Utc>,
