@@ -119,17 +119,10 @@ pub async fn reset_confirm(
     }
 
     let new_hash = hash_password_in_background(req.new_password.clone()).await?;
-    state.user_repo.update_password_hash(&user.id, &new_hash).await.map_err(anyhow::Error::from)?;
-
-    // 红线 #1：密码变更即全端下线；未消费的登录挑战一并作废
+    // 红线 #1：密码变更即全端下线；撤销与挑战作废同事务完成
     state
-        .refresh_repo
-        .revoke_all_sessions(&user.id, state.clock.now())
-        .await
-        .map_err(anyhow::Error::from)?;
-    state
-        .totp_repo
-        .invalidate_challenges(&user.id, state.clock.now())
+        .account_repo
+        .apply_password_change(&user.id, &new_hash, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
 
