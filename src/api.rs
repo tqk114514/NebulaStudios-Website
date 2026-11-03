@@ -236,6 +236,13 @@ impl fmt::Debug for AppState {
     }
 }
 
+/// 解析路径中的社交 provider；未知值按「未启用」同体返回，避免泄露配置细节。
+pub(crate) fn parse_social_provider(
+    raw: &str,
+) -> Result<crate::model::social::SocialProvider, ApiError> {
+    crate::model::social::SocialProvider::from_str_raw(raw).ok_or(ApiError::SocialProviderDisabled)
+}
+
 /// 校验当前口令并返回用户快照；口令错误 401，用户缺失/存储故障 500。
 pub(crate) async fn verify_current_password(
     state: &AppState,
@@ -275,6 +282,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/audit", get(admin::audit::audit))
         .route("/api/auth/{provider}", get(auth::social::start))
         .route("/api/auth/{provider}/callback", get(auth::social::callback))
+        .route("/api/user/social", get(user::social::list))
+        .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
         .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
         .route("/api/oauth/token", post(oauth::token::token));
