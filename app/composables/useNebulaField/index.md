@@ -8,6 +8,9 @@
 仅客户端执行。WebGL2 不可用时静默跳过；`prefers-reduced-motion` 下渲染一帧静态图后不进循环。
 hero 滚出视口或标签页隐藏时跳过渲染，rAF 保持心跳。
 
+上下文丢失（`webglcontextlost`）时停循环并丢弃场景（GL 资源已随上下文失效，不逐个删除）；
+`webglcontextrestored` 后在同一 canvas 上重建场景与观察器。视差是纯 JS 状态，跨丢失/恢复保持注册。
+
 ## 入场
 
 `intro` 从 0 推进到 1 用时 `INTRO_DURATION`，之后进入巡航。时钟只在真正出帧的帧上累加，
