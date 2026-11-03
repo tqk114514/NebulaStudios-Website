@@ -103,16 +103,6 @@ pub trait UserRepo: Send + Sync {
         identifier: &str,
     ) -> Result<Option<LoginCredentials>, UserRepoError>;
 
-    /// 更新用户口令哈希；不触碰会话（撤销由调用方负责，红线 #1）。
-    ///
-    /// # Errors
-    /// 仅 [`UserRepoError::Storage`]。
-    async fn update_password_hash(
-        &self,
-        user_id: &crate::model::user::UserId,
-        password: &PasswordHash,
-    ) -> Result<(), UserRepoError>;
-
     /// 按用户名查找，大小写不敏感。
     ///
     /// # Errors
@@ -259,11 +249,24 @@ pub trait EmailVerificationRepo: Send + Sync {
     ) -> Result<bool, StorageError>;
 }
 
-/// 账户删除仓储；删除即最终撤销。
+/// 账户生命周期仓储：凭据轮换与账户删除。
 ///
 /// 返回 `+ Send` 的 future：handler 与测试在多线程 runtime 下运行。
 #[async_trait]
 pub trait AccountRepo: Send + Sync {
+    /// 原子应用口令变更：写入口令哈希、递增 access token 版本并撤销全部 refresh
+    /// 家族、作废未消费的 TOTP 登录挑战（红线 #1、ADR-0010）。三者在同一事务内
+    /// 完成，避免「新口令已生效但旧会话仍可轮转」的中间态。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在不视为错误（无行可改）。
+    async fn apply_password_change(
+        &self,
+        user_id: &UserId,
+        new_hash: &PasswordHash,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
     /// 硬删除用户；从属数据由 `ON DELETE CASCADE` 在同一事务内删除（ADR-0007）。
     ///
     /// # Errors
@@ -519,16 +522,6 @@ pub trait TotpRepo: Send + Sync {
         id: &uuid::Uuid,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
-
-    /// 作废用户全部未消费挑战（disable / 改密后调用）。
-    ///
-    /// # Errors
-    /// 仅存储故障。
-    async fn invalidate_challenges(
-        &self,
-        user_id: &crate::model::user::UserId,
-        now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<(), StorageError>;
 }
 
 /// `OAuth2` Provider 仓储。

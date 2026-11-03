@@ -368,21 +368,6 @@ impl UserRepo for SqliteUserRepo {
             password_hash,
         }))
     }
-
-    async fn update_password_hash(
-        &self,
-        user_id: &UserId,
-        password: &PasswordHash,
-    ) -> Result<(), UserRepoError> {
-        sqlx::query!(
-            "UPDATE users SET password_hash = ?2 WHERE id = ?1",
-            user_id.as_uuid(),
-            password.as_str(),
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -552,6 +537,23 @@ async fn revoke_all_sessions_in_tx(
     Ok(())
 }
 
+/// 在事务内作废用户全部未消费的 TOTP 登录挑战；改密/重置与关闭 TOTP 共用。
+async fn invalidate_challenges_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    user_id: &UserId,
+    now: DateTime<Utc>,
+) -> Result<(), StorageError> {
+    sqlx::query!(
+        "UPDATE totp_login_challenges SET consumed_at = ?2
+         WHERE user_id = ?1 AND consumed_at IS NULL",
+        user_id.as_uuid(),
+        now,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// 把 `user_bans` 的 (`kind`, `expires_at`) 解码为领域状态；到期临时封禁归为 `None`。
 fn decode_ban(
     kind: Option<&str>,
@@ -699,6 +701,27 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
 
 #[async_trait]
 impl crate::storage::AccountRepo for SqliteAccountRepo {
+    async fn apply_password_change(
+        &self,
+        user_id: &UserId,
+        new_hash: &PasswordHash,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!(
+            "UPDATE users SET password_hash = ?2 WHERE id = ?1",
+            user_id.as_uuid(),
+            new_hash.as_str(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        // 撤销在事务内一并递增 token_version 并整族撤销（红线 #1、ADR-0010）
+        revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
+        invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
         // 用户从属表统一以 ON DELETE CASCADE 引用 users（ADR-0007）；
         // 单条 DELETE 由 SQLite 在同一事务内完成级联。
@@ -770,14 +793,7 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         )
         .execute(&mut *tx)
         .await?;
-        sqlx::query!(
-            "UPDATE totp_login_challenges SET consumed_at = ?2
-             WHERE user_id = ?1 AND consumed_at IS NULL",
-            user_id.as_uuid(),
-            now,
-        )
-        .execute(&mut *tx)
-        .await?;
+        invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -901,22 +917,6 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
-    }
-
-    async fn invalidate_challenges(
-        &self,
-        user_id: &UserId,
-        now: DateTime<Utc>,
-    ) -> Result<(), StorageError> {
-        sqlx::query!(
-            "UPDATE totp_login_challenges SET consumed_at = ?2
-             WHERE user_id = ?1 AND consumed_at IS NULL",
-            user_id.as_uuid(),
-            now,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 }
 

@@ -51,20 +51,13 @@ pub async fn change_password(
     verify_current_password(&state, &user.user_id, &req.current_password).await?;
 
     let new_hash = hash_password_in_background(req.new_password.clone()).await?;
+    // 改密即全端下线（红线 #1）：换哈希、递增 token_version 并整族撤销、作废未消费的
+    // TOTP 挑战，三者在同一事务内完成，不留「新口令已生效但旧会话仍可轮转」的中间态
     state
-        .user_repo
-        .update_password_hash(&user.user_id, &new_hash)
+        .account_repo
+        .apply_password_change(&user.user_id, &new_hash, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
-
-    // 改密即全端下线（红线 #1）：撤销全部家族、作废未消费的 TOTP 挑战，再清 cookie
-    let now = state.clock.now();
-    state
-        .refresh_repo
-        .revoke_all_sessions(&user.user_id, now)
-        .await
-        .map_err(anyhow::Error::from)?;
-    state.totp_repo.invalidate_challenges(&user.user_id, now).await.map_err(anyhow::Error::from)?;
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);
