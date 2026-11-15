@@ -1,5 +1,7 @@
 //! sqlx + SQLite 实现（ADR-0003）：用户仓储与 refresh 家族仓储共享连接池。
 
+mod schema;
+
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,6 +10,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use sqlx::Error as SqlxError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use uuid::Uuid;
+
+pub use schema::ensure_schema;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
@@ -78,14 +82,15 @@ pub struct SqliteSocialRepo {
     pool: SqlitePool,
 }
 
-/// 打开既有数据库文件建立带 PRAGMA 的连接池；不创建文件、不跑迁移——迁移由
-/// `sqlx migrate` 作为独立部署步骤执行，启动路径不执行 DDL（§1）。
+/// 打开或创建数据库文件并建立带 PRAGMA 的连接池；schema 由
+/// [`ensure_schema`] 幂等创建（ADR-0003 修订），没有独立迁移步骤。
 ///
 /// # Errors
-/// 文件不存在、权限不足或连接失败时返回 [`StorageError`]。
+/// 文件路径非法、权限不足或连接失败时返回 [`StorageError`]。
 pub async fn connect_pool(path: &Path) -> Result<SqlitePool, StorageError> {
     let options = SqliteConnectOptions::new()
         .filename(path)
+        .create_if_missing(true)
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .busy_timeout(Duration::from_secs(5));
@@ -198,19 +203,53 @@ impl From<SqlxError> for LinkIdentityError {
     }
 }
 
+type UserTuple = (Uuid, String, String, bool, DateTime<Utc>);
+
+fn user_from_tuple((id, username, email, email_verified, created_at): UserTuple) -> User {
+    User { id: UserId::from_uuid(id), username, email, created_at, email_verified }
+}
+
+type CredentialsTuple = (Uuid, String, String, bool, DateTime<Utc>, Option<String>);
+
+type AccessTuple = (String, bool, i64, Option<String>, Option<DateTime<Utc>>);
+type RefreshTuple = (Uuid, Uuid, String, DateTime<Utc>, String, Uuid, Option<String>, String, i64);
+type VerificationTuple = (Uuid, String, u32, DateTime<Utc>, DateTime<Utc>);
+type RecoveryTuple = (Uuid, Option<DateTime<Utc>>);
+type ChallengeTuple = (Uuid, Uuid, u32, DateTime<Utc>);
+type ClientTuple = (String, String, String, bool);
+type CodeTuple = (Uuid, String, Uuid, String, String, String, DateTime<Utc>);
+type AdminUserTuple =
+    (Uuid, String, String, bool, DateTime<Utc>, Option<String>, Option<DateTime<Utc>>);
+type AuditTuple = (Uuid, Uuid, String, Option<Uuid>, Option<String>, DateTime<Utc>);
+type SocialIdentityTuple = (Uuid, Uuid, String, String, Option<String>, DateTime<Utc>);
+type SocialStateTuple = (String, String, String, String, Option<Uuid>, DateTime<Utc>);
+
+fn credentials_from_tuple(
+    (id, username, email, email_verified, created_at, encoded): CredentialsTuple,
+) -> Result<Option<LoginCredentials>, UserRepoError> {
+    // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
+    let Some(encoded) = encoded else { return Ok(None) };
+    let password_hash = PasswordHash::from_encoded(encoded)
+        .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
+    Ok(Some(LoginCredentials {
+        user: user_from_tuple((id, username, email, email_verified, created_at)),
+        password_hash,
+    }))
+}
+
 #[async_trait]
 impl UserRepo for SqliteUserRepo {
     async fn insert(&self, user: &User, password: &PasswordHash) -> Result<(), UserRepoError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "INSERT INTO users (id, username, email, created_at, password_hash, email_verified)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            user.id.as_uuid(),
-            user.username,
-            user.email,
-            user.created_at,
-            password.as_str(),
-            user.email_verified,
         )
+        .bind(user.id.as_uuid())
+        .bind(&user.username)
+        .bind(&user.email)
+        .bind(user.created_at)
+        .bind(password.as_str())
+        .bind(user.email_verified)
         .execute(&self.pool)
         .await;
 
@@ -231,91 +270,56 @@ impl UserRepo for SqliteUserRepo {
         replacement: &PasswordHash,
     ) -> Result<bool, UserRepoError> {
         // 比较并交换：并发改密已写入新哈希时，旧口令的重算结果不得覆盖它
-        let updated = sqlx::query!(
-            "UPDATE users SET password_hash = ?3 WHERE id = ?1 AND password_hash = ?2",
-            user_id.as_uuid(),
-            expected.as_str(),
-            replacement.as_str(),
-        )
-        .execute(&self.pool)
-        .await?;
+        let updated =
+            sqlx::query("UPDATE users SET password_hash = ?3 WHERE id = ?1 AND password_hash = ?2")
+                .bind(user_id.as_uuid())
+                .bind(expected.as_str())
+                .bind(replacement.as_str())
+                .execute(&self.pool)
+                .await?;
         Ok(updated.rows_affected() == 1)
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, UserRepoError> {
-        // SQLite TEXT 列被推断为 String，uuid/chrono 解码须经列类型覆盖声明
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", username, email,
-                      email_verified AS "email_verified: bool",
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM users WHERE email = ?1"#,
-            email,
+        let row: Option<UserTuple> = sqlx::query_as(
+            "SELECT id, username, email, email_verified, created_at
+             FROM users WHERE email = ?1",
         )
+        .bind(email)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| User {
-            id: UserId::from_uuid(r.id),
-            username: r.username,
-            email: r.email,
-            created_at: r.created_at,
-            email_verified: r.email_verified,
-        }))
+        Ok(row.map(user_from_tuple))
     }
 
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, UserRepoError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", username, email,
-                      email_verified AS "email_verified: bool",
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM users WHERE username = ?1"#,
-            username,
+        let row: Option<UserTuple> = sqlx::query_as(
+            "SELECT id, username, email, email_verified, created_at
+             FROM users WHERE username = ?1",
         )
+        .bind(username)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| User {
-            id: UserId::from_uuid(r.id),
-            username: r.username,
-            email: r.email,
-            created_at: r.created_at,
-            email_verified: r.email_verified,
-        }))
+        Ok(row.map(user_from_tuple))
     }
 
     async fn find_by_id(
         &self,
         user_id: &UserId,
     ) -> Result<Option<LoginCredentials>, UserRepoError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", username, email,
-                      email_verified AS "email_verified: bool",
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>",
-                      password_hash
-               FROM users WHERE id = ?1"#,
-            user_id.as_uuid(),
+        let row: Option<CredentialsTuple> = sqlx::query_as(
+            "SELECT id, username, email, email_verified, created_at, password_hash
+             FROM users WHERE id = ?1",
         )
+        .bind(user_id.as_uuid())
         .fetch_optional(&self.pool)
         .await?;
 
-        let Some(row) = row else { return Ok(None) };
-        // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
-        let hash = row
-            .password_hash
-            .map(PasswordHash::from_encoded)
-            .transpose()
-            .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
-
-        Ok(hash.map(|password_hash| LoginCredentials {
-            user: User {
-                id: UserId::from_uuid(row.id),
-                username: row.username,
-                email: row.email,
-                created_at: row.created_at,
-                email_verified: row.email_verified,
-            },
-            password_hash,
-        }))
+        match row {
+            Some(tuple) => credentials_from_tuple(tuple),
+            None => Ok(None),
+        }
     }
 
     async fn find_access_state(
@@ -323,29 +327,21 @@ impl UserRepo for SqliteUserRepo {
         user_id: &UserId,
         now: DateTime<Utc>,
     ) -> Result<Option<UserAccess>, UserRepoError> {
-        let row = sqlx::query!(
-            r#"SELECT u.email,
-                      u.email_verified AS "email_verified: bool",
-                      u.token_version AS "token_version: i64",
-                      b.kind,
-                      b.expires_at AS "expires_at: Option<chrono::DateTime<chrono::Utc>>"
-               FROM users u
-               LEFT JOIN user_bans b ON b.user_id = u.id
-               WHERE u.id = ?1"#,
-            user_id.as_uuid(),
+        let row: Option<AccessTuple> = sqlx::query_as(
+            "SELECT u.email, u.email_verified, u.token_version, b.kind, b.expires_at
+                 FROM users u
+                 LEFT JOIN user_bans b ON b.user_id = u.id
+                 WHERE u.id = ?1",
         )
+        .bind(user_id.as_uuid())
         .fetch_optional(&self.pool)
         .await?;
 
-        let Some(row) = row else { return Ok(None) };
-        let ban = decode_ban(row.kind.as_deref(), row.expires_at.flatten(), now)
-            .map_err(UserRepoError::Storage)?;
-        Ok(Some(UserAccess {
-            email: row.email,
-            email_verified: row.email_verified,
-            token_version: row.token_version,
-            ban,
-        }))
+        let Some((email, email_verified, token_version, kind, expires_at)) = row else {
+            return Ok(None);
+        };
+        let ban = decode_ban(kind.as_deref(), expires_at, now).map_err(UserRepoError::Storage)?;
+        Ok(Some(UserAccess { email, email_verified, token_version, ban }))
     }
 
     async fn find_login_credentials(
@@ -353,38 +349,21 @@ impl UserRepo for SqliteUserRepo {
         identifier: &str,
     ) -> Result<Option<LoginCredentials>, UserRepoError> {
         // 哈希列可空：无口令用户按 None 返回，调用方据此走时序对齐路径
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", username, email,
-                      email_verified AS "email_verified: bool",
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>",
-                      password_hash
-               FROM users WHERE email = ?1 OR username = ?1
-               -- 兼容历史数据：若 username 恰好等于他人 email，email 匹配优先
-               ORDER BY CASE WHEN email = ?1 THEN 0 ELSE 1 END, created_at ASC
-               LIMIT 1"#,
-            identifier,
+        let row: Option<CredentialsTuple> = sqlx::query_as(
+            "SELECT id, username, email, email_verified, created_at, password_hash
+             FROM users WHERE email = ?1 OR username = ?1
+             -- 兼容历史数据：若 username 恰好等于他人 email，email 匹配优先
+             ORDER BY CASE WHEN email = ?1 THEN 0 ELSE 1 END, created_at ASC
+             LIMIT 1",
         )
+        .bind(identifier)
         .fetch_optional(&self.pool)
         .await?;
 
-        let Some(row) = row else { return Ok(None) };
-        // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
-        let hash = row
-            .password_hash
-            .map(PasswordHash::from_encoded)
-            .transpose()
-            .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
-
-        Ok(hash.map(|password_hash| LoginCredentials {
-            user: User {
-                id: UserId::from_uuid(row.id),
-                username: row.username,
-                email: row.email,
-                created_at: row.created_at,
-                email_verified: row.email_verified,
-            },
-            password_hash,
-        }))
+        match row {
+            Some(tuple) => credentials_from_tuple(tuple),
+            None => Ok(None),
+        }
     }
 }
 
@@ -396,26 +375,26 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id, scope)
              VALUES (?1, ?2, 'active', ?3, ?4, ?5)",
-            family.family_id,
-            family.user_id.as_uuid(),
-            created_at,
-            family.client_id,
-            family.scope,
         )
+        .bind(family.family_id)
+        .bind(family.user_id.as_uuid())
+        .bind(created_at)
+        .bind(family.client_id.as_deref())
+        .bind(family.scope.as_str())
         .execute(&mut *tx)
         .await?;
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-            Uuid::now_v7(),
-            family.family_id,
-            family.token_hash,
-            created_at,
-            family.expires_at,
         )
+        .bind(Uuid::now_v7())
+        .bind(family.family_id)
+        .bind(family.token_hash.as_str())
+        .bind(created_at)
+        .bind(family.expires_at)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -433,83 +412,82 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         let mut tx = self.pool.begin().await?;
 
         // 家族字段与 token 一次带出：绑定校验与轮转在同一个事务内完成
-        let presented = sqlx::query!(
-            r#"SELECT t.id AS "id: uuid::Uuid",
-                      t.family_id AS "family_id: uuid::Uuid",
-                      t.state,
-                      t.expires_at AS "expires_at: chrono::DateTime<chrono::Utc>",
-                      f.state AS "family_state",
-                      f.user_id AS "user_id: uuid::Uuid",
-                      f.client_id,
-                      f.scope,
-                      u.token_version AS "token_version: i64"
-               FROM refresh_tokens t
-               JOIN refresh_token_families f ON f.id = t.family_id
-               JOIN users u ON u.id = f.user_id
-               WHERE t.token_hash = ?1"#,
-            presented_hash,
+        let presented: Option<RefreshTuple> = sqlx::query_as(
+            "SELECT t.id, t.family_id, t.state, t.expires_at, f.state, f.user_id,
+                    f.client_id, f.scope, u.token_version
+             FROM refresh_tokens t
+             JOIN refresh_token_families f ON f.id = t.family_id
+             JOIN users u ON u.id = f.user_id
+             WHERE t.token_hash = ?1",
         )
+        .bind(presented_hash)
         .fetch_optional(&mut *tx)
         .await?;
 
-        let Some(presented) = presented else {
+        let Some((
+            id,
+            family_id,
+            state,
+            expires_at,
+            family_state,
+            user_id,
+            client_id,
+            scope,
+            token_version,
+        )) = presented
+        else {
             return Err(RotateRefreshError::Invalid);
         };
 
         // 先于状态判断：绑定不符的呈递不触碰家族状态
         let binding_matches = match binding {
-            ClientBinding::FirstParty => presented.client_id.is_none(),
-            ClientBinding::Client(client_id) => presented.client_id.as_deref() == Some(client_id),
+            ClientBinding::FirstParty => client_id.is_none(),
+            ClientBinding::Client(expected) => client_id.as_deref() == Some(expected),
         };
         if !binding_matches {
             return Err(RotateRefreshError::ClientMismatch);
         }
 
-        match presented.state.as_str() {
+        match state.as_str() {
             // 呈递已轮转 token = 重放：整族撤销后拒绝（事务保证撤销也落库）
             "rotated" => {
-                revoke_family_in_tx(&mut tx, presented.family_id, now).await?;
+                revoke_family_in_tx(&mut tx, family_id, now).await?;
                 tx.commit().await?;
                 Err(RotateRefreshError::Replay)
             }
             "active" => {
-                if presented.expires_at <= now || presented.family_state != "active" {
+                if expires_at <= now || family_state != "active" {
                     return Err(RotateRefreshError::Invalid);
                 }
-                let user_id = UserId::from_uuid(presented.user_id);
 
-                let rotated = sqlx::query!(
+                let rotated = sqlx::query(
                     "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
                      WHERE id = ?1 AND state = 'active'",
-                    presented.id,
-                    now,
                 )
+                .bind(id)
+                .bind(now)
                 .execute(&mut *tx)
                 .await?;
                 // 并发下状态可能已被他者改变；0 行受影响说明此刻不再是 active，按重放处置
                 if rotated.rows_affected() != 1 {
-                    revoke_family_in_tx(&mut tx, presented.family_id, now).await?;
+                    revoke_family_in_tx(&mut tx, family_id, now).await?;
                     tx.commit().await?;
                     return Err(RotateRefreshError::Replay);
                 }
 
-                sqlx::query!(
+                sqlx::query(
                     "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
                      VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-                    Uuid::now_v7(),
-                    presented.family_id,
-                    new_hash,
-                    now,
-                    new_expires_at,
                 )
+                .bind(Uuid::now_v7())
+                .bind(family_id)
+                .bind(new_hash)
+                .bind(now)
+                .bind(new_expires_at)
                 .execute(&mut *tx)
                 .await?;
                 tx.commit().await?;
-                Ok(RotatedSession {
-                    user_id,
-                    scope: presented.scope,
-                    token_version: presented.token_version,
-                })
+                Ok(RotatedSession { user_id: UserId::from_uuid(user_id), scope, token_version })
             }
             // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
             _ => Err(RotateRefreshError::Invalid),
@@ -535,22 +513,20 @@ async fn revoke_all_sessions_in_tx(
     user_id: &UserId,
     now: DateTime<Utc>,
 ) -> Result<(), StorageError> {
-    sqlx::query!(
-        "UPDATE users SET token_version = token_version + 1 WHERE id = ?1",
-        user_id.as_uuid(),
-    )
-    .execute(&mut **tx)
-    .await?;
+    sqlx::query("UPDATE users SET token_version = token_version + 1 WHERE id = ?1")
+        .bind(user_id.as_uuid())
+        .execute(&mut **tx)
+        .await?;
 
-    let families = sqlx::query!(
-        r#"SELECT id AS "id: uuid::Uuid" FROM refresh_token_families
-           WHERE user_id = ?1 AND state = 'active'"#,
-        user_id.as_uuid(),
+    let families: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM refresh_token_families
+         WHERE user_id = ?1 AND state = 'active'",
     )
+    .bind(user_id.as_uuid())
     .fetch_all(&mut **tx)
     .await?;
     for family in families {
-        revoke_family_in_tx(tx, family.id, now).await?;
+        revoke_family_in_tx(tx, family, now).await?;
     }
     Ok(())
 }
@@ -561,12 +537,12 @@ async fn invalidate_challenges_in_tx(
     user_id: &UserId,
     now: DateTime<Utc>,
 ) -> Result<(), StorageError> {
-    sqlx::query!(
+    sqlx::query(
         "UPDATE totp_login_challenges SET consumed_at = ?2
          WHERE user_id = ?1 AND consumed_at IS NULL",
-        user_id.as_uuid(),
-        now,
     )
+    .bind(user_id.as_uuid())
+    .bind(now)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -602,17 +578,17 @@ async fn revoke_family_in_tx(
     family_id: Uuid,
     now: DateTime<Utc>,
 ) -> Result<(), StorageError> {
-    sqlx::query!(
+    sqlx::query(
         "UPDATE refresh_token_families SET state = 'revoked', revoked_at = ?2 WHERE id = ?1",
-        family_id,
-        now,
     )
+    .bind(family_id)
+    .bind(now)
     .execute(&mut **tx)
     .await?;
-    sqlx::query!(
+    sqlx::query(
         "UPDATE refresh_tokens SET state = 'revoked' WHERE family_id = ?1 AND state != 'revoked'",
-        family_id,
     )
+    .bind(family_id)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -625,16 +601,16 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         entry: &NewEmailVerification,
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at, purpose)
              VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)",
-            Uuid::now_v7(),
-            entry.user_id.as_uuid(),
-            entry.code_hash,
-            entry.expires_at,
-            created_at,
-            entry.purpose.as_str(),
         )
+        .bind(Uuid::now_v7())
+        .bind(entry.user_id.as_uuid())
+        .bind(entry.code_hash.as_str())
+        .bind(entry.expires_at)
+        .bind(created_at)
+        .bind(entry.purpose.as_str())
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -645,31 +621,30 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         user_id: &UserId,
         purpose: VerificationPurpose,
     ) -> Result<Option<EmailVerification>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", code_hash, attempts AS "attempts: u32",
-                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>",
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM email_verifications
-               WHERE user_id = ?1 AND consumed_at IS NULL AND purpose = ?2
-               ORDER BY created_at DESC LIMIT 1"#,
-            user_id.as_uuid(),
-            purpose.as_str(),
+        let row: Option<VerificationTuple> = sqlx::query_as(
+            "SELECT id, code_hash, attempts, expires_at, created_at
+             FROM email_verifications
+             WHERE user_id = ?1 AND consumed_at IS NULL AND purpose = ?2
+             ORDER BY created_at DESC LIMIT 1",
         )
+        .bind(user_id.as_uuid())
+        .bind(purpose.as_str())
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| EmailVerification {
-            id: r.id,
+        Ok(row.map(|(id, code_hash, attempts, expires_at, created_at)| EmailVerification {
+            id,
             user_id: *user_id,
-            code_hash: r.code_hash,
-            attempts: r.attempts,
-            expires_at: r.expires_at,
-            created_at: r.created_at,
+            code_hash,
+            attempts,
+            expires_at,
+            created_at,
         }))
     }
 
     async fn record_attempt(&self, id: &Uuid) -> Result<(), StorageError> {
-        sqlx::query!("UPDATE email_verifications SET attempts = attempts + 1 WHERE id = ?1", id,)
+        sqlx::query("UPDATE email_verifications SET attempts = attempts + 1 WHERE id = ?1")
+            .bind(id)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -682,18 +657,19 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
         let mut tx = self.pool.begin().await?;
-        let consumed = sqlx::query!(
+        let consumed = sqlx::query(
             "UPDATE email_verifications SET consumed_at = ?2
              WHERE id = ?1 AND consumed_at IS NULL",
-            verification_id,
-            now,
         )
+        .bind(verification_id)
+        .bind(now)
         .execute(&mut *tx)
         .await?;
         if consumed.rows_affected() != 1 {
             return Ok(false);
         }
-        sqlx::query!("UPDATE users SET email_verified = 1 WHERE id = ?1", user_id.as_uuid(),)
+        sqlx::query("UPDATE users SET email_verified = 1 WHERE id = ?1")
+            .bind(user_id.as_uuid())
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
@@ -705,12 +681,12 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         verification_id: &Uuid,
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
-        let consumed = sqlx::query!(
+        let consumed = sqlx::query(
             "UPDATE email_verifications SET consumed_at = ?2
              WHERE id = ?1 AND consumed_at IS NULL",
-            verification_id,
-            now,
         )
+        .bind(verification_id)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
@@ -726,13 +702,11 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query!(
-            "UPDATE users SET password_hash = ?2 WHERE id = ?1",
-            user_id.as_uuid(),
-            new_hash.as_str(),
-        )
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("UPDATE users SET password_hash = ?2 WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .bind(new_hash.as_str())
+            .execute(&mut *tx)
+            .await?;
         // 撤销在事务内一并递增 token_version 并整族撤销（红线 #1、ADR-0010）
         revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
         invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
@@ -746,18 +720,18 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query!(
+        sqlx::query(
             "UPDATE users SET totp_state = 'disabled', totp_secret_enc = NULL WHERE id = ?1",
-            user_id.as_uuid(),
         )
+        .bind(user_id.as_uuid())
         .execute(&mut *tx)
         .await?;
-        sqlx::query!(
+        sqlx::query(
             "UPDATE totp_recovery_codes SET consumed_at = ?2
              WHERE user_id = ?1 AND consumed_at IS NULL",
-            user_id.as_uuid(),
-            now,
         )
+        .bind(user_id.as_uuid())
+        .bind(now)
         .execute(&mut *tx)
         .await?;
         invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
@@ -770,7 +744,8 @@ impl crate::storage::AccountRepo for SqliteAccountRepo {
     async fn delete_user(&self, user_id: &UserId) -> Result<(), StorageError> {
         // 用户从属表统一以 ON DELETE CASCADE 引用 users（ADR-0007）；
         // 单条 DELETE 由 SQLite 在同一事务内完成级联。
-        sqlx::query!("DELETE FROM users WHERE id = ?1", user_id.as_uuid())
+        sqlx::query("DELETE FROM users WHERE id = ?1")
+            .bind(user_id.as_uuid())
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -783,16 +758,15 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         &self,
         user_id: &UserId,
     ) -> Result<Option<(TotpState, Option<String>)>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT totp_state, totp_secret_enc FROM users WHERE id = ?1"#,
-            user_id.as_uuid(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(row.map(|r| {
-            let state = TotpState::from_str_raw(&r.totp_state)
-                .unwrap_or_else(|| unreachable!("库中 TOTP 状态值非法: {}", r.totp_state));
-            (state, r.totp_secret_enc)
+        let row: Option<(String, Option<String>)> =
+            sqlx::query_as("SELECT totp_state, totp_secret_enc FROM users WHERE id = ?1")
+                .bind(user_id.as_uuid())
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.map(|(raw_state, secret)| {
+            let state = TotpState::from_str_raw(&raw_state)
+                .unwrap_or_else(|| unreachable!("库中 TOTP 状态值非法: {raw_state}"));
+            (state, secret)
         }))
     }
 
@@ -802,21 +776,19 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         secret: &str,
         _now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        sqlx::query!(
-            "UPDATE users SET totp_state = 'pending', totp_secret_enc = ?2 WHERE id = ?1",
-            user_id.as_uuid(),
-            secret,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE users SET totp_state = 'pending', totp_secret_enc = ?2 WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .bind(secret)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     async fn enable(&self, user_id: &UserId, _now: DateTime<Utc>) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query(
             "UPDATE users SET totp_state = 'enabled' WHERE id = ?1 AND totp_state = 'pending'",
-            user_id.as_uuid(),
         )
+        .bind(user_id.as_uuid())
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -830,14 +802,14 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         for hash in hashes {
-            sqlx::query!(
+            sqlx::query(
                 "INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)
                  VALUES (?1, ?2, ?3, ?4)",
-                Uuid::now_v7(),
-                user_id.as_uuid(),
-                hash,
-                now,
             )
+            .bind(Uuid::now_v7())
+            .bind(user_id.as_uuid())
+            .bind(hash)
+            .bind(now)
             .execute(&mut *tx)
             .await?;
         }
@@ -851,13 +823,13 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         code_hash: &str,
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
-        let consumed = sqlx::query!(
+        let consumed = sqlx::query(
             "UPDATE totp_recovery_codes SET consumed_at = ?3
              WHERE user_id = ?1 AND code_hash = ?2 AND consumed_at IS NULL",
-            user_id.as_uuid(),
-            code_hash,
-            now,
         )
+        .bind(user_id.as_uuid())
+        .bind(code_hash)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
@@ -867,17 +839,14 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         &self,
         user_id: &UserId,
     ) -> Result<Vec<RecoveryCodeRecord>, StorageError> {
-        let rows = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", consumed_at AS "consumed_at: Option<chrono::DateTime<chrono::Utc>>"
-               FROM totp_recovery_codes WHERE user_id = ?1"#,
-            user_id.as_uuid(),
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<RecoveryTuple> =
+            sqlx::query_as("SELECT id, consumed_at FROM totp_recovery_codes WHERE user_id = ?1")
+                .bind(user_id.as_uuid())
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows
             .into_iter()
-            // 可空列 + Option 覆盖 = Option<Option>；内层即语义值
-            .map(|r| RecoveryCodeRecord { id: r.id, consumed_at: r.consumed_at.flatten() })
+            .map(|(id, consumed_at)| RecoveryCodeRecord { id, consumed_at })
             .collect())
     }
 
@@ -888,15 +857,15 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         expires_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO totp_login_challenges (id, user_id, token_hash, attempts, expires_at, created_at)
              VALUES (?1, ?2, ?3, 0, ?4, ?5)",
-            Uuid::now_v7(),
-            user_id.as_uuid(),
-            token_hash,
-            expires_at,
-            now,
         )
+        .bind(Uuid::now_v7())
+        .bind(user_id.as_uuid())
+        .bind(token_hash)
+        .bind(expires_at)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -906,38 +875,36 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         &self,
         token_hash: &str,
     ) -> Result<Option<TotpChallenge>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid",
-                      user_id AS "user_id: uuid::Uuid",
-                      attempts AS "attempts: u32",
-                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
-               FROM totp_login_challenges WHERE token_hash = ?1"#,
-            token_hash,
+        let row: Option<ChallengeTuple> = sqlx::query_as(
+            "SELECT id, user_id, attempts, expires_at
+             FROM totp_login_challenges WHERE token_hash = ?1",
         )
+        .bind(token_hash)
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|r| TotpChallenge {
-            id: r.id,
-            user_id: UserId::from_uuid(r.user_id),
-            attempts: r.attempts,
-            expires_at: r.expires_at,
+        Ok(row.map(|(id, user_id, attempts, expires_at)| TotpChallenge {
+            id,
+            user_id: UserId::from_uuid(user_id),
+            attempts,
+            expires_at,
         }))
     }
 
     async fn record_challenge_attempt(&self, id: &Uuid) -> Result<(), StorageError> {
-        sqlx::query!("UPDATE totp_login_challenges SET attempts = attempts + 1 WHERE id = ?1", id,)
+        sqlx::query("UPDATE totp_login_challenges SET attempts = attempts + 1 WHERE id = ?1")
+            .bind(id)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     async fn consume_challenge(&self, id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
-        let consumed = sqlx::query!(
+        let consumed = sqlx::query(
             "UPDATE totp_login_challenges SET consumed_at = ?2
              WHERE id = ?1 AND consumed_at IS NULL",
-            id,
-            now,
         )
+        .bind(id)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
@@ -947,26 +914,27 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
 #[async_trait]
 impl crate::storage::OAuthRepo for SqliteOAuthRepo {
     async fn find_client(&self, client_id: &str) -> Result<Option<OAuthClient>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT id, name, redirect_uri, enabled AS "enabled: bool"
-               FROM oauth_clients WHERE id = ?1"#,
-            client_id,
+        let row: Option<ClientTuple> = sqlx::query_as(
+            "SELECT id, name, redirect_uri, enabled FROM oauth_clients WHERE id = ?1",
         )
+        .bind(client_id)
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|r| OAuthClient {
-            id: r.id,
-            name: r.name,
-            redirect_uri: r.redirect_uri,
-            enabled: r.enabled,
+        Ok(row.map(|(id, name, redirect_uri, enabled)| OAuthClient {
+            id,
+            name,
+            redirect_uri,
+            enabled,
         }))
     }
 
     async fn find_client_secret(&self, client_id: &str) -> Result<Option<String>, StorageError> {
-        let row = sqlx::query!("SELECT secret_hash FROM oauth_clients WHERE id = ?1", client_id)
-            .fetch_optional(&self.pool)
-            .await?;
-        Ok(row.and_then(|r| r.secret_hash))
+        let row: Option<Option<String>> =
+            sqlx::query_scalar("SELECT secret_hash FROM oauth_clients WHERE id = ?1")
+                .bind(client_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.flatten())
     }
 
     async fn create_code(
@@ -975,53 +943,53 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         code: &NewAuthorizationCode,
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO oauth_authorization_codes
              (id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge, expires_at, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            Uuid::now_v7(),
-            code_hash,
-            code.client_id,
-            code.user_id.as_uuid(),
-            code.redirect_uri,
-            code.scope,
-            code.code_challenge,
-            code.expires_at,
-            created_at,
         )
+        .bind(Uuid::now_v7())
+        .bind(code_hash)
+        .bind(&code.client_id)
+        .bind(code.user_id.as_uuid())
+        .bind(&code.redirect_uri)
+        .bind(&code.scope)
+        .bind(&code.code_challenge)
+        .bind(code.expires_at)
+        .bind(created_at)
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
     async fn find_code(&self, code_hash: &str) -> Result<Option<AuthorizationCode>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", client_id, user_id AS "user_id: uuid::Uuid",
-                      redirect_uri, scope, code_challenge,
-                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
-               FROM oauth_authorization_codes WHERE code_hash = ?1"#,
-            code_hash,
+        let row: Option<CodeTuple> = sqlx::query_as(
+            "SELECT id, client_id, user_id, redirect_uri, scope, code_challenge, expires_at
+                 FROM oauth_authorization_codes WHERE code_hash = ?1",
         )
+        .bind(code_hash)
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|r| AuthorizationCode {
-            id: r.id,
-            client_id: r.client_id,
-            user_id: UserId::from_uuid(r.user_id),
-            redirect_uri: r.redirect_uri,
-            scope: r.scope,
-            code_challenge: r.code_challenge,
-            expires_at: r.expires_at,
+        Ok(row.map(|(id, client_id, user_id, redirect_uri, scope, code_challenge, expires_at)| {
+            AuthorizationCode {
+                id,
+                client_id,
+                user_id: UserId::from_uuid(user_id),
+                redirect_uri,
+                scope,
+                code_challenge,
+                expires_at,
+            }
         }))
     }
 
     async fn consume_code(&self, code_id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
-        let consumed = sqlx::query!(
+        let consumed = sqlx::query(
             "UPDATE oauth_authorization_codes SET consumed_at = ?2
              WHERE id = ?1 AND consumed_at IS NULL",
-            code_id,
-            now,
         )
+        .bind(code_id)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
@@ -1040,75 +1008,76 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
         let family_cutoff = now - EMPTY_FAMILY_RETENTION;
         let mut tx = self.pool.begin().await?;
 
-        let refresh_tokens = sqlx::query!("DELETE FROM refresh_tokens WHERE expires_at < ?1", now,)
+        let refresh_tokens = sqlx::query("DELETE FROM refresh_tokens WHERE expires_at < ?1")
+            .bind(now)
             .execute(&mut *tx)
             .await?
             .rows_affected();
 
-        let refresh_families = sqlx::query!(
-            r#"DELETE FROM refresh_token_families
-               WHERE created_at < ?1
-                 AND NOT EXISTS (
-                     SELECT 1 FROM refresh_tokens WHERE family_id = refresh_token_families.id
-                 )"#,
-            family_cutoff,
+        let refresh_families = sqlx::query(
+            "DELETE FROM refresh_token_families
+             WHERE created_at < ?1
+               AND NOT EXISTS (
+                   SELECT 1 FROM refresh_tokens WHERE family_id = refresh_token_families.id
+               )",
         )
+        .bind(family_cutoff)
         .execute(&mut *tx)
         .await?
         .rows_affected();
 
-        let email_verifications = sqlx::query!(
+        let email_verifications = sqlx::query(
             "DELETE FROM email_verifications
              WHERE expires_at < ?1
                 OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
-            now,
-            consumed_cutoff,
         )
+        .bind(now)
+        .bind(consumed_cutoff)
         .execute(&mut *tx)
         .await?
         .rows_affected();
 
-        let totp_recovery_codes = sqlx::query!(
+        let totp_recovery_codes = sqlx::query(
             "DELETE FROM totp_recovery_codes
              WHERE consumed_at IS NOT NULL AND consumed_at < ?1",
-            consumed_cutoff,
         )
+        .bind(consumed_cutoff)
         .execute(&mut *tx)
         .await?
         .rows_affected();
 
-        let totp_login_challenges = sqlx::query!(
+        let totp_login_challenges = sqlx::query(
             "DELETE FROM totp_login_challenges
              WHERE expires_at < ?1
                 OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
-            now,
-            consumed_cutoff,
         )
+        .bind(now)
+        .bind(consumed_cutoff)
         .execute(&mut *tx)
         .await?
         .rows_affected();
 
-        let oauth_authorization_codes = sqlx::query!(
+        let oauth_authorization_codes = sqlx::query(
             "DELETE FROM oauth_authorization_codes
              WHERE expires_at < ?1
                 OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
-            now,
-            consumed_cutoff,
         )
+        .bind(now)
+        .bind(consumed_cutoff)
         .execute(&mut *tx)
         .await?
         .rows_affected();
 
-        let expired_bans = sqlx::query!(
-            "DELETE FROM user_bans WHERE kind = 'temporary' AND expires_at <= ?1",
-            now,
-        )
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
+        let expired_bans =
+            sqlx::query("DELETE FROM user_bans WHERE kind = 'temporary' AND expires_at <= ?1")
+                .bind(now)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
 
         let social_login_states =
-            sqlx::query!("DELETE FROM social_login_states WHERE expires_at < ?1", now,)
+            sqlx::query("DELETE FROM social_login_states WHERE expires_at < ?1")
+                .bind(now)
                 .execute(&mut *tx)
                 .await?
                 .rows_affected();
@@ -1135,15 +1104,16 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         since: DateTime<Utc>,
     ) -> Result<AdminStats, StorageError> {
         let total_users: i64 =
-            sqlx::query_scalar!("SELECT COUNT(*) FROM users").fetch_one(&self.pool).await?;
-        let banned_users: i64 = sqlx::query_scalar!(
+            sqlx::query_scalar("SELECT COUNT(*) FROM users").fetch_one(&self.pool).await?;
+        let banned_users: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM user_bans WHERE kind = 'permanent' OR expires_at > ?1",
-            now,
         )
+        .bind(now)
         .fetch_one(&self.pool)
         .await?;
         let new_users_today: i64 =
-            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE created_at >= ?1", since,)
+            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE created_at >= ?1")
+                .bind(since)
                 .fetch_one(&self.pool)
                 .await?;
         Ok(AdminStats { total_users, banned_users, new_users_today })
@@ -1156,37 +1126,31 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         offset: i64,
         now: DateTime<Utc>,
     ) -> Result<Vec<AdminUserRow>, StorageError> {
-        let rows = sqlx::query!(
-            r#"SELECT u.id AS "id: uuid::Uuid",
-                      u.username,
-                      u.email,
-                      u.email_verified AS "email_verified: bool",
-                      u.created_at AS "created_at: chrono::DateTime<chrono::Utc>",
-                      b.kind,
-                      b.expires_at AS "expires_at: Option<chrono::DateTime<chrono::Utc>>"
-               FROM users u
-               LEFT JOIN user_bans b ON b.user_id = u.id
-               WHERE ?1 = ''
-                  OR u.email LIKE '%' || ?1 || '%'
-                  OR u.username LIKE '%' || ?1 || '%'
-               ORDER BY u.created_at DESC
-               LIMIT ?2 OFFSET ?3"#,
-            search.unwrap_or(""),
-            limit,
-            offset,
+        let rows: Vec<AdminUserTuple> = sqlx::query_as(
+            "SELECT u.id, u.username, u.email, u.email_verified, u.created_at, b.kind, b.expires_at
+             FROM users u
+             LEFT JOIN user_bans b ON b.user_id = u.id
+             WHERE ?1 = ''
+                OR u.email LIKE '%' || ?1 || '%'
+                OR u.username LIKE '%' || ?1 || '%'
+             ORDER BY u.created_at DESC
+             LIMIT ?2 OFFSET ?3",
         )
+        .bind(search.unwrap_or(""))
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let ban = decode_ban(row.kind.as_deref(), row.expires_at.flatten(), now)?;
+            .map(|(id, username, email, email_verified, created_at, kind, expires_at)| {
+                let ban = decode_ban(kind.as_deref(), expires_at, now)?;
                 Ok(AdminUserRow {
-                    id: UserId::from_uuid(row.id),
-                    username: row.username,
-                    email: row.email,
-                    email_verified: row.email_verified,
-                    created_at: row.created_at,
+                    id: UserId::from_uuid(id),
+                    username,
+                    email,
+                    email_verified,
+                    created_at,
                     ban,
                 })
             })
@@ -1194,13 +1158,13 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
     }
 
     async fn count_users(&self, search: Option<&str>) -> Result<i64, StorageError> {
-        let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) FROM users u
-               WHERE ?1 = ''
-                  OR u.email LIKE '%' || ?1 || '%'
-                  OR u.username LIKE '%' || ?1 || '%'"#,
-            search.unwrap_or(""),
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM users u
+             WHERE ?1 = ''
+                OR u.email LIKE '%' || ?1 || '%'
+                OR u.username LIKE '%' || ?1 || '%'",
         )
+        .bind(search.unwrap_or(""))
         .fetch_one(&self.pool)
         .await?;
         Ok(total)
@@ -1215,10 +1179,10 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
         let mut tx = self.pool.begin().await?;
-        let exists: i64 =
-            sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE id = ?1", user_id.as_uuid())
-                .fetch_one(&mut *tx)
-                .await?;
+        let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .fetch_one(&mut *tx)
+            .await?;
         if exists == 0 {
             return Ok(false);
         }
@@ -1227,7 +1191,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
             Ban::Permanent => ("permanent", None),
             Ban::Temporary(expires_at) => ("temporary", Some(*expires_at)),
         };
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO user_bans (user_id, kind, expires_at, reason, created_at, created_by)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(user_id) DO UPDATE SET
@@ -1236,13 +1200,13 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
                  reason = excluded.reason,
                  created_at = excluded.created_at,
                  created_by = excluded.created_by",
-            user_id.as_uuid(),
-            kind,
-            expires_at,
-            reason,
-            now,
-            actor_id.as_uuid(),
         )
+        .bind(user_id.as_uuid())
+        .bind(kind)
+        .bind(expires_at)
+        .bind(reason)
+        .bind(now)
+        .bind(actor_id.as_uuid())
         .execute(&mut *tx)
         .await?;
         // 封禁与撤销会话必须同事务：避免封禁生效但旧 refresh 仍可轮转
@@ -1252,7 +1216,8 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
     }
 
     async fn unban_user(&self, user_id: &UserId) -> Result<bool, StorageError> {
-        let deleted = sqlx::query!("DELETE FROM user_bans WHERE user_id = ?1", user_id.as_uuid())
+        let deleted = sqlx::query("DELETE FROM user_bans WHERE user_id = ?1")
+            .bind(user_id.as_uuid())
             .execute(&self.pool)
             .await?;
         Ok(deleted.rows_affected() == 1)
@@ -1269,52 +1234,46 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
             .map(serde_json::to_string)
             .transpose()
             .map_err(StorageError::wrap)?;
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO audit_logs (id, actor_id, action, target_id, details, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            Uuid::now_v7(),
-            entry.actor_id.as_uuid(),
-            entry.action,
-            entry.target_id.as_ref().map(UserId::as_uuid),
-            details,
-            now,
         )
+        .bind(Uuid::now_v7())
+        .bind(entry.actor_id.as_uuid())
+        .bind(entry.action)
+        .bind(entry.target_id.map(|id| *id.as_uuid()))
+        .bind(details)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
     async fn list_audit(&self, limit: i64, offset: i64) -> Result<Vec<AuditEntry>, StorageError> {
-        let rows = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid",
-                      actor_id AS "actor_id: uuid::Uuid",
-                      action,
-                      target_id AS "target_id: Option<uuid::Uuid>",
-                      details,
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM audit_logs
-               ORDER BY created_at DESC
-               LIMIT ?1 OFFSET ?2"#,
-            limit,
-            offset,
+        let rows: Vec<AuditTuple> = sqlx::query_as(
+            "SELECT id, actor_id, action, target_id, details, created_at
+                 FROM audit_logs
+                 ORDER BY created_at DESC
+                 LIMIT ?1 OFFSET ?2",
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let details: Option<serde_json::Value> = row
-                    .details
+            .map(|(id, actor_id, action, target_id, raw_details, created_at)| {
+                let details: Option<serde_json::Value> = raw_details
                     .map(|raw| serde_json::from_str(&raw))
                     .transpose()
                     .map_err(StorageError::wrap)?;
                 Ok(AuditEntry {
-                    id: row.id,
-                    actor_id: UserId::from_uuid(row.actor_id),
-                    action: row.action,
-                    target_id: row.target_id.flatten().map(UserId::from_uuid),
+                    id,
+                    actor_id: UserId::from_uuid(actor_id),
+                    action,
+                    target_id: target_id.map(UserId::from_uuid),
                     details,
-                    created_at: row.created_at,
+                    created_at,
                 })
             })
             .collect()
@@ -1322,7 +1281,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
 
     async fn count_audit(&self) -> Result<i64, StorageError> {
         let total: i64 =
-            sqlx::query_scalar!("SELECT COUNT(*) FROM audit_logs").fetch_one(&self.pool).await?;
+            sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs").fetch_one(&self.pool).await?;
         Ok(total)
     }
 }
@@ -1334,29 +1293,30 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
         provider: SocialProvider,
         provider_user_id: &str,
     ) -> Result<Option<SocialIdentity>, StorageError> {
-        let row = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", user_id AS "user_id: uuid::Uuid",
-                      provider, provider_user_id, display_name,
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM user_social_identities
-               WHERE provider = ?1 AND provider_user_id = ?2"#,
-            provider.as_str(),
-            provider_user_id,
+        let row: Option<SocialIdentityTuple> = sqlx::query_as(
+            "SELECT id, user_id, provider, provider_user_id, display_name, created_at
+                 FROM user_social_identities
+                 WHERE provider = ?1 AND provider_user_id = ?2",
         )
+        .bind(provider.as_str())
+        .bind(provider_user_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        let Some(row) = row else { return Ok(None) };
-        let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
-            return Err(unknown_social_value("provider", &row.provider));
+        let Some((id, user_id, raw_provider, provider_user_id, display_name, created_at)) = row
+        else {
+            return Ok(None);
+        };
+        let Some(provider) = SocialProvider::from_str_raw(&raw_provider) else {
+            return Err(unknown_social_value("provider", &raw_provider));
         };
         Ok(Some(SocialIdentity {
-            id: row.id,
-            user_id: UserId::from_uuid(row.user_id),
+            id,
+            user_id: UserId::from_uuid(user_id),
             provider,
-            provider_user_id: row.provider_user_id,
-            display_name: row.display_name,
-            created_at: row.created_at,
+            provider_user_id,
+            display_name,
+            created_at,
         }))
     }
 
@@ -1365,17 +1325,17 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
         identity: &NewSocialIdentity,
         now: DateTime<Utc>,
     ) -> Result<(), LinkIdentityError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "INSERT INTO user_social_identities
              (id, user_id, provider, provider_user_id, display_name, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            Uuid::now_v7(),
-            identity.user_id.as_uuid(),
-            identity.provider.as_str(),
-            identity.provider_user_id,
-            identity.display_name,
-            now,
         )
+        .bind(Uuid::now_v7())
+        .bind(identity.user_id.as_uuid())
+        .bind(identity.provider.as_str())
+        .bind(identity.provider_user_id.as_str())
+        .bind(identity.display_name.as_deref())
+        .bind(now)
         .execute(&self.pool)
         .await;
 
@@ -1393,41 +1353,38 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
         user_id: &UserId,
         provider: SocialProvider,
     ) -> Result<bool, StorageError> {
-        let deleted = sqlx::query!(
-            "DELETE FROM user_social_identities WHERE user_id = ?1 AND provider = ?2",
-            user_id.as_uuid(),
-            provider.as_str(),
-        )
-        .execute(&self.pool)
-        .await?;
+        let deleted =
+            sqlx::query("DELETE FROM user_social_identities WHERE user_id = ?1 AND provider = ?2")
+                .bind(user_id.as_uuid())
+                .bind(provider.as_str())
+                .execute(&self.pool)
+                .await?;
         Ok(deleted.rows_affected() == 1)
     }
 
     async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<SocialIdentity>, StorageError> {
-        let rows = sqlx::query!(
-            r#"SELECT id AS "id: uuid::Uuid", user_id AS "user_id: uuid::Uuid",
-                      provider, provider_user_id, display_name,
-                      created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-               FROM user_social_identities
-               WHERE user_id = ?1
-               ORDER BY created_at ASC"#,
-            user_id.as_uuid(),
+        let rows: Vec<SocialIdentityTuple> = sqlx::query_as(
+            "SELECT id, user_id, provider, provider_user_id, display_name, created_at
+                 FROM user_social_identities
+                 WHERE user_id = ?1
+                 ORDER BY created_at ASC",
         )
+        .bind(user_id.as_uuid())
         .fetch_all(&self.pool)
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
-                    return Err(unknown_social_value("provider", &row.provider));
+            .map(|(id, user_id, raw_provider, provider_user_id, display_name, created_at)| {
+                let Some(provider) = SocialProvider::from_str_raw(&raw_provider) else {
+                    return Err(unknown_social_value("provider", &raw_provider));
                 };
                 Ok(SocialIdentity {
-                    id: row.id,
-                    user_id: UserId::from_uuid(row.user_id),
+                    id,
+                    user_id: UserId::from_uuid(user_id),
                     provider,
-                    provider_user_id: row.provider_user_id,
-                    display_name: row.display_name,
-                    created_at: row.created_at,
+                    provider_user_id,
+                    display_name,
+                    created_at,
                 })
             })
             .collect()
@@ -1438,18 +1395,18 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
         state: &SocialLoginState,
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO social_login_states
              (state, provider, code_verifier, action, user_id, expires_at, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            state.state,
-            state.provider.as_str(),
-            state.code_verifier,
-            state.action.as_str(),
-            state.user_id.as_ref().map(UserId::as_uuid),
-            state.expires_at,
-            now,
         )
+        .bind(state.state.as_str())
+        .bind(state.provider.as_str())
+        .bind(state.code_verifier.as_str())
+        .bind(state.action.as_str())
+        .bind(state.user_id.map(|id| *id.as_uuid()))
+        .bind(state.expires_at)
+        .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1457,35 +1414,37 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
 
     async fn take_state(&self, state: &str) -> Result<Option<SocialLoginState>, StorageError> {
         let mut tx = self.pool.begin().await?;
-        let row = sqlx::query!(
-            r#"SELECT state, provider, code_verifier, action,
-                      user_id AS "user_id: Option<uuid::Uuid>",
-                      expires_at AS "expires_at: chrono::DateTime<chrono::Utc>"
-               FROM social_login_states WHERE state = ?1"#,
-            state,
+        let row: Option<SocialStateTuple> = sqlx::query_as(
+            "SELECT state, provider, code_verifier, action, user_id, expires_at
+                 FROM social_login_states WHERE state = ?1",
         )
+        .bind(state)
         .fetch_optional(&mut *tx)
         .await?;
-        let Some(row) = row else { return Ok(None) };
+        let Some((state, raw_provider, code_verifier, raw_action, user_id, expires_at)) = row
+        else {
+            return Ok(None);
+        };
         // 取出即删除：单次消费，重放同一 state 落到上面的 None 分支
-        sqlx::query!("DELETE FROM social_login_states WHERE state = ?1", state)
+        sqlx::query("DELETE FROM social_login_states WHERE state = ?1")
+            .bind(state.as_str())
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
 
-        let Some(provider) = SocialProvider::from_str_raw(&row.provider) else {
-            return Err(unknown_social_value("provider", &row.provider));
+        let Some(provider) = SocialProvider::from_str_raw(&raw_provider) else {
+            return Err(unknown_social_value("provider", &raw_provider));
         };
-        let Some(action) = SocialLoginAction::from_str_raw(&row.action) else {
-            return Err(unknown_social_value("action", &row.action));
+        let Some(action) = SocialLoginAction::from_str_raw(&raw_action) else {
+            return Err(unknown_social_value("action", &raw_action));
         };
         Ok(Some(SocialLoginState {
-            state: row.state,
+            state,
             provider,
-            code_verifier: row.code_verifier,
+            code_verifier,
             action,
-            user_id: row.user_id.flatten().map(UserId::from_uuid),
-            expires_at: row.expires_at,
+            user_id: user_id.map(UserId::from_uuid),
+            expires_at,
         }))
     }
 }

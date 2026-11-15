@@ -50,11 +50,11 @@ async fn register_creates_unverified_user_with_normalized_email() {
 #[tokio::test]
 async fn register_persists_verifiable_password_hash() {
     let (app, _state, _clock, _mailbox, dir) = common::app().await;
-    let pool = common::migrated_pool(dir.path()).await;
+    let pool = common::schema_pool(dir.path()).await;
 
     app.oneshot(post_register(VALID_BODY)).await.unwrap();
 
-    // 测试脚手架用运行时查询（query_as），不进 .sqlx 编译期缓存
+    // 测试脚手架直接用运行时查询（query_as）
     let (hash,): (Option<String>,) =
         sqlx::query_as("SELECT password_hash FROM users WHERE email = 'nova@nebula.st'")
             .fetch_one(&pool)

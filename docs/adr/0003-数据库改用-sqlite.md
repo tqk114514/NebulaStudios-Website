@@ -25,3 +25,7 @@ Rust 链接 C 无 CGo 式摩擦，bundled 编译即得单二进制，故「纯 R
 **得：** 部署从「应用 + Postgres」收敛为单二进制加数据文件；storage 测试不再拉容器，更快且无 Docker 依赖；备份即拷文件。
 
 **失：** 单写者模型，并发写受 WAL 串行化约束（认证服务写负载可承受）；横向扩展即重开本决策，届时向 Postgres 迁移需付方言差异成本；失去数据库级多连接并发原语（advisory lock 等）。
+
+## 修订
+
+2026-11-15 · 迁移机制移除。v4 无真实业务数据；schema 由 `storage/sqlite/schema.rs` 在启动时以 `CREATE ... IF NOT EXISTS` 幂等创建，不再使用 `sqlx migrate`，`.sqlx/` 查询缓存同步移除。驱动仍为 sqlx + SQLite，Decision 1 的 migrate 理由不再适用，其余决策不变。

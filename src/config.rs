@@ -138,7 +138,7 @@ pub struct MailConfig {
 /// SQLite 数据库配置（ADR-0003）。
 #[derive(Debug, Clone, Deserialize)]
 pub struct DatabaseConfig {
-    /// 数据库文件路径；须先经 `sqlx migrate` 迁移，启动不建表。
+    /// 数据库文件路径；启动时自动创建并初始化 schema。
     pub path: PathBuf,
 }
 

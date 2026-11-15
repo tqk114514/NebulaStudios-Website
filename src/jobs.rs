@@ -12,7 +12,7 @@ use crate::api::AppState;
 
 /// 启动过期数据清理任务；返回句柄，停机时应 abort。
 ///
-/// 首次 tick 只用于对齐间隔，不执行清理，避免服务启动瞬间与监听/迁移竞争。
+/// 首次 tick 只用于对齐间隔，不执行清理，避免服务启动瞬间与监听/schema 初始化竞争。
 pub fn spawn_cleanup(state: AppState, interval: Duration) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(interval);

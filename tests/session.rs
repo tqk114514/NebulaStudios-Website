@@ -390,7 +390,7 @@ async fn login_upgrades_outdated_password_hash() {
     .hash_password(PASSWORD.as_bytes())
     .expect("哈希必须成功")
     .to_string();
-    let pool = common::migrated_pool(dir.path()).await;
+    let pool = common::schema_pool(dir.path()).await;
     sqlx::query("UPDATE users SET password_hash = ?1 WHERE email = ?2")
         .bind(&legacy)
         .bind(EMAIL)

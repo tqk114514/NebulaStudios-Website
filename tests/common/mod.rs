@@ -1,5 +1,5 @@
-//! 集成测试共用装配：临时文件库 + 迁移 + 应用状态（§8.1：真实 SQLite）。
-//! 迁移在装配中执行——启动路径不跑 DDL 约束的是生产，测试不受限。
+//! 集成测试共用装配：临时文件库 + schema 初始化 + 应用状态（§8.1：真实 SQLite）。
+//! schema 在装配中创建；生产启动也以幂等 DDL 创建，测试与生产同一条路径。
 
 // 不同测试二进制各用装配的不同子集，未用项不算死代码；
 // 测试装配内的 expect 同样属于测试语义
@@ -31,15 +31,15 @@ pub const FIX_NOW: &str = "2026-10-26T08:00:00Z";
 pub const TEST_PRIVATE_PEM: &str = "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHHnffUGVWWLk8Hz8\nT+NdLnsaBCFWKphSj4rcq30zzkShRANCAASIriVp5Ne81a6mczgeIzuAXgLonIjY\nBRQBVkauO2/OKAe/QmK5cQ8TkPMha0N9171Z6eBiUfhJUeZs9qieNjw8\n-----END PRIVATE KEY-----";
 pub const TEST_PUBLIC_PEM: &str = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiK4laeTXvNWupnM4HiM7gF4C6JyI\n2AUUAVZGrjtvzigHv0JiuXEPE5DzIWtDfde9WengYlH4SVHmbPaonjY8PA==\n-----END PUBLIC KEY-----";
 
-/// 在 `dir` 下建库并跑全部迁移，返回保持打开的连接池（供测试直接查库）。
-pub async fn migrated_pool(dir: &Path) -> SqlitePool {
+/// 在 `dir` 下建库并初始化 schema，返回保持打开的连接池（供测试直接查库）。
+pub async fn schema_pool(dir: &Path) -> SqlitePool {
     let db_path = dir.join("users.db");
     let pool = SqlitePool::connect_with(
-        SqliteConnectOptions::new().filename(&db_path).create_if_missing(true),
+        SqliteConnectOptions::new().filename(&db_path).create_if_missing(true).foreign_keys(true),
     )
     .await
     .expect("建库连接必须成功");
-    sqlx::migrate!().run(&pool).await.expect("迁移必须成功");
+    sqlite::ensure_schema(&pool).await.expect("schema 初始化必须成功");
     pool
 }
 
@@ -148,10 +148,8 @@ pub async fn await_mail_subject_count(
 /// 装配 `AppState`：临时库 + 固定时钟 + 测试密钥 + 捕获信箱；`TempDir` 钉住文件生命周期。
 pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");
-    let bootstrap = migrated_pool(dir.path()).await;
-    bootstrap.close().await;
-    let pool =
-        sqlite::connect_pool(&dir.path().join("users.db")).await.expect("已迁移的库必须可打开");
+    let pool = sqlite::connect_pool(&dir.path().join("users.db")).await.expect("测试库必须可打开");
+    sqlite::ensure_schema(&pool).await.expect("schema 初始化必须成功");
 
     let start = chrono::DateTime::parse_from_rfc3339(FIX_NOW)
         .expect("固定字面量必须可解析")
@@ -193,11 +191,8 @@ pub async fn app() -> (axum::Router, AppState, Arc<ManualClock>, Mailbox, tempfi
 /// 装配共享同一连接池的用户与 refresh 仓储（仓储层测试用）。
 pub async fn repos() -> (SqliteUserRepo, SqliteRefreshRepo, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");
-    let bootstrap = migrated_pool(dir.path()).await;
-    bootstrap.close().await;
-
-    let pool =
-        sqlite::connect_pool(&dir.path().join("users.db")).await.expect("已迁移的库必须可打开");
+    let pool = sqlite::connect_pool(&dir.path().join("users.db")).await.expect("测试库必须可打开");
+    sqlite::ensure_schema(&pool).await.expect("schema 初始化必须成功");
     (SqliteUserRepo::from_pool(pool.clone()), SqliteRefreshRepo::from_pool(pool), dir)
 }
 

@@ -46,7 +46,7 @@
 
 **硬约束**：Rust 生态没有可用的 OAuth 2.0 授权服务器 crate，Provider 必须手写。计划阶段不得假设存在此类库。
 
-**sqlx 三项强制**：`query!` 编译期校验；CI 用 `SQLX_OFFLINE=true` 且 `.sqlx/` 必须提交；迁移用 `sqlx migrate` 作为独立部署步骤，启动路径不执行 DDL。
+**sqlx 约束**：运行时 `query` / `query_as` / `query_scalar`；schema 由 `storage/sqlite/schema.rs` 在启动时以 `IF NOT EXISTS` 幂等创建，不使用迁移或 `.sqlx/` 离线缓存（ADR-0003 修订）。
 
 ---
 
@@ -55,7 +55,7 @@
 单一 crate。目录边界命名取自 MAS，粒度不取自——不照搬其多 crate workspace。
 
 ```
-Cargo.toml  rustfmt.toml  migrations/  .sqlx/  docs/adr/
+Cargo.toml  rustfmt.toml  docs/adr/
 src/
   main.rs          装配与监听，无业务逻辑
   config.rs        env → 类型化结构体，启动即校验
@@ -63,8 +63,9 @@ src/
   context.rs       request_id、client ip、时钟
   model/           纯领域，零 I/O：user / password / tokens / grant / totp
   oauth2/          协议类型，与 HTTP 无关：requests / responses / errors / pkce / scope
-  storage/mod.rs   trait 定义（repository seam）
-  storage/sqlite/  sqlx 实现
+  storage.rs       trait 定义（repository seam）
+  storage/sqlite.rs sqlx 实现
+  storage/sqlite/schema.rs schema 幂等初始化
   api/             一个端点一个文件（vertical slice）：auth/ user/ admin/ oauth/
   extractors.rs    AuthUser 等 FromRequestParts
   jobs/            过期清理
@@ -191,7 +192,7 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 
 1. **登出必须真的撤销会话。** v3 的登出路由没挂鉴权中间件，而 handler 依赖中间件写入 context 的 UID，撤销逻辑在生产路径永不执行；其单测因测试助手手工注入 UID 而假绿。→ 登出、改密、重置、关闭 TOTP 走同一条撤销路径，且路由表与 handler 前置条件之间有测试覆盖。
 2. **鉴权与 CSRF 不依赖单一 `SameSite` 属性。** v3 的管理 API 与 `confirm-link` 无 CSRF 中间件，安全性全压在 `SameSite=Lax`。→ 所有 cookie 鉴权的写接口过 CSRF 门禁，含后台。
-3. **DDL 不进启动路径。** v3 在启动事务里执行 ALTER：大表锁表，任一破坏性操作未开闸即拒绝启动，rename 不可识别，无 revert，只 introspect `public`。
+3. **启动路径只允许幂等建表。** v3 在启动事务里执行 ALTER：大表锁表，任一破坏性操作未开闸即拒绝启动，rename 不可识别，无 revert，只 introspect `public`。→ v4 无真实数据，`ensure_schema` 只执行 `CREATE ... IF NOT EXISTS`；不得在启动路径执行 ALTER、DROP、rename 或数据迁移。
 4. **进程内状态有边界声明。** v3 把 OAuth state、待绑定、TOTP 中转态与锁、验证码失败锁、限流桶、管理员导出的一次性授权码（全局单槽位，两个超管并发互相覆盖）放进程内存。→ 入数据库，或 README 声明单实例并列全状态清单。
 5. **头像有尺寸上限。** v3 全链路无 resize：4096×4096 原图转出同尺寸 WebP 并直接分发。
 6. **降级他人 2FA 必须通知。** v3 超管重置 TOTP 只写审计日志。→ 任何由第三方发起的认证强度降级都发信。

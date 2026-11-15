@@ -22,12 +22,11 @@ fn now() -> DateTime<Utc> {
 
 async fn fixture() -> (SqliteSocialRepo, SqliteUserRepo, SqlitePool, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");
-    let bootstrap = common::migrated_pool(dir.path()).await;
-    bootstrap.close().await;
     // connect_pool 显式 foreign_keys=ON，级联删除测试依赖它（ADR-0003）
     let pool = nebula_server::storage::sqlite::connect_pool(&dir.path().join("users.db"))
         .await
-        .expect("已迁移的库必须可打开");
+        .expect("测试库必须可打开");
+    nebula_server::storage::sqlite::ensure_schema(&pool).await.expect("schema 初始化必须成功");
     (SqliteSocialRepo::from_pool(pool.clone()), SqliteUserRepo::from_pool(pool.clone()), pool, dir)
 }
 

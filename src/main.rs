@@ -28,6 +28,9 @@ async fn main() -> anyhow::Result<()> {
     let pool = sqlite::connect_pool(&config.database.path)
         .await
         .with_context(|| format!("打开数据库 {}", config.database.path.display()))?;
+    sqlite::ensure_schema(&pool)
+        .await
+        .with_context(|| format!("初始化数据库 schema {}", config.database.path.display()))?;
 
     let private_pem = std::fs::read(&config.jwt.private_key_path)
         .with_context(|| format!("读取 JWT 私钥 {}", config.jwt.private_key_path.display()))?;

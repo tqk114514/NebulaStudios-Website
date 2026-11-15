@@ -6,8 +6,7 @@ Nebula Studios 的身份认证服务：Rust（axum + sqlx/SQLite）后端与 Nux
 ## 运行
 
 ```bash
-cargo sqlx database create    # 首次建库（DATABASE_URL=sqlite://nebula.db）
-cargo sqlx migrate run        # 迁移是独立部署步骤，启动不执行 DDL
+# 首次启动自动创建 nebula.db 并初始化 schema；没有迁移步骤
 openssl ecparam -name prime256v1 -genkey -noout -out ec.pem      # ES256 密钥
 openssl pkcs8 -topk8 -nocrypt -in ec.pem -out jwt-private.pem
 openssl pkey -in jwt-private.pem -pubout -out jwt-public.pem
@@ -15,6 +14,8 @@ openssl rand -hex 32     # NEBULA_CRYPTO__TOTP_SECRET_KEY（TOTP 密钥加密）
 openssl rand -hex 32     # NEBULA_CRYPTO__CODE_PEPPER（验证码 HMAC pepper）
 cargo run --release
 ```
+
+数据库没有真实业务数据；schema 由启动时幂等创建，变更 schema 直接删除数据库文件后重启。
 
 环境变量（`NEBULA_` 前缀，双下划线分层级）：`NEBULA_BIND`（默认 `127.0.0.1:8080`）、
 `NEBULA_DATABASE__PATH`（默认 `nebula.db`）、`NEBULA_JWT__PRIVATE_KEY_PATH`、
