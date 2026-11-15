@@ -10,7 +10,8 @@ use serde::Deserialize;
 
 use super::{hash_password_in_background, password_problem};
 use crate::api::{
-    AppState, SecurityNotice, clear_session_cookies, send_security_notice, verify_current_password,
+    AppState, PASSWORD_INPUT_LIMIT, SecurityNotice, clear_session_cookies, send_security_notice,
+    verify_current_password,
 };
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
@@ -27,8 +28,8 @@ pub struct ChangePasswordRequest {
 /// 处理改密。
 ///
 /// # Errors
-/// 未认证 401；当前口令错误 401 `invalid_credentials`；新口令不合规 422；
-/// 内部故障 500。成功 204 并清除会话。
+/// 未认证 401；当前口令错误 401 `invalid_credentials`；当前口令超长或新口令不合规
+/// 422；内部故障 500。成功 204 并清除会话。
 pub async fn change_password(
     State(state): State<AppState>,
     user: FirstPartyUser,
@@ -41,6 +42,9 @@ pub async fn change_password(
     if req.current_password.is_empty() {
         issues
             .push(FieldInvalid { field: "current_password", code: "password_missing".to_owned() });
+    } else if req.current_password.len() > PASSWORD_INPUT_LIMIT {
+        issues
+            .push(FieldInvalid { field: "current_password", code: "password_invalid".to_owned() });
     }
     if let Some(code) = password_problem(&req.new_password) {
         issues.push(FieldInvalid { field: "new_password", code: code.to_owned() });

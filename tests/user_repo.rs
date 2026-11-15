@@ -56,6 +56,29 @@ async fn find_by_username_matches_case_insensitive_and_missing_is_none() {
 }
 
 #[tokio::test]
+async fn upgrade_password_hash_is_compare_and_swap() {
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
+    let repo = &state.user_repo;
+    let user = sample_user();
+    let old = sample_hash();
+    repo.insert(&user, &old).await.expect("插入必须成功");
+
+    let new = PasswordHash::hash("Fresh!Passw0rd-2026").expect("哈希必须成功");
+    let wrong = PasswordHash::hash("Wrong!Passw0rd-2026").expect("哈希必须成功");
+
+    // 期望值不符：不得覆盖当前哈希
+    assert!(!repo.upgrade_password_hash(&user.id, &wrong, &new).await.expect("更新必须成功"));
+    let found = repo.find_by_id(&user.id).await.expect("查找必须成功").expect("用户必须存在");
+    assert!(found.password_hash.verify("Nebula!Passw0rd-2026").expect("哈希必须可校验"));
+    assert!(!found.password_hash.verify("Fresh!Passw0rd-2026").expect("哈希必须可校验"));
+
+    // 期望值相符：原子替换
+    assert!(repo.upgrade_password_hash(&user.id, &old, &new).await.expect("更新必须成功"));
+    let found = repo.find_by_id(&user.id).await.expect("查找必须成功").expect("用户必须存在");
+    assert!(found.password_hash.verify("Fresh!Passw0rd-2026").expect("哈希必须可校验"));
+}
+
+#[tokio::test]
 async fn duplicate_email_is_rejected_as_conflict() {
     let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;

@@ -8,10 +8,12 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use serde::Deserialize;
 
-use super::{issue_session, session_response, verify_password_in_background};
-use crate::api::AppState;
+use super::{
+    issue_session, session_response, verify_login_password, verify_password_in_background,
+};
+use crate::api::{AppState, PASSWORD_INPUT_LIMIT};
 use crate::error::{ApiError, FieldInvalid};
-use crate::model::password::PasswordHash;
+use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::totp::{CHALLENGE_TTL, TotpState};
 
 /// 登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。
@@ -23,10 +25,7 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-/// 上限只为挡异常长度输入进入 argon2；口令强度规则只约束注册，不约束登录。
-const PASSWORD_INPUT_LIMIT: usize = 128;
-
-/// 处理登录：取凭据 → 验证（时序对齐）→ 签发会话。
+/// 处理登录：取凭据 → 验证（时序对齐）→ 参数落后时升级哈希 → 签发会话。
 ///
 /// # Errors
 /// JSON 非法 400、字段缺失 422、凭据错误 401、内部故障 500（ADR-0004）。
@@ -58,9 +57,28 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
         return Err(ApiError::InvalidCredentials);
     };
 
-    let ok = verify_password_in_background(credentials.password_hash, req.password.clone()).await?;
-    if !ok {
-        return Err(ApiError::InvalidCredentials);
+    let user_id = credentials.user.id;
+    let verified_hash = credentials.password_hash.clone();
+    match verify_login_password(credentials.password_hash, req.password.clone()).await? {
+        PasswordCheck::Mismatch => return Err(ApiError::InvalidCredentials),
+        PasswordCheck::Current => {}
+        PasswordCheck::Outdated(upgraded) => {
+            // 口令已确认正确；升级写回失败不阻断登录，旧参数仍可校验，记录后果便于排查。
+            // 比较并交换防止并发改密写入的新哈希被旧口令的重算结果覆盖。
+            match state.user_repo.upgrade_password_hash(&user_id, &verified_hash, &upgraded).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::warn!(user_id = %user_id, "口令哈希已被并发改写，跳过升级写回");
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        error = %err,
+                        user_id = %user_id,
+                        "口令哈希参数升级写回失败，旧参数继续生效"
+                    );
+                }
+            }
+        }
     }
     let user = credentials.user;
 

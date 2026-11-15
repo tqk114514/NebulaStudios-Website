@@ -224,6 +224,24 @@ impl UserRepo for SqliteUserRepo {
         }
     }
 
+    async fn upgrade_password_hash(
+        &self,
+        user_id: &UserId,
+        expected: &PasswordHash,
+        replacement: &PasswordHash,
+    ) -> Result<bool, UserRepoError> {
+        // 比较并交换：并发改密已写入新哈希时，旧口令的重算结果不得覆盖它
+        let updated = sqlx::query!(
+            "UPDATE users SET password_hash = ?3 WHERE id = ?1 AND password_hash = ?2",
+            user_id.as_uuid(),
+            expected.as_str(),
+            replacement.as_str(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, UserRepoError> {
         // SQLite TEXT 列被推断为 String，uuid/chrono 解码须经列类型覆盖声明
         let row = sqlx::query!(

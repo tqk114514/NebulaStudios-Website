@@ -143,3 +143,28 @@ async fn delete_request_burst_is_three() {
     assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
     assert!(body_text(limited).await.contains("rate_limited"));
 }
+
+#[tokio::test]
+async fn password_change_burst_is_limited() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+    common::register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = common::login_session(&app).await;
+
+    // 当前口令错不改变状态；每次仍要跑一次 Argon2，限额必须独立于其它端点
+    let body = r#"{"current_password":"Wrong!Passw0rd-2026","new_password":"Fresh!Passw0rd-2026"}"#;
+    let cookie = common::cookie_header(Some(&session.access), None, Some(&session.csrf));
+    for _ in 0..5 {
+        let response = app
+            .clone()
+            .oneshot_post_with("/api/auth/password/change", body, &cookie, Some(&session.csrf))
+            .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let limited = app
+        .clone()
+        .oneshot_post_with("/api/auth/password/change", body, &cookie, Some(&session.csrf))
+        .await;
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(body_text(limited).await.contains("rate_limited"));
+}

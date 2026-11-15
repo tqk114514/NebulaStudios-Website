@@ -67,6 +67,20 @@ pub trait UserRepo: Send + Sync {
     /// [`UserRepoError::Storage`]。
     async fn insert(&self, user: &User, password: &PasswordHash) -> Result<(), UserRepoError>;
 
+    /// 仅当库中口令哈希仍是 `expected` 时替换为 `replacement`，不触碰 token 版本
+    /// 或 refresh 家族；登录时参数升级写回用（AGENTS §2）。
+    ///
+    /// 返回 `false` 表示哈希已被并发改写（如另一请求改密），调用方不得覆盖。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]；用户不存在不视为错误（无行可改）。
+    async fn upgrade_password_hash(
+        &self,
+        user_id: &UserId,
+        expected: &PasswordHash,
+        replacement: &PasswordHash,
+    ) -> Result<bool, UserRepoError>;
+
     /// 按邮箱查找，大小写不敏感（列 COLLATE NOCASE）。
     ///
     /// # Errors

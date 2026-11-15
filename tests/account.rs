@@ -112,6 +112,31 @@ async fn change_password_validates_new_password() {
 }
 
 #[tokio::test]
+async fn change_password_rejects_overlong_current_password() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+    common::register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+    let session = common::login_session(&app).await;
+
+    let body = serde_json::json!({
+        "current_password": "a".repeat(129),
+        "new_password": NEW_PASSWORD,
+    })
+    .to_string();
+    let response = app
+        .clone()
+        .oneshot_post_with(
+            "/api/auth/password/change",
+            &body,
+            &cookie_header(Some(&session.access), None, Some(&session.csrf)),
+            Some(&session.csrf),
+        )
+        .await;
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(body_text(response).await.contains("password_invalid"));
+}
+
+#[tokio::test]
 async fn change_password_requires_authentication() {
     let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 

@@ -51,6 +51,8 @@ pub const CSRF_COOKIE: &str = "nebula_csrf";
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
 /// 全局请求体上限：当前认证端点均为小 JSON，上传路由将来单独放宽。
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
+/// 口令输入上限；只为挡住异常长度进入 Argon2，不代替强度规则。
+pub(crate) const PASSWORD_INPUT_LIMIT: usize = 128;
 
 /// 生成 uuid v7 请求 ID；v7 时间有序，日志按字面排序即按时间排序。
 #[derive(Debug, Clone, Copy, Default)]
@@ -315,6 +317,10 @@ pub(crate) async fn verify_current_password(
     user_id: &UserId,
     password: &str,
 ) -> Result<User, ApiError> {
+    // 与登录共用同一输入上限；超长直接按凭据错误拒绝，不进入 Argon2
+    if password.len() > PASSWORD_INPUT_LIMIT {
+        return Err(ApiError::InvalidCredentials);
+    }
     let Some(credentials) = state
         .user_repo
         .find_by_id(user_id)
@@ -339,7 +345,6 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(healthz::healthz))
         .route("/metrics", get(metrics::metrics))
         .route("/api/auth/logout", post(auth::logout::logout))
-        .route("/api/auth/password/change", post(auth::change_password::change_password))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
@@ -365,6 +370,14 @@ pub fn router(state: AppState) -> Router {
     // 登录：突发 5、每 12 秒补 1
     let login_limited =
         limited(Router::new().route("/api/auth/login", post(auth::login::login)), 12, 5);
+
+    // 改密：验证当前口令并重算新哈希，两次 Argon2；突发 5、每 10 秒补 1
+    let password_change_limited = limited(
+        Router::new()
+            .route("/api/auth/password/change", post(auth::change_password::change_password)),
+        10,
+        5,
+    );
 
     // 验证码校验：突发 5、每 10 秒补 1
     let verify_limited = limited(
@@ -411,6 +424,7 @@ pub fn router(state: AppState) -> Router {
     let mut router = open
         .merge(register_limited)
         .merge(login_limited)
+        .merge(password_change_limited)
         .merge(verify_limited)
         .merge(reset_limited)
         .merge(totp_limited)

@@ -4,8 +4,10 @@
 
 mod common;
 
+use argon2::PasswordHasher as _;
 use axum::http::StatusCode;
 use common::{OneshotPost, Session, cookie_header, login_session, register_user, set_cookie_of};
+use nebula_server::model::password::{PasswordCheck, PasswordHash};
 
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";
@@ -372,4 +374,44 @@ async fn logout_revokes_all_sessions() {
         let outcome = refresh_with_csrf(&app, session).await;
         assert_eq!(outcome.status(), StatusCode::UNAUTHORIZED, "登出后任一会话不得再轮转");
     }
+}
+
+#[tokio::test]
+async fn login_upgrades_outdated_password_hash() {
+    let (app, _state, _clock, _mailbox, dir) = common::app().await;
+    register_user(&app, EMAIL, USERNAME, PASSWORD).await;
+
+    // 预置弱参数哈希；登录成功后应被当前参数替换，且此后不再触发重算
+    let legacy = argon2::Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        argon2::Params::new(8, 1, 1, None).expect("参数合法"),
+    )
+    .hash_password(PASSWORD.as_bytes())
+    .expect("哈希必须成功")
+    .to_string();
+    let pool = common::migrated_pool(dir.path()).await;
+    sqlx::query("UPDATE users SET password_hash = ?1 WHERE email = ?2")
+        .bind(&legacy)
+        .bind(EMAIL)
+        .execute(&pool)
+        .await
+        .expect("旧哈希必须写入");
+
+    let response = login(&app, EMAIL, PASSWORD).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let (stored,): (Option<String>,) =
+        sqlx::query_as("SELECT password_hash FROM users WHERE email = ?1")
+            .bind(EMAIL)
+            .fetch_one(&pool)
+            .await
+            .expect("哈希行必须存在");
+    let stored = PasswordHash::from_encoded(stored.expect("登录后必须留有哈希")).expect("合法 PHC");
+    assert!(stored.verify(PASSWORD).expect("合法哈希必须可校验"));
+    assert_eq!(
+        stored.verify_and_upgrade(PASSWORD).expect("合法哈希必须可校验"),
+        PasswordCheck::Current,
+        "登录后哈希参数必须已是最新"
+    );
 }

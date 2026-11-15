@@ -23,7 +23,7 @@ use crate::api::{
 use crate::error::ApiError;
 use crate::extractors::constant_time_eq;
 use crate::mailer::EmailMessage;
-use crate::model::password::PasswordHash;
+use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sign_access};
 use crate::model::user::{User, UserId};
 use crate::model::verification::{
@@ -207,6 +207,18 @@ pub(crate) async fn verify_password_in_background(
     plain: String,
 ) -> Result<bool, ApiError> {
     tokio::task::spawn_blocking(move || hash.verify(&plain))
+        .await
+        .map_err(anyhow::Error::from)?
+        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
+}
+
+/// 登录时校验口令；参数落后时在同一阻塞任务内按当前配置重算新哈希，
+/// 返回值可直接用于决定是否写回（AGENTS §2）。
+pub(crate) async fn verify_login_password(
+    hash: PasswordHash,
+    plain: String,
+) -> Result<PasswordCheck, ApiError> {
+    tokio::task::spawn_blocking(move || hash.verify_and_upgrade(&plain))
         .await
         .map_err(anyhow::Error::from)?
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))
