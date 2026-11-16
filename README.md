@@ -29,6 +29,7 @@ cargo run --release
 `NEBULA_MAIL__SMTP_TLS`（`starttls` 默认 / `implicit` 用于 465 / `none`）、
 `NEBULA_OAUTH__CLIENTS_FILE`（OAuth Provider 客户端 TOML，空则无客户端）、
 `NEBULA_AVATAR__DIR`（头像文件目录，默认 `avatars`）、
+`NEBULA_POLICY__MANIFEST_FILE`（政策 manifest TOML，空则不启用政策中心）、
 `NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
 
 ## OAuth Provider 客户端
@@ -56,8 +57,36 @@ enabled = true
 
 `POST /api/user/export` 生成 10 分钟有效、单次使用的下载链接；再次申请会作废此前
 未消费的链接。`GET /api/user/export/{token}` 返回 JSON（资料、头像地址、社交绑定、
-TOTP 状态与恢复码余量、审计记录），响应 `Cache-Control: no-store`。令牌明文只在
-申请响应中出现一次，库中只存 SHA-256。
+TOTP 状态与恢复码余量、政策同意记录、审计记录），响应 `Cache-Control: no-store`。
+令牌明文只在申请响应中出现一次，库中只存 SHA-256。
+
+## 政策中心
+
+`NEBULA_POLICY__MANIFEST_FILE` 指向部署侧 manifest TOML；启动时校验并排序，修改后需
+重启。每个政策版本必须同时提供 `zh-CN` 与 `en` 文档，`path` 为站点内绝对路径或
+https 地址；文档内容不进仓库。
+
+```toml
+[[policies]]
+slug = "privacy"
+version = "2026-11-01"
+effective_at = "2026-11-01T00:00:00Z"
+
+[[policies.documents]]
+locale = "zh-CN"
+title = "隐私政策"
+path = "/policies/privacy/2026-11-01/zh-CN"
+
+[[policies.documents]]
+locale = "en"
+title = "Privacy Policy"
+path = "/policies/privacy/2026-11-01/en"
+```
+
+- `GET /api/policies`：公开 manifest，`current` 由服务端时钟判定当前生效版本。
+- `GET /api/user/consents`：已同意记录与当前待同意版本。
+- `POST /api/user/consents`：提交 `{"policy":"privacy","version":"2026-11-01"}`；
+  只接受当前生效版本，重复同意幂等，返回 204。
 
 ## 运维端点与后台任务
 

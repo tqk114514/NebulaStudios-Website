@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use crate::model::policy::{Policy, PolicyCatalog};
+
 /// 服务配置；字段经 `NEBULA_` 前缀环境变量覆盖（如 `NEBULA_BIND`、
 /// `NEBULA_DATABASE__PATH`，双下划线表层级）。
 #[derive(Debug, Clone, Deserialize)]
@@ -31,6 +33,24 @@ pub struct Config {
     pub oauth: OAuthConfig,
     /// 头像存储子配置。
     pub avatar: AvatarConfig,
+    /// 政策中心子配置。
+    pub policy: PolicyConfig,
+}
+
+/// 政策中心配置；manifest 只在启动时读取，修改后需重启。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct PolicyConfig {
+    /// 政策 manifest TOML 路径；空串表示不启用政策中心。
+    pub manifest_file: String,
+    /// 已校验并排序的政策目录；不参与环境变量反序列化。
+    #[serde(skip)]
+    pub catalog: PolicyCatalog,
+}
+
+#[derive(Debug, Deserialize)]
+struct PolicyManifestFile {
+    #[serde(default)]
+    policies: Vec<Policy>,
 }
 
 /// 头像文件存储配置；路径须可写，启动时创建。
@@ -247,10 +267,12 @@ impl Config {
             .set_default("social.microsoft_client_secret", "")?
             .set_default("oauth.clients_file", "")?
             .set_default("avatar.dir", "avatars")?
+            .set_default("policy.manifest_file", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let mut config: Self = settings.try_deserialize()?;
         config.oauth.clients = load_oauth_clients(&config.oauth.clients_file)?;
+        config.policy.catalog = load_policies(&config.policy.manifest_file)?;
         // 红线 #7：配置必须存在即生效——TTL 在此校验并由会话签发实际使用
         if config.jwt.access_ttl_secs == 0 || config.jwt.refresh_ttl_secs == 0 {
             return Err(LoadConfigError::Invalid("jwt ttl 必须为正秒数".to_owned()));
@@ -334,6 +356,18 @@ fn load_oauth_clients(path: &str) -> Result<Vec<OAuthClientSeed>, LoadConfigErro
     Ok(file.clients)
 }
 
+/// 读取并校验政策 manifest；空路径表示政策中心未配置。
+fn load_policies(path: &str) -> Result<PolicyCatalog, LoadConfigError> {
+    if path.is_empty() {
+        return Ok(PolicyCatalog::default());
+    }
+    let settings = config::Config::builder()
+        .add_source(config::File::new(path, config::FileFormat::Toml))
+        .build()?;
+    let file: PolicyManifestFile = settings.try_deserialize()?;
+    PolicyCatalog::new(file.policies).map_err(|err| LoadConfigError::Invalid(err.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     // 断言失败即 panic 是测试的正确失败语义；expect 禁令面向生产路径
@@ -365,6 +399,69 @@ mod tests {
         assert_eq!(config.oauth.clients_file, "");
         assert!(config.oauth.clients.is_empty());
         assert_eq!(config.avatar.dir, std::path::Path::new("avatars"));
+        assert_eq!(config.policy.manifest_file, "");
+        assert!(config.policy.catalog.is_empty());
+    }
+
+    #[test]
+    fn policy_manifest_file_parses_and_validates() {
+        let dir = tempfile::tempdir().expect("临时目录必须可创建");
+        let path = dir.path().join("policies.toml");
+        std::fs::write(
+            &path,
+            r#"
+[[policies]]
+slug = "privacy"
+version = "2026-11-01"
+effective_at = "2026-11-01T00:00:00Z"
+
+[[policies.documents]]
+locale = "zh-CN"
+title = "隐私政策"
+path = "/policies/privacy/2026-11-01/zh-CN"
+
+[[policies.documents]]
+locale = "en"
+title = "Privacy Policy"
+path = "/policies/privacy/2026-11-01/en"
+"#,
+        )
+        .expect("政策 manifest 必须可写");
+
+        let catalog = super::load_policies(path.to_str().expect("路径必须是 UTF-8"))
+            .expect("manifest 必须可解析");
+        assert_eq!(catalog.policies().len(), 1);
+        assert_eq!(catalog.policies()[0].slug, "privacy");
+        assert!(
+            catalog
+                .current(
+                    "privacy",
+                    chrono::DateTime::parse_from_rfc3339("2026-11-02T00:00:00Z")
+                        .expect("固定字面量必须可解析")
+                        .with_timezone(&chrono::Utc)
+                )
+                .is_some()
+        );
+
+        std::fs::write(
+            &path,
+            r#"
+[[policies]]
+slug = "privacy"
+version = "2026-11-01"
+effective_at = "2026-11-01T00:00:00Z"
+
+[[policies.documents]]
+locale = "zh-CN"
+title = "隐私政策"
+path = "/policies/privacy/2026-11-01/zh-CN"
+"#,
+        )
+        .expect("缺语言 manifest 必须可写");
+        assert!(matches!(
+            super::load_policies(path.to_str().expect("路径必须是 UTF-8")),
+            Err(super::LoadConfigError::Invalid(_))
+        ));
     }
 
     #[test]

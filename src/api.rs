@@ -5,6 +5,7 @@ pub mod auth;
 pub mod healthz;
 pub mod metrics;
 pub mod oauth;
+pub mod policy;
 pub mod user;
 
 use std::collections::HashSet;
@@ -36,11 +37,12 @@ use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
 use crate::mailer::{EmailMessage, Mailer};
 use crate::model::audit::{AuditAction, NewAuditEntry};
+use crate::model::policy::PolicyCatalog;
 use crate::model::user::{User, UserId};
 use crate::social::SocialClients;
 use crate::storage::{
-    AccountRepo, AdminRepo, EmailVerificationRepo, ExportRepo, MaintenanceRepo, OAuthRepo,
-    RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
+    AccountRepo, AdminRepo, ConsentRepo, EmailVerificationRepo, ExportRepo, MaintenanceRepo,
+    OAuthRepo, RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -218,6 +220,10 @@ pub struct AppState {
     pub social_repo: Arc<dyn SocialRepo>,
     /// 数据导出一次性下载令牌仓储。
     pub export_repo: Arc<dyn ExportRepo>,
+    /// 政策同意记录仓储。
+    pub consent_repo: Arc<dyn ConsentRepo>,
+    /// 启动时加载并校验的政策目录；空目录表示政策中心未配置。
+    pub policy_catalog: Arc<PolicyCatalog>,
     /// 头像文件存储；上传、公开读取与注销清理共用。
     pub avatar_store: Arc<AvatarStore>,
     /// 已启用的社交 provider 客户端；未启用的 provider 不在表内。
@@ -388,15 +394,37 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/audit", get(admin::audit::audit))
         .route("/api/auth/{provider}", get(auth::social::start))
         .route("/api/auth/{provider}/callback", get(auth::social::callback))
+        .route("/api/policies", get(policy::policies))
         .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
         .route("/api/user/export/{token}", get(user::export_download::download_export))
+        .route("/api/user/consents", get(user::consents::list).post(user::consents::record))
         .route("/api/user/social", get(user::social::list))
         .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
         .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
         .route("/api/oauth/token", post(oauth::token::token));
 
-    // 限额参数沿用 v3（per_second 语义是「补 1 个令牌的间隔秒数」，tower_governor 命名反直觉）
+    let mut router = open
+        .merge(limited_routes())
+        .with_state(state)
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(middleware::map_response(envelope_payload_too_large));
+
+    if let Some(origin) = cors_allowed_origin {
+        router = router.layer(cors_layer(origin));
+    }
+
+    router = security_headers(router);
+
+    let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
+    router
+        .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
+        .layer(SetRequestIdLayer::new(request_id_header, MakeV7RequestId))
+}
+
+/// 按端点风险装配 GCRA 限额；参数沿用 v3（`per_second` 是补 1 个令牌的
+/// 间隔秒数，`tower_governor` 命名反直觉）。
+fn limited_routes() -> Router<AppState> {
     // 注册：突发 3、每 20 秒补 1
     let register_limited = limited(
         Router::new()
@@ -476,8 +504,7 @@ pub fn router(state: AppState) -> Router {
     let refresh_limited =
         limited(Router::new().route("/api/auth/refresh", post(auth::refresh::refresh)), 1, 30);
 
-    let mut router = open
-        .merge(register_limited)
+    register_limited
         .merge(login_limited)
         .merge(password_change_limited)
         .merge(verify_limited)
@@ -487,20 +514,6 @@ pub fn router(state: AppState) -> Router {
         .merge(avatar_limited)
         .merge(export_limited)
         .merge(refresh_limited)
-        .with_state(state)
-        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
-        .layer(middleware::map_response(envelope_payload_too_large));
-
-    if let Some(origin) = cors_allowed_origin {
-        router = router.layer(cors_layer(origin));
-    }
-
-    router = security_headers(router);
-
-    let request_id_header = HeaderName::from_static(REQUEST_ID_HEADER);
-    router
-        .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
-        .layer(SetRequestIdLayer::new(request_id_header, MakeV7RequestId))
 }
 
 /// 给子路由挂 GCRA 限额层；`per_second` 是补 1 个令牌的间隔秒数，

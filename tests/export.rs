@@ -78,6 +78,11 @@ async fn export_downloads_full_snapshot_exactly_once() {
         .add_recovery_codes(&user.id, vec!["hash-1".to_owned(), "hash-2".to_owned()], clock.now())
         .await
         .expect("恢复码必须落库");
+    state
+        .consent_repo
+        .record(&user.id, "privacy", "2026-11-01", clock.now())
+        .await
+        .expect("同意记录必须落库");
 
     let issued = request_export(&app, &session).await;
     let download_url = issued["download_url"].as_str().expect("必须返回下载地址").to_owned();
@@ -118,6 +123,8 @@ async fn export_downloads_full_snapshot_exactly_once() {
     assert_eq!(document["social_identities"][0]["provider"], "google");
     assert_eq!(document["social_identities"][0]["provider_user_id"], "google-1");
     assert_eq!(document["social_identities"][0]["display_name"], "Nova");
+    assert_eq!(document["policy_consents"][0]["policy"], "privacy");
+    assert_eq!(document["policy_consents"][0]["version"], "2026-11-01");
     let actions: Vec<&str> = document["audit_log"]
         .as_array()
         .expect("审计记录必须是数组")

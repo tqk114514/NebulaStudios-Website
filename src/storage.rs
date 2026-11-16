@@ -9,6 +9,7 @@ use std::fmt;
 use async_trait::async_trait;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
+use crate::model::consent::PolicyConsent;
 use crate::model::oauth2::{AuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::social::{NewSocialIdentity, SocialIdentity, SocialLoginState, SocialProvider};
@@ -645,6 +646,28 @@ pub trait ExportRepo: Send + Sync {
         token_hash: &str,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<Option<UserId>, StorageError>;
+}
+
+/// 用户政策同意仓储；记录只追加，不随政策版本变化删除。
+#[async_trait]
+pub trait ConsentRepo: Send + Sync {
+    /// 记录用户对某政策版本的同意；重复同意幂等，保留首次时刻。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在（外键约束）也按存储故障返回。
+    async fn record(
+        &self,
+        user_id: &UserId,
+        policy: &str,
+        version: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 用户全部同意记录，按同意时刻升序。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<PolicyConsent>, StorageError>;
 }
 
 /// 社交身份绑定错误。

@@ -14,6 +14,7 @@ use uuid::Uuid;
 pub use schema::ensure_schema;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
+use crate::model::consent::PolicyConsent;
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
 use crate::model::password::PasswordHash;
 use crate::model::social::{
@@ -85,6 +86,12 @@ pub struct SqliteSocialRepo {
 /// SQLite 数据导出令牌仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteExportRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 政策同意仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteConsentRepo {
     pool: SqlitePool,
 }
 
@@ -184,6 +191,14 @@ impl SqliteSocialRepo {
 }
 
 impl SqliteExportRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SqliteConsentRepo {
     /// 从既有连接池构建。
     #[must_use]
     pub fn from_pool(pool: SqlitePool) -> Self {
@@ -1427,6 +1442,46 @@ impl crate::storage::ExportRepo for SqliteExportRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(user_id.map(UserId::from_uuid))
+    }
+}
+
+#[async_trait]
+impl crate::storage::ConsentRepo for SqliteConsentRepo {
+    async fn record(
+        &self,
+        user_id: &UserId,
+        policy: &str,
+        version: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            "INSERT INTO policy_consents (user_id, policy, version, consented_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (user_id, policy, version) DO NOTHING",
+        )
+        .bind(user_id.as_uuid())
+        .bind(policy)
+        .bind(version)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<PolicyConsent>, StorageError> {
+        let rows: Vec<(String, String, DateTime<Utc>)> = sqlx::query_as(
+            "SELECT policy, version, consented_at
+             FROM policy_consents
+             WHERE user_id = ?1
+             ORDER BY consented_at ASC, policy ASC, version ASC",
+        )
+        .bind(user_id.as_uuid())
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(policy, version, consented_at)| PolicyConsent { policy, version, consented_at })
+            .collect())
     }
 }
 

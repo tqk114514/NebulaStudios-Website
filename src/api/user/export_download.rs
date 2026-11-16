@@ -11,6 +11,7 @@ use serde::Serialize;
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::model::audit::AuditEntry;
+use crate::model::consent::PolicyConsent;
 use crate::model::export::ExportToken;
 use crate::model::totp::TotpState;
 use crate::model::user::User;
@@ -52,6 +53,8 @@ pub struct ExportDocument {
     pub totp: TotpExport,
     /// 已绑定的社交身份。
     pub social_identities: Vec<SocialIdentityExport>,
+    /// 政策同意记录，按同意时刻升序。
+    pub policy_consents: Vec<PolicyConsent>,
     /// 该用户作为操作者或被操作对象的审计记录，按时间升序。
     pub audit_log: Vec<AuditEntry>,
 }
@@ -89,6 +92,8 @@ pub async fn download_export(
     let totp = state.totp_repo.find(&user_id).await.map_err(anyhow::Error::new)?;
     let recovery_codes =
         state.totp_repo.recovery_codes(&user_id).await.map_err(anyhow::Error::new)?;
+    let policy_consents =
+        state.consent_repo.list_for_user(&user_id).await.map_err(anyhow::Error::new)?;
     let audit_log =
         state.admin_repo.list_audit_for_user(&user_id).await.map_err(anyhow::Error::new)?;
 
@@ -114,6 +119,7 @@ pub async fn download_export(
                 created_at: identity.created_at,
             })
             .collect(),
+        policy_consents,
         audit_log,
     };
 

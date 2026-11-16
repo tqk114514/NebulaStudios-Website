@@ -62,7 +62,7 @@ src/
   error.rs         thiserror 枚举 + impl IntoResponse
   context.rs       request_id、client ip、时钟
   avatar.rs        头像解码、缩放、WebP 编码与文件存储
-  model/           纯领域，零 I/O：user / password / tokens / grant / totp / export
+  model/           纯领域，零 I/O：user / password / tokens / grant / totp / export / policy / consent
   oauth2/          协议类型，与 HTTP 无关：requests / responses / errors / pkce / scope
   storage.rs       trait 定义（repository seam）
   storage/sqlite.rs sqlx 实现

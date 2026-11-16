@@ -18,11 +18,12 @@ use nebula_server::context::ManualClock;
 use nebula_server::crypto::{AesGcmCipher, HmacCodeHasher};
 pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
+use nebula_server::model::policy::PolicyCatalog;
 use nebula_server::social::SocialClients;
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteAdminRepo, SqliteEmailVerificationRepo, SqliteExportRepo,
-    SqliteMaintenanceRepo, SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo, SqliteTotpRepo,
-    SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteAdminRepo, SqliteConsentRepo, SqliteEmailVerificationRepo,
+    SqliteExportRepo, SqliteMaintenanceRepo, SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo,
+    SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -171,7 +172,10 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
         social_repo: Arc::new(SqliteSocialRepo::from_pool(pool.clone())),
-        export_repo: Arc::new(SqliteExportRepo::from_pool(pool)),
+        export_repo: Arc::new(SqliteExportRepo::from_pool(pool.clone())),
+        consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool)),
+        // 默认空政策目录；政策用例自行覆盖本字段
+        policy_catalog: Arc::new(PolicyCatalog::default()),
         avatar_store: Arc::new(AvatarStore::new(dir.path().join("avatars"))),
         // 默认不启用任何社交 provider；社交用例自行覆盖本字段注入假客户端
         social_clients: Arc::new(SocialClients::default()),

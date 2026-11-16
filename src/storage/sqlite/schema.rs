@@ -158,6 +158,14 @@ CREATE TABLE IF NOT EXISTS data_export_tokens (
     consumed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS policy_consents (
+    user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    policy       TEXT NOT NULL,
+    version      TEXT NOT NULL,
+    consented_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, policy, version)
+);
+
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens (family_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_families_user ON refresh_token_families (user_id);
 CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications (user_id);
