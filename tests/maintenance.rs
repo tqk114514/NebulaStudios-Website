@@ -21,6 +21,9 @@ const OLD_CODE: &str = "018f0000-0000-7000-8000-00000000000c";
 const NEW_CODE: &str = "018f0000-0000-7000-8000-00000000000d";
 const OLD_STATE: &str = "social-state-old";
 const NEW_STATE: &str = "social-state-new";
+const OLD_EXPORT: &str = "export-expired";
+const CONSUMED_EXPORT: &str = "export-consumed";
+const NEW_EXPORT: &str = "export-new";
 
 #[tokio::test]
 async fn purge_expired_deletes_only_expired_rows() {
@@ -34,6 +37,7 @@ async fn purge_expired_deletes_only_expired_rows() {
     seed_oauth_data(&pool).await;
     seed_ban_data(&pool).await;
     seed_social_states(&pool).await;
+    seed_export_tokens(&pool).await;
     pool.close().await;
 
     let report =
@@ -50,6 +54,7 @@ async fn purge_expired_deletes_only_expired_rows() {
             oauth_authorization_codes: 1,
             expired_bans: 1,
             social_login_states: 1,
+            data_export_tokens: 2,
         }
     );
 
@@ -215,6 +220,27 @@ async fn seed_social_states(pool: &SqlitePool) {
     }
 }
 
+async fn seed_export_tokens(pool: &SqlitePool) {
+    for (hash, expires_at, consumed_at) in [
+        (OLD_EXPORT, "2026-10-26T07:00:00+00:00", None),
+        // 已消费但未过期：保留 1 天后清理
+        (CONSUMED_EXPORT, "2026-10-26T09:00:00+00:00", Some("2026-10-24T00:00:00+00:00")),
+        (NEW_EXPORT, "2026-10-26T09:00:00+00:00", None),
+    ] {
+        sqlx::query(
+            "INSERT INTO data_export_tokens (token_hash, user_id, expires_at, created_at, consumed_at)
+             VALUES (?1, ?2, ?3, '2026-10-26T08:00:00+00:00', ?4)",
+        )
+        .bind(hash)
+        .bind(USER_ID)
+        .bind(expires_at)
+        .bind(consumed_at)
+        .execute(pool)
+        .await
+        .expect("导出令牌必须可插入");
+    }
+}
+
 async fn assert_remaining_rows(pool: &SqlitePool) {
     for (table, sql, expected) in [
         ("refresh_tokens", "SELECT COUNT(*) FROM refresh_tokens", 1_i64),
@@ -225,6 +251,7 @@ async fn assert_remaining_rows(pool: &SqlitePool) {
         ("oauth_authorization_codes", "SELECT COUNT(*) FROM oauth_authorization_codes", 1),
         ("user_bans", "SELECT COUNT(*) FROM user_bans", 0),
         ("social_login_states", "SELECT COUNT(*) FROM social_login_states", 1),
+        ("data_export_tokens", "SELECT COUNT(*) FROM data_export_tokens", 1),
     ] {
         let count: i64 = sqlx::query_scalar(sql).fetch_one(pool).await.expect("计数必须可读");
         assert_eq!(count, expected, "{table} 只应保留未过期行");

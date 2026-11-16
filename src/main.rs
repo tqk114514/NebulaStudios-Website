@@ -18,8 +18,8 @@ use nebula_server::social::google::{GoogleClient, GoogleConfig};
 use nebula_server::social::microsoft::{MicrosoftClient, MicrosoftConfig};
 use nebula_server::social::{SocialClients, SocialProviderClient};
 use nebula_server::storage::sqlite::{
-    self, SqliteAdminRepo, SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteSocialRepo,
-    SqliteUserRepo,
+    self, SqliteAdminRepo, SqliteExportRepo, SqliteMaintenanceRepo, SqliteRefreshRepo,
+    SqliteSocialRepo, SqliteUserRepo,
 };
 use nebula_server::telemetry;
 
@@ -120,7 +120,8 @@ async fn main() -> anyhow::Result<()> {
         )),
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
-        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool.clone())),
+        export_repo: Arc::new(SqliteExportRepo::from_pool(pool)),
         avatar_store,
         social_clients: Arc::new(social_clients),
         social_base_url: config.social.base_url.clone(),

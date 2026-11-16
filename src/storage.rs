@@ -331,6 +331,8 @@ pub struct CleanupReport {
     pub expired_bans: u64,
     /// 删除的已过期 OAuth 中转态行数。
     pub social_login_states: u64,
+    /// 删除的过期或已消费数据导出令牌行数。
+    pub data_export_tokens: u64,
 }
 
 /// 维护仓储：过期数据清理；删除在同一事务内完成。
@@ -451,6 +453,12 @@ pub trait AdminRepo: Send + Sync {
     /// # Errors
     /// 仅存储故障。
     async fn count_audit(&self) -> Result<i64, StorageError>;
+
+    /// 某用户作为操作者或被操作对象的全部审计记录，按时间升序（数据导出用）。
+    ///
+    /// # Errors
+    /// 仅存储故障；存量记录的 UUID/JSON 损坏也按存储故障返回。
+    async fn list_audit_for_user(&self, user_id: &UserId) -> Result<Vec<AuditEntry>, StorageError>;
 }
 
 /// TOTP 仓储：状态与密钥、恢复码批次、登录二段挑战。
@@ -609,6 +617,34 @@ pub trait OAuthRepo: Send + Sync {
         code_id: &uuid::Uuid,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
+}
+
+/// 数据导出下载令牌仓储。
+///
+/// 令牌明文不入库，只存 SHA-256；每用户同时最多一个未消费令牌。
+#[async_trait]
+pub trait ExportRepo: Send + Sync {
+    /// 作废该用户全部未消费令牌并写入新令牌。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在（外键约束）也按存储故障返回。
+    async fn issue(
+        &self,
+        user_id: &UserId,
+        token_hash: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 原子消费未过期令牌并返回所属用户；不存在、已消费或已过期返回 `None`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn consume(
+        &self,
+        token_hash: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<UserId>, StorageError>;
 }
 
 /// 社交身份绑定错误。

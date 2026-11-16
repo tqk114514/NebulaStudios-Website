@@ -58,6 +58,8 @@ pub enum ApiError {
     RefreshInvalid,
     /// refresh token 重放，家族已整族撤销；401。
     RefreshReused,
+    /// 数据导出令牌不存在、已过期或已被消费；404。
+    ExportTokenInvalid,
     /// CSRF 校验失败（缺头、缺 cookie 或不相等）；403。
     CsrfInvalid,
     /// 验证码错误、过期、耗尽尝试或对应用户不存在（同体，防枚举）；401。
@@ -188,6 +190,9 @@ impl ApiError {
                 "refresh_reused",
                 "refresh token 已被重放，会话已撤销",
             ),
+            Self::ExportTokenInvalid => {
+                simple(StatusCode::NOT_FOUND, "export_token_invalid", "下载链接无效或已过期")
+            }
             Self::CsrfInvalid => simple(StatusCode::FORBIDDEN, "csrf_invalid", "CSRF 校验失败"),
             Self::InvalidVerificationCode => {
                 simple(StatusCode::UNAUTHORIZED, "invalid_code", "验证码错误或已失效")

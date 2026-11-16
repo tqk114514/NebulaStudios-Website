@@ -20,8 +20,9 @@ pub use nebula_server::mailer::EmailMessage;
 use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::social::SocialClients;
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteAdminRepo, SqliteEmailVerificationRepo, SqliteMaintenanceRepo,
-    SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo, SqliteTotpRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteAdminRepo, SqliteEmailVerificationRepo, SqliteExportRepo,
+    SqliteMaintenanceRepo, SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo, SqliteTotpRepo,
+    SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -169,7 +170,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         oauth_repo: Arc::new(SqliteOAuthRepo::from_pool(pool.clone())),
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
-        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        social_repo: Arc::new(SqliteSocialRepo::from_pool(pool.clone())),
+        export_repo: Arc::new(SqliteExportRepo::from_pool(pool)),
         avatar_store: Arc::new(AvatarStore::new(dir.path().join("avatars"))),
         // 默认不启用任何社交 provider；社交用例自行覆盖本字段注入假客户端
         social_clients: Arc::new(SocialClients::default()),

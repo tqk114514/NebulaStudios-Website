@@ -52,13 +52,20 @@ enabled = true
 `GET /api/users/{user_id}/avatar?v=N` 公开读取，`v` 只作缓存键；资料端点在
 `avatar_url` 返回该地址。注销账户时头像文件一并删除。
 
+## 数据导出
+
+`POST /api/user/export` 生成 10 分钟有效、单次使用的下载链接；再次申请会作废此前
+未消费的链接。`GET /api/user/export/{token}` 返回 JSON（资料、头像地址、社交绑定、
+TOTP 状态与恢复码余量、审计记录），响应 `Cache-Control: no-store`。令牌明文只在
+申请响应中出现一次，库中只存 SHA-256。
+
 ## 运维端点与后台任务
 
 - `GET /healthz`：存活探针。
 - `GET /metrics`：Prometheus 文本格式；由 `main` 安装 recorder，测试装配返回 404。
 - 清理任务每 `NEBULA_JOBS__CLEANUP_INTERVAL_SECS` 秒运行一次：删除过期 refresh token、
-  过期/已消费验证码、TOTP 挑战、OAuth 授权码、已消费恢复码与已到期临时封禁；已消费
-  记录保留 1 天，无 token 的 refresh 家族保留 30 天。
+  过期/已消费验证码、TOTP 挑战、OAuth 授权码、已消费恢复码、过期或已消费导出令牌与
+  已到期临时封禁；已消费记录保留 1 天，无 token 的 refresh 家族保留 30 天。
 - 审计日志不自动清理，留存策略待单独 ADR。
 
 ## 管理 API（ADR-0008）

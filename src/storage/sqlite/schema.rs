@@ -150,6 +150,14 @@ CREATE TABLE IF NOT EXISTS social_login_states (
     )
 );
 
+CREATE TABLE IF NOT EXISTS data_export_tokens (
+    token_hash  TEXT PRIMARY KEY NOT NULL,
+    user_id     TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expires_at  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    consumed_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens (family_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_families_user ON refresh_token_families (user_id);
 CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications (user_id);
@@ -159,6 +167,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs (actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action);
 CREATE INDEX IF NOT EXISTS idx_social_identities_user ON user_social_identities (user_id);
 CREATE INDEX IF NOT EXISTS idx_social_login_states_expires ON social_login_states (expires_at);
+CREATE INDEX IF NOT EXISTS idx_data_export_tokens_user ON data_export_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_data_export_tokens_expires ON data_export_tokens (expires_at);
 
 CREATE TRIGGER IF NOT EXISTS users_username_chars_insert
 BEFORE INSERT ON users

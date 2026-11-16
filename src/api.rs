@@ -39,8 +39,8 @@ use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::user::{User, UserId};
 use crate::social::SocialClients;
 use crate::storage::{
-    AccountRepo, AdminRepo, EmailVerificationRepo, MaintenanceRepo, OAuthRepo, RefreshTokenRepo,
-    SocialRepo, TotpRepo, UserRepo,
+    AccountRepo, AdminRepo, EmailVerificationRepo, ExportRepo, MaintenanceRepo, OAuthRepo,
+    RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
 };
 
 /// access 会话 cookie 名；全站路径。
@@ -216,6 +216,8 @@ pub struct AppState {
     pub admin_repo: Arc<dyn AdminRepo>,
     /// 社交身份与 OAuth 中转态仓储（ADR-0012）。
     pub social_repo: Arc<dyn SocialRepo>,
+    /// 数据导出一次性下载令牌仓储。
+    pub export_repo: Arc<dyn ExportRepo>,
     /// 头像文件存储；上传、公开读取与注销清理共用。
     pub avatar_store: Arc<AvatarStore>,
     /// 已启用的社交 provider 客户端；未启用的 provider 不在表内。
@@ -387,6 +389,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/{provider}", get(auth::social::start))
         .route("/api/auth/{provider}/callback", get(auth::social::callback))
         .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
+        .route("/api/user/export/{token}", get(user::export_download::download_export))
         .route("/api/user/social", get(user::social::list))
         .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
@@ -461,6 +464,13 @@ pub fn router(state: AppState) -> Router {
         5,
     );
 
+    // 数据导出申请写库并返回一次性链接；突发 3、每 20 秒补 1
+    let export_limited = limited(
+        Router::new().route("/api/user/export", post(user::export_request::request_export)),
+        20,
+        3,
+    );
+
     // 刷新可被匿名触发并放大一次 DB 查询与潜在的整族撤销，故限额挡放大：
     // 突发 30、每 1 秒补 1——正常客户端刷新频率远低于此（access TTL 默认 1 小时）
     let refresh_limited =
@@ -475,6 +485,7 @@ pub fn router(state: AppState) -> Router {
         .merge(totp_limited)
         .merge(delete_request_limited)
         .merge(avatar_limited)
+        .merge(export_limited)
         .merge(refresh_limited)
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))

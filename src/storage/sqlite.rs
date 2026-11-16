@@ -82,6 +82,12 @@ pub struct SqliteSocialRepo {
     pool: SqlitePool,
 }
 
+/// SQLite 数据导出令牌仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteExportRepo {
+    pool: SqlitePool,
+}
+
 /// 打开或创建数据库文件并建立带 PRAGMA 的连接池；schema 由
 /// [`ensure_schema`] 幂等创建（ADR-0003 修订），没有独立迁移步骤。
 ///
@@ -177,6 +183,14 @@ impl SqliteSocialRepo {
     }
 }
 
+impl SqliteExportRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
 impl From<SqlxError> for StorageError {
     fn from(err: SqlxError) -> Self {
         Self(Box::new(err))
@@ -225,6 +239,23 @@ type AdminUserTuple =
 type AuditTuple = (Uuid, Uuid, String, Option<Uuid>, Option<String>, DateTime<Utc>);
 type SocialIdentityTuple = (Uuid, Uuid, String, String, Option<String>, DateTime<Utc>);
 type SocialStateTuple = (String, String, String, String, Option<Uuid>, DateTime<Utc>);
+
+fn audit_from_tuple(
+    (id, actor_id, action, target_id, raw_details, created_at): AuditTuple,
+) -> Result<AuditEntry, StorageError> {
+    let details: Option<serde_json::Value> = raw_details
+        .map(|raw| serde_json::from_str(&raw))
+        .transpose()
+        .map_err(StorageError::wrap)?;
+    Ok(AuditEntry {
+        id,
+        actor_id: UserId::from_uuid(actor_id),
+        action,
+        target_id: target_id.map(UserId::from_uuid),
+        details,
+        created_at,
+    })
+}
 
 fn credentials_from_tuple(
     (id, username, email, email_verified, created_at, avatar_version, encoded): CredentialsTuple,
@@ -1122,6 +1153,17 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
                 .await?
                 .rows_affected();
 
+        let data_export_tokens = sqlx::query(
+            "DELETE FROM data_export_tokens
+             WHERE expires_at < ?1
+                OR (consumed_at IS NOT NULL AND consumed_at < ?2)",
+        )
+        .bind(now)
+        .bind(consumed_cutoff)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
         tx.commit().await?;
         Ok(CleanupReport {
             refresh_tokens,
@@ -1132,6 +1174,7 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
             oauth_authorization_codes,
             expired_bans,
             social_login_states,
+            data_export_tokens,
         })
     }
 }
@@ -1314,28 +1357,76 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|(id, actor_id, action, target_id, raw_details, created_at)| {
-                let details: Option<serde_json::Value> = raw_details
-                    .map(|raw| serde_json::from_str(&raw))
-                    .transpose()
-                    .map_err(StorageError::wrap)?;
-                Ok(AuditEntry {
-                    id,
-                    actor_id: UserId::from_uuid(actor_id),
-                    action,
-                    target_id: target_id.map(UserId::from_uuid),
-                    details,
-                    created_at,
-                })
-            })
-            .collect()
+        rows.into_iter().map(audit_from_tuple).collect()
     }
 
     async fn count_audit(&self) -> Result<i64, StorageError> {
         let total: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs").fetch_one(&self.pool).await?;
         Ok(total)
+    }
+
+    async fn list_audit_for_user(&self, user_id: &UserId) -> Result<Vec<AuditEntry>, StorageError> {
+        let rows: Vec<AuditTuple> = sqlx::query_as(
+            "SELECT id, actor_id, action, target_id, details, created_at
+             FROM audit_logs
+             WHERE actor_id = ?1 OR target_id = ?1
+             ORDER BY created_at ASC",
+        )
+        .bind(user_id.as_uuid())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(audit_from_tuple).collect()
+    }
+}
+
+#[async_trait]
+impl crate::storage::ExportRepo for SqliteExportRepo {
+    async fn issue(
+        &self,
+        user_id: &UserId,
+        token_hash: &str,
+        expires_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        // 同一用户只保留最新一条未消费令牌；旧链接申请新链接后立即失效
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM data_export_tokens WHERE user_id = ?1 AND consumed_at IS NULL")
+            .bind(user_id.as_uuid())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO data_export_tokens (token_hash, user_id, expires_at, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(token_hash)
+        .bind(user_id.as_uuid())
+        .bind(expires_at)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn consume(
+        &self,
+        token_hash: &str,
+        now: DateTime<Utc>,
+    ) -> Result<Option<UserId>, StorageError> {
+        let user_id: Option<Uuid> = sqlx::query_scalar(
+            "UPDATE data_export_tokens SET consumed_at = ?2
+             WHERE token_hash = ?1
+               AND consumed_at IS NULL
+               AND expires_at > ?2
+             RETURNING user_id",
+        )
+        .bind(token_hash)
+        .bind(now)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(user_id.map(UserId::from_uuid))
     }
 }
 

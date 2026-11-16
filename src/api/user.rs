@@ -2,6 +2,8 @@
 
 pub mod avatar_serve;
 pub mod avatar_upload;
+pub mod export_download;
+pub mod export_request;
 pub mod profile;
 pub mod social;
 pub mod totp_disable;
