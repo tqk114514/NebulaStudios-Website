@@ -87,6 +87,7 @@ async fn seed_user(fixture: &Fixture, username: &str, email: &str) -> UserId {
                 email: email.to_owned(),
                 created_at: fixture.clock.now(),
                 email_verified: true,
+                avatar_version: 0,
             },
             &PasswordHash::hash("Nebula!Passw0rd-2026").expect("哈希必须成功"),
         )

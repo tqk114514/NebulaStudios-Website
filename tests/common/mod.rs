@@ -13,6 +13,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode, header::SET_COOKIE};
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
+use nebula_server::avatar::AvatarStore;
 use nebula_server::context::ManualClock;
 use nebula_server::crypto::{AesGcmCipher, HmacCodeHasher};
 pub use nebula_server::mailer::EmailMessage;
@@ -169,6 +170,7 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
         social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        avatar_store: Arc::new(AvatarStore::new(dir.path().join("avatars"))),
         // 默认不启用任何社交 provider；社交用例自行覆盖本字段注入假客户端
         social_clients: Arc::new(SocialClients::default()),
         social_base_url: "https://accounts.nebula.test".to_owned(),
@@ -275,6 +277,15 @@ pub trait OneshotPost {
     ) -> axum::response::Response;
     /// POST form-urlencoded。
     async fn oneshot_post_form(self, uri: &str, form: &str) -> axum::response::Response;
+    /// POST 任意字节体（multipart 等），带 cookie 与可选 CSRF 头。
+    async fn oneshot_post_bytes(
+        self,
+        uri: &str,
+        content_type: &str,
+        body: Vec<u8>,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response;
 }
 
 impl OneshotPost for axum::Router {
@@ -362,6 +373,31 @@ impl OneshotPost for axum::Router {
             .header("content-type", "application/x-www-form-urlencoded")
             .body(Body::from(form.to_owned()))
             .expect("请求构造必须成功");
+        inject_connect_info(&mut request);
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_post_bytes(
+        self,
+        uri: &str,
+        content_type: &str,
+        body: Vec<u8>,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = Request::post(uri)
+            .header("content-type", content_type)
+            .body(Body::from(body))
+            .expect("请求构造必须成功");
+        if !cookie.is_empty() {
+            request
+                .headers_mut()
+                .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
+        }
+        if let Some(csrf) = csrf {
+            request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));
+        }
         inject_connect_info(&mut request);
         self.oneshot(request).await.expect("oneshot 必须成功")
     }

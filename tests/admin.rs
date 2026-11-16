@@ -142,6 +142,7 @@ async fn admin_reads_stats_and_user_list() {
     assert_eq!(users_json["total"], 1);
     assert_eq!(users_json["users"][0]["email"], "nova@nebula.st");
     assert_eq!(users_json["users"][0]["is_admin"], false);
+    assert!(users_json["users"][0]["avatar_url"].is_null());
     assert!(users_json["users"][0]["ban"].is_null());
 }
 

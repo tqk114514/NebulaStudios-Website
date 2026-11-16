@@ -28,6 +28,7 @@ cargo run --release
 `NEBULA_MAIL__SMTP_HOST`（空则日志模式）、`NEBULA_MAIL__SMTP_PORT`（默认 587）、
 `NEBULA_MAIL__SMTP_TLS`（`starttls` 默认 / `implicit` 用于 465 / `none`）、
 `NEBULA_OAUTH__CLIENTS_FILE`（OAuth Provider 客户端 TOML，空则无客户端）、
+`NEBULA_AVATAR__DIR`（头像文件目录，默认 `avatars`）、
 `NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
 
 ## OAuth Provider 客户端
@@ -43,6 +44,13 @@ redirect_uri = "https://app.example.com/callback"
 secret = "change-me"
 enabled = true
 ```
+
+## 头像
+
+`POST /api/user/avatar` 接收 multipart 字段 `avatar`：原始文件上限 5 MiB、单边不超过
+4096 像素，按内容解码后居中裁剪缩放为 512×512 WebP，写入 `NEBULA_AVATAR__DIR`。
+`GET /api/users/{user_id}/avatar?v=N` 公开读取，`v` 只作缓存键；资料端点在
+`avatar_url` 返回该地址。注销账户时头像文件一并删除。
 
 ## 运维端点与后台任务
 

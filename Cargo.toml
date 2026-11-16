@@ -35,12 +35,13 @@ aes-gcm = "0.11.1"
 anyhow = "1.0.104"
 argon2 = "0.6.0"
 async-trait = "0.1.92"
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["multipart"] }
 axum-prometheus = "0.10.1"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 config = { version = "0.15.27", default-features = false, features = ["toml"] }
 ed25519-dalek = { version = "3.0.0", features = ["pkcs8", "pem"] }
+image = { version = "0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 jsonwebtoken = { version = "12.0.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 lettre = { version = "0.11.23", default-features = false, features = [
   "aws-lc-rs",
@@ -71,6 +72,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.29.2", features = ["serde", "v7"] }
 validator = { version = "0.21.0", features = ["derive"] }
+webp = { version = "0.3.1", default-features = false }
 
 [dev-dependencies]
 http-body-util = "0.1.5"

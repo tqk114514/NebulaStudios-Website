@@ -29,6 +29,15 @@ pub struct Config {
     pub social: SocialConfig,
     /// OAuth Provider 客户端子配置。
     pub oauth: OAuthConfig,
+    /// 头像存储子配置。
+    pub avatar: AvatarConfig,
+}
+
+/// 头像文件存储配置；路径须可写，启动时创建。
+#[derive(Debug, Clone, Deserialize)]
+pub struct AvatarConfig {
+    /// 头像文件目录；每个用户一个 `{user_id}.webp`。
+    pub dir: PathBuf,
 }
 
 /// OAuth Provider 客户端配置；客户端只在部署配置中登记，不提供管理端点。
@@ -237,6 +246,7 @@ impl Config {
             .set_default("social.microsoft_client_id", "")?
             .set_default("social.microsoft_client_secret", "")?
             .set_default("oauth.clients_file", "")?
+            .set_default("avatar.dir", "avatars")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let mut config: Self = settings.try_deserialize()?;
@@ -249,6 +259,9 @@ impl Config {
             return Err(LoadConfigError::Invalid(
                 "jobs.cleanup_interval_secs 必须为正秒数".to_owned(),
             ));
+        }
+        if config.avatar.dir.as_os_str().is_empty() {
+            return Err(LoadConfigError::Invalid("avatar.dir 不得为空".to_owned()));
         }
         if !matches!(config.mail.smtp_tls.as_str(), "starttls" | "implicit" | "none") {
             return Err(LoadConfigError::Invalid(
@@ -351,6 +364,7 @@ mod tests {
         // 没有客户端配置文件时，OAuth 客户端列表为空
         assert_eq!(config.oauth.clients_file, "");
         assert!(config.oauth.clients.is_empty());
+        assert_eq!(config.avatar.dir, std::path::Path::new("avatars"));
     }
 
     #[test]

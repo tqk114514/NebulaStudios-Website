@@ -37,6 +37,7 @@ async fn seed_user(users: &SqliteUserRepo, username: &str, email: &str) -> UserI
         email: email.to_owned(),
         created_at: now(),
         email_verified: false,
+        avatar_version: 0,
     };
     users
         .insert(&user, &PasswordHash::hash("Nebula!Passw0rd-2026").expect("哈希必须成功"))

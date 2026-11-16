@@ -203,13 +203,15 @@ impl From<SqlxError> for LinkIdentityError {
     }
 }
 
-type UserTuple = (Uuid, String, String, bool, DateTime<Utc>);
+type UserTuple = (Uuid, String, String, bool, DateTime<Utc>, i64);
 
-fn user_from_tuple((id, username, email, email_verified, created_at): UserTuple) -> User {
-    User { id: UserId::from_uuid(id), username, email, created_at, email_verified }
+fn user_from_tuple(
+    (id, username, email, email_verified, created_at, avatar_version): UserTuple,
+) -> User {
+    User { id: UserId::from_uuid(id), username, email, created_at, email_verified, avatar_version }
 }
 
-type CredentialsTuple = (Uuid, String, String, bool, DateTime<Utc>, Option<String>);
+type CredentialsTuple = (Uuid, String, String, bool, DateTime<Utc>, i64, Option<String>);
 
 type AccessTuple = (String, bool, i64, Option<String>, Option<DateTime<Utc>>);
 type RefreshTuple = (Uuid, Uuid, String, DateTime<Utc>, String, Uuid, Option<String>, String, i64);
@@ -219,20 +221,20 @@ type ChallengeTuple = (Uuid, Uuid, u32, DateTime<Utc>);
 type ClientTuple = (String, String, String, bool);
 type CodeTuple = (Uuid, String, Uuid, String, String, String, DateTime<Utc>);
 type AdminUserTuple =
-    (Uuid, String, String, bool, DateTime<Utc>, Option<String>, Option<DateTime<Utc>>);
+    (Uuid, String, String, bool, DateTime<Utc>, i64, Option<String>, Option<DateTime<Utc>>);
 type AuditTuple = (Uuid, Uuid, String, Option<Uuid>, Option<String>, DateTime<Utc>);
 type SocialIdentityTuple = (Uuid, Uuid, String, String, Option<String>, DateTime<Utc>);
 type SocialStateTuple = (String, String, String, String, Option<Uuid>, DateTime<Utc>);
 
 fn credentials_from_tuple(
-    (id, username, email, email_verified, created_at, encoded): CredentialsTuple,
+    (id, username, email, email_verified, created_at, avatar_version, encoded): CredentialsTuple,
 ) -> Result<Option<LoginCredentials>, UserRepoError> {
     // 存量哈希损坏是存储数据问题，须显式报错而非静默当作无口令
     let Some(encoded) = encoded else { return Ok(None) };
     let password_hash = PasswordHash::from_encoded(encoded)
         .map_err(|err| UserRepoError::Storage(StorageError::wrap(err)))?;
     Ok(Some(LoginCredentials {
-        user: user_from_tuple((id, username, email, email_verified, created_at)),
+        user: user_from_tuple((id, username, email, email_verified, created_at, avatar_version)),
         password_hash,
     }))
 }
@@ -280,9 +282,21 @@ impl UserRepo for SqliteUserRepo {
         Ok(updated.rows_affected() == 1)
     }
 
+    async fn bump_avatar_version(&self, user_id: &UserId) -> Result<Option<i64>, UserRepoError> {
+        let version: Option<i64> = sqlx::query_scalar(
+            "UPDATE users SET avatar_version = avatar_version + 1
+             WHERE id = ?1
+             RETURNING avatar_version",
+        )
+        .bind(user_id.as_uuid())
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(version)
+    }
+
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, UserRepoError> {
         let row: Option<UserTuple> = sqlx::query_as(
-            "SELECT id, username, email, email_verified, created_at
+            "SELECT id, username, email, email_verified, created_at, avatar_version
              FROM users WHERE email = ?1",
         )
         .bind(email)
@@ -294,7 +308,7 @@ impl UserRepo for SqliteUserRepo {
 
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, UserRepoError> {
         let row: Option<UserTuple> = sqlx::query_as(
-            "SELECT id, username, email, email_verified, created_at
+            "SELECT id, username, email, email_verified, created_at, avatar_version
              FROM users WHERE username = ?1",
         )
         .bind(username)
@@ -309,7 +323,7 @@ impl UserRepo for SqliteUserRepo {
         user_id: &UserId,
     ) -> Result<Option<LoginCredentials>, UserRepoError> {
         let row: Option<CredentialsTuple> = sqlx::query_as(
-            "SELECT id, username, email, email_verified, created_at, password_hash
+            "SELECT id, username, email, email_verified, created_at, avatar_version, password_hash
              FROM users WHERE id = ?1",
         )
         .bind(user_id.as_uuid())
@@ -350,7 +364,7 @@ impl UserRepo for SqliteUserRepo {
     ) -> Result<Option<LoginCredentials>, UserRepoError> {
         // 哈希列可空：无口令用户按 None 返回，调用方据此走时序对齐路径
         let row: Option<CredentialsTuple> = sqlx::query_as(
-            "SELECT id, username, email, email_verified, created_at, password_hash
+            "SELECT id, username, email, email_verified, created_at, avatar_version, password_hash
              FROM users WHERE email = ?1 OR username = ?1
              -- 兼容历史数据：若 username 恰好等于他人 email，email 匹配优先
              ORDER BY CASE WHEN email = ?1 THEN 0 ELSE 1 END, created_at ASC
@@ -1153,7 +1167,8 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         now: DateTime<Utc>,
     ) -> Result<Vec<AdminUserRow>, StorageError> {
         let rows: Vec<AdminUserTuple> = sqlx::query_as(
-            "SELECT u.id, u.username, u.email, u.email_verified, u.created_at, b.kind, b.expires_at
+            "SELECT u.id, u.username, u.email, u.email_verified, u.created_at,
+                    u.avatar_version, b.kind, b.expires_at
              FROM users u
              LEFT JOIN user_bans b ON b.user_id = u.id
              WHERE ?1 = ''
@@ -1169,17 +1184,29 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         .await?;
 
         rows.into_iter()
-            .map(|(id, username, email, email_verified, created_at, kind, expires_at)| {
-                let ban = decode_ban(kind.as_deref(), expires_at, now)?;
-                Ok(AdminUserRow {
-                    id: UserId::from_uuid(id),
+            .map(
+                |(
+                    id,
                     username,
                     email,
                     email_verified,
                     created_at,
-                    ban,
-                })
-            })
+                    avatar_version,
+                    kind,
+                    expires_at,
+                )| {
+                    let ban = decode_ban(kind.as_deref(), expires_at, now)?;
+                    Ok(AdminUserRow {
+                        id: UserId::from_uuid(id),
+                        username,
+                        email,
+                        email_verified,
+                        created_at,
+                        avatar_version,
+                        ban,
+                    })
+                },
+            )
             .collect()
     }
 

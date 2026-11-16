@@ -44,6 +44,8 @@ pub struct UserView {
     pub email_verified: bool,
     /// 注册时刻。
     pub created_at: DateTime<Utc>,
+    /// 头像公开地址；从未上传为 `None`。
+    pub avatar_url: Option<String>,
     /// 当前生效的封禁。
     pub ban: Option<BanView>,
     /// 是否为配置化管理员（ADR-0008）。
@@ -99,6 +101,7 @@ pub async fn users(
     let users = rows
         .into_iter()
         .map(|row| UserView {
+            avatar_url: crate::api::avatar_url(&row.id, row.avatar_version),
             is_admin: state.admin_emails.contains(&row.email),
             id: row.id,
             username: row.username,

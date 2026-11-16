@@ -17,6 +17,7 @@ fn sample_user() -> User {
             .expect("固定字面量必须可解析")
             .with_timezone(&Utc),
         email_verified: false,
+        avatar_version: 0,
     }
 }
 

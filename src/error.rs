@@ -38,6 +38,8 @@ pub enum ApiError {
     Internal(anyhow::Error),
     /// 请求体不是合法 JSON；400。
     MalformedJson(String),
+    /// multipart 请求无法解析；400。
+    MalformedMultipart(String),
     /// 请求体超过全局上限；413。
     PayloadTooLarge,
     /// 请求字段未通过校验；422，字段级错误在 `details.fields`。
@@ -158,6 +160,9 @@ impl ApiError {
             }
             Self::MalformedJson(reason) => {
                 (StatusCode::BAD_REQUEST, "malformed_json", reason, None)
+            }
+            Self::MalformedMultipart(reason) => {
+                (StatusCode::BAD_REQUEST, "malformed_multipart", reason, None)
             }
             Self::PayloadTooLarge => {
                 simple(StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", "请求体超过上限")

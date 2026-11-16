@@ -8,6 +8,7 @@ use anyhow::Context as _;
 use axum_prometheus::PrometheusMetricLayer;
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
+use nebula_server::avatar::AvatarStore;
 use nebula_server::config::{Config, OAuthClientSeed};
 use nebula_server::context::{Clock, SystemClock};
 use nebula_server::crypto::{AesGcmCipher, CodeHasher, HmacCodeHasher, SecretCipher};
@@ -95,6 +96,11 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("未配置社交登录，/api/auth/{{provider}} 不可用");
     }
 
+    tokio::fs::create_dir_all(&config.avatar.dir)
+        .await
+        .with_context(|| format!("创建头像目录 {}", config.avatar.dir.display()))?;
+    let avatar_store = Arc::new(AvatarStore::new(config.avatar.dir.clone()));
+
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
         refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
@@ -115,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
         maintenance_repo: Arc::new(SqliteMaintenanceRepo::from_pool(pool.clone())),
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
         social_repo: Arc::new(SqliteSocialRepo::from_pool(pool)),
+        avatar_store,
         social_clients: Arc::new(social_clients),
         social_base_url: config.social.base_url.clone(),
         admin_emails,

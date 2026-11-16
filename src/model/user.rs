@@ -60,6 +60,10 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     /// 邮箱是否已验证；注册时为 false，验证端点置 true。
     pub email_verified: bool,
+    /// 头像版本；0 表示从未上传，每次上传递增，用作公开头像地址的缓存键。
+    /// 不进入对外用户 JSON，资料端点单独给出 `avatar_url`。
+    #[serde(skip)]
+    pub avatar_version: i64,
 }
 
 /// 登录凭据查询结果：用户快照与口令哈希一并返回，供登录端点一次性取得。

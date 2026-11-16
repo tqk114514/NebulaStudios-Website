@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
     totp_state      TEXT NOT NULL DEFAULT 'disabled',
     totp_secret_enc TEXT,
     token_version   INTEGER NOT NULL DEFAULT 0,
+    avatar_version  INTEGER NOT NULL DEFAULT 0,
     UNIQUE (username),
     UNIQUE (email)
 );

@@ -2,11 +2,22 @@
 
 use axum::Json;
 use axum::extract::State;
+use serde::Serialize;
 
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
 use crate::model::user::User;
+
+/// 当前用户资料；用户字段平铺，另加派生的头像地址。
+#[derive(Debug, Serialize)]
+pub struct ProfileResponse {
+    /// 用户快照；不含口令哈希与头像版本。
+    #[serde(flatten)]
+    pub user: User,
+    /// 头像公开地址；从未上传为 `None`。
+    pub avatar_url: Option<String>,
+}
 
 /// 返回当前用户；不包含口令哈希等凭据。
 ///
@@ -15,12 +26,13 @@ use crate::model::user::User;
 pub async fn profile(
     State(state): State<AppState>,
     user: FirstPartyUser,
-) -> Result<Json<User>, ApiError> {
+) -> Result<Json<ProfileResponse>, ApiError> {
     let Some(credentials) =
         state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?
     else {
         // 提取器刚确认过用户存在；这里缺失只可能是并发删除，按未认证处理
         return Err(ApiError::Unauthorized);
     };
-    Ok(Json(credentials.user))
+    let avatar_url = crate::api::avatar_url(&credentials.user.id, credentials.user.avatar_version);
+    Ok(Json(ProfileResponse { user: credentials.user, avatar_url }))
 }

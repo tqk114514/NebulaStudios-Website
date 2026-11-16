@@ -2,6 +2,7 @@
 //! 供 `tests/` 集成测试导入。
 
 pub mod api;
+pub mod avatar;
 pub mod config;
 pub mod context;
 pub mod crypto;

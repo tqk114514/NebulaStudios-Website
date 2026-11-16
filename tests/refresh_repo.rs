@@ -24,6 +24,7 @@ fn seed_user(user_id: UserId) -> User {
         email: format!("{user_id}@nebula.st"),
         created_at: now(),
         email_verified: false,
+        avatar_version: 0,
     }
 }
 

@@ -81,6 +81,15 @@ pub trait UserRepo: Send + Sync {
         replacement: &PasswordHash,
     ) -> Result<bool, UserRepoError>;
 
+    /// 头像版本 +1 并返回新值；用户不存在返回 `None`。
+    ///
+    /// 版本写入先于文件替换：版本递增后即使文件仍为旧内容，公开地址也与旧缓存
+    /// 隔离，不会出现「URL 未变但图片已变」的永久陈旧缓存。
+    ///
+    /// # Errors
+    /// 仅 [`UserRepoError::Storage`]。
+    async fn bump_avatar_version(&self, user_id: &UserId) -> Result<Option<i64>, UserRepoError>;
+
     /// 按邮箱查找，大小写不敏感（列 COLLATE NOCASE）。
     ///
     /// # Errors
@@ -361,6 +370,8 @@ pub struct AdminUserRow {
     pub email_verified: bool,
     /// 注册时刻。
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// 头像版本；0 表示从未上传。
+    pub avatar_version: i64,
     /// 当前生效的封禁；已到期的临时封禁归为 `None`。
     pub ban: Option<Ban>,
 }

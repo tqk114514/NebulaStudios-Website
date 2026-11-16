@@ -128,6 +128,7 @@ pub async fn register(
         email: req.email,
         created_at: state.clock.now(),
         email_verified: false,
+        avatar_version: 0,
     };
 
     match state.user_repo.insert(&user, &hash).await {

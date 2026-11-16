@@ -58,6 +58,11 @@ pub async fn delete_confirm(
 
     // 删除即撤销：账户连同全部 refresh 家族与验证码一并消失
     state.account_repo.delete_user(&user.user_id).await.map_err(anyhow::Error::from)?;
+    // 头像文件不在数据库事务内；删除失败时文件成为孤儿，但用户记录已不存在，
+    // 资料端点不会再给出它的地址
+    if let Err(err) = state.avatar_store.remove(&user.user_id).await {
+        tracing::warn!(error = ?err, user_id = %user.user_id, "头像文件清理失败");
+    }
     crate::api::record_audit(
         &state,
         user.user_id,

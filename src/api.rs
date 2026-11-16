@@ -30,6 +30,7 @@ use tower_http::request_id::{
 };
 use tower_http::set_header::SetResponseHeaderLayer;
 
+use crate::avatar::{AvatarStore, MAX_REQUEST_BYTES};
 use crate::context::{Clock, RequestId};
 use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
@@ -215,6 +216,8 @@ pub struct AppState {
     pub admin_repo: Arc<dyn AdminRepo>,
     /// 社交身份与 OAuth 中转态仓储（ADR-0012）。
     pub social_repo: Arc<dyn SocialRepo>,
+    /// 头像文件存储；上传、公开读取与注销清理共用。
+    pub avatar_store: Arc<AvatarStore>,
     /// 已启用的社交 provider 客户端；未启用的 provider 不在表内。
     pub social_clients: Arc<SocialClients>,
     /// 社交回跳后跳转的前端基地址（`social.base_url`）；社交未启用时为空串。
@@ -305,6 +308,14 @@ pub(crate) fn send_security_notice(state: &AppState, to: &str, notice: SecurityN
     });
 }
 
+/// 头像公开读取地址；版本为 0 表示从未上传。
+///
+/// 路径与版本参数属于 HTTP 契约，故放在 `api/` 父模块供资料与用户列表共用
+/// （§2 依赖方向 3）。
+pub(crate) fn avatar_url(user_id: &UserId, version: i64) -> Option<String> {
+    (version > 0).then(|| format!("/api/users/{user_id}/avatar?v={version}"))
+}
+
 /// 追加一条审计记录；失败只记日志，不回滚已经完成的业务动作。
 ///
 /// 用户事件与管理事件共用 `audit_logs`（AGENTS §0）；审计失败意味着该事件
@@ -375,6 +386,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/audit", get(admin::audit::audit))
         .route("/api/auth/{provider}", get(auth::social::start))
         .route("/api/auth/{provider}/callback", get(auth::social::callback))
+        .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
         .route("/api/user/social", get(user::social::list))
         .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))
@@ -440,6 +452,15 @@ pub fn router(state: AppState) -> Router {
         3,
     );
 
+    // 头像上传：解码与重编码是 CPU 工作，单独放宽请求体上限；突发 5、每 10 秒补 1
+    let avatar_limited = limited(
+        Router::new()
+            .route("/api/user/avatar", post(user::avatar_upload::upload))
+            .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES)),
+        10,
+        5,
+    );
+
     // 刷新可被匿名触发并放大一次 DB 查询与潜在的整族撤销，故限额挡放大：
     // 突发 30、每 1 秒补 1——正常客户端刷新频率远低于此（access TTL 默认 1 小时）
     let refresh_limited =
@@ -453,6 +474,7 @@ pub fn router(state: AppState) -> Router {
         .merge(reset_limited)
         .merge(totp_limited)
         .merge(delete_request_limited)
+        .merge(avatar_limited)
         .merge(refresh_limited)
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
