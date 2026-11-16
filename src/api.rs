@@ -34,6 +34,7 @@ use crate::context::{Clock, RequestId};
 use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::ApiError;
 use crate::mailer::{EmailMessage, Mailer};
+use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::user::{User, UserId};
 use crate::social::SocialClients;
 use crate::storage::{
@@ -304,6 +305,28 @@ pub(crate) fn send_security_notice(state: &AppState, to: &str, notice: SecurityN
     });
 }
 
+/// 追加一条审计记录；失败只记日志，不回滚已经完成的业务动作。
+///
+/// 用户事件与管理事件共用 `audit_logs`（AGENTS §0）；审计失败意味着该事件
+/// 没有留痕，调用方不得把它当作业务失败，排查依赖日志中的 `action` 与 `user_id`。
+pub(crate) async fn record_audit(
+    state: &AppState,
+    actor_id: UserId,
+    action: AuditAction,
+    target_id: Option<UserId>,
+    details: Option<serde_json::Value>,
+) {
+    let entry = NewAuditEntry { actor_id, action, target_id, details };
+    if let Err(err) = state.admin_repo.record_audit(&entry, state.clock.now()).await {
+        tracing::warn!(
+            error = ?err,
+            action = action.as_str(),
+            user_id = %actor_id,
+            "审计写入失败，事件未留痕"
+        );
+    }
+}
+
 /// 解析路径中的社交 provider；未知值按「未启用」同体返回，避免泄露配置细节。
 pub(crate) fn parse_social_provider(
     raw: &str,
@@ -345,6 +368,7 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(healthz::healthz))
         .route("/metrics", get(metrics::metrics))
         .route("/api/auth/logout", post(auth::logout::logout))
+        .route("/api/user", get(user::profile::profile))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))

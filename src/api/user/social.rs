@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::api::{AppState, parse_social_provider};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 use crate::model::oauth2::{code_challenge_s256, generate_code_verifier};
 use crate::model::social::{SOCIAL_STATE_TTL, SocialLoginAction, SocialLoginState};
 use crate::model::tokens::random_hex_32;
@@ -130,5 +131,13 @@ pub async fn unlink(
     if !removed {
         return Err(ApiError::SocialNotLinked);
     }
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::UserSocialUnlinked,
+        Some(user.user_id),
+        Some(serde_json::json!({ "provider": provider.as_str() })),
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }

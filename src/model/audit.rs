@@ -23,13 +23,69 @@ pub struct AuditEntry {
     pub created_at: DateTime<Utc>,
 }
 
+/// 审计动作；字符串是对外稳定契约，新增变体只追加不改名。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuditAction {
+    /// 注册。
+    AuthRegister,
+    /// 邮箱验证完成。
+    AuthEmailVerify,
+    /// 登录成功；`details.method` 区分 password / totp / provider。
+    AuthLogin,
+    /// 登出。
+    AuthLogout,
+    /// 已登录态改密。
+    AuthPasswordChange,
+    /// 未登录态密码重置。
+    AuthPasswordReset,
+    /// 账户注销。
+    AuthAccountDelete,
+    /// 启用两步验证。
+    UserTotpEnabled,
+    /// 关闭两步验证。
+    UserTotpDisabled,
+    /// 绑定社交身份。
+    UserSocialLinked,
+    /// 解绑社交身份。
+    UserSocialUnlinked,
+    /// 同意第三方客户端授权。
+    OAuthConsent,
+    /// 管理员封禁。
+    AdminUserBan,
+    /// 管理员解封。
+    AdminUserUnban,
+}
+
+impl AuditAction {
+    /// 入库字符串。
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AuthRegister => "auth.register",
+            Self::AuthEmailVerify => "auth.email.verify",
+            Self::AuthLogin => "auth.login",
+            Self::AuthLogout => "auth.logout",
+            Self::AuthPasswordChange => "auth.password.change",
+            Self::AuthPasswordReset => "auth.password.reset",
+            Self::AuthAccountDelete => "auth.account.delete",
+            Self::UserTotpEnabled => "user.totp.enable",
+            Self::UserTotpDisabled => "user.totp.disable",
+            Self::UserSocialLinked => "user.social.link",
+            Self::UserSocialUnlinked => "user.social.unlink",
+            Self::OAuthConsent => "oauth.consent",
+            Self::AdminUserBan => "admin.user.ban",
+            Self::AdminUserUnban => "admin.user.unban",
+        }
+    }
+}
+
 /// 待写入的审计记录；明文不在此结构之外出现。
 #[derive(Debug, Clone)]
 pub struct NewAuditEntry {
     /// 操作者。
     pub actor_id: UserId,
     /// 机器可读动作。
-    pub action: &'static str,
+    pub action: AuditAction,
     /// 被操作对象。
     pub target_id: Option<UserId>,
     /// 结构化附加信息。

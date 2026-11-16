@@ -12,7 +12,7 @@ use super::{invalid, target_id};
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::AdminUser;
-use crate::model::audit::NewAuditEntry;
+use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::user::Ban;
 
 /// 封禁请求。
@@ -101,7 +101,7 @@ pub async fn ban(
         .record_audit(
             &NewAuditEntry {
                 actor_id: admin.user.user_id,
-                action: "admin.user.ban",
+                action: AuditAction::AdminUserBan,
                 target_id: Some(target),
                 details: Some(details),
             },

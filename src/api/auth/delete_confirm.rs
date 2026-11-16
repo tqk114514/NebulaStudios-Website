@@ -11,6 +11,7 @@ use super::check_verification_code;
 use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 use crate::model::verification::VerificationPurpose;
 
 /// 注销确认请求。
@@ -57,6 +58,14 @@ pub async fn delete_confirm(
 
     // 删除即撤销：账户连同全部 refresh 家族与验证码一并消失
     state.account_repo.delete_user(&user.user_id).await.map_err(anyhow::Error::from)?;
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::AuthAccountDelete,
+        Some(user.user_id),
+        None,
+    )
+    .await;
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);

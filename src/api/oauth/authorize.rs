@@ -13,6 +13,7 @@ use super::{form_urlencode, rfc_error};
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 use crate::model::oauth2::{AUTH_CODE_TTL, NewAuthorizationCode, valid_challenge, valid_scope};
 use crate::model::tokens::RefreshToken;
 
@@ -150,6 +151,7 @@ pub async fn consent(
 
     // 码明文只在 302 Location 出现一次，库中存哈希
     let code = RefreshToken::generate();
+    let client_id = client.id.clone();
     let entry = NewAuthorizationCode {
         client_id: client.id,
         user_id: user.user_id,
@@ -163,6 +165,14 @@ pub async fn consent(
         .create_code(&code.to_hash_hex(), &entry, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::OAuthConsent,
+        Some(user.user_id),
+        Some(serde_json::json!({ "client_id": client_id, "scope": query.scope })),
+    )
+    .await;
 
     let mut location = query.redirect_uri.clone();
     location.push_str(if query.redirect_uri.contains('?') { "&" } else { "?" });

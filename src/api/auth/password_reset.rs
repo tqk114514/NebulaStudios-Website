@@ -12,6 +12,7 @@ use serde::Deserialize;
 use super::{hash_password_in_background, issue_and_send_code, password_problem};
 use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
+use crate::model::audit::AuditAction;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 重置请求（request 端点）。
@@ -126,6 +127,8 @@ pub async fn reset_confirm(
         .await
         .map_err(anyhow::Error::from)?;
 
+    crate::api::record_audit(&state, user.id, AuditAction::AuthPasswordReset, Some(user.id), None)
+        .await;
     send_security_notice(&state, &user.email, SecurityNotice::PasswordReset);
 
     let mut headers = axum::http::HeaderMap::new();

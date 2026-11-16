@@ -367,7 +367,8 @@ pub struct AdminUserRow {
 
 /// 管理后台仓储：统计、用户列表、封禁/解封与审计。
 ///
-/// 封禁与撤销 refresh 会话在同一事务内完成；审计写入是独立追加操作。
+/// 封禁与撤销 refresh 会话在同一事务内完成；审计表同时承载用户侧与管理侧事件，
+/// 写入是独立追加操作。
 #[async_trait]
 pub trait AdminRepo: Send + Sync {
     /// 取用户总数、当前封禁数与 `since` 之后的新增数。

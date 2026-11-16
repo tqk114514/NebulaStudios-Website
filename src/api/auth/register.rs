@@ -10,6 +10,7 @@ use validator::{Validate, ValidationError, ValidationErrors};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::model::audit::AuditAction;
 use crate::model::password::PasswordHash;
 use crate::model::user::{User, UserId};
 use crate::storage::{UserRepo, UserRepoError};
@@ -131,6 +132,14 @@ pub async fn register(
 
     match state.user_repo.insert(&user, &hash).await {
         Ok(()) => {
+            crate::api::record_audit(
+                &state,
+                user.id,
+                AuditAction::AuthRegister,
+                Some(user.id),
+                None,
+            )
+            .await;
             // 注册即发首封验证邮件；发送失败可经重发端点补发
             super::issue_and_send_code(
                 &state,

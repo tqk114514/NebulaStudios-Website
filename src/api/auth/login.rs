@@ -13,6 +13,7 @@ use super::{
 };
 use crate::api::{AppState, PASSWORD_INPUT_LIMIT};
 use crate::error::{ApiError, FieldInvalid};
+use crate::model::audit::AuditAction;
 use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::totp::{CHALLENGE_TTL, TotpState};
 
@@ -110,6 +111,14 @@ pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Respons
     }
 
     let tokens = issue_session(&state, user.id, access.token_version).await?;
+    crate::api::record_audit(
+        &state,
+        user.id,
+        AuditAction::AuthLogin,
+        Some(user.id),
+        Some(serde_json::json!({ "method": "password" })),
+    )
+    .await;
     Ok(session_response(StatusCode::OK, &state, &user, &tokens))
 }
 

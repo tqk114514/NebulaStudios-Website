@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use crate::api::{AppState, clear_session_cookies};
 use crate::error::ApiError;
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 
 /// 处理登出：鉴权前置由 [`FirstPartyUser`] 提取器承担——无有效 access token 时
 /// handler 根本不会执行（v3 的登出路由没挂鉴权，撤销逻辑永不执行，红线 #1）；
@@ -24,6 +25,15 @@ pub async fn logout(
         .revoke_all_sessions(&user.user_id, state.clock.now())
         .await
         .map_err(anyhow::Error::from)?;
+
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::AuthLogout,
+        Some(user.user_id),
+        None,
+    )
+    .await;
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);

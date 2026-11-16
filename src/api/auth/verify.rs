@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::model::audit::AuditAction;
 use crate::model::verification::VerificationPurpose;
 
 /// 验证请求。
@@ -63,5 +64,7 @@ pub async fn verify(State(state): State<AppState>, body: Bytes) -> Result<Respon
         // 并发下已被他者消费
         return Err(invalid);
     }
+    crate::api::record_audit(&state, user.id, AuditAction::AuthEmailVerify, Some(user.id), None)
+        .await;
     Ok(StatusCode::NO_CONTENT.into_response())
 }

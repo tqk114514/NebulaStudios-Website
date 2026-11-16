@@ -15,6 +15,7 @@ use crate::api::{
 };
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 
 /// 改密请求。
 #[derive(Debug, Deserialize)]
@@ -65,6 +66,14 @@ pub async fn change_password(
         .await
         .map_err(anyhow::Error::from)?;
 
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::AuthPasswordChange,
+        Some(user.user_id),
+        None,
+    )
+    .await;
     send_security_notice(&state, &user.email, SecurityNotice::PasswordChanged);
 
     let mut headers = HeaderMap::new();

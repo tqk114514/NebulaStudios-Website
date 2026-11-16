@@ -14,6 +14,7 @@ use crate::api::{
     AppState, cookie_max_age, set_access_cookie, set_csrf_cookie, set_refresh_cookie,
 };
 use crate::error::ApiError;
+use crate::model::audit::AuditAction;
 use crate::model::oauth2::{code_challenge_s256, generate_code_verifier};
 use crate::model::social::{
     NewSocialIdentity, SOCIAL_STATE_TTL, SocialLoginAction, SocialLoginState, SocialProvider,
@@ -182,6 +183,14 @@ async fn complete_login(
             tracing::error!(error = ?err, "签发社交会话失败");
             Failure::login("server_error")
         })?;
+    crate::api::record_audit(
+        state,
+        binding.user_id,
+        AuditAction::AuthLogin,
+        Some(binding.user_id),
+        Some(serde_json::json!({ "method": provider.as_str() })),
+    )
+    .await;
     Ok(session_redirect(state, &tokens, "ok"))
 }
 
@@ -201,7 +210,17 @@ async fn complete_link(
         display_name: identity.display_name,
     };
     match state.social_repo.link_identity(&new, now).await {
-        Ok(()) => Ok(frontend_redirect(state, SETTINGS_PATH, "social", "linked")),
+        Ok(()) => {
+            crate::api::record_audit(
+                state,
+                user_id,
+                AuditAction::UserSocialLinked,
+                Some(user_id),
+                Some(serde_json::json!({ "provider": provider.as_str() })),
+            )
+            .await;
+            Ok(frontend_redirect(state, SETTINGS_PATH, "social", "linked"))
+        }
         Err(LinkIdentityError::Conflict) => Err(Failure::settings("already_linked")),
         Err(LinkIdentityError::Storage(err)) => {
             tracing::error!(error = ?err, "绑定社交身份失败");

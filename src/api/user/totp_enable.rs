@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::api::{AppState, SecurityNotice, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
 
 /// enable 请求。
@@ -85,6 +86,14 @@ pub async fn enable(
         .await
         .map_err(anyhow::Error::from)?;
 
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::UserTotpEnabled,
+        Some(user.user_id),
+        None,
+    )
+    .await;
     send_security_notice(&state, &user.email, SecurityNotice::TotpEnabled);
 
     Ok(Json(EnableResponse {

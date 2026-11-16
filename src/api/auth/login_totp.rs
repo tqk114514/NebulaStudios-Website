@@ -10,6 +10,7 @@ use serde::Deserialize;
 use super::{issue_session, session_response};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::model::audit::AuditAction;
 use crate::model::tokens::RefreshToken;
 use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code};
 
@@ -113,5 +114,13 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
         .ok_or_else(|| {
         ApiError::Internal(anyhow::anyhow!("挑战指向的用户不存在: {}", challenge.user_id))
     })?;
+    crate::api::record_audit(
+        &state,
+        challenge.user_id,
+        AuditAction::AuthLogin,
+        Some(challenge.user_id),
+        Some(serde_json::json!({ "method": "totp" })),
+    )
+    .await;
     Ok(session_response(StatusCode::OK, &state, &user.user, &tokens))
 }

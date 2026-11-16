@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::FirstPartyUser;
+use crate::model::audit::AuditAction;
 use crate::model::totp::verify_code;
 
 /// disable 请求。
@@ -82,6 +83,14 @@ pub async fn disable(
 
     // 关闭即下线（红线 #1）：降级、恢复码/挑战作废与会话撤销在同一事务内完成
     state.account_repo.apply_totp_disable(&user.user_id, now).await.map_err(anyhow::Error::from)?;
+    crate::api::record_audit(
+        &state,
+        user.user_id,
+        AuditAction::UserTotpDisabled,
+        Some(user.user_id),
+        None,
+    )
+    .await;
 
     send_security_notice(&state, &user.email, SecurityNotice::TotpDisabled);
 

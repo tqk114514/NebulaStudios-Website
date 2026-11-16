@@ -7,7 +7,7 @@ use super::target_id;
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::extractors::AdminUser;
-use crate::model::audit::NewAuditEntry;
+use crate::model::audit::{AuditAction, NewAuditEntry};
 
 /// 解除封禁；仅管理员可访问。
 ///
@@ -33,7 +33,7 @@ pub async fn unban(
         .record_audit(
             &NewAuditEntry {
                 actor_id: admin.user.user_id,
-                action: "admin.user.unban",
+                action: AuditAction::AdminUserUnban,
                 target_id: Some(target),
                 details: None,
             },

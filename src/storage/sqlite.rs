@@ -1240,7 +1240,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         )
         .bind(Uuid::now_v7())
         .bind(entry.actor_id.as_uuid())
-        .bind(entry.action)
+        .bind(entry.action.as_str())
         .bind(entry.target_id.map(|id| *id.as_uuid()))
         .bind(details)
         .bind(now)
