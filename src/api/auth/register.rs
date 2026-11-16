@@ -116,6 +116,18 @@ pub async fn register(
     let req = req.normalized();
     req.validate().map_err(|errors| ApiError::Validation(field_issues(&req, &errors)))?;
 
+    // 白名单只约束新注册；空集合表示不限制。邮箱已归一化为小写，
+    // 配置侧也已小写化，故按精确域名匹配（子域须单独列出）。
+    if !state.allowed_email_domains.is_empty() {
+        let domain = req.email.rsplit_once('@').map_or("", |(_, domain)| domain);
+        if !state.allowed_email_domains.contains(domain) {
+            return Err(ApiError::Validation(vec![FieldInvalid {
+                field: "email",
+                code: "email_domain_not_allowed".to_owned(),
+            }]));
+        }
+    }
+
     let plain = req.password.clone();
     let hash = tokio::task::spawn_blocking(move || PasswordHash::hash(&plain))
         .await

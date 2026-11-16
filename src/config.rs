@@ -1,5 +1,6 @@
 //! 环境变量到类型化配置的加载，值非法时启动即失败。
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -35,6 +36,18 @@ pub struct Config {
     pub avatar: AvatarConfig,
     /// 政策中心子配置。
     pub policy: PolicyConfig,
+    /// 注册策略子配置。
+    pub registration: RegistrationConfig,
+}
+
+/// 注册策略配置；白名单只作用于新注册，不影响既有账号登录。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RegistrationConfig {
+    /// 允许注册的邮箱域名，逗号分隔；空串表示不限制。
+    pub allowed_email_domains: String,
+    /// 已归一化并校验的域名集合；不参与环境变量反序列化。
+    #[serde(skip)]
+    pub allowed_domains: HashSet<String>,
 }
 
 /// 政策中心配置；manifest 只在启动时读取，修改后需重启。
@@ -268,11 +281,14 @@ impl Config {
             .set_default("oauth.clients_file", "")?
             .set_default("avatar.dir", "avatars")?
             .set_default("policy.manifest_file", "")?
+            .set_default("registration.allowed_email_domains", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let mut config: Self = settings.try_deserialize()?;
         config.oauth.clients = load_oauth_clients(&config.oauth.clients_file)?;
         config.policy.catalog = load_policies(&config.policy.manifest_file)?;
+        config.registration.allowed_domains =
+            parse_email_domains(&config.registration.allowed_email_domains)?;
         // 红线 #7：配置必须存在即生效——TTL 在此校验并由会话签发实际使用
         if config.jwt.access_ttl_secs == 0 || config.jwt.refresh_ttl_secs == 0 {
             return Err(LoadConfigError::Invalid("jwt ttl 必须为正秒数".to_owned()));
@@ -368,6 +384,38 @@ fn load_policies(path: &str) -> Result<PolicyCatalog, LoadConfigError> {
     PolicyCatalog::new(file.policies).map_err(|err| LoadConfigError::Invalid(err.to_string()))
 }
 
+/// 解析逗号分隔的邮箱域名白名单；空串表示不限制，非空配置不得解析为空集。
+fn parse_email_domains(raw: &str) -> Result<HashSet<String>, LoadConfigError> {
+    let mut domains = HashSet::new();
+    for part in raw.split(',') {
+        let domain = part.trim().to_ascii_lowercase();
+        if domain.is_empty() {
+            continue;
+        }
+        if !valid_email_domain(&domain) {
+            return Err(LoadConfigError::Invalid(format!("邮箱域名非法: {domain}")));
+        }
+        domains.insert(domain);
+    }
+    if !raw.trim().is_empty() && domains.is_empty() {
+        return Err(LoadConfigError::Invalid(
+            "registration.allowed_email_domains 非空但未解析出域名".to_owned(),
+        ));
+    }
+    Ok(domains)
+}
+
+/// 域名形状校验：ASCII 字母数字、`.`、`-`，至少两段，标签不以连字符开头或结尾。
+fn valid_email_domain(domain: &str) -> bool {
+    !domain.is_empty()
+        && domain.len() <= 253
+        && domain.contains('.')
+        && domain.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        && domain
+            .split('.')
+            .all(|label| !label.is_empty() && !label.starts_with('-') && !label.ends_with('-'))
+}
+
 #[cfg(test)]
 mod tests {
     // 断言失败即 panic 是测试的正确失败语义；expect 禁令面向生产路径
@@ -401,6 +449,24 @@ mod tests {
         assert_eq!(config.avatar.dir, std::path::Path::new("avatars"));
         assert_eq!(config.policy.manifest_file, "");
         assert!(config.policy.catalog.is_empty());
+        assert_eq!(config.registration.allowed_email_domains, "");
+        assert!(config.registration.allowed_domains.is_empty());
+    }
+
+    #[test]
+    fn registration_email_domains_are_normalized_and_validated() {
+        let domains = super::parse_email_domains("Nebula.st, example.com, ,nebula.st")
+            .expect("合法域名必须可解析");
+        assert_eq!(domains.len(), 2);
+        assert!(domains.contains("nebula.st"));
+        assert!(domains.contains("example.com"));
+
+        assert!(super::parse_email_domains("").expect("空串不限制").is_empty());
+        assert!(super::parse_email_domains(",").is_err());
+        assert!(super::parse_email_domains("not a domain").is_err());
+        assert!(super::parse_email_domains("@example.com").is_err());
+        assert!(super::parse_email_domains("-example.com").is_err());
+        assert!(super::parse_email_domains("localhost").is_err());
     }
 
     #[test]

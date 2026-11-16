@@ -128,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
         social_clients: Arc::new(social_clients),
         social_base_url: config.social.base_url.clone(),
         admin_emails,
+        allowed_email_domains: Arc::new(config.registration.allowed_domains.clone()),
         secret_cipher,
         code_hasher,
         mailer,

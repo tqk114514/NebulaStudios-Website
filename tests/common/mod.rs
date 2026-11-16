@@ -181,6 +181,7 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         social_clients: Arc::new(SocialClients::default()),
         social_base_url: "https://accounts.nebula.test".to_owned(),
         admin_emails: Arc::new(HashSet::new()),
+        allowed_email_domains: Arc::new(HashSet::new()),
         secret_cipher: Arc::new(AesGcmCipher::from_key([7u8; 32])),
         code_hasher: Arc::new(HmacCodeHasher::from_key([9u8; 32])),
         mailer: Arc::new(mailbox.clone()),

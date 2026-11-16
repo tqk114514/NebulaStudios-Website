@@ -30,6 +30,8 @@ cargo run --release
 `NEBULA_OAUTH__CLIENTS_FILE`（OAuth Provider 客户端 TOML，空则无客户端）、
 `NEBULA_AVATAR__DIR`（头像文件目录，默认 `avatars`）、
 `NEBULA_POLICY__MANIFEST_FILE`（政策 manifest TOML，空则不启用政策中心）、
+`NEBULA_REGISTRATION__ALLOWED_EMAIL_DOMAINS`（逗号分隔的注册邮箱域名，精确匹配；
+空则不限制，只作用于新注册）、
 `NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
 
 ## OAuth Provider 客户端

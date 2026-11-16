@@ -232,6 +232,8 @@ pub struct AppState {
     pub social_base_url: String,
     /// 配置化管理员邮箱（已 trim + 小写）；`AdminUser` 提取器据此判定。
     pub admin_emails: Arc<HashSet<String>>,
+    /// 允许注册的邮箱域名（小写、精确匹配）；空集合表示不限制。
+    pub allowed_email_domains: Arc<HashSet<String>>,
     /// TOTP 密钥静态加密端口。
     pub secret_cipher: Arc<dyn SecretCipher>,
     /// 低熵验证码的 HMAC pepper 摘要端口。
