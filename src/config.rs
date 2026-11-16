@@ -27,6 +27,56 @@ pub struct Config {
     pub crypto: CryptoConfig,
     /// 社交登录子配置（ADR-0012）。
     pub social: SocialConfig,
+    /// OAuth Provider 客户端子配置。
+    pub oauth: OAuthConfig,
+}
+
+/// OAuth Provider 客户端配置；客户端只在部署配置中登记，不提供管理端点。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct OAuthConfig {
+    /// 客户端 TOML 文件路径；空串表示没有客户端。
+    pub clients_file: String,
+    /// 已从文件加载的客户端；不参与环境变量反序列化。
+    #[serde(skip)]
+    pub clients: Vec<OAuthClientSeed>,
+}
+
+/// 配置文件中的单个 OAuth 客户端；secret 为明文，启动时哈希后入库。
+#[derive(Clone, Deserialize)]
+pub struct OAuthClientSeed {
+    /// 公开 `client_id`。
+    pub client_id: String,
+    /// 展示名。
+    pub name: String,
+    /// 精确匹配的回跳地址。
+    pub redirect_uri: String,
+    /// 客户端密钥明文；只在启动装配时出现。
+    pub secret: String,
+    /// 是否启用；缺省 true。
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+impl std::fmt::Debug for OAuthClientSeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthClientSeed")
+            .field("client_id", &self.client_id)
+            .field("name", &self.name)
+            .field("redirect_uri", &self.redirect_uri)
+            .field("secret", &"<redacted>")
+            .field("enabled", &self.enabled)
+            .finish()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthClientsFile {
+    #[serde(default)]
+    clients: Vec<OAuthClientSeed>,
 }
 
 /// 社交登录配置（ADR-0012）；某 provider 的 client id 为空即不启用该 provider。
@@ -186,9 +236,11 @@ impl Config {
             .set_default("social.google_worker_signing_public_key", "")?
             .set_default("social.microsoft_client_id", "")?
             .set_default("social.microsoft_client_secret", "")?
+            .set_default("oauth.clients_file", "")?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
-        let config: Self = settings.try_deserialize()?;
+        let mut config: Self = settings.try_deserialize()?;
+        config.oauth.clients = load_oauth_clients(&config.oauth.clients_file)?;
         // 红线 #7：配置必须存在即生效——TTL 在此校验并由会话签发实际使用
         if config.jwt.access_ttl_secs == 0 || config.jwt.refresh_ttl_secs == 0 {
             return Err(LoadConfigError::Invalid("jwt ttl 必须为正秒数".to_owned()));
@@ -230,6 +282,45 @@ impl Config {
     }
 }
 
+/// 读取并校验 OAuth 客户端 TOML；空路径表示没有客户端。
+fn load_oauth_clients(path: &str) -> Result<Vec<OAuthClientSeed>, LoadConfigError> {
+    if path.is_empty() {
+        return Ok(Vec::new());
+    }
+    let settings = config::Config::builder()
+        .add_source(config::File::new(path, config::FileFormat::Toml))
+        .build()?;
+    let file: OAuthClientsFile = settings.try_deserialize()?;
+
+    let mut seen = std::collections::HashSet::new();
+    for client in &file.clients {
+        if client.client_id.trim().is_empty()
+            || client.name.trim().is_empty()
+            || client.redirect_uri.trim().is_empty()
+            || client.secret.is_empty()
+        {
+            return Err(LoadConfigError::Invalid(
+                "oauth 客户端字段 client_id/name/redirect_uri/secret 不得为空".to_owned(),
+            ));
+        }
+        if !(client.redirect_uri.starts_with("https://")
+            || client.redirect_uri.starts_with("http://"))
+        {
+            return Err(LoadConfigError::Invalid(format!(
+                "oauth 客户端 {} 的 redirect_uri 必须是 http(s) 地址",
+                client.client_id
+            )));
+        }
+        if !seen.insert(client.client_id.as_str()) {
+            return Err(LoadConfigError::Invalid(format!(
+                "oauth 客户端 id 重复: {}",
+                client.client_id
+            )));
+        }
+    }
+    Ok(file.clients)
+}
+
 #[cfg(test)]
 mod tests {
     // 断言失败即 panic 是测试的正确失败语义；expect 禁令面向生产路径
@@ -257,6 +348,53 @@ mod tests {
         assert!(!config.social.google_enabled());
         assert!(!config.social.microsoft_enabled());
         assert_eq!(config.social.base_url, "");
+        // 没有客户端配置文件时，OAuth 客户端列表为空
+        assert_eq!(config.oauth.clients_file, "");
+        assert!(config.oauth.clients.is_empty());
+    }
+
+    #[test]
+    fn oauth_clients_file_parses_and_rejects_duplicates() {
+        let dir = tempfile::tempdir().expect("临时目录必须可创建");
+        let path = dir.path().join("clients.toml");
+        std::fs::write(
+            &path,
+            r#"
+[[clients]]
+client_id = "client-1"
+name = "Example"
+redirect_uri = "https://app.example/cb"
+secret = "secret"
+"#,
+        )
+        .expect("客户端配置必须可写");
+
+        let clients = super::load_oauth_clients(path.to_str().expect("路径必须是 UTF-8"))
+            .expect("客户端配置必须可解析");
+        assert_eq!(clients.len(), 1);
+        assert_eq!(clients[0].client_id, "client-1");
+        assert!(clients[0].enabled);
+
+        std::fs::write(
+            &path,
+            r#"
+[[clients]]
+client_id = "client-1"
+name = "One"
+redirect_uri = "https://one.example/cb"
+secret = "secret"
+[[clients]]
+client_id = "client-1"
+name = "Two"
+redirect_uri = "https://two.example/cb"
+secret = "secret"
+"#,
+        )
+        .expect("重复客户端配置必须可写");
+        assert!(matches!(
+            super::load_oauth_clients(path.to_str().expect("路径必须是 UTF-8")),
+            Err(super::LoadConfigError::Invalid(_))
+        ));
     }
 
     #[test]

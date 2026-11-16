@@ -39,7 +39,7 @@ axum = "0.8.9"
 axum-prometheus = "0.10.1"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
-config = { version = "0.15.27", default-features = false }
+config = { version = "0.15.27", default-features = false, features = ["toml"] }
 ed25519-dalek = { version = "3.0.0", features = ["pkcs8", "pem"] }
 jsonwebtoken = { version = "12.0.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 lettre = { version = "0.11.23", default-features = false, features = [

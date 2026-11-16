@@ -26,7 +26,23 @@ cargo run --release
 `NEBULA_CRYPTO__TOTP_SECRET_KEY`（必填，64 个十六进制字符；缺失或格式非法则启动失败）、
 `NEBULA_CRYPTO__CODE_PEPPER`（必填，64 个十六进制字符；验证码/恢复码 HMAC pepper）、
 `NEBULA_MAIL__SMTP_HOST`（空则日志模式）、`NEBULA_MAIL__SMTP_PORT`（默认 587）、
-`NEBULA_MAIL__SMTP_TLS`（`starttls` 默认 / `implicit` 用于 465 / `none`）。
+`NEBULA_MAIL__SMTP_TLS`（`starttls` 默认 / `implicit` 用于 465 / `none`）、
+`NEBULA_OAUTH__CLIENTS_FILE`（OAuth Provider 客户端 TOML，空则无客户端）、
+`NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
+
+## OAuth Provider 客户端
+
+`NEBULA_OAUTH__CLIENTS_FILE` 指向一个 TOML 文件；启动时按 `client_id` upsert，
+`secret` 以 Argon2 哈希入库，明文不落库。
+
+```toml
+[[clients]]
+client_id = "example"
+name = "Example App"
+redirect_uri = "https://app.example.com/callback"
+secret = "change-me"
+enabled = true
+```
 
 ## 运维端点与后台任务
 

@@ -8,9 +8,11 @@ use anyhow::Context as _;
 use axum_prometheus::PrometheusMetricLayer;
 use chrono::TimeDelta;
 use nebula_server::api::{self, AppState, JwtKeys, SessionPolicy};
-use nebula_server::config::Config;
+use nebula_server::config::{Config, OAuthClientSeed};
 use nebula_server::context::{Clock, SystemClock};
 use nebula_server::crypto::{AesGcmCipher, CodeHasher, HmacCodeHasher, SecretCipher};
+use nebula_server::model::oauth2::OAuthClient;
+use nebula_server::model::password::PasswordHash;
 use nebula_server::social::google::{GoogleClient, GoogleConfig};
 use nebula_server::social::microsoft::{MicrosoftClient, MicrosoftConfig};
 use nebula_server::social::{SocialClients, SocialProviderClient};
@@ -129,6 +131,8 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
+    seed_oauth_clients(&state, &config.oauth.clients).await.context("初始化 OAuth 客户端")?;
+
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .with_context(|| format!("监听 {}", config.bind))?;
@@ -150,6 +154,29 @@ async fn main() -> anyhow::Result<()> {
     .context("服务退出");
     cleanup.abort();
     result?;
+    Ok(())
+}
+
+/// 把配置文件中的 OAuth 客户端登记到数据库；secret 在启动时哈希，明文不落库。
+async fn seed_oauth_clients(state: &AppState, seeds: &[OAuthClientSeed]) -> anyhow::Result<()> {
+    for seed in seeds {
+        let plain = seed.secret.clone();
+        let hash = tokio::task::spawn_blocking(move || PasswordHash::hash(&plain))
+            .await
+            .context("哈希 OAuth 客户端密钥")?
+            .context("哈希 OAuth 客户端密钥")?;
+        let client = OAuthClient {
+            id: seed.client_id.clone(),
+            name: seed.name.clone(),
+            redirect_uri: seed.redirect_uri.clone(),
+            enabled: seed.enabled,
+        };
+        state
+            .oauth_repo
+            .upsert_client(&client, hash.as_str(), state.clock.now())
+            .await
+            .context("写入 OAuth 客户端")?;
+    }
     Ok(())
 }
 

@@ -561,6 +561,17 @@ pub trait OAuthRepo: Send + Sync {
     /// 仅存储故障。
     async fn find_client_secret(&self, client_id: &str) -> Result<Option<String>, StorageError>;
 
+    /// 按配置登记或更新客户端；`secret_hash` 由调用方计算，保留原 `created_at`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn upsert_client(
+        &self,
+        client: &OAuthClient,
+        secret_hash: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
     /// 落一条授权码（Fulfilled）。
     ///
     /// # Errors

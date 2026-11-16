@@ -937,6 +937,32 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         Ok(row.flatten())
     }
 
+    async fn upsert_client(
+        &self,
+        client: &OAuthClient,
+        secret_hash: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            "INSERT INTO oauth_clients (id, name, secret_hash, redirect_uri, enabled, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 secret_hash = excluded.secret_hash,
+                 redirect_uri = excluded.redirect_uri,
+                 enabled = excluded.enabled",
+        )
+        .bind(&client.id)
+        .bind(&client.name)
+        .bind(secret_hash)
+        .bind(&client.redirect_uri)
+        .bind(client.enabled)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn create_code(
         &self,
         code_hash: &str,
