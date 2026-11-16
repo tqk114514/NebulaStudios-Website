@@ -103,6 +103,8 @@ pub enum ApiError {
     SocialAlreadyLinked,
     /// 目标第三方应用没有有效授权；404。
     OAuthGrantNotFound,
+    /// Turnstile 校验服务不可用；503。
+    TurnstileUnavailable,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -153,6 +155,9 @@ impl ApiError {
             }
             Self::OAuthGrantNotFound => {
                 simple(StatusCode::NOT_FOUND, "oauth_grant_not_found", "未找到第三方应用授权")
+            }
+            Self::TurnstileUnavailable => {
+                simple(StatusCode::SERVICE_UNAVAILABLE, "turnstile_unavailable", "人机验证暂不可用")
             }
             other => other.common_parts(),
         }
@@ -241,7 +246,10 @@ impl ApiError {
             | Self::SocialProviderDisabled
             | Self::SocialNotLinked
             | Self::SocialAlreadyLinked
-            | Self::OAuthGrantNotFound => unreachable!("admin、社交与 OAuth 授权错误由 parts 路由"),
+            | Self::OAuthGrantNotFound
+            | Self::TurnstileUnavailable => {
+                unreachable!("admin、社交、OAuth 授权与 Turnstile 错误由 parts 路由")
+            }
         }
     }
 }

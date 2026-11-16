@@ -202,7 +202,7 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 9. **PKCE 不接受 `plain`。** v3 接受 `plain`（无客户端使用）而文档称强制 PKCE。降级路径存在则降级迟早发生。
 10. **`openid` 命名需有依据。** v3 有 `openid` scope 而无 OIDC discovery/JWKS 端点。补齐，或不叫 `openid`。
 11. **语言覆盖范围与实际一致。** v3 的 `i18n/sources/admin/` 只有 `zh-CN`，对外称五语言。
-12. **人机验证不得是唯一步骤。** WCAG 2.2 SC 3.3.8 禁止把认知功能测试作为认证的必要环节；v3 把 Turnstile 挂在登录、注册发码、改密、注销、开关 TOTP 上且无替代路径。→ 每处验证码都提供替代（邮件链接、TOTP、passkey）。
+12. **人机验证不得要求认知功能测试。** WCAG 2.2 SC 3.3.8 禁止要求用户记忆、转写或解谜；Turnstile 的不可见/单按钮模式不属于认知功能测试，但一旦升级为拼图或图像选择即触发。→ 只用非交互模式；若部署启用交互式挑战，该端点必须提供邮件链接、TOTP 或 passkey 替代。v3 在所有认证端点挂验证码且无替代，是反例。
 
 ---
 
@@ -294,6 +294,8 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 **Rust 规范与工具链**：[API Guidelines · Naming](https://rust-lang.github.io/api-guidelines/naming.html) · [Documentation](https://rust-lang.github.io/api-guidelines/documentation.html) · [Interoperability](https://rust-lang.github.io/api-guidelines/interoperability.html) · [Rust Style Guide](https://doc.rust-lang.org/style-guide/) · [rustdoc](https://doc.rust-lang.org/rustdoc/write-documentation/the-doc-attribute.html) · [Cargo Book 布局](https://doc.rust-lang.org/cargo/guide/project-layout.html) · [Rust Book 7.5](https://doc.rust-lang.org/book/ch07-05-separating-modules-into-different-files.html) · [Edition 2024](https://doc.rust-lang.org/edition-guide/rust-2024/index.html) · [rustfmt 选项](https://raw.githubusercontent.com/rust-lang/rustfmt/main/src/config/options.rs) · [thiserror](https://raw.githubusercontent.com/dtolnay/thiserror/master/README.md) / [anyhow](https://raw.githubusercontent.com/dtolnay/anyhow/master/README.md)
 
 **Rust 参考代码库与 crate**：[MAS](https://github.com/element-hq/matrix-authentication-service)（`docs/development/architecture.md`）· [axum examples](https://github.com/tokio-rs/axum/tree/main/examples) · [rustls](https://github.com/rustls/rustls) · [tokio](https://github.com/tokio-rs/tokio) · [jsonwebtoken](https://docs.rs/jsonwebtoken/latest/jsonwebtoken/struct.EncodingKey.html) · [sqlx](https://github.com/launchbadge/sqlx/blob/main/CHANGELOG.md) · [rand](https://github.com/rust-random/rand/blob/master/CHANGELOG.md) · [lettre](https://github.com/lettre/lettre) · [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) · [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) · [12factor](https://12factor.net/)
+
+**安全与无障碍**：[WCAG 2.2 SC 3.3.8](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) · [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)
 
 **前端规范**：[Vue Style Guide](https://vuejs.org/style-guide/) · [SFC script-setup](https://vuejs.org/api/sfc-script-setup.html) · [VueUse CONTRIBUTING](https://vueuse.org/contributing) · [antfu/eslint-config](https://github.com/antfu/eslint-config) · [@nuxt/eslint](https://eslint.nuxt.com/packages/module) · [FSD](https://feature-sliced.design/docs/get-started/overview) · [nuxt/ui](https://github.com/nuxt/ui) · [halo](https://github.com/halo-dev/halo) · [openobserve](https://github.com/openobserve/openobserve) · [nuxt/nuxt 根配置](https://github.com/nuxt/nuxt)
 

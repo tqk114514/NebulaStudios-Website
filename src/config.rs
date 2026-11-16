@@ -38,6 +38,32 @@ pub struct Config {
     pub policy: PolicyConfig,
     /// 注册策略子配置。
     pub registration: RegistrationConfig,
+    /// 人机验证子配置。
+    pub turnstile: TurnstileConfig,
+}
+
+/// 人机验证配置；启用时注册、重发验证码与重置发码要求 Turnstile token。
+#[derive(Clone, Deserialize)]
+pub struct TurnstileConfig {
+    /// 是否启用。
+    pub enabled: bool,
+    /// 前端渲染组件用的公开 site key。
+    pub site_key: String,
+    /// 服务端 `siteverify` 用的 secret key。
+    pub secret_key: String,
+    /// 校验地址；仅允许 https。
+    pub verify_url: String,
+}
+
+impl std::fmt::Debug for TurnstileConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TurnstileConfig")
+            .field("enabled", &self.enabled)
+            .field("site_key", &self.site_key)
+            .field("secret_key", &"<redacted>")
+            .field("verify_url", &self.verify_url)
+            .finish()
+    }
 }
 
 /// 注册策略配置；白名单只作用于新注册，不影响既有账号登录。
@@ -282,6 +308,13 @@ impl Config {
             .set_default("avatar.dir", "avatars")?
             .set_default("policy.manifest_file", "")?
             .set_default("registration.allowed_email_domains", "")?
+            .set_default("turnstile.enabled", false)?
+            .set_default("turnstile.site_key", "")?
+            .set_default("turnstile.secret_key", "")?
+            .set_default(
+                "turnstile.verify_url",
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            )?
             .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
             .build()?;
         let mut config: Self = settings.try_deserialize()?;
@@ -289,6 +322,7 @@ impl Config {
         config.policy.catalog = load_policies(&config.policy.manifest_file)?;
         config.registration.allowed_domains =
             parse_email_domains(&config.registration.allowed_email_domains)?;
+        validate_turnstile(&config.turnstile)?;
         // 红线 #7：配置必须存在即生效——TTL 在此校验并由会话签发实际使用
         if config.jwt.access_ttl_secs == 0 || config.jwt.refresh_ttl_secs == 0 {
             return Err(LoadConfigError::Invalid("jwt ttl 必须为正秒数".to_owned()));
@@ -416,6 +450,22 @@ fn valid_email_domain(domain: &str) -> bool {
             .all(|label| !label.is_empty() && !label.starts_with('-') && !label.ends_with('-'))
 }
 
+/// 启用 Turnstile 时三项配置必须齐全；关闭时不读取 key，也不产生校验流量。
+fn validate_turnstile(config: &TurnstileConfig) -> Result<(), LoadConfigError> {
+    if !config.enabled {
+        return Ok(());
+    }
+    if config.site_key.trim().is_empty() || config.secret_key.trim().is_empty() {
+        return Err(LoadConfigError::Invalid(
+            "启用 turnstile 时 site_key 与 secret_key 必须配置".to_owned(),
+        ));
+    }
+    if !config.verify_url.starts_with("https://") {
+        return Err(LoadConfigError::Invalid("turnstile.verify_url 必须是 https 地址".to_owned()));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     // 断言失败即 panic 是测试的正确失败语义；expect 禁令面向生产路径
@@ -451,6 +501,32 @@ mod tests {
         assert!(config.policy.catalog.is_empty());
         assert_eq!(config.registration.allowed_email_domains, "");
         assert!(config.registration.allowed_domains.is_empty());
+        assert!(!config.turnstile.enabled);
+        assert_eq!(
+            config.turnstile.verify_url,
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+        );
+    }
+
+    #[test]
+    fn turnstile_requires_keys_only_when_enabled() {
+        let mut config = super::TurnstileConfig {
+            enabled: false,
+            site_key: String::new(),
+            secret_key: String::new(),
+            verify_url: "http://insecure.example".to_owned(),
+        };
+        assert!(super::validate_turnstile(&config).is_ok());
+
+        config.enabled = true;
+        assert!(super::validate_turnstile(&config).is_err());
+
+        config.site_key = "site-key".to_owned();
+        config.secret_key = "secret-key".to_owned();
+        assert!(super::validate_turnstile(&config).is_err(), "verify_url 必须是 https");
+
+        config.verify_url = "https://challenges.cloudflare.com/turnstile/v0/siteverify".to_owned();
+        assert!(super::validate_turnstile(&config).is_ok());
     }
 
     #[test]

@@ -32,6 +32,9 @@ cargo run --release
 `NEBULA_POLICY__MANIFEST_FILE`（政策 manifest TOML，空则不启用政策中心）、
 `NEBULA_REGISTRATION__ALLOWED_EMAIL_DOMAINS`（逗号分隔的注册邮箱域名，精确匹配；
 空则不限制，只作用于新注册）、
+`NEBULA_TURNSTILE__ENABLED`（默认 false）、`NEBULA_TURNSTILE__SITE_KEY`、
+`NEBULA_TURNSTILE__SECRET_KEY`、`NEBULA_TURNSTILE__VERIFY_URL`（默认 Cloudflare
+siteverify）、
 `NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
 
 ## OAuth Provider 客户端
@@ -97,6 +100,21 @@ path = "/policies/privacy/2026-11-01/en"
 - `GET /api/user/consents`：已同意记录与当前待同意版本。
 - `POST /api/user/consents`：提交 `{"policy":"privacy","version":"2026-11-01"}`；
   只接受当前生效版本，重复同意幂等，返回 204。
+
+## 人机验证
+
+默认关闭。启用后注册、重发验证码、重置发码必须携带 `turnstile_token`；`GET
+/api/auth/turnstile` 返回 `{ enabled, site_key }` 供前端渲染。只使用不可见/单按钮
+模式，不出现拼图或图像选择；校验服务不可用时相关端点返回 503。配置：
+
+```bash
+NEBULA_TURNSTILE__ENABLED=true
+NEBULA_TURNSTILE__SITE_KEY=...
+NEBULA_TURNSTILE__SECRET_KEY=...
+```
+
+登录、改密、注销与 TOTP 开关不挂 Turnstile：前者已有 Argon2 与限流，后者已要求
+当前口令或邮件验证码。
 
 ## 运维端点与后台任务
 

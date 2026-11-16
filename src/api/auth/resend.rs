@@ -18,6 +18,9 @@ use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 pub struct ResendRequest {
     /// 需要重发的邮箱。
     pub email: String,
+    /// Turnstile token；启用校验时必填。
+    #[serde(default)]
+    pub turnstile_token: Option<String>,
 }
 
 /// 处理重发：冷却检查 → 签发新码并异步发送。
@@ -35,6 +38,7 @@ pub async fn resend(State(state): State<AppState>, body: Bytes) -> Result<Respon
             code: "email_missing".to_owned(),
         }]));
     }
+    crate::api::verify_turnstile(&state, req.turnstile_token.as_deref()).await?;
 
     let user = state.user_repo.find_by_email(&email).await.map_err(anyhow::Error::from)?;
 

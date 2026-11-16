@@ -20,6 +20,9 @@ use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 pub struct ResetRequestPayload {
     /// 注册邮箱。
     pub email: String,
+    /// Turnstile token；启用校验时必填。
+    #[serde(default)]
+    pub turnstile_token: Option<String>,
 }
 
 /// 重置完成（confirm 端点）。
@@ -50,6 +53,7 @@ pub async fn reset_request(
             code: "email_missing".to_owned(),
         }]));
     }
+    crate::api::verify_turnstile(&state, req.turnstile_token.as_deref()).await?;
 
     if let Some(user) = state.user_repo.find_by_email(&email).await.map_err(anyhow::Error::from)? {
         if let Some(latest) = state

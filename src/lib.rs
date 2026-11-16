@@ -14,3 +14,4 @@ pub mod model;
 pub mod social;
 pub mod storage;
 pub mod telemetry;
+pub mod turnstile;

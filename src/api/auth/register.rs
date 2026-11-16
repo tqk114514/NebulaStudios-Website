@@ -32,6 +32,9 @@ pub struct RegisterRequest {
     #[validate(length(min = 16, max = 64))]
     #[validate(custom(function = "validate_password_strength"))]
     pub password: String,
+    /// Turnstile token；启用校验时必填，未启用时忽略。
+    #[serde(default)]
+    pub turnstile_token: Option<String>,
 }
 
 /// 用户名只允许 ASCII 字母、数字、下划线与连字符；不允许 `@`/`.` 等邮箱字符。
@@ -51,6 +54,7 @@ impl RegisterRequest {
             username: self.username.trim().to_owned(),
             // 口令的空白是口令的一部分，不 trim
             password: self.password,
+            turnstile_token: self.turnstile_token,
         }
     }
 }
@@ -115,6 +119,7 @@ pub async fn register(
         serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
     let req = req.normalized();
     req.validate().map_err(|errors| ApiError::Validation(field_issues(&req, &errors)))?;
+    crate::api::verify_turnstile(&state, req.turnstile_token.as_deref()).await?;
 
     // 白名单只约束新注册；空集合表示不限制。邮箱已归一化为小写，
     // 配置侧也已小写化，故按精确域名匹配（子域须单独列出）。

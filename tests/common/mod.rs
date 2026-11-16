@@ -176,6 +176,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool)),
         // 默认空政策目录；政策用例自行覆盖本字段
         policy_catalog: Arc::new(PolicyCatalog::default()),
+        turnstile: None,
+        turnstile_site_key: None,
         avatar_store: Arc::new(AvatarStore::new(dir.path().join("avatars"))),
         // 默认不启用任何社交 provider；社交用例自行覆盖本字段注入假客户端
         social_clients: Arc::new(SocialClients::default()),

@@ -22,6 +22,7 @@ use nebula_server::storage::sqlite::{
     SqliteRefreshRepo, SqliteSocialRepo, SqliteUserRepo,
 };
 use nebula_server::telemetry;
+use nebula_server::turnstile::{TurnstileClient, TurnstileVerifier};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -101,6 +102,19 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("创建头像目录 {}", config.avatar.dir.display()))?;
     let avatar_store = Arc::new(AvatarStore::new(config.avatar.dir.clone()));
 
+    let turnstile: Option<Arc<dyn TurnstileVerifier>> = if config.turnstile.enabled {
+        Some(Arc::new(
+            TurnstileClient::new(
+                config.turnstile.verify_url.clone(),
+                config.turnstile.secret_key.clone(),
+            )
+            .context("初始化 Turnstile 校验客户端")?,
+        ))
+    } else {
+        None
+    };
+    let turnstile_site_key = config.turnstile.enabled.then(|| config.turnstile.site_key.clone());
+
     let state = AppState {
         user_repo: Arc::new(SqliteUserRepo::from_pool(pool.clone())),
         refresh_repo: Arc::new(SqliteRefreshRepo::from_pool(pool.clone())),
@@ -124,6 +138,8 @@ async fn main() -> anyhow::Result<()> {
         export_repo: Arc::new(SqliteExportRepo::from_pool(pool.clone())),
         consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool)),
         policy_catalog: Arc::new(config.policy.catalog.clone()),
+        turnstile,
+        turnstile_site_key,
         avatar_store,
         social_clients: Arc::new(social_clients),
         social_base_url: config.social.base_url.clone(),

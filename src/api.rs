@@ -34,7 +34,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use crate::avatar::{AvatarStore, MAX_REQUEST_BYTES};
 use crate::context::{Clock, RequestId};
 use crate::crypto::{CodeHasher, SecretCipher};
-use crate::error::ApiError;
+use crate::error::{ApiError, FieldInvalid};
 use crate::mailer::{EmailMessage, Mailer};
 use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::policy::PolicyCatalog;
@@ -44,6 +44,7 @@ use crate::storage::{
     AccountRepo, AdminRepo, ConsentRepo, EmailVerificationRepo, ExportRepo, MaintenanceRepo,
     OAuthRepo, RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
 };
+use crate::turnstile::TurnstileVerifier;
 
 /// access 会话 cookie 名；全站路径。
 pub const ACCESS_COOKIE: &str = "nebula_access";
@@ -224,6 +225,10 @@ pub struct AppState {
     pub consent_repo: Arc<dyn ConsentRepo>,
     /// 启动时加载并校验的政策目录；空目录表示政策中心未配置。
     pub policy_catalog: Arc<PolicyCatalog>,
+    /// Turnstile 校验端口；`None` 表示未启用。
+    pub turnstile: Option<Arc<dyn TurnstileVerifier>>,
+    /// 前端渲染 Turnstile 组件用的公开 site key；未启用时 `None`。
+    pub turnstile_site_key: Option<String>,
     /// 头像文件存储；上传、公开读取与注销清理共用。
     pub avatar_store: Arc<AvatarStore>,
     /// 已启用的社交 provider 客户端；未启用的 provider 不在表内。
@@ -326,6 +331,42 @@ pub(crate) fn avatar_url(user_id: &UserId, version: i64) -> Option<String> {
     (version > 0).then(|| format!("/api/users/{user_id}/avatar?v={version}"))
 }
 
+/// 启用 Turnstile 时校验请求携带的 token；未启用直接通过。
+///
+/// Token 缺失与校验未通过同体返回 422，避免把 Cloudflare 的判定细节外泄；
+/// 校验请求本身失败返回 503，由前端提示稍后再试。
+///
+/// # Errors
+/// 启用时缺 token 或校验未通过返回 422；校验服务不可用返回 503。
+pub(crate) async fn verify_turnstile(
+    state: &AppState,
+    token: Option<&str>,
+) -> Result<(), ApiError> {
+    let Some(verifier) = &state.turnstile else {
+        return Ok(());
+    };
+    let Some(token) = token.map(str::trim).filter(|token| !token.is_empty()) else {
+        return Err(turnstile_invalid());
+    };
+    let outcome = verifier.verify(token).await.map_err(|err| {
+        tracing::error!(error = %err, "Turnstile 校验请求失败");
+        ApiError::TurnstileUnavailable
+    })?;
+    if outcome.success {
+        Ok(())
+    } else {
+        tracing::warn!(error_codes = ?outcome.error_codes, "Turnstile 校验未通过");
+        Err(turnstile_invalid())
+    }
+}
+
+fn turnstile_invalid() -> ApiError {
+    ApiError::Validation(vec![FieldInvalid {
+        field: "turnstile_token",
+        code: "turnstile_invalid".to_owned(),
+    }])
+}
+
 /// 追加一条审计记录；失败只记日志，不回滚已经完成的业务动作。
 ///
 /// 用户事件与管理事件共用 `audit_logs`（AGENTS §0）；审计失败意味着该事件
@@ -396,6 +437,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/audit", get(admin::audit::audit))
         .route("/api/auth/{provider}", get(auth::social::start))
         .route("/api/auth/{provider}/callback", get(auth::social::callback))
+        .route("/api/auth/turnstile", get(auth::turnstile::settings))
         .route("/api/policies", get(policy::policies))
         .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
         .route("/api/user/export/{token}", get(user::export_download::download_export))
