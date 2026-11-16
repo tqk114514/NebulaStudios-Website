@@ -18,7 +18,9 @@ use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::totp::{CHALLENGE_TTL, TotpState};
 
 /// 登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。
-#[derive(Debug, Deserialize)]
+// 含明文口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct LoginRequest {
     /// 登录标识。
     pub identifier: String,

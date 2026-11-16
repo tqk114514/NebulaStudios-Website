@@ -13,7 +13,9 @@ use crate::model::user::username_problem;
 use crate::storage::UserRepoError;
 
 /// 用户名修改请求。
-#[derive(Debug, Deserialize)]
+// 含明文口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct UpdateUsernameRequest {
     /// 新用户名；大小写保留并精确匹配。
     pub username: String,

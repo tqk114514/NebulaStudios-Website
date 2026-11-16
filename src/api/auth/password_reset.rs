@@ -18,7 +18,9 @@ use crate::model::audit::AuditAction;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 重置请求（request 端点）。
-#[derive(Debug, Deserialize)]
+// 含 Turnstile token，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct ResetRequestPayload {
     /// 注册邮箱。
     pub email: String,
@@ -28,7 +30,9 @@ pub struct ResetRequestPayload {
 }
 
 /// 重置完成（confirm 端点）。
-#[derive(Debug, Deserialize)]
+// 含验证码与新口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct ResetConfirmPayload {
     /// 注册邮箱。
     pub email: String,

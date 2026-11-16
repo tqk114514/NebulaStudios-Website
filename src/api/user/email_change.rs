@@ -21,7 +21,9 @@ use crate::model::verification::{
 use crate::storage::EmailChangeError;
 
 /// 邮箱变更申请。
-#[derive(Debug, Deserialize, Validate)]
+// 含明文口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize, Validate)]
 pub struct RequestEmailChangeRequest {
     /// 新邮箱；服务端 trim 并小写化。
     #[validate(length(min = 1, max = 254))]
@@ -32,7 +34,9 @@ pub struct RequestEmailChangeRequest {
 }
 
 /// 邮箱变更确认。
-#[derive(Debug, Deserialize)]
+// 含验证码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct ConfirmEmailChangeRequest {
     /// 发送到新邮箱的六位验证码。
     pub code: String,

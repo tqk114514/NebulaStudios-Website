@@ -16,7 +16,9 @@ use crate::model::audit::AuditAction;
 use crate::model::totp::verify_code;
 
 /// disable 请求。
-#[derive(Debug, Deserialize)]
+// 含明文口令与验证码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct DisableRequest {
     /// 当前口令。
     pub password: String,

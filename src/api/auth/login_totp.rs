@@ -15,7 +15,9 @@ use crate::model::tokens::RefreshToken;
 use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code};
 
 /// 二段请求。
-#[derive(Debug, Deserialize)]
+// 含挑战令牌与验证码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct LoginTotpRequest {
     /// 密码步骤响应 `details.challenge_token`。
     pub challenge_token: String,

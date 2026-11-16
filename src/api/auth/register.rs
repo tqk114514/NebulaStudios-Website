@@ -19,7 +19,9 @@ use crate::storage::{UserRepo, UserRepoError};
 /// 注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 3–15 个
 /// ASCII 字母/数字/下划线/连字符、密码 16–64 且须含大小写字母、数字与标点。
 /// 用户名禁止 `@` 等邮箱字符，保证登录标识在 email 与 username 两列之间不歧义。
-#[derive(Debug, Deserialize, Validate)]
+// 含明文口令与 Turnstile token，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize, Validate)]
 pub struct RegisterRequest {
     /// 邮箱；服务端 trim 并小写化后入库（v3 语义）。
     #[validate(length(min = 1, max = 254))]

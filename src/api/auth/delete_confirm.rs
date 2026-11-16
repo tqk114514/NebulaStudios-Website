@@ -15,7 +15,9 @@ use crate::model::audit::AuditAction;
 use crate::model::verification::VerificationPurpose;
 
 /// 注销确认请求。
-#[derive(Debug, Deserialize)]
+// 含验证码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct DeleteConfirmRequest {
     /// 邮件中的六位确认码。
     pub code: String,

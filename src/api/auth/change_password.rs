@@ -19,7 +19,9 @@ use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 
 /// 改密请求。
-#[derive(Debug, Deserialize)]
+// 含明文口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct ChangePasswordRequest {
     /// 当前口令。
     pub current_password: String,

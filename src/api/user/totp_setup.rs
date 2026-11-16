@@ -20,7 +20,9 @@ pub struct SetupRequest {
 }
 
 /// setup 响应；密钥与 URI 由用户导入验证器 App。
-#[derive(Debug, Serialize)]
+// 含 TOTP 明文密钥，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Serialize)]
 pub struct SetupResponse {
     /// base32 无填充密钥。
     pub secret: String,

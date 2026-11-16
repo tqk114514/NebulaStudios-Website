@@ -18,7 +18,9 @@ use crate::model::social::{SOCIAL_STATE_TTL, SocialLoginAction, SocialLoginState
 use crate::model::tokens::random_hex_32;
 
 /// 绑定发起请求；写操作要求当前口令，防止被盗会话绑定攻击者身份。
-#[derive(Debug, Deserialize)]
+// 含明文口令，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct LinkRequest {
     /// 当前登录口令。
     pub password: String,

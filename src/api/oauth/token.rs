@@ -19,7 +19,9 @@ use crate::storage::{ClientBinding, RotateRefreshError};
 use uuid::Uuid;
 
 /// 兑换请求（`application/x-www-form-urlencoded`）。
-#[derive(Debug, Deserialize)]
+// 含授权码、PKCE verifier、refresh token 与客户端密钥，故意不实现 Debug。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct TokenRequest {
     /// 授权类型；`authorization_code` 或 `refresh_token`。
     pub grant_type: String,
@@ -43,7 +45,9 @@ pub struct TokenRequest {
 }
 
 /// RFC 6749 成功响应。
-#[derive(Debug, serde::Serialize)]
+// 含 access/refresh 令牌明文，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(serde::Serialize)]
 pub struct TokenResponse {
     /// 签发的 access token（ES256 JWT）。
     pub access_token: String,

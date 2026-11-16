@@ -15,7 +15,9 @@ use crate::model::audit::AuditAction;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
 
 /// enable 请求。
-#[derive(Debug, Deserialize)]
+// 含明文口令与验证码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
 pub struct EnableRequest {
     /// 当前登录口令；启用前再认证。
     pub password: String,
@@ -24,7 +26,9 @@ pub struct EnableRequest {
 }
 
 /// enable 响应；恢复码明文仅此一次。
-#[derive(Debug, Serialize)]
+// 含一次性恢复码，故意不实现 Debug，避免误日志。
+#[allow(missing_debug_implementations)]
+#[derive(Serialize)]
 pub struct EnableResponse {
     /// 一次性恢复码（v3 同款 8 个）。
     pub recovery_codes: Vec<String>,
