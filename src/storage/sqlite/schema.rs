@@ -20,7 +20,7 @@ pub async fn ensure_schema(pool: &SqlitePool) -> Result<(), StorageError> {
 const SCHEMA: &str = r"
 CREATE TABLE IF NOT EXISTS users (
     id              TEXT PRIMARY KEY NOT NULL,
-    username        TEXT NOT NULL COLLATE NOCASE,
+    username        TEXT NOT NULL,
     email           TEXT NOT NULL COLLATE NOCASE,
     created_at      TEXT NOT NULL,
     password_hash   TEXT,
@@ -71,6 +71,15 @@ CREATE TABLE IF NOT EXISTS email_verifications (
     created_at  TEXT NOT NULL,
     consumed_at TEXT,
     purpose     TEXT NOT NULL DEFAULT 'email_verify'
+);
+
+CREATE TABLE IF NOT EXISTS email_change_requests (
+    user_id    TEXT PRIMARY KEY NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    new_email  TEXT NOT NULL,
+    code_hash  TEXT NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS totp_recovery_codes (

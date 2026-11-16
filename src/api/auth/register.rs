@@ -13,7 +13,7 @@ use crate::error::{ApiError, FieldInvalid};
 use crate::extractors::PreferredLocale;
 use crate::model::audit::AuditAction;
 use crate::model::password::PasswordHash;
-use crate::model::user::{User, UserId};
+use crate::model::user::{User, UserId, username_problem};
 use crate::storage::{UserRepo, UserRepoError};
 
 /// 注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 3–15 个
@@ -26,8 +26,6 @@ pub struct RegisterRequest {
     #[validate(email)]
     pub email: String,
     /// 展示用户名。
-    #[validate(length(min = 3, max = 15))]
-    #[validate(custom(function = "validate_username_chars"))]
     pub username: String,
     /// 明文口令；只在本端点边界出现，不进日志与响应。
     #[validate(length(min = 16, max = 64))]
@@ -36,15 +34,6 @@ pub struct RegisterRequest {
     /// Turnstile token；启用校验时必填，未启用时忽略。
     #[serde(default)]
     pub turnstile_token: Option<String>,
-}
-
-/// 用户名只允许 ASCII 字母、数字、下划线与连字符；不允许 `@`/`.` 等邮箱字符。
-fn validate_username_chars(username: &str) -> Result<(), ValidationError> {
-    if username.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-')) {
-        Ok(())
-    } else {
-        Err(ValidationError::new("username_invalid_characters"))
-    }
 }
 
 impl RegisterRequest {
@@ -82,15 +71,6 @@ fn field_issues(req: &RegisterRequest, errors: &ValidationErrors) -> Vec<FieldIn
             };
             match field.as_ref() {
                 "email" => Some(FieldInvalid { field: "email", code: "invalid_email".to_owned() }),
-                "username" => {
-                    let code = match errs.first().map(|err| err.code.as_ref()) {
-                        Some("length") if req.username.chars().count() > 15 => "username_too_long",
-                        Some("length") => "username_too_short",
-                        Some(custom) => custom,
-                        None => return None,
-                    };
-                    Some(FieldInvalid { field: "username", code: code.to_owned() })
-                }
                 "password" => {
                     let code = match errs.first().map(|err| err.code.as_ref()) {
                         // length 规则失败：按实际长度定向；custom 规则直接透传其 code
@@ -120,7 +100,14 @@ pub async fn register(
     let req: RegisterRequest =
         serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
     let req = req.normalized();
-    req.validate().map_err(|errors| ApiError::Validation(field_issues(&req, &errors)))?;
+    let mut issues =
+        req.validate().err().map_or_else(Vec::new, |errors| field_issues(&req, &errors));
+    if let Some(code) = username_problem(&req.username) {
+        issues.push(FieldInvalid { field: "username", code: code.to_owned() });
+    }
+    if !issues.is_empty() {
+        return Err(ApiError::Validation(issues));
+    }
     crate::api::verify_turnstile(&state, req.turnstile_token.as_deref()).await?;
 
     // 白名单只约束新注册；空集合表示不限制。邮箱已归一化为小写，

@@ -23,7 +23,7 @@ use crate::api::{
 };
 use crate::error::ApiError;
 use crate::extractors::constant_time_eq;
-use crate::mailer::{EmailMessage, Locale, verification_code};
+use crate::mailer::Locale;
 use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::tokens::{AccessClaims, RefreshToken, random_hex_32, sign_access};
 use crate::model::user::{User, UserId};
@@ -117,16 +117,7 @@ pub(crate) async fn issue_and_send_code(
         purpose,
     };
     state.verification_repo.issue(&entry, now).await.map_err(anyhow::Error::from)?;
-
-    let content = verification_code(locale, purpose, code.as_str(), VERIFICATION_TTL.num_minutes());
-    let mailer = state.mailer.clone();
-    let message =
-        EmailMessage { to: user.email.clone(), subject: content.subject, body: content.body };
-    tokio::spawn(async move {
-        if let Err(err) = mailer.send(message).await {
-            tracing::warn!(error = %err, "验证邮件发送失败");
-        }
-    });
+    crate::api::send_code_email(state, &user.email, purpose, &code, locale);
     Ok(())
 }
 

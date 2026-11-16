@@ -21,9 +21,9 @@ use nebula_server::mailer::{MailError, Mailer};
 use nebula_server::model::policy::PolicyCatalog;
 use nebula_server::social::SocialClients;
 use nebula_server::storage::sqlite::{
-    self, SqliteAccountRepo, SqliteAdminRepo, SqliteConsentRepo, SqliteEmailVerificationRepo,
-    SqliteExportRepo, SqliteMaintenanceRepo, SqliteOAuthRepo, SqliteRefreshRepo, SqliteSocialRepo,
-    SqliteTotpRepo, SqliteUserRepo,
+    self, SqliteAccountRepo, SqliteAdminRepo, SqliteConsentRepo, SqliteEmailChangeRepo,
+    SqliteEmailVerificationRepo, SqliteExportRepo, SqliteMaintenanceRepo, SqliteOAuthRepo,
+    SqliteRefreshRepo, SqliteSocialRepo, SqliteTotpRepo, SqliteUserRepo,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 
@@ -173,7 +173,8 @@ pub async fn app_state() -> (AppState, Arc<ManualClock>, Mailbox, tempfile::Temp
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
         social_repo: Arc::new(SqliteSocialRepo::from_pool(pool.clone())),
         export_repo: Arc::new(SqliteExportRepo::from_pool(pool.clone())),
-        consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool)),
+        consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool.clone())),
+        email_change_repo: Arc::new(SqliteEmailChangeRepo::from_pool(pool)),
         // 默认空政策目录；政策用例自行覆盖本字段
         policy_catalog: Arc::new(PolicyCatalog::default()),
         turnstile: None,
@@ -308,6 +309,14 @@ pub trait OneshotPost {
     async fn oneshot_delete_with_cookie(
         self,
         uri: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response;
+    /// PATCH JSON，带 cookie 与可选 CSRF 头。
+    async fn oneshot_patch_with(
+        self,
+        uri: &str,
+        body: &str,
         cookie: &str,
         csrf: Option<&str>,
     ) -> axum::response::Response;
@@ -451,6 +460,30 @@ impl OneshotPost for axum::Router {
     ) -> axum::response::Response {
         use tower::ServiceExt;
         let mut request = Request::delete(uri).body(Body::empty()).expect("请求构造必须成功");
+        if !cookie.is_empty() {
+            request
+                .headers_mut()
+                .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
+        }
+        if let Some(csrf) = csrf {
+            request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));
+        }
+        inject_connect_info(&mut request);
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_patch_with(
+        self,
+        uri: &str,
+        body: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = Request::patch(uri)
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_owned()))
+            .expect("请求构造必须成功");
         if !cookie.is_empty() {
             request
                 .headers_mut()

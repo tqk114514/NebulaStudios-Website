@@ -21,6 +21,7 @@
 | Microsoft / Google 社交登录 | 保留（简化） | 保留 Worker 代理；仅已绑定账号可登录，未绑定一律报错引导，不比对邮箱、不自动建号；绑定只在设置页主动发起（ADR-0002） |
 | 头像自动同步 | 砍 | 头像仅由用户在信息页手动上传（ADR-0002） |
 | 头像上传 | 保留但简化 | 只留「上传 → 缩放 → 转 WebP」；去掉同步、hash、哨兵 |
+| 用户名 / 邮箱修改 | 保留 | 信息页可改资料；用户名大小写敏感，邮箱两步变更（ADR-0015） |
 | 管理后台 | 保留最小集 | 统计 / 用户列表 / 封禁；角色管理、客户端管理、白名单改配置文件 |
 | 数据导出导入 | 保留导出，砍导入 | 自助 JSON 下载；一次性下载令牌入库（§9.4），不做合并 / 覆盖（ADR-0002） |
 | 政策中心 + 同意记录 + Cookie 同意 | 保留 | 政策文档不进仓库，随部署提供（manifest 描述语言与版本）；同意记录入库（ADR-0002） |
@@ -62,7 +63,7 @@ src/
   error.rs         thiserror 枚举 + impl IntoResponse
   context.rs       request_id、client ip、时钟
   avatar.rs        头像解码、缩放、WebP 编码与文件存储
-  model/           纯领域，零 I/O：user / password / tokens / grant / totp / export / policy / consent
+  model/           纯领域，零 I/O：user / password / tokens / grant / totp / export / policy / consent / email_change
   oauth2/          协议类型，与 HTTP 无关：requests / responses / errors / pkce / scope
   storage.rs       trait 定义（repository seam）
   storage/sqlite.rs sqlx 实现

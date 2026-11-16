@@ -16,6 +16,7 @@ pub use schema::ensure_schema;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::consent::PolicyConsent;
+use crate::model::email_change::EmailChangeRequest;
 use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient, OAuthGrant};
 use crate::model::password::PasswordHash;
 use crate::model::social::{
@@ -93,6 +94,12 @@ pub struct SqliteExportRepo {
 /// SQLite 政策同意仓储；与用户仓储共享同一连接池。
 #[derive(Debug, Clone)]
 pub struct SqliteConsentRepo {
+    pool: SqlitePool,
+}
+
+/// SQLite 邮箱变更请求仓储；与用户仓储共享同一连接池。
+#[derive(Debug, Clone)]
+pub struct SqliteEmailChangeRepo {
     pool: SqlitePool,
 }
 
@@ -207,6 +214,14 @@ impl SqliteConsentRepo {
     }
 }
 
+impl SqliteEmailChangeRepo {
+    /// 从既有连接池构建。
+    #[must_use]
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
 impl From<SqlxError> for StorageError {
     fn from(err: SqlxError) -> Self {
         Self(Box::new(err))
@@ -221,6 +236,12 @@ impl From<SqlxError> for UserRepoError {
 }
 
 impl From<SqlxError> for RotateRefreshError {
+    fn from(err: SqlxError) -> Self {
+        Self::Storage(err.into())
+    }
+}
+
+impl From<SqlxError> for crate::storage::EmailChangeError {
     fn from(err: SqlxError) -> Self {
         Self::Storage(err.into())
     }
@@ -339,6 +360,25 @@ impl UserRepo for SqliteUserRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(version)
+    }
+
+    async fn update_username(
+        &self,
+        user_id: &UserId,
+        username: &str,
+    ) -> Result<bool, UserRepoError> {
+        let result = sqlx::query("UPDATE users SET username = ?2 WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .bind(username)
+            .execute(&self.pool)
+            .await;
+        match result {
+            Ok(updated) => Ok(updated.rows_affected() == 1),
+            Err(SqlxError::Database(db)) if db.is_unique_violation() => {
+                Err(UserRepoError::Conflict)
+            }
+            Err(err) => Err(UserRepoError::from(err)),
+        }
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, UserRepoError> {
@@ -1245,6 +1285,13 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
         .await?
         .rows_affected();
 
+        let email_change_requests =
+            sqlx::query("DELETE FROM email_change_requests WHERE expires_at < ?1")
+                .bind(now)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+
         tx.commit().await?;
         Ok(CleanupReport {
             refresh_tokens,
@@ -1256,6 +1303,7 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
             expired_bans,
             social_login_states,
             data_export_tokens,
+            email_change_requests,
         })
     }
 }
@@ -1548,6 +1596,97 @@ impl crate::storage::ConsentRepo for SqliteConsentRepo {
             .into_iter()
             .map(|(policy, version, consented_at)| PolicyConsent { policy, version, consented_at })
             .collect())
+    }
+}
+
+#[async_trait]
+impl crate::storage::EmailChangeRepo for SqliteEmailChangeRepo {
+    async fn upsert(
+        &self,
+        user_id: &UserId,
+        new_email: &str,
+        code_hash: &str,
+        expires_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            "INSERT INTO email_change_requests
+             (user_id, new_email, code_hash, attempts, expires_at, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5)
+             ON CONFLICT (user_id) DO UPDATE SET
+                 new_email = excluded.new_email,
+                 code_hash = excluded.code_hash,
+                 attempts = 0,
+                 expires_at = excluded.expires_at,
+                 created_at = excluded.created_at",
+        )
+        .bind(user_id.as_uuid())
+        .bind(new_email)
+        .bind(code_hash)
+        .bind(expires_at)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn find(&self, user_id: &UserId) -> Result<Option<EmailChangeRequest>, StorageError> {
+        let row: Option<(String, String, u32, DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
+            "SELECT new_email, code_hash, attempts, expires_at, created_at
+             FROM email_change_requests WHERE user_id = ?1",
+        )
+        .bind(user_id.as_uuid())
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|(new_email, code_hash, attempts, expires_at, created_at)| EmailChangeRequest {
+            user_id: *user_id,
+            new_email,
+            code_hash,
+            attempts,
+            expires_at,
+            created_at,
+        }))
+    }
+
+    async fn record_attempt(&self, user_id: &UserId) -> Result<(), StorageError> {
+        sqlx::query("UPDATE email_change_requests SET attempts = attempts + 1 WHERE user_id = ?1")
+            .bind(user_id.as_uuid())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn apply(
+        &self,
+        user_id: &UserId,
+        expected_email: &str,
+    ) -> Result<(), crate::storage::EmailChangeError> {
+        let mut tx = self.pool.begin().await?;
+        let updated = sqlx::query("UPDATE users SET email = ?2, email_verified = 1 WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .bind(expected_email)
+            .execute(&mut *tx)
+            .await;
+        match updated {
+            Ok(result) if result.rows_affected() == 1 => {}
+            Ok(_) => return Err(crate::storage::EmailChangeError::NotFound),
+            Err(SqlxError::Database(db)) if db.is_unique_violation() => {
+                return Err(crate::storage::EmailChangeError::Conflict);
+            }
+            Err(err) => return Err(StorageError::from(err).into()),
+        }
+
+        let deleted =
+            sqlx::query("DELETE FROM email_change_requests WHERE user_id = ?1 AND new_email = ?2")
+                .bind(user_id.as_uuid())
+                .bind(expected_email)
+                .execute(&mut *tx)
+                .await?;
+        if deleted.rows_affected() != 1 {
+            return Err(crate::storage::EmailChangeError::NotFound);
+        }
+        tx.commit().await?;
+        Ok(())
     }
 }
 

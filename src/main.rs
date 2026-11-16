@@ -18,8 +18,8 @@ use nebula_server::social::google::{GoogleClient, GoogleConfig};
 use nebula_server::social::microsoft::{MicrosoftClient, MicrosoftConfig};
 use nebula_server::social::{SocialClients, SocialProviderClient};
 use nebula_server::storage::sqlite::{
-    self, SqliteAdminRepo, SqliteConsentRepo, SqliteExportRepo, SqliteMaintenanceRepo,
-    SqliteRefreshRepo, SqliteSocialRepo, SqliteUserRepo,
+    self, SqliteAdminRepo, SqliteConsentRepo, SqliteEmailChangeRepo, SqliteExportRepo,
+    SqliteMaintenanceRepo, SqliteRefreshRepo, SqliteSocialRepo, SqliteUserRepo,
 };
 use nebula_server::telemetry;
 use nebula_server::turnstile::{TurnstileClient, TurnstileVerifier};
@@ -136,7 +136,8 @@ async fn main() -> anyhow::Result<()> {
         admin_repo: Arc::new(SqliteAdminRepo::from_pool(pool.clone())),
         social_repo: Arc::new(SqliteSocialRepo::from_pool(pool.clone())),
         export_repo: Arc::new(SqliteExportRepo::from_pool(pool.clone())),
-        consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool)),
+        consent_repo: Arc::new(SqliteConsentRepo::from_pool(pool.clone())),
+        email_change_repo: Arc::new(SqliteEmailChangeRepo::from_pool(pool)),
         policy_catalog: Arc::new(config.policy.catalog.clone()),
         turnstile,
         turnstile_site_key,

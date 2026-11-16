@@ -44,6 +44,10 @@ pub enum AuditAction {
     UserTotpEnabled,
     /// 关闭两步验证。
     UserTotpDisabled,
+    /// 修改用户名。
+    UserUsernameChanged,
+    /// 修改账户邮箱。
+    UserEmailChanged,
     /// 绑定社交身份。
     UserSocialLinked,
     /// 解绑社交身份。
@@ -72,6 +76,8 @@ impl AuditAction {
             Self::AuthAccountDelete => "auth.account.delete",
             Self::UserTotpEnabled => "user.totp.enable",
             Self::UserTotpDisabled => "user.totp.disable",
+            Self::UserUsernameChanged => "user.username.change",
+            Self::UserEmailChanged => "user.email.change",
             Self::UserSocialLinked => "user.social.link",
             Self::UserSocialUnlinked => "user.social.unlink",
             Self::OAuthConsent => "oauth.consent",

@@ -10,6 +10,7 @@ use async_trait::async_trait;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::consent::PolicyConsent;
+use crate::model::email_change::EmailChangeRequest;
 use crate::model::oauth2::{AuthorizationCode, OAuthClient, OAuthGrant};
 use crate::model::password::PasswordHash;
 use crate::model::social::{NewSocialIdentity, SocialIdentity, SocialLoginState, SocialProvider};
@@ -91,6 +92,18 @@ pub trait UserRepo: Send + Sync {
     /// 仅 [`UserRepoError::Storage`]。
     async fn bump_avatar_version(&self, user_id: &UserId) -> Result<Option<i64>, UserRepoError>;
 
+    /// 更新用户名并返回是否命中用户；大小写精确，唯一约束冲突返回
+    /// [`UserRepoError::Conflict`]。
+    ///
+    /// # Errors
+    /// 用户名已被占用返回 [`UserRepoError::Conflict`]；底层故障返回
+    /// [`UserRepoError::Storage`]。
+    async fn update_username(
+        &self,
+        user_id: &UserId,
+        username: &str,
+    ) -> Result<bool, UserRepoError>;
+
     /// 按邮箱查找，大小写不敏感（列 COLLATE NOCASE）。
     ///
     /// # Errors
@@ -117,8 +130,8 @@ pub trait UserRepo: Send + Sync {
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<Option<UserAccess>, UserRepoError>;
 
-    /// 按登录标识（邮箱或用户名）取登录凭据，大小写不敏感；用户不存在或
-    /// 该用户无口令哈希均返回 `None`，由调用方走时序对齐路径。
+    /// 按登录标识（邮箱或用户名）取登录凭据；邮箱大小写不敏感，用户名大小写
+    /// 精确。用户不存在或该用户无口令哈希均返回 `None`，由调用方走时序对齐路径。
     ///
     /// # Errors
     /// 仅 [`UserRepoError::Storage`]；读取不产生 Conflict。
@@ -127,7 +140,7 @@ pub trait UserRepo: Send + Sync {
         identifier: &str,
     ) -> Result<Option<LoginCredentials>, UserRepoError>;
 
-    /// 按用户名查找，大小写不敏感。
+    /// 按用户名查找，大小写精确。
     ///
     /// # Errors
     /// 仅 [`UserRepoError::Storage`]；读取不产生 Conflict。
@@ -334,6 +347,8 @@ pub struct CleanupReport {
     pub social_login_states: u64,
     /// 删除的过期或已消费数据导出令牌行数。
     pub data_export_tokens: u64,
+    /// 删除的过期邮箱变更请求行数。
+    pub email_change_requests: u64,
 }
 
 /// 维护仓储：过期数据清理；删除在同一事务内完成。
@@ -694,6 +709,60 @@ pub trait ConsentRepo: Send + Sync {
     /// # Errors
     /// 仅存储故障。
     async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<PolicyConsent>, StorageError>;
+}
+
+/// 邮箱变更应用错误。
+#[derive(Debug, thiserror::Error)]
+pub enum EmailChangeError {
+    /// 新邮箱已被其他用户占用。
+    #[error("邮箱已被占用")]
+    Conflict,
+    /// 用户或待确认请求不存在（并发删除/覆盖）。
+    #[error("待确认邮箱变更请求不存在")]
+    NotFound,
+    /// 底层存储故障，细节见 source。
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+/// 邮箱变更待确认请求仓储；每用户至多一条。
+#[async_trait]
+pub trait EmailChangeRepo: Send + Sync {
+    /// 写入或覆盖待确认请求；重发时重置验证码摘要与尝试次数。
+    ///
+    /// # Errors
+    /// 仅存储故障；用户不存在（外键约束）也按存储故障返回。
+    async fn upsert(
+        &self,
+        user_id: &UserId,
+        new_email: &str,
+        code_hash: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// 读取当前待确认请求；不存在返回 `None`。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn find(&self, user_id: &UserId) -> Result<Option<EmailChangeRequest>, StorageError>;
+
+    /// 错误尝试 +1。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn record_attempt(&self, user_id: &UserId) -> Result<(), StorageError>;
+
+    /// 原子应用邮箱变更：写新邮箱、置已验证、删除待确认请求。
+    ///
+    /// `expected_email` 必须与当前请求的新邮箱一致，防止并发重发后旧验证码
+    /// 作用到新地址；唯一约束冲突返回 [`EmailChangeError::Conflict`] 且回滚，
+    /// 待确认请求保留。
+    ///
+    /// # Errors
+    /// 邮箱冲突返回 [`EmailChangeError::Conflict`]；待确认请求缺失或已变化返回
+    /// [`EmailChangeError::NotFound`]；存储故障返回 [`EmailChangeError::Storage`]。
+    async fn apply(&self, user_id: &UserId, expected_email: &str) -> Result<(), EmailChangeError>;
 }
 
 /// 社交身份绑定错误。

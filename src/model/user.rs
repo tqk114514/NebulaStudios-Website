@@ -46,11 +46,39 @@ impl std::fmt::Display for UserId {
     }
 }
 
+/// 用户名最短字符数。
+pub const USERNAME_MIN_CHARS: usize = 3;
+/// 用户名最长字符数。
+pub const USERNAME_MAX_CHARS: usize = 15;
+
+/// 用户名规则：3–15 个 ASCII 字母、数字、下划线或连字符；返回首个错误码。
+///
+/// ```
+/// use nebula_server::model::user::username_problem;
+///
+/// assert_eq!(username_problem("nova"), None);
+/// assert_eq!(username_problem("no"), Some("username_too_short"));
+/// assert_eq!(username_problem("nova!"), Some("username_invalid_characters"));
+/// ```
+#[must_use]
+pub fn username_problem(username: &str) -> Option<&'static str> {
+    let len = username.chars().count();
+    if len < USERNAME_MIN_CHARS {
+        Some("username_too_short")
+    } else if len > USERNAME_MAX_CHARS {
+        Some("username_too_long")
+    } else if !username.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-')) {
+        Some("username_invalid_characters")
+    } else {
+        None
+    }
+}
+
 /// 注册用户快照。登录标识为邮箱或用户名（ADR-0002）；
 /// 字段合法形状（长度、字符集）在注册端点经 `validator` 校验，领域层不重复编码规则。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct User {
-    /// 永久标识。
+    /// 永久标识（API 字段名 `id`），UUID v7，即稳定 UID；修改用户名或邮箱不变。
     pub id: UserId,
     /// 展示用用户名，全库唯一（大小写不敏感）。
     pub username: String,

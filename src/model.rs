@@ -2,6 +2,7 @@
 
 pub mod audit;
 pub mod consent;
+pub mod email_change;
 pub mod export;
 pub mod oauth2;
 pub mod password;

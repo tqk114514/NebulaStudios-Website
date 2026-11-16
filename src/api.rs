@@ -19,7 +19,7 @@ use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, patch, post};
 use chrono::TimeDelta;
 use tower_governor::GovernorLayer;
 use tower_governor::errors::GovernorError;
@@ -35,14 +35,17 @@ use crate::avatar::{AvatarStore, MAX_REQUEST_BYTES};
 use crate::context::{Clock, RequestId};
 use crate::crypto::{CodeHasher, SecretCipher};
 use crate::error::{ApiError, FieldInvalid};
-use crate::mailer::{EmailMessage, Locale, Mailer, SecurityNotice, security_notice};
+use crate::mailer::{
+    EmailMessage, Locale, Mailer, SecurityNotice, security_notice, verification_code,
+};
 use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::policy::PolicyCatalog;
 use crate::model::user::{User, UserId};
+use crate::model::verification::{VERIFICATION_TTL, VerificationCode, VerificationPurpose};
 use crate::social::SocialClients;
 use crate::storage::{
-    AccountRepo, AdminRepo, ConsentRepo, EmailVerificationRepo, ExportRepo, MaintenanceRepo,
-    OAuthRepo, RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
+    AccountRepo, AdminRepo, ConsentRepo, EmailChangeRepo, EmailVerificationRepo, ExportRepo,
+    MaintenanceRepo, OAuthRepo, RefreshTokenRepo, SocialRepo, TotpRepo, UserRepo,
 };
 use crate::turnstile::TurnstileVerifier;
 
@@ -223,6 +226,8 @@ pub struct AppState {
     pub export_repo: Arc<dyn ExportRepo>,
     /// 政策同意记录仓储。
     pub consent_repo: Arc<dyn ConsentRepo>,
+    /// 邮箱变更待确认请求仓储。
+    pub email_change_repo: Arc<dyn EmailChangeRepo>,
     /// 启动时加载并校验的政策目录；空目录表示政策中心未配置。
     pub policy_catalog: Arc<PolicyCatalog>,
     /// Turnstile 校验端口；`None` 表示未启用。
@@ -271,6 +276,24 @@ pub(crate) fn send_security_notice(
     tokio::spawn(async move {
         if let Err(err) = mailer.send(message).await {
             tracing::warn!(error = %err, "安全通知邮件发送失败");
+        }
+    });
+}
+
+/// 发送验证码邮件到指定地址；发送失败只记日志，不阻塞已完成的状态变更。
+pub(crate) fn send_code_email(
+    state: &AppState,
+    to: &str,
+    purpose: VerificationPurpose,
+    code: &VerificationCode,
+    locale: Locale,
+) {
+    let content = verification_code(locale, purpose, code.as_str(), VERIFICATION_TTL.num_minutes());
+    let mailer = state.mailer.clone();
+    let message = EmailMessage { to: to.to_owned(), subject: content.subject, body: content.body };
+    tokio::spawn(async move {
+        if let Err(err) = mailer.send(message).await {
+            tracing::warn!(error = %err, "验证邮件发送失败");
         }
     });
 }
@@ -436,10 +459,11 @@ fn limited_routes() -> Router<AppState> {
     let login_limited =
         limited(Router::new().route("/api/auth/login", post(auth::login::login)), 12, 5);
 
-    // 改密：验证当前口令并重算新哈希，两次 Argon2；突发 5、每 10 秒补 1
+    // 改密与用户名修改：验证当前口令并可能重算哈希；突发 5、每 10 秒补 1
     let password_change_limited = limited(
         Router::new()
-            .route("/api/auth/password/change", post(auth::change_password::change_password)),
+            .route("/api/auth/password/change", post(auth::change_password::change_password))
+            .route("/api/user/username", patch(user::username::update_username)),
         10,
         5,
     );
@@ -448,7 +472,11 @@ fn limited_routes() -> Router<AppState> {
     let verify_limited = limited(
         Router::new()
             .route("/api/auth/register/verify", post(auth::verify::verify))
-            .route("/api/auth/account/delete/confirm", post(auth::delete_confirm::delete_confirm)),
+            .route("/api/auth/account/delete/confirm", post(auth::delete_confirm::delete_confirm))
+            .route(
+                "/api/user/email/change/confirm",
+                post(user::email_change::confirm_email_change),
+            ),
         10,
         5,
     );
@@ -473,10 +501,14 @@ fn limited_routes() -> Router<AppState> {
         10,
     );
 
-    // 注销发码会触发外发邮件，限额与注册/重置发码同档（突发 3、每 20 秒补 1）
+    // 注销发码与邮箱变更申请会触发外发邮件，限额与注册/重置发码同档（突发 3、每 20 秒补 1）
     let delete_request_limited = limited(
         Router::new()
-            .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request)),
+            .route("/api/auth/account/delete/request", post(auth::delete_request::delete_request))
+            .route(
+                "/api/user/email/change/request",
+                post(user::email_change::request_email_change),
+            ),
         20,
         3,
     );

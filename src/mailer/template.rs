@@ -60,6 +60,7 @@ pub fn verification_code(
                 VerificationPurpose::VerifyEmail => "Nebula 邮箱验证码",
                 VerificationPurpose::DeleteAccount => "Nebula 账户注销确认码",
                 VerificationPurpose::PasswordReset => "Nebula 密码重置验证码",
+                VerificationPurpose::EmailChange => "Nebula 邮箱变更验证码",
             };
             EmailContent {
                 subject: subject.to_owned(),
@@ -71,6 +72,7 @@ pub fn verification_code(
                 VerificationPurpose::VerifyEmail => "Nebula email verification code",
                 VerificationPurpose::DeleteAccount => "Nebula account deletion code",
                 VerificationPurpose::PasswordReset => "Nebula password reset code",
+                VerificationPurpose::EmailChange => "Nebula email change code",
             };
             EmailContent {
                 subject: subject.to_owned(),
@@ -91,6 +93,8 @@ pub enum SecurityNotice {
     TotpEnabled,
     /// 两步验证关闭；账户认证强度降级。
     TotpDisabled,
+    /// 账户邮箱变更；通知旧邮箱。
+    EmailChanged,
 }
 
 /// 安全变更通知邮件；提示用户在非本人操作时的处置方式。
@@ -119,6 +123,11 @@ pub fn security_notice(locale: Locale, notice: SecurityNotice) -> EmailContent {
                     "你的 Nebula 账户刚刚关闭了两步验证，账户安全强度已降低。\n\
                      若这不是你本人的操作，请立即更改口令并重新启用两步验证。",
                 ),
+                SecurityNotice::EmailChanged => (
+                    "Nebula 安全提醒：账户邮箱已更改",
+                    "你的 Nebula 账户邮箱刚刚被更改，旧邮箱不再可用于登录或密码重置。\n\
+                     若这不是你本人的操作，请立即检查账户安全。",
+                ),
             };
             EmailContent { subject: subject.to_owned(), body: body.to_owned() }
         }
@@ -145,6 +154,12 @@ pub fn security_notice(locale: Locale, notice: SecurityNotice) -> EmailContent {
                     "Two-step verification was just disabled for your Nebula account, \
                      lowering its security.\nIf this was not you, change your password and \
                      enable it again immediately.",
+                ),
+                SecurityNotice::EmailChanged => (
+                    "Nebula security notice: email address changed",
+                    "The email address for your Nebula account was just changed. The old \
+                     address can no longer be used to sign in or reset your password.\n\
+                     If this was not you, review your account security immediately.",
                 ),
             };
             EmailContent { subject: subject.to_owned(), body: body.to_owned() }

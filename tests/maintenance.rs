@@ -38,6 +38,7 @@ async fn purge_expired_deletes_only_expired_rows() {
     seed_ban_data(&pool).await;
     seed_social_states(&pool).await;
     seed_export_tokens(&pool).await;
+    seed_email_change(&pool).await;
     pool.close().await;
 
     let report =
@@ -55,6 +56,7 @@ async fn purge_expired_deletes_only_expired_rows() {
             expired_bans: 1,
             social_login_states: 1,
             data_export_tokens: 2,
+            email_change_requests: 1,
         }
     );
 
@@ -220,6 +222,19 @@ async fn seed_social_states(pool: &SqlitePool) {
     }
 }
 
+async fn seed_email_change(pool: &SqlitePool) {
+    sqlx::query(
+        "INSERT INTO email_change_requests
+         (user_id, new_email, code_hash, attempts, expires_at, created_at)
+         VALUES (?1, 'new@nebula.st', 'change-hash', 0,
+                 '2026-10-26T07:00:00+00:00', '2026-10-26T06:00:00+00:00')",
+    )
+    .bind(USER_ID)
+    .execute(pool)
+    .await
+    .expect("邮箱变更请求必须可插入");
+}
+
 async fn seed_export_tokens(pool: &SqlitePool) {
     for (hash, expires_at, consumed_at) in [
         (OLD_EXPORT, "2026-10-26T07:00:00+00:00", None),
@@ -252,6 +267,7 @@ async fn assert_remaining_rows(pool: &SqlitePool) {
         ("user_bans", "SELECT COUNT(*) FROM user_bans", 0),
         ("social_login_states", "SELECT COUNT(*) FROM social_login_states", 1),
         ("data_export_tokens", "SELECT COUNT(*) FROM data_export_tokens", 1),
+        ("email_change_requests", "SELECT COUNT(*) FROM email_change_requests", 0),
     ] {
         let count: i64 = sqlx::query_scalar(sql).fetch_one(pool).await.expect("计数必须可读");
         assert_eq!(count, expected, "{table} 只应保留未过期行");

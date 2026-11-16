@@ -47,13 +47,37 @@ async fn find_by_email_matches_case_insensitive_and_missing_is_none() {
 }
 
 #[tokio::test]
-async fn find_by_username_matches_case_insensitive_and_missing_is_none() {
+async fn find_by_username_matches_exactly_and_missing_is_none() {
     let (state, _clock, _mailbox, _dir) = common::app_state().await;
     let repo = &state.user_repo;
     repo.insert(&sample_user(), &sample_hash()).await.expect("插入必须成功");
 
-    assert!(repo.find_by_username("NOVA").await.expect("查找必须成功").is_some());
+    assert!(repo.find_by_username("nova").await.expect("查找必须成功").is_some());
+    assert!(repo.find_by_username("NOVA").await.expect("查找必须成功").is_none());
     assert!(repo.find_by_username("ghost").await.expect("查找必须成功").is_none());
+}
+
+#[tokio::test]
+async fn usernames_differing_only_by_case_can_coexist() {
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
+    let repo = &state.user_repo;
+    let first = sample_user();
+    repo.insert(&first, &sample_hash()).await.expect("插入必须成功");
+
+    let mut second = sample_user();
+    second.id = UserId::new();
+    second.username = "NOVA".to_owned();
+    second.email = "other@nebula.st".to_owned();
+    repo.insert(&second, &sample_hash()).await.expect("大小写不同的用户名必须可共存");
+
+    assert_eq!(
+        repo.find_by_username("nova").await.expect("查找必须成功").expect("用户必须存在").id,
+        first.id
+    );
+    assert_eq!(
+        repo.find_by_username("NOVA").await.expect("查找必须成功").expect("用户必须存在").id,
+        second.id
+    );
 }
 
 #[tokio::test]

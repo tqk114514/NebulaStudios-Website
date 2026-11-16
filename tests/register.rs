@@ -145,13 +145,28 @@ async fn duplicate_username_is_409_username_taken() {
 
     let response = app
         .oneshot(post_register(
-            r#"{"email":"other@nebula.st","username":"NOVA","password":"Nebula!Passw0rd-2026"}"#,
+            r#"{"email":"other@nebula.st","username":"nova","password":"Nebula!Passw0rd-2026"}"#,
         ))
         .await
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
     insta::assert_snapshot!(body_text(response).await);
+}
+
+#[tokio::test]
+async fn username_case_variants_can_coexist() {
+    let (app, _state, _clock, _mailbox, _dir) = common::app().await;
+    app.clone().oneshot(post_register(VALID_BODY)).await.unwrap();
+
+    let response = app
+        .oneshot(post_register(
+            r#"{"email":"other@nebula.st","username":"NOVA","password":"Nebula!Passw0rd-2026"}"#,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
 }
 
 #[tokio::test]

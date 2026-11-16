@@ -3,6 +3,7 @@
 pub mod avatar_serve;
 pub mod avatar_upload;
 pub mod consents;
+pub mod email_change;
 pub mod export_download;
 pub mod export_request;
 pub mod oauth_grants;
@@ -11,3 +12,4 @@ pub mod social;
 pub mod totp_disable;
 pub mod totp_enable;
 pub mod totp_setup;
+pub mod username;

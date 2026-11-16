@@ -33,7 +33,13 @@ pub struct LoginRequest {
 pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
     let req: LoginRequest =
         serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    let identifier = req.identifier.trim().to_lowercase();
+    // 邮箱大小写不敏感，用户名大小写敏感（ADR-0015）：只有含 @ 的标识才小写化
+    let raw_identifier = req.identifier.trim();
+    let identifier = if raw_identifier.contains('@') {
+        raw_identifier.to_lowercase()
+    } else {
+        raw_identifier.to_owned()
+    };
 
     let mut issues = Vec::new();
     if identifier.is_empty() {
