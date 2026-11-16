@@ -104,8 +104,9 @@ path = "/policies/privacy/2026-11-01/en"
 ## 人机验证
 
 默认关闭。启用后注册、重发验证码、重置发码必须携带 `turnstile_token`；`GET
-/api/auth/turnstile` 返回 `{ enabled, site_key }` 供前端渲染。只使用不可见/单按钮
-模式，不出现拼图或图像选择；校验服务不可用时相关端点返回 503。配置：
+/api/auth/turnstile` 返回 `{ enabled, site_key }` 供前端渲染。Turnstile 各模式均
+不呈现图像/文字谜题：managed 最多显示复选框，non-interactive 无需交互，invisible
+完全隐藏，因此不需要替代路径。校验服务不可用时相关端点返回 503。配置：
 
 ```bash
 NEBULA_TURNSTILE__ENABLED=true

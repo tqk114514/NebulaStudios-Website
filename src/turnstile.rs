@@ -1,7 +1,8 @@
 //! Turnstile 服务端校验（ADR-0002、§9.12）。
 //!
-//! 只用于不可见或单按钮模式——不要求用户记忆、转写或解谜；Token 由前端
-//! 从 Turnstile 组件取得后随请求提交，服务端向 Cloudflare `siteverify` 核验。
+//! Turnstile 各模式均不要求记忆、转写或解谜：managed 最多显示复选框，
+//! non-interactive/invisible 无需交互。Token 由前端从 Turnstile 组件取得后随
+//! 请求提交，服务端向 Cloudflare `siteverify` 核验。
 
 use std::fmt;
 use std::time::Duration;

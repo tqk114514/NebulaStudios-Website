@@ -24,7 +24,7 @@
 | 管理后台 | 保留最小集 | 统计 / 用户列表 / 封禁；角色管理、客户端管理、白名单改配置文件 |
 | 数据导出导入 | 保留导出，砍导入 | 自助 JSON 下载；一次性下载令牌入库（§9.4），不做合并 / 覆盖（ADR-0002） |
 | 政策中心 + 同意记录 + Cookie 同意 | 保留 | 政策文档不进仓库，随部署提供（manifest 描述语言与版本）；同意记录入库（ADR-0002） |
-| Turnstile 人机验证 | 保留但受限 | 可配置开关；每处必须有替代路径（§9.12，ADR-0002） |
+| Turnstile 人机验证 | 保留但受限 | 可配置开关；Turnstile 各模式均不出认知题目，无需替代路径；其他出题型验证码仍须替代（§9.12，ADR-0002 修订） |
 | 5 语言 i18n | 降为 2 语言 | 文案维护成本不会因工具而降低 |
 | 用户日志 + 管理日志 | 合并为一张审计表 | |
 | Zig 图片处理 sidecar | 砍 | `image` + `spawn_blocking` 足够 |
@@ -202,7 +202,7 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 9. **PKCE 不接受 `plain`。** v3 接受 `plain`（无客户端使用）而文档称强制 PKCE。降级路径存在则降级迟早发生。
 10. **`openid` 命名需有依据。** v3 有 `openid` scope 而无 OIDC discovery/JWKS 端点。补齐，或不叫 `openid`。
 11. **语言覆盖范围与实际一致。** v3 的 `i18n/sources/admin/` 只有 `zh-CN`，对外称五语言。
-12. **人机验证不得要求认知功能测试。** WCAG 2.2 SC 3.3.8 禁止要求用户记忆、转写或解谜；Turnstile 的不可见/单按钮模式不属于认知功能测试，但一旦升级为拼图或图像选择即触发。→ 只用非交互模式；若部署启用交互式挑战，该端点必须提供邮件链接、TOTP 或 passkey 替代。v3 在所有认证端点挂验证码且无替代，是反例。
+12. **人机验证不得要求认知功能测试。** WCAG 2.2 SC 3.3.8 禁止要求用户记忆、转写或解谜。Turnstile 各模式均符合：managed 最多显示复选框，non-interactive 无需交互，invisible 完全隐藏；官方明确 managed 模式“There will be no images or text to decipher”。因此 Turnstile 本身不触发该条，不需要替代路径。若使用会出题的验证码（图像选择、拼图、记忆、转写），该端点必须提供邮件链接、TOTP 或 passkey 替代。v3 的 Turnstile 用法不构成 §9.12 反例。
 
 ---
 
@@ -295,7 +295,7 @@ v3 中确实存在、重写时最容易复刻的缺陷。
 
 **Rust 参考代码库与 crate**：[MAS](https://github.com/element-hq/matrix-authentication-service)（`docs/development/architecture.md`）· [axum examples](https://github.com/tokio-rs/axum/tree/main/examples) · [rustls](https://github.com/rustls/rustls) · [tokio](https://github.com/tokio-rs/tokio) · [jsonwebtoken](https://docs.rs/jsonwebtoken/latest/jsonwebtoken/struct.EncodingKey.html) · [sqlx](https://github.com/launchbadge/sqlx/blob/main/CHANGELOG.md) · [rand](https://github.com/rust-random/rand/blob/master/CHANGELOG.md) · [lettre](https://github.com/lettre/lettre) · [axum-prometheus](https://github.com/Ptrskay3/axum-prometheus) · [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) · [12factor](https://12factor.net/)
 
-**安全与无障碍**：[WCAG 2.2 SC 3.3.8](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) · [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)
+**安全与无障碍**：[WCAG 2.2 SC 3.3.8](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) · [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) · [Turnstile widget modes](https://developers.cloudflare.com/turnstile/concepts/widget/)
 
 **前端规范**：[Vue Style Guide](https://vuejs.org/style-guide/) · [SFC script-setup](https://vuejs.org/api/sfc-script-setup.html) · [VueUse CONTRIBUTING](https://vueuse.org/contributing) · [antfu/eslint-config](https://github.com/antfu/eslint-config) · [@nuxt/eslint](https://eslint.nuxt.com/packages/module) · [FSD](https://feature-sliced.design/docs/get-started/overview) · [nuxt/ui](https://github.com/nuxt/ui) · [halo](https://github.com/halo-dev/halo) · [openobserve](https://github.com/openobserve/openobserve) · [nuxt/nuxt 根配置](https://github.com/nuxt/nuxt)
 
