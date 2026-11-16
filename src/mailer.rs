@@ -1,5 +1,5 @@
 //! 邮件端口：trait 与 SMTP / 日志两种实现（§1：lettre 异步传输绑定当前 tokio
-//! runtime，须在 runtime 内创建）。
+//! runtime，须在 runtime 内创建）；纯文本模板与 2 语言文案见 [`template`]。
 
 use std::error::Error as StdError;
 use std::fmt;
@@ -10,7 +10,11 @@ use lettre::message::Mailbox;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
-/// 待发送邮件；纯文本，模板与多语言随后续切片引入。
+pub mod template;
+
+pub use template::{EmailContent, Locale, SecurityNotice, security_notice, verification_code};
+
+/// 待发送邮件；纯文本，主题与正文由 [`template`] 渲染。
 #[derive(Debug, Clone)]
 pub struct EmailMessage {
     /// 收件人地址（`名字 <addr>` 或裸地址）。

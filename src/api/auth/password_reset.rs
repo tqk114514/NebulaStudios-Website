@@ -10,8 +10,10 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
 use super::{hash_password_in_background, issue_and_send_code, password_problem};
-use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
+use crate::api::{AppState, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::PreferredLocale;
+use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
@@ -42,6 +44,7 @@ pub struct ResetConfirmPayload {
 /// 字段缺失 422；冷却中 429 `resend_cooldown`；内部故障 500。未知邮箱 204。
 pub async fn reset_request(
     State(state): State<AppState>,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: ResetRequestPayload =
@@ -68,7 +71,7 @@ pub async fn reset_request(
                 return Err(ApiError::ResendCooldown(remaining.cast_unsigned()));
             }
         }
-        issue_and_send_code(&state, &user, VerificationPurpose::PasswordReset).await?;
+        issue_and_send_code(&state, &user, VerificationPurpose::PasswordReset, locale.0).await?;
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -80,6 +83,7 @@ pub async fn reset_request(
 /// 字段缺失/新口令不合规 422；码错/过期/耗尽 401 `invalid_code`；内部故障 500。
 pub async fn reset_confirm(
     State(state): State<AppState>,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: ResetConfirmPayload =
@@ -133,7 +137,7 @@ pub async fn reset_confirm(
 
     crate::api::record_audit(&state, user.id, AuditAction::AuthPasswordReset, Some(user.id), None)
         .await;
-    send_security_notice(&state, &user.email, SecurityNotice::PasswordReset);
+    send_security_notice(&state, &user.email, SecurityNotice::PasswordReset, locale.0);
 
     let mut headers = axum::http::HeaderMap::new();
     clear_session_cookies(&mut headers);

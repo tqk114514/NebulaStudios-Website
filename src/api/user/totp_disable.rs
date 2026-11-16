@@ -8,9 +8,10 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use crate::api::{AppState, SecurityNotice, clear_session_cookies, send_security_notice};
+use crate::api::{AppState, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 use crate::model::totp::verify_code;
 
@@ -31,6 +32,7 @@ pub struct DisableRequest {
 pub async fn disable(
     State(state): State<AppState>,
     user: FirstPartyUser,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: DisableRequest =
@@ -92,7 +94,7 @@ pub async fn disable(
     )
     .await;
 
-    send_security_notice(&state, &user.email, SecurityNotice::TotpDisabled);
+    send_security_notice(&state, &user.email, SecurityNotice::TotpDisabled, locale.0);
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);

@@ -2,10 +2,12 @@
 
 use axum::extract::FromRequestParts;
 use axum::http::Method;
+use axum::http::header::ACCEPT_LANGUAGE;
 use axum::http::request::Parts;
 
 use crate::api::{ACCESS_COOKIE, AppState, CSRF_COOKIE, cookie_value};
 use crate::error::ApiError;
+use crate::mailer::Locale;
 use crate::model::tokens::{VerifiedAccessToken, verify_access};
 use crate::model::user::UserId;
 
@@ -48,7 +50,6 @@ pub struct AdminUser {
     /// 已通过第一方认证与封禁检查的用户。
     pub user: FirstPartyUser,
 }
-
 impl FromRequestParts<AppState> for AdminUser {
     type Rejection = ApiError;
 
@@ -62,6 +63,26 @@ impl FromRequestParts<AppState> for AdminUser {
         } else {
             Err(ApiError::Forbidden)
         }
+    }
+}
+
+/// 邮件语言；按 `Accept-Language` 协商，无法匹配时回落简体中文。
+#[derive(Debug, Clone, Copy)]
+pub struct PreferredLocale(pub Locale);
+
+impl FromRequestParts<AppState> for PreferredLocale {
+    type Rejection = ApiError;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        let raw = parts
+            .headers
+            .get(ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        std::future::ready(Ok(Self(Locale::from_accept_language(raw))))
     }
 }
 

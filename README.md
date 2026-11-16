@@ -116,6 +116,11 @@ NEBULA_TURNSTILE__SECRET_KEY=...
 登录、改密、注销与 TOTP 开关不挂 Turnstile：前者已有 Argon2 与限流，后者已要求
 当前口令或邮件验证码。
 
+## 邮件
+
+验证码与安全通知按请求 `Accept-Language` 的**首个受支持语言**渲染：`zh-CN` 或 `en`；
+无法匹配时回落简体中文。邮件为纯文本，模板在 `src/mailer/template.rs`。
+
 ## 运维端点与后台任务
 
 - `GET /healthz`：存活探针。

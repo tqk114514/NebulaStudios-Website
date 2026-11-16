@@ -7,9 +7,10 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, SecurityNotice, send_security_notice};
+use crate::api::{AppState, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
 
@@ -37,6 +38,7 @@ pub struct EnableResponse {
 pub async fn enable(
     State(state): State<AppState>,
     user: FirstPartyUser,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: EnableRequest =
@@ -94,7 +96,7 @@ pub async fn enable(
         None,
     )
     .await;
-    send_security_notice(&state, &user.email, SecurityNotice::TotpEnabled);
+    send_security_notice(&state, &user.email, SecurityNotice::TotpEnabled, locale.0);
 
     Ok(Json(EnableResponse {
         recovery_codes: codes.iter().map(|c| c.as_str().to_owned()).collect(),

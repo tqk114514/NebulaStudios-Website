@@ -11,6 +11,7 @@ use serde::Deserialize;
 use super::issue_and_send_code;
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::PreferredLocale;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 重发请求。
@@ -28,7 +29,11 @@ pub struct ResendRequest {
 /// # Errors
 /// 字段缺失 422；冷却中 429 `resend_cooldown`（`details.retry_after` 为剩余秒数）；
 /// 内部故障 500。
-pub async fn resend(State(state): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
+pub async fn resend(
+    State(state): State<AppState>,
+    locale: PreferredLocale,
+    body: Bytes,
+) -> Result<Response, ApiError> {
     let req: ResendRequest =
         serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
     let email = req.email.trim().to_lowercase();
@@ -57,7 +62,7 @@ pub async fn resend(State(state): State<AppState>, body: Bytes) -> Result<Respon
                 return Err(ApiError::ResendCooldown(remaining.cast_unsigned()));
             }
         }
-        issue_and_send_code(&state, &user, VerificationPurpose::VerifyEmail).await?;
+        issue_and_send_code(&state, &user, VerificationPurpose::VerifyEmail, locale.0).await?;
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }

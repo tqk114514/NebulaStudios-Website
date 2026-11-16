@@ -264,6 +264,15 @@ pub trait OneshotPost {
         cookie: &str,
         csrf: Option<&str>,
     ) -> axum::response::Response;
+    /// POST JSON 并附加请求头（如 `Accept-Language`）。
+    async fn oneshot_post_with_headers(
+        self,
+        uri: &str,
+        body: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+        headers: &[(&str, &str)],
+    ) -> axum::response::Response;
     async fn oneshot_post_bearer(
         self,
         uri: &str,
@@ -316,6 +325,17 @@ impl OneshotPost for axum::Router {
         cookie: &str,
         csrf: Option<&str>,
     ) -> axum::response::Response {
+        self.oneshot_post_with_headers(uri, body, cookie, csrf, &[]).await
+    }
+
+    async fn oneshot_post_with_headers(
+        self,
+        uri: &str,
+        body: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+        headers: &[(&str, &str)],
+    ) -> axum::response::Response {
         use tower::ServiceExt;
         let mut request = Request::post(uri)
             .header("content-type", "application/json")
@@ -325,6 +345,11 @@ impl OneshotPost for axum::Router {
             request
                 .headers_mut()
                 .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
+        }
+        for (name, value) in headers {
+            let name = axum::http::HeaderName::from_bytes(name.as_bytes()).expect("附加头名合法");
+            let value: axum::http::HeaderValue = value.parse().expect("附加头值合法");
+            request.headers_mut().insert(name, value);
         }
         if let Some(csrf) = csrf {
             request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));

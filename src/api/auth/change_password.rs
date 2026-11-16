@@ -10,11 +10,12 @@ use serde::Deserialize;
 
 use super::{hash_password_in_background, password_problem};
 use crate::api::{
-    AppState, PASSWORD_INPUT_LIMIT, SecurityNotice, clear_session_cookies, send_security_notice,
+    AppState, PASSWORD_INPUT_LIMIT, clear_session_cookies, send_security_notice,
     verify_current_password,
 };
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 
 /// 改密请求。
@@ -34,6 +35,7 @@ pub struct ChangePasswordRequest {
 pub async fn change_password(
     State(state): State<AppState>,
     user: FirstPartyUser,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let req: ChangePasswordRequest =
@@ -74,7 +76,7 @@ pub async fn change_password(
         None,
     )
     .await;
-    send_security_notice(&state, &user.email, SecurityNotice::PasswordChanged);
+    send_security_notice(&state, &user.email, SecurityNotice::PasswordChanged, locale.0);
 
     let mut headers = HeaderMap::new();
     clear_session_cookies(&mut headers);

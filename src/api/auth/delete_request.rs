@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use super::issue_and_send_code;
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, PreferredLocale};
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 处理注销发起：对未验证邮箱拒绝（注销确认码发往邮箱，邮箱不可达则注销
@@ -20,6 +20,7 @@ use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 pub async fn delete_request(
     State(state): State<AppState>,
     user: FirstPartyUser,
+    locale: PreferredLocale,
 ) -> Result<Response, ApiError> {
     let Some(credentials) =
         state.user_repo.find_by_id(&user.user_id).await.map_err(anyhow::Error::from)?
@@ -43,6 +44,7 @@ pub async fn delete_request(
         }
     }
 
-    issue_and_send_code(&state, &credentials.user, VerificationPurpose::DeleteAccount).await?;
+    issue_and_send_code(&state, &credentials.user, VerificationPurpose::DeleteAccount, locale.0)
+        .await?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }

@@ -10,6 +10,7 @@ use validator::{Validate, ValidationError, ValidationErrors};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::PreferredLocale;
 use crate::model::audit::AuditAction;
 use crate::model::password::PasswordHash;
 use crate::model::user::{User, UserId};
@@ -112,6 +113,7 @@ fn field_issues(req: &RegisterRequest, errors: &ValidationErrors) -> Vec<FieldIn
 /// JSON 非法 400、字段校验失败 422、用户名或邮箱占用 409、内部故障 500（ADR-0004）。
 pub async fn register(
     State(state): State<AppState>,
+    locale: PreferredLocale,
     body: Bytes,
 ) -> Result<(StatusCode, Json<User>), ApiError> {
     // 手工反序列化而非 Json 提取器：坏 JSON 必须走统一错误信封，不用 axum 默认 400
@@ -163,6 +165,7 @@ pub async fn register(
                 &state,
                 &user,
                 crate::model::verification::VerificationPurpose::VerifyEmail,
+                locale.0,
             )
             .await?;
             Ok((StatusCode::CREATED, Json(user)))
