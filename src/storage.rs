@@ -10,7 +10,7 @@ use async_trait::async_trait;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::consent::PolicyConsent;
-use crate::model::oauth2::{AuthorizationCode, OAuthClient};
+use crate::model::oauth2::{AuthorizationCode, OAuthClient, OAuthGrant};
 use crate::model::password::PasswordHash;
 use crate::model::social::{NewSocialIdentity, SocialIdentity, SocialLoginState, SocialProvider};
 use crate::model::tokens::NewRefreshFamily;
@@ -616,6 +616,32 @@ pub trait OAuthRepo: Send + Sync {
     async fn consume_code(
         &self,
         code_id: &uuid::Uuid,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, StorageError>;
+
+    /// 用户当前有效的第三方应用授权；按客户端聚合 scope，按 `client_id` 升序。
+    ///
+    /// 只统计仍有未过期 active refresh token 的 active 家族——家族存在但 token
+    /// 已全部过期时，授权不再有意义。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn list_grants(
+        &self,
+        user_id: &UserId,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<OAuthGrant>, StorageError>;
+
+    /// 撤销用户对某客户端的全部 active refresh 家族；没有可撤销家族返回 `false`。
+    ///
+    /// 已签发的第三方 access token 不在此处失效，须等其自然过期（≤ access TTL）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn revoke_client(
+        &self,
+        user_id: &UserId,
+        client_id: &str,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
 }

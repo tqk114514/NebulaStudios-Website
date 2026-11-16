@@ -2,6 +2,7 @@
 
 mod schema;
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::Duration;
 
@@ -15,7 +16,7 @@ pub use schema::ensure_schema;
 
 use crate::model::audit::{AuditEntry, NewAuditEntry};
 use crate::model::consent::PolicyConsent;
-use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient};
+use crate::model::oauth2::{AuthorizationCode, NewAuthorizationCode, OAuthClient, OAuthGrant};
 use crate::model::password::PasswordHash;
 use crate::model::social::{
     NewSocialIdentity, SocialIdentity, SocialLoginAction, SocialLoginState, SocialProvider,
@@ -1079,6 +1080,71 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         .execute(&self.pool)
         .await?;
         Ok(consumed.rows_affected() == 1)
+    }
+
+    async fn list_grants(
+        &self,
+        user_id: &UserId,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<OAuthGrant>, StorageError> {
+        let rows: Vec<(String, String, String, DateTime<Utc>)> = sqlx::query_as(
+            "SELECT f.client_id, c.name, f.scope, f.created_at
+             FROM refresh_token_families f
+             JOIN oauth_clients c ON c.id = f.client_id
+             WHERE f.user_id = ?1
+               AND f.state = 'active'
+               AND f.client_id IS NOT NULL
+               AND EXISTS (
+                   SELECT 1 FROM refresh_tokens t
+                   WHERE t.family_id = f.id
+                     AND t.state = 'active'
+                     AND t.expires_at > ?2
+               )
+             ORDER BY f.created_at ASC",
+        )
+        .bind(user_id.as_uuid())
+        .bind(now)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // 同一客户端可能有多次授权：合并 scope，授权时间取最早一次
+        let mut grants: BTreeMap<String, (String, BTreeSet<String>, DateTime<Utc>)> =
+            BTreeMap::new();
+        for (client_id, client_name, scope, created_at) in rows {
+            let entry = grants
+                .entry(client_id)
+                .or_insert_with(|| (client_name, BTreeSet::new(), created_at));
+            entry.2 = entry.2.min(created_at);
+            entry.1.extend(scope.split_whitespace().map(ToOwned::to_owned));
+        }
+        Ok(grants
+            .into_iter()
+            .map(|(client_id, (client_name, scopes, authorized_at))| OAuthGrant {
+                client_id,
+                client_name,
+                scope: scopes.into_iter().collect::<Vec<_>>().join(" "),
+                authorized_at,
+            })
+            .collect())
+    }
+
+    async fn revoke_client(
+        &self,
+        user_id: &UserId,
+        client_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let revoked = sqlx::query(
+            "UPDATE refresh_token_families
+             SET state = 'revoked', revoked_at = ?3
+             WHERE user_id = ?1 AND client_id = ?2 AND state = 'active'",
+        )
+        .bind(user_id.as_uuid())
+        .bind(client_id)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(revoked.rows_affected() > 0)
     }
 }
 

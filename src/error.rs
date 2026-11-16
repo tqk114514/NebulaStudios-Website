@@ -101,6 +101,8 @@ pub enum ApiError {
     SocialNotLinked,
     /// 社交身份已绑定到其他账户；409。
     SocialAlreadyLinked,
+    /// 目标第三方应用没有有效授权；404。
+    OAuthGrantNotFound,
 }
 
 impl From<anyhow::Error> for ApiError {
@@ -148,6 +150,9 @@ impl ApiError {
             }
             Self::SocialAlreadyLinked => {
                 simple(StatusCode::CONFLICT, "social_already_linked", "社交身份已绑定其他账户")
+            }
+            Self::OAuthGrantNotFound => {
+                simple(StatusCode::NOT_FOUND, "oauth_grant_not_found", "未找到第三方应用授权")
             }
             other => other.common_parts(),
         }
@@ -235,7 +240,8 @@ impl ApiError {
             | Self::MalformedQuery(_)
             | Self::SocialProviderDisabled
             | Self::SocialNotLinked
-            | Self::SocialAlreadyLinked => unreachable!("admin 与社交错误由 parts 路由"),
+            | Self::SocialAlreadyLinked
+            | Self::OAuthGrantNotFound => unreachable!("admin、社交与 OAuth 授权错误由 parts 路由"),
         }
     }
 }

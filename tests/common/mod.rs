@@ -293,6 +293,13 @@ pub trait OneshotPost {
         cookie: &str,
         csrf: Option<&str>,
     ) -> axum::response::Response;
+    /// DELETE with cookie 与可选 CSRF 头。
+    async fn oneshot_delete_with_cookie(
+        self,
+        uri: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response;
 }
 
 impl OneshotPost for axum::Router {
@@ -397,6 +404,26 @@ impl OneshotPost for axum::Router {
             .header("content-type", content_type)
             .body(Body::from(body))
             .expect("请求构造必须成功");
+        if !cookie.is_empty() {
+            request
+                .headers_mut()
+                .insert(axum::http::header::COOKIE, cookie.parse().expect("cookie 头合法"));
+        }
+        if let Some(csrf) = csrf {
+            request.headers_mut().insert("x-csrf-token", csrf.parse().expect("csrf 头合法"));
+        }
+        inject_connect_info(&mut request);
+        self.oneshot(request).await.expect("oneshot 必须成功")
+    }
+
+    async fn oneshot_delete_with_cookie(
+        self,
+        uri: &str,
+        cookie: &str,
+        csrf: Option<&str>,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = Request::delete(uri).body(Body::empty()).expect("请求构造必须成功");
         if !cookie.is_empty() {
             request
                 .headers_mut()

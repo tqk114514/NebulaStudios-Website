@@ -5,6 +5,7 @@ pub mod avatar_upload;
 pub mod consents;
 pub mod export_download;
 pub mod export_request;
+pub mod oauth_grants;
 pub mod profile;
 pub mod social;
 pub mod totp_disable;

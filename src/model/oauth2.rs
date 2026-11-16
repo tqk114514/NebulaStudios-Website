@@ -206,6 +206,19 @@ pub struct OAuthClient {
     pub enabled: bool,
 }
 
+/// 用户已授权的第三方应用；按客户端聚合多次授权。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct OAuthGrant {
+    /// 公开 `client_id`。
+    pub client_id: String,
+    /// 客户端展示名。
+    pub client_name: String,
+    /// 合并后的空格分隔 `scope`。
+    pub scope: String,
+    /// 该客户端最早一次仍有效的授权时刻。
+    pub authorized_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::expect_used)]

@@ -13,6 +13,7 @@ use crate::error::ApiError;
 use crate::model::audit::AuditEntry;
 use crate::model::consent::PolicyConsent;
 use crate::model::export::ExportToken;
+use crate::model::oauth2::OAuthGrant;
 use crate::model::totp::TotpState;
 use crate::model::user::User;
 
@@ -55,6 +56,8 @@ pub struct ExportDocument {
     pub social_identities: Vec<SocialIdentityExport>,
     /// 政策同意记录，按同意时刻升序。
     pub policy_consents: Vec<PolicyConsent>,
+    /// 当前有效的第三方应用授权。
+    pub oauth_grants: Vec<OAuthGrant>,
     /// 该用户作为操作者或被操作对象的审计记录，按时间升序。
     pub audit_log: Vec<AuditEntry>,
 }
@@ -94,6 +97,8 @@ pub async fn download_export(
         state.totp_repo.recovery_codes(&user_id).await.map_err(anyhow::Error::new)?;
     let policy_consents =
         state.consent_repo.list_for_user(&user_id).await.map_err(anyhow::Error::new)?;
+    let oauth_grants =
+        state.oauth_repo.list_grants(&user_id, now).await.map_err(anyhow::Error::new)?;
     let audit_log =
         state.admin_repo.list_audit_for_user(&user_id).await.map_err(anyhow::Error::new)?;
 
@@ -120,6 +125,7 @@ pub async fn download_export(
             })
             .collect(),
         policy_consents,
+        oauth_grants,
         audit_log,
     };
 

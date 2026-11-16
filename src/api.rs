@@ -19,7 +19,7 @@ use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use chrono::TimeDelta;
 use tower_governor::GovernorLayer;
 use tower_governor::errors::GovernorError;
@@ -400,6 +400,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
         .route("/api/user/export/{token}", get(user::export_download::download_export))
         .route("/api/user/consents", get(user::consents::list).post(user::consents::record))
+        .route("/api/user/oauth/grants", get(user::oauth_grants::list))
+        .route("/api/user/oauth/grants/{client_id}", delete(user::oauth_grants::revoke))
         .route("/api/user/social", get(user::social::list))
         .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
         .route("/api/oauth/authorize", get(oauth::authorize::authorize))

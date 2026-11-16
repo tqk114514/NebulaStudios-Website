@@ -5,15 +5,77 @@
 mod common;
 
 use axum::http::StatusCode;
-use chrono::TimeDelta;
+use chrono::{DateTime, TimeDelta, Utc};
 use common::{OneshotPost, Session, body_text, cookie_header, login_session, register_user};
+use nebula_server::api::AppState;
 use nebula_server::context::Clock;
 use nebula_server::model::export::EXPORT_TOKEN_TTL;
+use nebula_server::model::oauth2::OAuthClient;
 use nebula_server::model::social::{NewSocialIdentity, SocialProvider};
+use nebula_server::model::tokens::NewRefreshFamily;
+use nebula_server::model::user::UserId;
 
 const EMAIL: &str = "nova@nebula.st";
 const USERNAME: &str = "nova";
 const PASSWORD: &str = "Nebula!Passw0rd-2026";
+
+/// 造齐导出文档涵盖的从属数据：社交绑定、TOTP、政策同意与 OAuth 授权。
+async fn seed_export_snapshot(state: &AppState, user_id: UserId, now: DateTime<Utc>) {
+    state
+        .social_repo
+        .link_identity(
+            &NewSocialIdentity {
+                user_id,
+                provider: SocialProvider::Google,
+                provider_user_id: "google-1".to_owned(),
+                display_name: Some("Nova".to_owned()),
+            },
+            now,
+        )
+        .await
+        .expect("绑定必须成功");
+    state.totp_repo.set_pending(&user_id, "cipher", now).await.expect("pending 必须成功");
+    state.totp_repo.enable(&user_id, now).await.expect("启用必须成功");
+    state
+        .totp_repo
+        .add_recovery_codes(&user_id, vec!["hash-1".to_owned(), "hash-2".to_owned()], now)
+        .await
+        .expect("恢复码必须落库");
+    state
+        .consent_repo
+        .record(&user_id, "privacy", "2026-11-01", now)
+        .await
+        .expect("同意记录必须落库");
+    state
+        .oauth_repo
+        .upsert_client(
+            &OAuthClient {
+                id: "client-export".to_owned(),
+                name: "Export App".to_owned(),
+                redirect_uri: "https://export.example/cb".to_owned(),
+                enabled: true,
+            },
+            "client-hash",
+            now,
+        )
+        .await
+        .expect("OAuth 客户端必须落库");
+    state
+        .refresh_repo
+        .create_family(
+            &NewRefreshFamily {
+                family_id: uuid::Uuid::now_v7(),
+                user_id,
+                client_id: Some("client-export".to_owned()),
+                scope: "profile".to_owned(),
+                token_hash: "export-refresh-token".to_owned(),
+                expires_at: now + TimeDelta::days(1),
+            },
+            now,
+        )
+        .await
+        .expect("OAuth 家族必须落库");
+}
 
 async fn request_export(app: &axum::Router, session: &Session) -> serde_json::Value {
     let response = app
@@ -57,32 +119,7 @@ async fn export_downloads_full_snapshot_exactly_once() {
     register_user(&app, EMAIL, USERNAME, PASSWORD).await;
     let session = login_session(&app).await;
     let user = state.user_repo.find_by_email(EMAIL).await.unwrap().expect("用户必须存在");
-
-    state
-        .social_repo
-        .link_identity(
-            &NewSocialIdentity {
-                user_id: user.id,
-                provider: SocialProvider::Google,
-                provider_user_id: "google-1".to_owned(),
-                display_name: Some("Nova".to_owned()),
-            },
-            clock.now(),
-        )
-        .await
-        .expect("绑定必须成功");
-    state.totp_repo.set_pending(&user.id, "cipher", clock.now()).await.expect("pending 必须成功");
-    state.totp_repo.enable(&user.id, clock.now()).await.expect("启用必须成功");
-    state
-        .totp_repo
-        .add_recovery_codes(&user.id, vec!["hash-1".to_owned(), "hash-2".to_owned()], clock.now())
-        .await
-        .expect("恢复码必须落库");
-    state
-        .consent_repo
-        .record(&user.id, "privacy", "2026-11-01", clock.now())
-        .await
-        .expect("同意记录必须落库");
+    seed_export_snapshot(&state, user.id, clock.now()).await;
 
     let issued = request_export(&app, &session).await;
     let download_url = issued["download_url"].as_str().expect("必须返回下载地址").to_owned();
@@ -125,6 +162,9 @@ async fn export_downloads_full_snapshot_exactly_once() {
     assert_eq!(document["social_identities"][0]["display_name"], "Nova");
     assert_eq!(document["policy_consents"][0]["policy"], "privacy");
     assert_eq!(document["policy_consents"][0]["version"], "2026-11-01");
+    assert_eq!(document["oauth_grants"][0]["client_id"], "client-export");
+    assert_eq!(document["oauth_grants"][0]["client_name"], "Export App");
+    assert_eq!(document["oauth_grants"][0]["scope"], "profile");
     let actions: Vec<&str> = document["audit_log"]
         .as_array()
         .expect("审计记录必须是数组")

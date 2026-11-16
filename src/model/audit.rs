@@ -50,6 +50,8 @@ pub enum AuditAction {
     UserSocialUnlinked,
     /// 同意第三方客户端授权。
     OAuthConsent,
+    /// 撤销第三方客户端授权。
+    OAuthGrantRevoked,
     /// 管理员封禁。
     AdminUserBan,
     /// 管理员解封。
@@ -73,6 +75,7 @@ impl AuditAction {
             Self::UserSocialLinked => "user.social.link",
             Self::UserSocialUnlinked => "user.social.unlink",
             Self::OAuthConsent => "oauth.consent",
+            Self::OAuthGrantRevoked => "oauth.grant.revoke",
             Self::AdminUserBan => "admin.user.ban",
             Self::AdminUserUnban => "admin.user.unban",
         }

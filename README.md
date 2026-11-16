@@ -59,8 +59,16 @@ enabled = true
 
 `POST /api/user/export` 生成 10 分钟有效、单次使用的下载链接；再次申请会作废此前
 未消费的链接。`GET /api/user/export/{token}` 返回 JSON（资料、头像地址、社交绑定、
-TOTP 状态与恢复码余量、政策同意记录、审计记录），响应 `Cache-Control: no-store`。
-令牌明文只在申请响应中出现一次，库中只存 SHA-256。
+TOTP 状态与恢复码余量、政策同意记录、第三方授权、审计记录），响应
+`Cache-Control: no-store`。令牌明文只在申请响应中出现一次，库中只存 SHA-256。
+
+## 第三方授权
+
+用户可在设置页查看并撤销已授权的 OAuth 客户端：
+
+- `GET /api/user/oauth/grants`：按客户端聚合，scope 取并集，`authorized_at` 取最早授权时间。
+- `DELETE /api/user/oauth/grants/{client_id}`：撤销该客户端的全部有效 refresh 家族；
+  已签发的 access token 在剩余 TTL 内仍有效，到期自然失效。撤销写入审计。
 
 ## 政策中心
 
