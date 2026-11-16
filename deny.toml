@@ -1,4 +1,4 @@
-# 依赖许可白名单，恰好覆盖当前依赖树，新增依赖带新许可时在此追加并注明归属。
+# 依赖许可与安全公告配置。
 # OR 型双许可满足其一即可：aho-corasick / memchr 取 MIT，r-efi / ryu 取 Apache-2.0，
 # wasi 有 MIT 分支兜底。
 # AND 型例外：matchit = MIT AND BSD-3-Clause；unicode-ident = (MIT OR Apache-2.0) AND Unicode-3.0。
@@ -6,6 +6,15 @@
 # OpenSSL 归属 aws-lc（BoringSSL 系，与 ISC 双授权）；
 # CDLA-Permissive-2.0 归属 webpki-roots（lettre 的 Mozilla 根证书数据，数据许可）；
 # 0BSD 归属 quoted_printable（lettre 的引号可打印编码）。
+
+[advisories]
+# RUSTSEC-2026-0459：libsqlite3-sys 0.37 内置 SQLite 3.53.2；sqlx-sqlite 0.9.0
+# 的依赖范围是 >=0.30.1,<0.38.0，无法选修复版 0.39.x。攻击要求本地写入
+# 数据库文件与同名 WAL，当前部署目录受控。
+# 移除条件：sqlx-sqlite 允许 libsqlite3-sys >=0.39 后立即删除本条。
+ignore = [
+  { id = "RUSTSEC-2026-0459", reason = "sqlx-sqlite 0.9 固定 libsqlite3-sys <0.38；本地数据库受控，待上游升级" },
+]
 
 [licenses]
 # 本 crate 的 LICENSE 是自定义文本（license-file），非 SPDX 表达式，跳过自检
