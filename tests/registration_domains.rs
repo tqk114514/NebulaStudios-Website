@@ -16,15 +16,17 @@ fn payload(email: &str, username: &str) -> String {
     format!(r#"{{"email":"{email}","username":"{username}","password":"{PASSWORD}"}}"#)
 }
 
-async fn app_with_domain(domain: &str) -> (axum::Router, nebula_server::api::AppState) {
-    let (mut state, _clock, _mailbox, _dir) = common::app_state().await;
+async fn app_with_domain(
+    domain: &str,
+) -> (axum::Router, nebula_server::api::AppState, tempfile::TempDir) {
+    let (mut state, _clock, _mailbox, dir) = common::app_state().await;
     state.allowed_email_domains = Arc::new(HashSet::from([domain.to_owned()]));
-    (api::router(state.clone()), state)
+    (api::router(state.clone()), state, dir)
 }
 
 #[tokio::test]
 async fn allowlisted_domain_registers_case_insensitively() {
-    let (app, _state) = app_with_domain("nebula.st").await;
+    let (app, _state, _dir) = app_with_domain("nebula.st").await;
 
     let response =
         app.clone().oneshot_post("/api/auth/register", &payload("nova@nebula.st", "nova")).await;
@@ -38,7 +40,7 @@ async fn allowlisted_domain_registers_case_insensitively() {
 
 #[tokio::test]
 async fn other_domain_and_subdomain_are_rejected() {
-    let (app, state) = app_with_domain("nebula.st").await;
+    let (app, state, _dir) = app_with_domain("nebula.st").await;
 
     for (email, username) in [("nova@other.com", "nova"), ("nova@mail.nebula.st", "nova-sub")] {
         let response =
