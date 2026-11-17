@@ -63,6 +63,7 @@ useSeoMeta({ title: () => t('register.title') })
 
       <div class="foot">
         <span class="quiet">{{ t('register.haveAccount') }}</span>
+        <span class="quiet sep" aria-hidden="true">|</span>
         <NuxtLink class="quiet" to="/account/login">{{ t('register.signIn') }}</NuxtLink>
       </div>
     </AuthPanel>
@@ -83,9 +84,14 @@ useSeoMeta({ title: () => t('register.title') })
 
 .foot {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
   margin-top: var(--space-6);
+}
+
+.sep {
+  color: var(--fg-faint);
 }
 
 .quiet {

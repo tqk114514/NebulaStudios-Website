@@ -135,8 +135,9 @@ useSeoMeta({ title: () => t('login.title') })
 
 .foot {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
   margin-top: var(--space-6);
 }
 </style>
