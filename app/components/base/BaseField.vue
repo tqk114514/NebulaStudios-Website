@@ -3,7 +3,6 @@
 // 控件由本组件渲染而非插槽下发，id 关联因此可以在编译期确定。
 // 口令类型自带显示切换（NIST SP 800-63B 的 SHOULD 项）。
 import { computed, ref, useId } from 'vue'
-import { useI18n } from '#imports'
 
 const model = defineModel<string>({ required: true })
 
@@ -33,7 +32,6 @@ const props = withDefaults(
 )
 
 const uid = useId()
-const { t } = useI18n()
 const controlId = computed(() => `${uid}-control`)
 // 错误优先于提示：这行同时决定控件的 aria-describedby 与下方消息行的 id/class/role
 const messageKind = computed(() => (props.error ? 'error' : props.hint ? 'hint' : ''))
@@ -47,17 +45,13 @@ const controlType = computed(() =>
 )
 
 const numeric = computed(() => props.type === 'number' || props.inputmode === 'numeric')
-
-function toggleReveal() {
-  revealed.value = !revealed.value
-}
 </script>
 
 <template>
   <div class="base-field" :class="{ 'base-field--error': !!props.error }">
-    <label class="base-field__label" :for="controlId">{{ props.label }}</label>
+    <label class="sr-only" :for="controlId">{{ props.label }}</label>
 
-    <div class="base-field__control">
+    <div class="base-field__control" :class="{ 'base-field__control--secret': isSecret }">
       <input
         :id="controlId"
         v-model="model"
@@ -65,6 +59,7 @@ function toggleReveal() {
         :class="{ 'base-field__input--code': numeric }"
         :name="props.name"
         :type="controlType"
+        :placeholder="props.label"
         :autocomplete="props.autocomplete"
         :inputmode="props.inputmode"
         :maxlength="props.maxlength"
@@ -74,15 +69,7 @@ function toggleReveal() {
         :aria-describedby="describedBy"
       >
 
-      <button
-        v-if="isSecret"
-        class="base-field__reveal"
-        type="button"
-        :aria-pressed="revealed"
-        @click="toggleReveal"
-      >
-        {{ revealed ? t('form.hidePassword') : t('form.showPassword') }}
-      </button>
+      <BasePasswordReveal v-if="isSecret" v-model="revealed" />
     </div>
 
     <p
@@ -98,14 +85,6 @@ function toggleReveal() {
 .base-field {
   display: grid;
   gap: var(--space-2);
-}
-
-.base-field__label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--fg-muted);
 }
 
 .base-field__control {
@@ -152,27 +131,9 @@ function toggleReveal() {
   border-color: var(--error);
 }
 
-/* 切换按钮浮在控件右端，明文状态下的输入内容需要从它下面让开 */
-.base-field__control:has(.base-field__reveal) .base-field__input {
-  padding-right: var(--space-24);
-}
-
-.base-field__reveal {
-  position: absolute;
-  right: 0;
-  min-width: var(--target-min);
-  min-height: var(--target-min);
-  padding: 0 var(--space-1);
-  border: none;
-  background: transparent;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-mono);
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-.base-field__reveal:hover {
-  color: var(--fg);
+/* 图标按钮宽度与语言无关；输入内容统一让出 48px */
+.base-field__control--secret .base-field__input {
+  padding-right: var(--space-12);
 }
 
 .base-field__hint {
