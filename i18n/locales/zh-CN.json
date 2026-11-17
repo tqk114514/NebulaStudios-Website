@@ -71,7 +71,7 @@
   },
   "register": {
     "title": "创建账户",
-    "subtitle": "填写邮箱与密码，随后用邮件里的验证码完成验证",
+    "subtitle": "只需几步，即可加入我们",
     "email": "邮箱",
     "username": "用户名",
     "password": "密码",
@@ -81,8 +81,7 @@
     "passwordMismatch": "两次输入的密码不一致",
     "fieldsRequired": "请填写全部字段",
     "submit": "创建账户",
-    "haveAccount": "已有账户",
-    "signIn": "登录"
+    "backToLogin": "已有账户？返回登录"
   },
   "totp": {
     "title": "两步验证",

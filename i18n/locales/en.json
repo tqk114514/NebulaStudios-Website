@@ -71,7 +71,7 @@
   },
   "register": {
     "title": "Create account",
-    "subtitle": "Enter an email and password, then confirm with the code we send you",
+    "subtitle": "Join us in just a few steps",
     "email": "Email",
     "username": "Username",
     "password": "Password",
@@ -81,8 +81,7 @@
     "passwordMismatch": "The two passwords don't match",
     "fieldsRequired": "Fill in every field",
     "submit": "Create account",
-    "haveAccount": "Already have an account",
-    "signIn": "Sign in"
+    "backToLogin": "Already have an account? Back to Sign In"
   },
   "totp": {
     "title": "Two-factor verification",
