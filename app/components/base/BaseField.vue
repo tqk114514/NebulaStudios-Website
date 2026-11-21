@@ -49,8 +49,6 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
 
 <template>
   <div class="base-field" :class="{ 'base-field--error': !!props.error }">
-    <label class="sr-only" :for="controlId">{{ props.label }}</label>
-
     <div class="base-field__control" :class="{ 'base-field__control--secret': isSecret }">
       <input
         :id="controlId"
@@ -59,7 +57,7 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
         :class="{ 'base-field__input--code': numeric }"
         :name="props.name"
         :type="controlType"
-        :placeholder="props.label"
+        placeholder=" "
         :autocomplete="props.autocomplete"
         :inputmode="props.inputmode"
         :maxlength="props.maxlength"
@@ -68,6 +66,7 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
         :aria-invalid="props.error ? 'true' : undefined"
         :aria-describedby="describedBy"
       >
+      <label class="base-field__label" :for="controlId">{{ props.label }}</label>
 
       <BasePasswordReveal v-if="isSecret" v-model="revealed" />
     </div>
@@ -96,7 +95,7 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
 .base-field__input {
   width: 100%;
   min-height: var(--target-comfort);
-  padding: var(--space-2) 0;
+  padding: var(--space-5) 0 var(--space-1);
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--line-strong);
@@ -107,7 +106,7 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
   transition: border-color var(--dur-ui) var(--ease-standard);
 }
 .base-field__input::placeholder {
-  color: var(--fg-faint);
+  color: transparent;
 }
 .base-field__input:hover {
   border-color: var(--fg-faint);
@@ -117,7 +116,36 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
 }
 .base-field__input:focus-visible {
   border-bottom-width: 2px;
-  padding-bottom: calc(var(--space-2) - 1px);
+  padding-bottom: calc(var(--space-1) - 1px);
+}
+
+/* 标签初始在框内；聚焦或有值时浮到上沿，保持可见（Modern Web Guidance: forms） */
+.base-field__label {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  letter-spacing: var(--track-body);
+  color: var(--fg-faint);
+  pointer-events: none;
+  transition:
+    top var(--dur-ui) var(--ease-standard),
+    transform var(--dur-ui) var(--ease-standard),
+    font-size var(--dur-ui) var(--ease-standard),
+    letter-spacing var(--dur-ui) var(--ease-standard),
+    color var(--dur-ui) var(--ease-standard);
+}
+.base-field__input:focus + .base-field__label,
+.base-field__input:not(:placeholder-shown) + .base-field__label {
+  top: 0;
+  transform: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--fg-muted);
 }
 
 /* 动态码：单框 + 字距分格，六个分格会破坏自动填充与退格 */
