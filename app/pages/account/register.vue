@@ -4,8 +4,6 @@ import { useSignUp } from '~/composables/useSignUp'
 
 const { t } = useI18n()
 const {
-  confirm,
-  confirmError,
   email,
   formError,
   password,
@@ -28,6 +26,7 @@ useSeoMeta({ title: () => t('register.title') })
           name="email"
           type="email"
           autocomplete="email"
+          :spellcheck="false"
           required
         />
         <BaseField
@@ -35,6 +34,9 @@ useSeoMeta({ title: () => t('register.title') })
           :label="t('register.username')"
           name="username"
           autocomplete="username"
+          :spellcheck="false"
+          autocorrect="off"
+          autocapitalize="none"
           :error="usernameError"
           required
         />
@@ -44,15 +46,6 @@ useSeoMeta({ title: () => t('register.title') })
           name="new-password"
           type="password"
           autocomplete="new-password"
-          required
-        />
-        <BaseField
-          v-model="confirm"
-          :label="t('register.confirmPassword')"
-          name="confirm-password"
-          type="password"
-          autocomplete="new-password"
-          :error="confirmError"
           required
         />
 

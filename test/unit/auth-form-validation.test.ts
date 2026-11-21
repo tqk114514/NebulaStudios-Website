@@ -33,14 +33,14 @@ describe('isCompleteCode', () => {
 })
 
 describe('checkSignUp', () => {
-  const valid = { email: 'a@example.com', username: 'san', password: 'hunter2', confirm: 'hunter2' }
+  const valid = { email: 'a@example.com', username: 'san', password: 'hunter2' }
 
-  it('四项齐全且两次密码一致时通过', () => {
+  it('三项齐全时通过', () => {
     expect(checkSignUp(valid)).toBe('none')
   })
 
   it('任一项为空先报缺项', () => {
-    expect(checkSignUp({ ...valid, confirm: '' })).toBe('fieldsRequired')
+    expect(checkSignUp({ ...valid, password: '' })).toBe('fieldsRequired')
     expect(checkSignUp({ ...valid, username: '  ' })).toBe('fieldsRequired')
   })
 
@@ -53,11 +53,7 @@ describe('checkSignUp', () => {
     expect(checkSignUp({ ...valid, username: 'bad.name' })).toBe('usernameInvalidCharacters')
   })
 
-  it('两次密码不一致时报不一致', () => {
-    expect(checkSignUp({ ...valid, confirm: 'hunter3' })).toBe('passwordMismatch')
-  })
-
-  it('同时有多个问题时只报第一个：缺项优先于密码不一致', () => {
-    expect(checkSignUp({ ...valid, email: '', confirm: 'hunter3' })).toBe('fieldsRequired')
+  it('同时有多个问题时只报第一个', () => {
+    expect(checkSignUp({ ...valid, email: '', username: 'ab' })).toBe('fieldsRequired')
   })
 })

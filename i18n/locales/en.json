@@ -67,6 +67,7 @@
     "providers": "Or use a third-party account",
     "signinGoogle": "Sign in with Google",
     "signinMicrosoft": "Sign in with Microsoft",
+    "forgotPassword": "Forgot password",
     "register": "Create account"
   },
   "register": {
@@ -75,13 +76,25 @@
     "email": "Email",
     "username": "Username",
     "password": "Password",
-    "confirmPassword": "Confirm password",
     "usernameTooShort": "Your username must be at least 3 characters",
     "usernameInvalidCharacters": "Use only letters, numbers, underscores and hyphens",
-    "passwordMismatch": "The two passwords don't match",
     "fieldsRequired": "Fill in every field",
     "submit": "Create account",
     "backToLogin": "Already have an account? Back to Sign In"
+  },
+  "forgot": {
+    "title": "Reset password",
+    "subtitle": "Enter your account email and we'll send a code",
+    "email": "Email",
+    "sendCode": "Send code",
+    "code": "Code",
+    "newPassword": "New password",
+    "submit": "Reset password",
+    "backToEmail": "Use a different email",
+    "backToLogin": "Back to Sign In",
+    "emailMissing": "Enter your email address",
+    "codeMissing": "Enter the code",
+    "passwordMissing": "Enter a new password"
   },
   "totp": {
     "title": "Two-factor verification",

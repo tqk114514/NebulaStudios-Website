@@ -18,6 +18,9 @@ const props = withDefaults(
     disabled?: boolean
     maxlength?: number
     inputmode?: 'text' | 'numeric' | 'email' | 'tel'
+    spellcheck?: boolean
+    autocorrect?: 'on' | 'off'
+    autocapitalize?: 'none' | 'sentences' | 'words' | 'characters'
   }>(),
   {
     type: 'text',
@@ -28,6 +31,9 @@ const props = withDefaults(
     disabled: false,
     maxlength: undefined,
     inputmode: undefined,
+    spellcheck: undefined,
+    autocorrect: undefined,
+    autocapitalize: undefined,
   },
 )
 
@@ -61,6 +67,9 @@ const numeric = computed(() => props.type === 'number' || props.inputmode === 'n
         :autocomplete="props.autocomplete"
         :inputmode="props.inputmode"
         :maxlength="props.maxlength"
+        :spellcheck="props.spellcheck"
+        :autocorrect="props.autocorrect"
+        :autocapitalize="props.autocapitalize"
         :required="props.required"
         :disabled="props.disabled"
         :aria-invalid="props.error ? 'true' : undefined"

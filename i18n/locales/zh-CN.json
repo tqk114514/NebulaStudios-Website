@@ -67,6 +67,7 @@
     "providers": "或使用第三方账号",
     "signinGoogle": "使用 Google 登录",
     "signinMicrosoft": "使用 Microsoft 登录",
+    "forgotPassword": "忘记密码",
     "register": "创建账户"
   },
   "register": {
@@ -75,13 +76,25 @@
     "email": "邮箱",
     "username": "用户名",
     "password": "密码",
-    "confirmPassword": "确认密码",
     "usernameTooShort": "用户名至少 3 个字符",
     "usernameInvalidCharacters": "用户名只能包含字母、数字、下划线和连字符",
-    "passwordMismatch": "两次输入的密码不一致",
     "fieldsRequired": "请填写全部字段",
     "submit": "创建账户",
     "backToLogin": "已有账户？返回登录"
+  },
+  "forgot": {
+    "title": "重置密码",
+    "subtitle": "输入注册邮箱，我们会发送验证码",
+    "email": "邮箱",
+    "sendCode": "发送验证码",
+    "code": "验证码",
+    "newPassword": "新密码",
+    "submit": "重置密码",
+    "backToEmail": "重新输入邮箱",
+    "backToLogin": "返回登录",
+    "emailMissing": "请输入邮箱地址",
+    "codeMissing": "请输入验证码",
+    "passwordMissing": "请输入新密码"
   },
   "totp": {
     "title": "两步验证",

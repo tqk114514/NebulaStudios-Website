@@ -12,7 +12,6 @@ export function useSignUp() {
   const email = ref('')
   const username = ref('')
   const password = ref('')
-  const confirm = ref('')
   const attempted = ref(false)
 
   const issue = computed<SignUpIssue>(() =>
@@ -21,7 +20,6 @@ export function useSignUp() {
         email: email.value,
         username: username.value,
         password: password.value,
-        confirm: confirm.value,
       })
       : 'none',
   )
@@ -35,8 +33,6 @@ export function useSignUp() {
         return t('register.usernameTooShort')
       case 'usernameInvalidCharacters':
         return t('register.usernameInvalidCharacters')
-      case 'passwordMismatch':
-        return t('register.passwordMismatch')
       default:
         return ''
     }
@@ -49,7 +45,6 @@ export function useSignUp() {
       ? issueText.value
       : '',
   )
-  const confirmError = computed(() => (issue.value === 'passwordMismatch' ? issueText.value : ''))
 
   function submit() {
     attempted.value = true
@@ -61,10 +56,8 @@ export function useSignUp() {
     email,
     username,
     password,
-    confirm,
     formError,
     usernameError,
-    confirmError,
     submit,
   }
 }

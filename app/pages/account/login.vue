@@ -34,7 +34,8 @@ useSeoMeta({ title: () => t('login.title') })
           :label="t('login.email')"
           name="email"
           type="email"
-          autocomplete="username email"
+          autocomplete="username"
+          :spellcheck="false"
           :error="emailError"
           required
         />
@@ -64,6 +65,8 @@ useSeoMeta({ title: () => t('login.title') })
       </div>
 
       <div class="foot">
+        <NuxtLink class="quiet" to="/account/forgot">{{ t('login.forgotPassword') }}</NuxtLink>
+        <span class="quiet sep" aria-hidden="true">|</span>
         <NuxtLink class="quiet" to="/account/register">{{ t('login.register') }}</NuxtLink>
       </div>
     </AuthPanel>
@@ -80,6 +83,9 @@ useSeoMeta({ title: () => t('login.title') })
           name="code"
           inputmode="numeric"
           autocomplete="one-time-code"
+          :spellcheck="false"
+          autocorrect="off"
+          autocapitalize="none"
           :maxlength="6"
           :error="codeError"
           required
@@ -114,6 +120,10 @@ useSeoMeta({ title: () => t('login.title') })
 
 .quiet:hover {
   color: var(--fg);
+}
+
+.sep {
+  color: var(--fg-faint);
 }
 
 .divider {
