@@ -12,8 +12,13 @@
 # 的依赖范围是 >=0.30.1,<0.38.0，无法选修复版 0.39.x。攻击要求本地写入
 # 数据库文件与同名 WAL，当前部署目录受控。
 # 移除条件：sqlx-sqlite 允许 libsqlite3-sys >=0.39 后立即删除本条。
+#
+# RUSTSEC-2026-0543：chrono 0.4.45 停止维护，所有版本受影响且无安全升级；
+# sqlx-core / sqlx-sqlite 与本地代码共同依赖，迁移 jiff/time 需单独切片。
+# 移除条件：chrono 恢复维护，或 sqlx 与本地完成时间库迁移后立即删除本条。
 ignore = [
   { id = "RUSTSEC-2026-0459", reason = "sqlx-sqlite 0.9 固定 libsqlite3-sys <0.38；本地数据库受控，待上游升级" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono 停止维护且无安全升级；sqlx 与本地均依赖，迁移时间库需单独切片" },
 ]
 
 [licenses]
