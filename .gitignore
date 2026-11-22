@@ -30,3 +30,6 @@ Reference/
 # 注意：lint 配置（eslint.config.mjs、stylelint.config.mjs、knip.jsonc、
 # commitlint.config.mjs、.lychee.toml、renovate.json）必须入库，
 # 否则门禁只存在于某一台机器上。
+
+# TLA+ 运行元数据（scripts/check-tla.sh 使用缓存目录，这里兜底）
+docs/tla/states/

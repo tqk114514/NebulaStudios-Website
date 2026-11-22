@@ -133,6 +133,12 @@ NEBULA_TURNSTILE__SECRET_KEY=...
 验证码与安全通知按请求 `Accept-Language` 的**首个受支持语言**渲染：`zh-CN` 或 `en`；
 无法匹配时回落简体中文。邮件为纯文本，模板在 `src/mailer/template.rs`。
 
+## 形式化测试
+
+纯逻辑用 `proptest` 做 property-based 测试（`tests/properties.rs`）；refresh 家族与重放检测另有
+TLA+ 模型（`docs/tla/`），由 `bash scripts/check-tla.sh` 运行 TLC。模型检查设计层不变量，
+不替代 SQLite 集成测试。
+
 ## 运维端点与后台任务
 
 - `GET /healthz`：存活探针。

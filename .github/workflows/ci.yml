@@ -123,3 +123,16 @@ jobs:
         with:
           args: --config .lychee.toml 'AGENTS.md' 'docs/**/*.md'
           fail: true
+
+  tla:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-java@v6.3.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: TLA+ 模型检查
+        run: bash scripts/check-tla.sh
