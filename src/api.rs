@@ -404,7 +404,11 @@ pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))
         .route("/metrics", get(metrics::metrics))
-        .route("/api/auth/logout", post(auth::logout::logout))
+        .route(
+            "/api/auth/logout",
+            post(auth::logout::logout)
+                .layer(middleware::map_response(clear_cookies_on_auth_failure)),
+        )
         .route("/api/user", get(user::profile::profile))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
@@ -531,8 +535,13 @@ fn limited_routes() -> Router<AppState> {
 
     // 刷新可被匿名触发并放大一次 DB 查询与潜在的整族撤销，故限额挡放大：
     // 突发 30、每 1 秒补 1——正常客户端刷新频率远低于此（access TTL 默认 1 小时）
-    let refresh_limited =
-        limited(Router::new().route("/api/auth/refresh", post(auth::refresh::refresh)), 1, 30);
+    let refresh_limited = limited(
+        Router::new()
+            .route("/api/auth/refresh", post(auth::refresh::refresh))
+            .layer(middleware::map_response(clear_cookies_on_forbidden)),
+        1,
+        30,
+    );
 
     register_limited
         .merge(login_limited)
@@ -610,6 +619,31 @@ async fn envelope_payload_too_large(response: Response) -> Response {
     } else {
         response
     }
+}
+
+/// 登出与刷新在提取器阶段被 CSRF 拒绝时 handler 不会执行；按 ADR-0005 决策 5
+/// 补发清会话 cookie 头。这两个路由的 403 只可能来自认证/CSRF 门禁。
+#[allow(clippy::unused_async)] // axum map_response 只接受 async fn
+async fn clear_cookies_on_forbidden(response: Response) -> Response {
+    clear_cookies_if(response, |status| status == StatusCode::FORBIDDEN)
+}
+
+/// 登出的 401（缺失/过期 access）与 403（CSRF/封禁）都发生在 handler 之前，
+/// 同样按 ADR-0005 决策 5 清掉死 cookie；刷新 401 已由 handler 自行清理。
+#[allow(clippy::unused_async)] // axum map_response 只接受 async fn
+async fn clear_cookies_on_auth_failure(response: Response) -> Response {
+    clear_cookies_if(response, |status| {
+        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN
+    })
+}
+
+fn clear_cookies_if(response: Response, should_clear: impl FnOnce(StatusCode) -> bool) -> Response {
+    if !should_clear(response.status()) {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    clear_session_cookies(&mut parts.headers);
+    Response::from_parts(parts, body)
 }
 
 /// 限额 429 的统一信封；`wait_time` 直接进 `details.retry_after`（ADR-0004）。

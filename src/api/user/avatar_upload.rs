@@ -1,6 +1,7 @@
 //! POST /api/user/avatar：上传并缩放头像，转为 WebP 后落盘。
 
 use axum::Json;
+use axum::extract::multipart::MultipartRejection;
 use axum::extract::{Multipart, State};
 use serde::Serialize;
 
@@ -27,8 +28,9 @@ pub struct AvatarResponse {
 pub async fn upload(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    mut multipart: Multipart,
+    multipart: Result<Multipart, MultipartRejection>,
 ) -> Result<Json<AvatarResponse>, ApiError> {
+    let mut multipart = multipart.map_err(|err| ApiError::MalformedMultipart(err.to_string()))?;
     let mut payload = None;
     while let Some(field) =
         multipart.next_field().await.map_err(|err| ApiError::MalformedMultipart(err.to_string()))?
