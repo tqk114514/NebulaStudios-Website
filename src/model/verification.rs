@@ -48,6 +48,18 @@ const UNBIASED_LIMIT: u8 = 220;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationCode(String);
 
+/// 逐字节拒绝采样：byte < 220 时对 55 取模无偏差；达到 6 个字符即停。
+fn fill_from_pool(plain: &mut String, pool: &[u8]) {
+    for &byte in pool {
+        if plain.len() == 6 {
+            return;
+        }
+        if byte < UNBIASED_LIMIT {
+            plain.push(ALPHABET[usize::from(byte) % ALPHABET.len()] as char);
+        }
+    }
+}
+
 impl VerificationCode {
     /// 随机生成六位验证码（逐字符拒绝采样，无模偏差）。
     ///
@@ -59,17 +71,13 @@ impl VerificationCode {
     /// ```
     #[must_use]
     pub fn generate() -> Self {
-        let mut pool = [0u8; 16];
-        rand::rng().fill_bytes(&mut pool);
+        let mut rng = rand::rng();
         let mut plain = String::with_capacity(6);
-        // 逐字节拒绝采样：byte < 228 时对 57 取模无偏差
-        for byte in pool {
-            if plain.len() == 6 {
-                break;
-            }
-            if byte < UNBIASED_LIMIT {
-                plain.push(ALPHABET[usize::from(byte) % ALPHABET.len()] as char);
-            }
+        // 单批 16 字节可能因拒绝采样不足 6 个字符；循环补足而不是返回短码。
+        while plain.len() < 6 {
+            let mut pool = [0u8; 16];
+            rng.fill_bytes(&mut pool);
+            fill_from_pool(&mut plain, &pool);
         }
         Self(plain)
     }
@@ -113,7 +121,7 @@ pub struct EmailVerification {
 
 #[cfg(test)]
 mod tests {
-    use super::{ALPHABET, UNBIASED_LIMIT};
+    use super::{ALPHABET, UNBIASED_LIMIT, VerificationCode, VerificationPurpose, fill_from_pool};
 
     #[test]
     fn alphabet_excludes_ambiguous_characters_and_rejection_limit_is_unbiased() {
@@ -122,5 +130,32 @@ mod tests {
         for byte in b"0OILl" {
             assert!(!ALPHABET.contains(byte), "字母表不得包含易混淆字符 {}", *byte as char);
         }
+    }
+
+    #[test]
+    fn generated_code_is_six_unambiguous_characters() {
+        for _ in 0..64 {
+            let code = VerificationCode::generate();
+            assert_eq!(code.as_str().len(), 6);
+            assert!(code.as_str().chars().all(|c| ALPHABET.contains(&(c as u8))));
+        }
+    }
+
+    #[test]
+    fn purpose_strings_are_stable() {
+        assert_eq!(VerificationPurpose::VerifyEmail.as_str(), "email_verify");
+        assert_eq!(VerificationPurpose::DeleteAccount.as_str(), "account_delete");
+        assert_eq!(VerificationPurpose::PasswordReset.as_str(), "password_reset");
+        assert_eq!(VerificationPurpose::EmailChange.as_str(), "email_change");
+    }
+
+    #[test]
+    fn rejection_sampling_maps_known_bytes_and_drops_out_of_range() {
+        let mut pool = [0u8; 16];
+        pool[..6].copy_from_slice(&[0, 1, 219, 220, 221, 54]);
+        let mut code = String::new();
+        fill_from_pool(&mut code, &pool);
+        // 0→'1'、1→'2'、219→'z'；220/221 被拒绝；54→'z'；余下 0 补到 6 位
+        assert_eq!(code, "12zz11");
     }
 }
