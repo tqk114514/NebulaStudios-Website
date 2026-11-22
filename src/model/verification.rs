@@ -39,10 +39,10 @@ impl VerificationPurpose {
     }
 }
 
-/// v3 同款无歧义字母表（剔除 0/O/I/L/l），57 个字符。
-const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
-/// 拒绝采样阈值：256 = 4×57 + 28，byte < 228 时取模无偏差。
-const UNBIASED_LIMIT: u8 = 228;
+/// v3 同款无歧义字母表（剔除 0/O/I/L/l），55 个字符。
+const ALPHABET: &[u8] = b"123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
+/// 拒绝采样阈值：256 = 4×55 + 36，byte < 220 时取模无偏差。
+const UNBIASED_LIMIT: u8 = 220;
 
 /// 六位邮箱验证码明文；仅签发与邮件正文出现，入库只存带 pepper 的 HMAC-SHA256。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,4 +109,18 @@ pub struct EmailVerification {
     pub expires_at: DateTime<Utc>,
     /// 签发时刻；重发冷却以它为基准。
     pub created_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ALPHABET, UNBIASED_LIMIT};
+
+    #[test]
+    fn alphabet_excludes_ambiguous_characters_and_rejection_limit_is_unbiased() {
+        assert_eq!(ALPHABET.len(), 55);
+        assert_eq!(usize::from(UNBIASED_LIMIT), (256 / ALPHABET.len()) * ALPHABET.len());
+        for byte in b"0OILl" {
+            assert!(!ALPHABET.contains(byte), "字母表不得包含易混淆字符 {}", *byte as char);
+        }
+    }
 }
