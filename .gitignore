@@ -33,3 +33,6 @@ Reference/
 
 # TLA+ 运行元数据（scripts/check-tla.sh 使用缓存目录，这里兜底）
 docs/tla/states/
+
+# cargo-mutants 运行产物
+mutants.out*/
