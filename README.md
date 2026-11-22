@@ -135,7 +135,7 @@ NEBULA_TURNSTILE__SECRET_KEY=...
 
 ## 形式化测试
 
-纯逻辑用 `proptest` 做 property-based 测试（`tests/properties.rs`）；refresh 家族与重放检测另有
+纯逻辑用 `proptest` 做 property-based 测试；refresh 家族与 OAuth 授权码另有
 TLA+ 模型（`docs/tla/`），由 `bash scripts/check-tla.sh` 运行 TLC。模型检查设计层不变量，
 不替代 SQLite 集成测试。
 

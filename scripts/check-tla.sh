@@ -15,7 +15,16 @@ if [[ ! -f "$JAR" ]]; then
   mv "$JAR.tmp" "$JAR"
 fi
 
-mkdir -p "$METADIR"
 cd "$ROOT/docs/tla"
-exec java -XX:+UseParallelGC -cp "$JAR" tlc2.TLC \
-  -metadir "$METADIR" -config RefreshFamily.cfg RefreshFamily.tla
+
+# 每个模型使用独立的状态目录，避免两个配置的指纹缓存互相干扰。
+run_tlc() {
+  local module="$1"
+  echo "==> TLC: $module" >&2
+  mkdir -p "$METADIR/$module"
+  java -XX:+UseParallelGC -cp "$JAR" tlc2.TLC \
+    -metadir "$METADIR/$module" -config "$module.cfg" "$module.tla"
+}
+
+run_tlc RefreshFamily
+run_tlc OAuthCode
