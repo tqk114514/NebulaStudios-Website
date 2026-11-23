@@ -2,6 +2,9 @@
 # 键名以 lychee 0.24 的字段表为准：并发是 max_concurrency；邮箱默认不查，没有 exclude_mail。
 cache = true
 timeout = 20
+# GitHub 对数据中心出口偶发 429；重试避免把限流当成死链
+max_retries = 3
+retry_wait_time = 2
 max_concurrency = 4
 exclude_loopback = true
 # 一些站点按客户端类型回 404 而不是 403，默认 UA 会被当成死链
