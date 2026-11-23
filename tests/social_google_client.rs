@@ -55,11 +55,29 @@ async fn token_responder(
     (status, Json(serde_json::from_str(&body).expect("mock 响应必须是 JSON")))
 }
 
+async fn raw_token_responder(
+    State((status, body)): State<(StatusCode, String)>,
+) -> (StatusCode, [(axum::http::header::HeaderName, &'static str); 1], String) {
+    (status, [(axum::http::header::CONTENT_TYPE, "application/json")], body)
+}
+
 async fn mock_token_server(status: StatusCode, body: Value) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("mock 端口必须可监听");
     let addr = listener.local_addr().expect("本地地址必须可读");
     let app =
         Router::new().route("/token", post(token_responder)).with_state((status, body.to_string()));
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("mock 服务不得退出");
+    });
+    format!("http://{addr}")
+}
+
+async fn mock_raw_token_server(status: StatusCode, body: &'static str) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("mock 端口必须可监听");
+    let addr = listener.local_addr().expect("本地地址必须可读");
+    let app = Router::new()
+        .route("/token", post(raw_token_responder))
+        .with_state((status, body.to_owned()));
     tokio::spawn(async move {
         axum::serve(listener, app).await.expect("mock 服务不得退出");
     });
@@ -114,6 +132,21 @@ async fn google_fetch_identity_rejects_bad_worker_status_and_payload() {
     let proxy = mock_token_server(StatusCode::OK, envelope).await;
     let client = GoogleClient::new(google_config(proxy, public_key_pem(&signing)), clock)
         .expect("Google 客户端必须可构建");
+    assert!(matches!(
+        client.fetch_identity("code", "verifier").await,
+        Err(nebula_server::social::SocialError::Malformed(_))
+    ));
+}
+
+#[tokio::test]
+async fn google_non_json_envelope_is_malformed() {
+    let signing = SigningKey::from_bytes(&[7u8; 32]);
+    let now = fixed_now();
+    let proxy = mock_raw_token_server(StatusCode::OK, "not-an-envelope").await;
+    let clock: Arc<ManualClock> = Arc::new(ManualClock::new(now));
+    let client = GoogleClient::new(google_config(proxy, public_key_pem(&signing)), clock)
+        .expect("Google 客户端必须可构建");
+
     assert!(matches!(
         client.fetch_identity("code", "verifier").await,
         Err(nebula_server::social::SocialError::Malformed(_))
