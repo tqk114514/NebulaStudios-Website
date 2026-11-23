@@ -451,7 +451,15 @@ async fn sigint_triggers_graceful_shutdown() {
     let dir = tempfile::tempdir().expect("临时目录必须可创建");
     let mut command = base_command(dir.path());
     let (mut guard, logs, rx) = ChildGuard::spawn(&mut command);
-    await_listening(&rx, &logs);
+    let addr = await_listening(&rx, &logs);
+
+    // listening 日志早于 axum::serve 内 shutdown future 的首次轮询：
+    // 先确认服务已能应答，并留出信号处理器注册窗口，否则 SIGINT 走默认终止
+    let client = reqwest::Client::new();
+    let response =
+        client.get(format!("http://{addr}/healthz")).send().await.expect("healthz 请求必须成功");
+    assert_eq!(response.status().as_u16(), 200, "服务必须先进入可应答状态");
+    thread::sleep(Duration::from_millis(200));
 
     let pid = guard.id().to_string();
     let signal =
