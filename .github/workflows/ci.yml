@@ -120,6 +120,9 @@ jobs:
       # AGENTS.md 与 docs/ 的每条条款都要带来源 URL（§16），链接失效即失败。
       # 目标只列带来源链接的文档；README.md 与 composable 的 index.md 不含外链。
       - uses: lycheeverse/lychee-action@v2.9.0
+        env:
+          # 未认证的 GitHub 请求会被共享 runner 出口限流成 429
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: --config .lychee.toml 'AGENTS.md' 'docs/**/*.md'
           fail: true
