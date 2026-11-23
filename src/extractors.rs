@@ -1,9 +1,12 @@
 //! 请求提取器（§2）：第一方用户会话与 CSRF 门禁（ADR-0005、ADR-0006）。
 
-use axum::extract::FromRequestParts;
+use axum::body::Bytes;
+use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::Method;
-use axum::http::header::ACCEPT_LANGUAGE;
+use axum::http::StatusCode;
+use axum::http::header::{ACCEPT_LANGUAGE, CONTENT_TYPE};
 use axum::http::request::Parts;
+use serde::de::DeserializeOwned;
 
 use crate::api::{ACCESS_COOKIE, AppState, CSRF_COOKIE, cookie_value};
 use crate::error::ApiError;
@@ -31,6 +34,8 @@ pub struct FirstPartyUser {
     pub email: String,
     /// 邮箱是否已验证；配置化管理员要求此项为真。
     pub email_verified: bool,
+    /// 当前 access token 版本；签发一次性能力（如 OAuth 授权码）时绑定。
+    pub token_version: i64,
 }
 
 impl FromRequestParts<AppState> for FirstPartyUser {
@@ -58,7 +63,8 @@ impl FromRequestParts<AppState> for AdminUser {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let user = FirstPartyUser::from_request_parts(parts, state).await?;
-        if user.email_verified && state.admin_emails.contains(&user.email) {
+        if crate::api::admin::is_admin_email(&state.admin_emails, &user.email, user.email_verified)
+        {
             Ok(Self { user })
         } else {
             Err(ApiError::Forbidden)
@@ -105,6 +111,66 @@ impl FromRequestParts<AppState> for CsrfGuard {
     }
 }
 
+/// JSON 请求体；只接受 `application/json`，把解析失败统一映射为 ADR-0004 信封。
+///
+/// 强制媒体类型是登录 CSRF 的主防线：浏览器允许跨站提交 `text/plain` 表单，
+/// 但不经预检无法发送 `application/json`。
+pub struct JsonBody<T>(pub T);
+
+// 请求体可能含口令/验证码，Debug 只报结构名而不要求 T: Debug
+impl<T> std::fmt::Debug for JsonBody<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JsonBody").finish_non_exhaustive()
+    }
+}
+
+impl<T, S> FromRequest<S> for JsonBody<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        require_json(req.headers())?;
+        let bytes = Bytes::from_request(req, state)
+            .await
+            .map_err(|rejection| map_body_rejection(&rejection))?;
+        serde_json::from_slice(&bytes)
+            .map(Self)
+            .map_err(|err| ApiError::MalformedJson(err.to_string()))
+    }
+}
+
+/// 已手动读取 body 的 handler 复用的媒体类型门禁与 JSON 解析。
+///
+/// 需要“路径/身份检查先于 body 解析”的端点用它，而不是 [`JsonBody`] 提取器。
+pub(crate) fn parse_json_body<T: DeserializeOwned>(
+    headers: &axum::http::HeaderMap,
+    body: &[u8],
+) -> Result<T, ApiError> {
+    require_json(headers)?;
+    serde_json::from_slice(body).map_err(|err| ApiError::MalformedJson(err.to_string()))
+}
+
+fn require_json(headers: &axum::http::HeaderMap) -> Result<(), ApiError> {
+    let is_json = headers
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|raw| raw.split(';').next())
+        .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("application/json"));
+    if is_json { Ok(()) } else { Err(ApiError::UnsupportedMediaType) }
+}
+
+/// 读体失败按状态区分：超限保留 413，其余按非法 JSON 处理。
+fn map_body_rejection(rejection: &axum::extract::rejection::BytesRejection) -> ApiError {
+    if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        ApiError::PayloadTooLarge
+    } else {
+        ApiError::MalformedJson("无法读取请求体".to_owned())
+    }
+}
+
 async fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPartyUser, ApiError> {
     let (token, from_cookie) = access_token_of(parts).ok_or(ApiError::Unauthorized)?;
     // 跨站页面无法携带自定义头，Bearer 认证豁免 CSRF（ADR-0005）
@@ -134,7 +200,12 @@ async fn first_party_user_of(parts: &Parts, state: &AppState) -> Result<FirstPar
     if access.token_version != token_version {
         return Err(ApiError::Unauthorized);
     }
-    Ok(FirstPartyUser { user_id, email: access.email, email_verified: access.email_verified })
+    Ok(FirstPartyUser {
+        user_id,
+        email: access.email,
+        email_verified: access.email_verified,
+        token_version: access.token_version,
+    })
 }
 
 /// cookie 优先、Bearer 次之；返回 (token, 是否来自 cookie)。

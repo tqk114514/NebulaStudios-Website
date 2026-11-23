@@ -406,8 +406,15 @@ impl OneshotPost for axum::Router {
         cookie: &str,
     ) -> axum::response::Response {
         use tower::ServiceExt;
-        let mut request =
-            Request::get(format!("{uri}?{query}")).body(Body::empty()).expect("请求构造必须成功");
+        // `uri` 可能已带查询串（如版本化头像地址）；空 query 时不要追加裸 `?`
+        let target = if query.is_empty() {
+            uri.to_owned()
+        } else if uri.contains('?') {
+            format!("{uri}&{query}")
+        } else {
+            format!("{uri}?{query}")
+        };
+        let mut request = Request::get(target).body(Body::empty()).expect("请求构造必须成功");
         if !cookie.is_empty() {
             request
                 .headers_mut()

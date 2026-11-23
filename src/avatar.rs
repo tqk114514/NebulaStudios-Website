@@ -90,8 +90,9 @@ pub enum AvatarStoreError {
     Io(#[from] std::io::Error),
 }
 
-/// 按用户 id 存取 `{dir}/{user_id}.webp` 的文件存储。
+/// 按用户 id 与版本存取 `{dir}/{user_id}-{version}.webp` 的文件存储。
 ///
+/// 文件名带版本：并发上传即使写盘顺序颠倒，每个 `?v=` 也只对应自己那次内容。
 /// 写入先落临时文件再原子替换，读者不会看到半张图片。
 #[derive(Debug, Clone)]
 pub struct AvatarStore {
@@ -111,26 +112,35 @@ impl AvatarStore {
         &self.dir
     }
 
-    /// 读取用户头像；文件不存在返回 `None`。
+    /// 读取指定版本的用户头像；文件不存在返回 `None`。
     ///
     /// # Errors
     /// 路径存在但读取失败时返回 [`AvatarStoreError::Io`]。
-    pub async fn load(&self, user_id: &UserId) -> Result<Option<Vec<u8>>, AvatarStoreError> {
-        match tokio::fs::read(self.path_for(user_id)).await {
+    pub async fn load(
+        &self,
+        user_id: &UserId,
+        version: i64,
+    ) -> Result<Option<Vec<u8>>, AvatarStoreError> {
+        match tokio::fs::read(self.path_for(user_id, version)).await {
             Ok(bytes) => Ok(Some(bytes)),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(AvatarStoreError::Io(err)),
         }
     }
 
-    /// 写入用户头像；已存在时原子替换。
+    /// 写入指定版本的用户头像；同版本已存在时原子替换。
     ///
     /// # Errors
     /// 目录创建、临时文件写入或替换失败时返回 [`AvatarStoreError::Io`]。
-    pub async fn store(&self, user_id: &UserId, bytes: &[u8]) -> Result<(), AvatarStoreError> {
+    pub async fn store(
+        &self,
+        user_id: &UserId,
+        version: i64,
+        bytes: &[u8],
+    ) -> Result<(), AvatarStoreError> {
         tokio::fs::create_dir_all(&self.dir).await?;
-        let target = self.path_for(user_id);
-        let temp = self.dir.join(format!("{user_id}.webp.tmp-{}", Uuid::now_v7()));
+        let target = self.path_for(user_id, version);
+        let temp = self.dir.join(format!("{user_id}-{version}.webp.tmp-{}", Uuid::now_v7()));
         tokio::fs::write(&temp, bytes).await?;
         if let Err(err) = tokio::fs::rename(&temp, &target).await {
             // 清理失败不改变主错误；残留临时文件不影响读取
@@ -140,20 +150,29 @@ impl AvatarStore {
         Ok(())
     }
 
-    /// 删除用户头像；文件本来不存在也视为成功（幂等）。
+    /// 删除用户全部版本的头像；文件本来不存在也视为成功（幂等）。
     ///
     /// # Errors
     /// 删除失败时返回 [`AvatarStoreError::Io`]。
     pub async fn remove(&self, user_id: &UserId) -> Result<(), AvatarStoreError> {
-        match tokio::fs::remove_file(self.path_for(user_id)).await {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(AvatarStoreError::Io(err)),
+        let prefix = format!("{user_id}-");
+        let mut entries = match tokio::fs::read_dir(&self.dir).await {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(AvatarStoreError::Io(err)),
+        };
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&prefix) && name.ends_with(".webp") {
+                tokio::fs::remove_file(entry.path()).await?;
+            }
         }
+        Ok(())
     }
 
-    fn path_for(&self, user_id: &UserId) -> PathBuf {
-        self.dir.join(format!("{user_id}.webp"))
+    fn path_for(&self, user_id: &UserId, version: i64) -> PathBuf {
+        self.dir.join(format!("{user_id}-{version}.webp"))
     }
 }
 
@@ -205,16 +224,16 @@ mod tests {
         let store = AvatarStore::new(dir.path().join("avatars"));
         let user_id = UserId::new();
 
-        assert!(store.load(&user_id).await.expect("读取必须成功").is_none());
-        store.store(&user_id, b"webp-bytes").await.expect("写入必须成功");
+        assert!(store.load(&user_id, 1).await.expect("读取必须成功").is_none());
+        store.store(&user_id, 1, b"webp-bytes").await.expect("写入必须成功");
         assert_eq!(
-            store.load(&user_id).await.expect("读取必须成功").expect("文件必须存在"),
+            store.load(&user_id, 1).await.expect("读取必须成功").expect("文件必须存在"),
             b"webp-bytes"
         );
-        assert!(store.dir().join(format!("{user_id}.webp")).exists());
+        assert!(store.dir().join(format!("{user_id}-1.webp")).exists());
 
         store.remove(&user_id).await.expect("删除必须成功");
-        assert!(store.load(&user_id).await.expect("读取必须成功").is_none());
+        assert!(store.load(&user_id, 1).await.expect("读取必须成功").is_none());
         // 幂等：再次删除不报错
         store.remove(&user_id).await.expect("重复删除必须成功");
     }

@@ -40,6 +40,8 @@ pub enum ApiError {
     MalformedJson(String),
     /// multipart 请求无法解析；400。
     MalformedMultipart(String),
+    /// JSON 端点收到非 `application/json` 请求；415。跨站表单因此无法直接打 JSON 端点。
+    UnsupportedMediaType,
     /// 请求体超过全局上限；413。
     PayloadTooLarge,
     /// 请求字段未通过校验；422，字段级错误在 `details.fields`。
@@ -176,6 +178,11 @@ impl ApiError {
             Self::MalformedMultipart(reason) => {
                 (StatusCode::BAD_REQUEST, "malformed_multipart", reason, None)
             }
+            Self::UnsupportedMediaType => simple(
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "unsupported_media_type",
+                "Content-Type 必须为 application/json",
+            ),
             Self::PayloadTooLarge => {
                 simple(StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", "请求体超过上限")
             }

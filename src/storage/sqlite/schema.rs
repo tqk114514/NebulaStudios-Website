@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified  INTEGER NOT NULL DEFAULT 0,
     totp_state      TEXT NOT NULL DEFAULT 'disabled',
     totp_secret_enc TEXT,
+    totp_last_step  INTEGER,
     token_version   INTEGER NOT NULL DEFAULT 0,
     avatar_version  INTEGER NOT NULL DEFAULT 0,
     UNIQUE (username),
@@ -70,7 +71,8 @@ CREATE TABLE IF NOT EXISTS email_verifications (
     expires_at  TEXT NOT NULL,
     created_at  TEXT NOT NULL,
     consumed_at TEXT,
-    purpose     TEXT NOT NULL DEFAULT 'email_verify'
+    purpose     TEXT NOT NULL DEFAULT 'email_verify',
+    sent_to     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS email_change_requests (
@@ -110,7 +112,9 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     code_challenge TEXT NOT NULL,
     expires_at     TEXT NOT NULL,
     created_at     TEXT NOT NULL,
-    consumed_at    TEXT
+    consumed_at    TEXT,
+    session_version INTEGER NOT NULL DEFAULT 0,
+    family_id      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS user_bans (

@@ -672,7 +672,7 @@ async fn malformed_missing_and_overlong_inputs_are_4xx_with_stable_codes() {
     // 登录口令输入上限先于 Argon2：超长输入按字段错误拒绝
     let long_password = serde_json::json!({
         "identifier": "nova@nebula.st",
-        "password": "a".repeat(129),
+        "password": "a".repeat(257),
     })
     .to_string();
     let response = send(
@@ -709,13 +709,14 @@ async fn malformed_missing_and_overlong_inputs_are_4xx_with_stable_codes() {
 }
 
 #[tokio::test]
-async fn logout_without_credentials_clears_session_cookies() {
+async fn logout_without_credentials_does_not_clear_cookies() {
     let (app, _state, _clock, _mailbox, _dir) = common::app().await;
 
     let response = app.clone().oneshot_post("/api/auth/logout", "").await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_cleared_cookies(&response);
+    // 零 cookie 的跨站请求不得用来强制登出：响应不应下发任何清 cookie 头
+    assert_eq!(response.headers().get_all(header::SET_COOKIE).iter().count(), 0);
 }
 
 #[tokio::test]

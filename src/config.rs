@@ -1,6 +1,7 @@
 //! 环境变量到类型化配置的加载，值非法时启动即失败。
 
 use std::collections::HashSet;
+use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -151,7 +152,7 @@ struct OAuthClientsFile {
 ///
 /// Google 取数经 Cloudflare Worker 代理，启用时须同时提供代理地址、Access
 /// service token 与 Worker 的 Ed25519 签名公钥。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct SocialConfig {
     /// 站点对外基地址；回跳地址由它派生，启用任一 provider 时必填。
     pub base_url: String,
@@ -171,6 +172,23 @@ pub struct SocialConfig {
     pub microsoft_client_id: String,
     /// Microsoft OAuth 客户端密钥。
     pub microsoft_client_secret: String,
+}
+
+// 三个 secret 都不得出现在 Debug 输出
+impl fmt::Debug for SocialConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SocialConfig")
+            .field("base_url", &self.base_url)
+            .field("google_client_id", &self.google_client_id)
+            .field("google_client_secret", &"<redacted>")
+            .field("google_proxy_url", &self.google_proxy_url)
+            .field("google_proxy_access_client_id", &self.google_proxy_access_client_id)
+            .field("google_proxy_access_client_secret", &"<redacted>")
+            .field("google_worker_signing_public_key", &self.google_worker_signing_public_key)
+            .field("microsoft_client_id", &self.microsoft_client_id)
+            .field("microsoft_client_secret", &"<redacted>")
+            .finish()
+    }
 }
 
 impl SocialConfig {
@@ -194,12 +212,22 @@ impl SocialConfig {
 }
 
 /// 加密配置；TOTP 密钥必须由部署方提供 32 字节十六进制密钥。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct CryptoConfig {
     /// AES-256 密钥，64 个十六进制字符。
     pub totp_secret_key: String,
     /// 验证码 HMAC pepper，64 个十六进制字符。
     pub code_pepper: String,
+}
+
+// 两个字段都是长期密钥；任何 `?config` 都不应把它们写进日志
+impl fmt::Debug for CryptoConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CryptoConfig")
+            .field("totp_secret_key", &"<redacted>")
+            .field("code_pepper", &"<redacted>")
+            .finish()
+    }
 }
 
 /// 管理员配置；邮箱列表逗号分隔，启动时 trim + 小写。
@@ -237,7 +265,7 @@ pub struct JwtConfig {
 }
 
 /// 邮件配置；`smtp_host` 为空表示不投递（日志模式，开发用）。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct MailConfig {
     /// SMTP 主机；空串启用 [`crate::mailer::LogMailer`]。
     pub smtp_host: String,
@@ -251,6 +279,20 @@ pub struct MailConfig {
     pub smtp_password: String,
     /// 发件人，`名字 <地址>` 形式。
     pub from: String,
+}
+
+// SMTP 口令只在连接中继时使用；Debug 输出不得携带
+impl fmt::Debug for MailConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MailConfig")
+            .field("smtp_host", &self.smtp_host)
+            .field("smtp_port", &self.smtp_port)
+            .field("smtp_tls", &self.smtp_tls)
+            .field("smtp_username", &self.smtp_username)
+            .field("smtp_password", &"<redacted>")
+            .field("from", &self.from)
+            .finish()
+    }
 }
 
 /// SQLite 数据库配置（ADR-0003）。
@@ -344,6 +386,7 @@ impl Config {
                 "mail.smtp_tls 必须为 starttls/implicit/none".to_owned(),
             ));
         }
+        validate_cors_origin(&config.cors.allowed_origin)?;
         // 社交登录：启用任一 provider 才校验其配套项，全空即不启用（ADR-0012）
         let social = &config.social;
         if (social.google_enabled() || social.microsoft_enabled()) && social.base_url.is_empty() {
@@ -435,12 +478,33 @@ fn parse_email_domains(raw: &str) -> Result<HashSet<String>, LoadConfigError> {
         }
         domains.insert(domain);
     }
-    if !raw.trim().is_empty() && domains.is_empty() {
+    if !raw.is_empty() && domains.is_empty() {
         return Err(LoadConfigError::Invalid(
             "registration.allowed_email_domains 非空但未解析出域名".to_owned(),
         ));
     }
     Ok(domains)
+}
+
+/// CORS 来源必须是精确的 `http(s)://host[:port]`；通配符与带路径的值会让
+/// `AllowOrigin::exact` 与浏览器实际发送的 Origin 永不匹配，属配置陷阱。
+fn validate_cors_origin(origin: &str) -> Result<(), LoadConfigError> {
+    if origin.is_empty() {
+        return Ok(());
+    }
+    let rest =
+        origin.strip_prefix("https://").or_else(|| origin.strip_prefix("http://")).ok_or_else(
+            || LoadConfigError::Invalid("cors.allowed_origin 必须是 http(s) 来源".to_owned()),
+        )?;
+    if rest.is_empty()
+        || rest.contains('@')
+        || rest.chars().any(|ch| matches!(ch, '/' | '?' | '#') || ch.is_whitespace())
+    {
+        return Err(LoadConfigError::Invalid(
+            "cors.allowed_origin 必须是精确来源（不含路径、查询、用户信息或通配符）".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// 域名形状校验：ASCII 字母数字、`.`、`-`，至少两段，标签不以连字符开头或结尾。

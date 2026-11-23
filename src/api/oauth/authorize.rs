@@ -3,7 +3,6 @@
 //! 参数校验失败一律 400 统一信封：`redirect_uri` 未经验证前不得向其跳转，
 //! 第三方错误页回传（RFC 6749 §4.1.2.1）由后续切片按已验证前提交接。
 
-use axum::body::Bytes;
 use axum::extract::{RawQuery, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -12,7 +11,7 @@ use serde::Deserialize;
 use super::{form_urlencode, rfc_error};
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::audit::AuditAction;
 use crate::model::oauth2::{AUTH_CODE_TTL, NewAuthorizationCode, valid_challenge, valid_scope};
 use crate::model::tokens::RefreshToken;
@@ -134,10 +133,9 @@ pub async fn authorize(State(state): State<AppState>, RawQuery(raw): RawQuery) -
 pub async fn consent(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    body: Bytes,
+    body: JsonBody<ConsentRequest>,
 ) -> Result<Response, ApiError> {
-    let req: ConsentRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     let query = AuthorizeQuery {
         client_id: req.client_id,
         redirect_uri: req.redirect_uri,
@@ -159,6 +157,7 @@ pub async fn consent(
         scope: query.scope.clone(),
         code_challenge: query.code_challenge.clone(),
         expires_at: state.clock.now() + AUTH_CODE_TTL,
+        session_version: user.token_version,
     };
     state
         .oauth_repo

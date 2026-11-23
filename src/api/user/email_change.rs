@@ -3,7 +3,6 @@
 //! request：当前口令 + 新邮箱 → 向新邮箱发验证码；confirm：验码后改邮箱并置已验证。
 //! 现有会话保留（ADR-0015）；旧邮箱收到安全通知。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
@@ -13,8 +12,9 @@ use crate::api::{
     AppState, SecurityNotice, send_code_email, send_security_notice, verify_current_password,
 };
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::{FirstPartyUser, PreferredLocale, constant_time_eq};
+use crate::extractors::{FirstPartyUser, JsonBody, PreferredLocale, constant_time_eq};
 use crate::model::audit::AuditAction;
+use crate::model::user::canonicalize_email;
 use crate::model::verification::{
     MAX_ATTEMPTS, RESEND_COOLDOWN, VERIFICATION_TTL, VerificationCode, VerificationPurpose,
 };
@@ -51,11 +51,11 @@ pub async fn request_email_change(
     State(state): State<AppState>,
     user: FirstPartyUser,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<RequestEmailChangeRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let mut request: RequestEmailChangeRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    request.new_email = request.new_email.trim().to_lowercase();
+    let mut request = body.0;
+    request.new_email = canonicalize_email(&request.new_email)
+        .ok_or_else(|| invalid("new_email", "invalid_email"))?;
     if request.validate().is_err() {
         return Err(invalid("new_email", "invalid_email"));
     }
@@ -112,10 +112,9 @@ pub async fn confirm_email_change(
     State(state): State<AppState>,
     user: FirstPartyUser,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<ConfirmEmailChangeRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let request: ConfirmEmailChangeRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let request = body.0;
     let code = request.code.trim();
     if code.is_empty() {
         return Err(invalid("code", "code_missing"));
@@ -127,12 +126,19 @@ pub async fn confirm_email_change(
     else {
         return Err(ApiError::InvalidVerificationCode);
     };
-    if pending.expires_at <= now || pending.attempts >= MAX_ATTEMPTS {
+    if pending.expires_at <= now {
+        return Err(ApiError::InvalidVerificationCode);
+    }
+    let reserved = state
+        .email_change_repo
+        .reserve_attempt(&user.user_id, MAX_ATTEMPTS)
+        .await
+        .map_err(anyhow::Error::from)?;
+    if !reserved {
         return Err(ApiError::InvalidVerificationCode);
     }
     let candidate = state.code_hasher.hash(code);
     if !constant_time_eq(candidate.as_bytes(), pending.code_hash.as_bytes()) {
-        state.email_change_repo.record_attempt(&user.user_id).await.map_err(anyhow::Error::from)?;
         return Err(ApiError::InvalidVerificationCode);
     }
 
@@ -141,7 +147,11 @@ pub async fn confirm_email_change(
     else {
         return Err(ApiError::Unauthorized);
     };
-    match state.email_change_repo.apply(&user.user_id, &pending.new_email).await {
+    match state
+        .email_change_repo
+        .apply(&user.user_id, &pending.new_email, &pending.code_hash, now)
+        .await
+    {
         Ok(()) => {}
         Err(EmailChangeError::Conflict) => return Err(ApiError::EmailTaken),
         Err(EmailChangeError::NotFound) => return Err(ApiError::InvalidVerificationCode),

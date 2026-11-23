@@ -19,28 +19,21 @@ pub async fn unban(
     Path(raw_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let target = target_id(&raw_id)?;
+    let now = state.clock.now();
+    let audit = NewAuditEntry {
+        actor_id: admin.user.user_id,
+        action: AuditAction::AdminUserUnban,
+        target_id: Some(target),
+        details: None,
+    };
     let removed = state
         .admin_repo
-        .unban_user(&target)
+        .unban_user(&target, &audit, now)
         .await
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
     if !removed {
         return Err(ApiError::BanNotFound);
     }
-
-    state
-        .admin_repo
-        .record_audit(
-            &NewAuditEntry {
-                actor_id: admin.user.user_id,
-                action: AuditAction::AdminUserUnban,
-                target_id: Some(target),
-                details: None,
-            },
-            state.clock.now(),
-        )
-        .await
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

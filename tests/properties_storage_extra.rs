@@ -83,7 +83,13 @@ async fn issue_verification(
     now: DateTime<Utc>,
 ) -> Uuid {
     repo.issue(
-        &NewEmailVerification { user_id, code_hash: code_hash.to_owned(), expires_at, purpose },
+        &NewEmailVerification {
+            user_id,
+            code_hash: code_hash.to_owned(),
+            expires_at,
+            purpose,
+            sent_to: "user@nebula.st".to_owned(),
+        },
         now,
     )
     .await
@@ -723,7 +729,7 @@ proptest! {
             repo.upsert(&owner, requested, "hash-taken", now + TimeDelta::minutes(10), now)
                 .await
                 .expect("待确认请求必须可写入");
-            let result = repo.apply(&owner, requested).await;
+            let result = repo.apply(&owner, requested, "hash-taken", now).await;
             assert!(
                 matches!(&result, Err(EmailChangeError::Conflict)),
                 "邮箱唯一约束冲突必须返回 Conflict，实际为 {result:?}"
@@ -776,7 +782,7 @@ proptest! {
             repo.upsert(&user_id, &new_email, "hash-new", now + TimeDelta::minutes(10), now)
                 .await
                 .expect("待确认请求必须可写入");
-            repo.apply(&user_id, &new_email).await.expect("无冲突的变更必须成功");
+            repo.apply(&user_id, &new_email, "hash-new", now).await.expect("无冲突的变更必须成功");
 
             let row: (String, bool) =
                 sqlx::query_as("SELECT email, email_verified FROM users WHERE id = ?1")
@@ -803,7 +809,7 @@ proptest! {
             assert_eq!(rows, 0);
             assert!(
                 matches!(
-                    repo.apply(&user_id, &new_email).await,
+                    repo.apply(&user_id, &new_email, "hash-new", now).await,
                     Err(EmailChangeError::NotFound)
                 ),
                 "待确认行已删除，重复应用必须返回 NotFound"
@@ -840,7 +846,7 @@ proptest! {
                 .expect("待确认请求必须可写入");
             }
 
-            let result = repo.apply(&user_id, "different@example.net").await;
+            let result = repo.apply(&user_id, "different@example.net", "hash-pending", now).await;
             assert!(
                 matches!(&result, Err(EmailChangeError::NotFound)),
                 "待确认请求缺失或与 expected 不符必须返回 NotFound，实际为 {result:?}"

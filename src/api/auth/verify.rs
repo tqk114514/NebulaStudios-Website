@@ -1,7 +1,6 @@
 //! POST /api/auth/register/verify：以邮件中的验证码完成邮箱验证。
 //! 「用户不存在」与「验证码错误」同体 401，防枚举；错误尝试限 5 次后作废。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -9,7 +8,9 @@ use serde::Deserialize;
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::JsonBody;
 use crate::model::audit::AuditAction;
+use crate::model::user::canonicalize_email;
 use crate::model::verification::VerificationPurpose;
 
 /// 验证请求。
@@ -25,10 +26,12 @@ pub struct VerifyRequest {
 ///
 /// # Errors
 /// 字段缺失 422；验证码错误/过期/耗尽/用户不存在 401 `invalid_code`；内部故障 500。
-pub async fn verify(State(state): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
-    let req: VerifyRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    let email = req.email.trim().to_lowercase();
+pub async fn verify(
+    State(state): State<AppState>,
+    body: JsonBody<VerifyRequest>,
+) -> Result<Response, ApiError> {
+    let req = body.0;
+    let email = canonicalize_email(&req.email).unwrap_or_else(|| req.email.trim().to_lowercase());
     let mut issues = Vec::new();
     if email.is_empty() {
         issues.push(FieldInvalid { field: "email", code: "email_missing".to_owned() });
@@ -50,6 +53,7 @@ pub async fn verify(State(state): State<AppState>, body: Bytes) -> Result<Respon
     let verification_id = super::check_verification_code(
         &state,
         &user.id,
+        &user.email,
         req.code.trim(),
         VerificationPurpose::VerifyEmail,
     )

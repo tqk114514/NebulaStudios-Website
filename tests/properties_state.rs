@@ -12,7 +12,8 @@ use nebula_server::storage::sqlite::{
     SqliteOAuthRepo, SqliteRefreshRepo, SqliteTotpRepo, SqliteUserRepo,
 };
 use nebula_server::storage::{
-    ClientBinding, OAuthRepo, RefreshTokenRepo, RotateRefreshError, TotpRepo, UserRepo,
+    ClientBinding, CodeExchange, OAuthRepo, RefreshTokenRepo, RotateRefreshError, TotpRepo,
+    UserRepo,
 };
 use proptest::prelude::*;
 use sqlx::sqlite::SqlitePool;
@@ -312,13 +313,23 @@ async fn oauth_code_is_consumed_exactly_once() {
     let repo = SqliteOAuthRepo::from_pool(pool.clone());
 
     let mut set = tokio::task::JoinSet::new();
-    for _ in 0..16 {
+    for index in 0..16 {
         let repo = repo.clone();
-        set.spawn(async move { repo.consume_code(&code_id, now).await.expect("消费必须成功") });
+        let family = NewRefreshFamily {
+            family_id: Uuid::now_v7(),
+            user_id,
+            client_id: Some("client-property".to_owned()),
+            scope: "profile".to_owned(),
+            token_hash: format!("token-{index}"),
+            expires_at: now + TimeDelta::days(30),
+        };
+        set.spawn(async move {
+            repo.exchange_code(&code_id, now, &family).await.expect("兑换必须成功")
+        });
     }
     let mut successes = 0;
     while let Some(result) = set.join_next().await {
-        if result.expect("任务不得 panic") {
+        if matches!(result.expect("任务不得 panic"), CodeExchange::Exchanged) {
             successes += 1;
         }
     }

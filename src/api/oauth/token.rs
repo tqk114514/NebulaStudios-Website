@@ -15,7 +15,7 @@ use crate::model::oauth2::{TokenError, verify_pkce_s256};
 use crate::model::password::PasswordHash;
 use crate::model::tokens::{AccessClaims, NewRefreshFamily, RefreshToken, sign_access};
 use crate::model::user::UserId;
-use crate::storage::{ClientBinding, RotateRefreshError};
+use crate::storage::{ClientBinding, CodeExchange, RotateRefreshError};
 use uuid::Uuid;
 
 /// 兑换请求（`application/x-www-form-urlencoded`）。
@@ -104,17 +104,40 @@ async fn authorization_code_grant(state: AppState, req: TokenRequest) -> Respons
     if !verify_pkce_s256(req.code_verifier.trim(), &record.code_challenge) {
         return invalid();
     }
-    // 原子消费：并发重放只有一个赢家
-    let Ok(consumed) = state.oauth_repo.consume_code(&record.id, now).await else {
-        return internal(anyhow::anyhow!("消费授权码失败"));
-    };
-    if !consumed {
-        return invalid();
-    }
 
-    match issue_client_grant(&state, record.user_id, &client.id, &record.scope).await {
-        Ok(response) => response,
-        Err(err) => internal(err),
+    // 先签 access：签发失败不留下没有响应的孤儿家族
+    let access = match sign_client_access(&state, record.user_id, &client.id, &record.scope, now) {
+        Ok(access) => access,
+        Err(err) => return internal(err),
+    };
+    let refresh = RefreshToken::generate();
+    let family = NewRefreshFamily {
+        family_id: Uuid::now_v7(),
+        user_id: record.user_id,
+        client_id: Some(client.id.clone()),
+        scope: record.scope.clone(),
+        token_hash: refresh.to_hash_hex(),
+        expires_at: now + state.session.refresh_ttl,
+    };
+    match state.oauth_repo.exchange_code(&record.id, now, &family).await {
+        Ok(CodeExchange::Exchanged) => token_response(
+            access,
+            refresh.as_str(),
+            &record.scope,
+            state.session.access_ttl.num_seconds(),
+        ),
+        Ok(CodeExchange::Replayed { family_id }) => {
+            // 码重放是泄露信号：撤销首次兑换建立的整族
+            if let Some(family_id) = family_id
+                && let Err(err) = state.oauth_repo.revoke_family(family_id, now).await
+            {
+                tracing::error!(error = ?err, "撤销重放授权码家族失败");
+            }
+            metrics::counter!("nebula_oauth_code_replay_total").increment(1);
+            invalid()
+        }
+        Ok(CodeExchange::Invalid) => invalid(),
+        Err(err) => internal(anyhow::Error::new(err)),
     }
 }
 
@@ -170,12 +193,19 @@ async fn authenticated_client(
     state: &AppState,
     req: &TokenRequest,
 ) -> Result<Option<crate::model::oauth2::OAuthClient>, anyhow::Error> {
+    // 与登录同一输入上限；超长输入不进入 Argon2
+    if req.client_secret.len() > CLIENT_SECRET_INPUT_LIMIT {
+        return Ok(None);
+    }
     let Some(client) =
         state.oauth_repo.find_client(&req.client_id).await.map_err(anyhow::Error::new)?
     else {
+        // 未知 client 也跑一次哑哈希，抹掉 client_id 存在性的时序差
+        let _ = dummy_verify(req.client_secret.clone()).await;
         return Ok(None);
     };
     if !client.enabled {
+        let _ = dummy_verify(req.client_secret.clone()).await;
         return Ok(None);
     }
 
@@ -184,16 +214,28 @@ async fn authenticated_client(
     let plain = req.client_secret.clone();
     let ok = if let Some(encoded) = stored {
         let hash = PasswordHash::from_encoded(encoded).map_err(anyhow::Error::new)?;
-        tokio::task::spawn_blocking(move || hash.verify(&plain))
-            .await
-            .map_err(anyhow::Error::from)?
-            .map_err(anyhow::Error::new)?
+        verify_secret(hash, plain).await?
     } else {
         // 公共客户端（未设密钥）拒绝；哑哈希对齐耗时，`client_id` 枚举不可测
-        let _ = dummy_verify(req.client_secret.clone()).await;
+        let _ = dummy_verify(plain).await;
         false
     };
     Ok(ok.then_some(client))
+}
+
+/// 客户端密钥输入上限；Argon2 的耗时与内存不因更长的输入而增加。
+const CLIENT_SECRET_INPUT_LIMIT: usize = 128;
+/// 同时进行 `client_secret` Argon2 校验的上限：每请求约 19 MiB，必须封顶。
+static CLIENT_SECRET_VERIFY: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+
+/// 在并发信号量内执行一次 Argon2 校验。
+async fn verify_secret(hash: PasswordHash, plain: String) -> Result<bool, anyhow::Error> {
+    let _permit =
+        CLIENT_SECRET_VERIFY.acquire().await.map_err(|_| anyhow::anyhow!("校验信号量已关闭"))?;
+    tokio::task::spawn_blocking(move || hash.verify(&plain))
+        .await
+        .map_err(anyhow::Error::from)?
+        .map_err(anyhow::Error::new)
 }
 
 /// 哑哈希只用于对齐「客户端无密钥」路径的耗时（与 login 同策略）。
@@ -204,39 +246,9 @@ async fn dummy_verify(plain: String) -> bool {
         PasswordHash::hash("nebula-oauth-timing-equalizer").map_err(|err| err.to_string())
     });
     match stored {
-        Ok(hash) => {
-            let hash = hash.clone();
-            tokio::task::spawn_blocking(move || hash.verify(&plain))
-                .await
-                .ok()
-                .and_then(Result::ok)
-                .unwrap_or(false)
-        }
+        Ok(hash) => verify_secret(hash.clone(), plain).await.unwrap_or(false),
         Err(_) => false,
     }
-}
-
-/// 授权码首次兑换：创建以 client + scope 固定的家族并返回令牌对。
-async fn issue_client_grant(
-    state: &AppState,
-    user_id: UserId,
-    client_id: &str,
-    scope: &str,
-) -> Result<Response, anyhow::Error> {
-    let now = state.clock.now();
-    // 先签 access：非法 scope 在落库前失败，不会留下没有对应响应的孤儿家族
-    let access = sign_client_access(state, user_id, client_id, scope, now)?;
-    let refresh = RefreshToken::generate();
-    let family = NewRefreshFamily {
-        family_id: Uuid::now_v7(),
-        user_id,
-        client_id: Some(client_id.to_owned()),
-        scope: scope.to_owned(),
-        token_hash: refresh.to_hash_hex(),
-        expires_at: now + state.session.refresh_ttl,
-    };
-    state.refresh_repo.create_family(&family, now).await?;
-    Ok(token_response(access, refresh.as_str(), scope, state.session.access_ttl.num_seconds()))
 }
 
 /// 签发第三方 access JWT；`audience`、`client_id` 与 `scope` 由 claims 构造函数固定。

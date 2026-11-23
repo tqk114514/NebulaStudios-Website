@@ -65,14 +65,17 @@ async fn fixture(identity: Option<ProviderIdentity>) -> Fixture {
     Fixture { app, state, clock, seen_verifier, _dir: dir }
 }
 
-/// 起授权并返回 Location 里的 state。
-async fn start_and_capture_state(fixture: &Fixture) -> String {
+/// 起授权并返回（Location 里的 state，发起端 state cookie）。
+async fn start_and_capture_state(fixture: &Fixture) -> (String, String) {
     let response = fixture.app.clone().oneshot_get_with_cookie("/api/auth/google", "", "").await;
     assert_eq!(response.status(), StatusCode::FOUND);
+    let cookie =
+        set_cookie_of(&response, api::SOCIAL_STATE_COOKIE).expect("起授权必须写 state 绑定 cookie");
     let location = response.headers().get(header::LOCATION).unwrap().to_str().unwrap();
     assert!(location.starts_with("https://provider.test/authorize"), "{location}");
     assert!(location.contains("code_challenge="), "必须带 PKCE challenge: {location}");
-    location.split("state=").nth(1).unwrap().split('&').next().unwrap().to_owned()
+    let state = location.split("state=").nth(1).unwrap().split('&').next().unwrap().to_owned();
+    (state, format!("{}={cookie}", api::SOCIAL_STATE_COOKIE))
 }
 
 async fn seed_user(fixture: &Fixture, username: &str, email: &str) -> UserId {
@@ -138,7 +141,7 @@ async fn unknown_provider_is_404() {
 async fn bound_identity_logs_in_with_session() {
     let fixture = fixture(Some(identity("google-1"))).await;
     let user_id = seed_bound_user(&fixture, "google-1").await;
-    let state = start_and_capture_state(&fixture).await;
+    let (state, cookie) = start_and_capture_state(&fixture).await;
 
     let response = fixture
         .app
@@ -146,7 +149,7 @@ async fn bound_identity_logs_in_with_session() {
         .oneshot_get_with_cookie(
             "/api/auth/google/callback",
             &format!("code=abc&state={state}"),
-            "",
+            &cookie,
         )
         .await;
 
@@ -172,7 +175,7 @@ async fn bound_identity_logs_in_with_session() {
 #[tokio::test]
 async fn unbound_identity_is_rejected_without_account_creation() {
     let fixture = fixture(Some(identity("stranger"))).await;
-    let state = start_and_capture_state(&fixture).await;
+    let (state, cookie) = start_and_capture_state(&fixture).await;
 
     let response = fixture
         .app
@@ -180,7 +183,7 @@ async fn unbound_identity_is_rejected_without_account_creation() {
         .oneshot_get_with_cookie(
             "/api/auth/google/callback",
             &format!("code=abc&state={state}"),
-            "",
+            &cookie,
         )
         .await;
 
@@ -196,15 +199,21 @@ async fn unbound_identity_is_rejected_without_account_creation() {
 async fn replayed_state_is_rejected() {
     let fixture = fixture(Some(identity("google-1"))).await;
     seed_bound_user(&fixture, "google-1").await;
-    let state = start_and_capture_state(&fixture).await;
+    let (state, cookie) = start_and_capture_state(&fixture).await;
     let query = format!("code=abc&state={state}");
 
-    let first =
-        fixture.app.clone().oneshot_get_with_cookie("/api/auth/google/callback", &query, "").await;
+    let first = fixture
+        .app
+        .clone()
+        .oneshot_get_with_cookie("/api/auth/google/callback", &query, &cookie)
+        .await;
     assert!(first.headers().get(header::LOCATION).unwrap().to_str().unwrap().contains("social=ok"));
 
-    let replay =
-        fixture.app.clone().oneshot_get_with_cookie("/api/auth/google/callback", &query, "").await;
+    let replay = fixture
+        .app
+        .clone()
+        .oneshot_get_with_cookie("/api/auth/google/callback", &query, &cookie)
+        .await;
     let location = replay.headers().get(header::LOCATION).unwrap().to_str().unwrap();
     assert!(location.ends_with("social_error=invalid_state"), "{location}");
 }
@@ -213,7 +222,7 @@ async fn replayed_state_is_rejected() {
 async fn expired_state_is_rejected() {
     let fixture = fixture(Some(identity("google-1"))).await;
     seed_bound_user(&fixture, "google-1").await;
-    let state = start_and_capture_state(&fixture).await;
+    let (state, cookie) = start_and_capture_state(&fixture).await;
 
     fixture.clock.advance(chrono::TimeDelta::minutes(10) + chrono::TimeDelta::seconds(1));
     let response = fixture
@@ -222,7 +231,7 @@ async fn expired_state_is_rejected() {
         .oneshot_get_with_cookie(
             "/api/auth/google/callback",
             &format!("code=abc&state={state}"),
-            "",
+            &cookie,
         )
         .await;
 
@@ -246,8 +255,12 @@ fn auth_cookie(session: &common::Session) -> String {
     cookie_header(Some(&session.access), None, Some(&session.csrf))
 }
 
-/// 以当前口令发起绑定，返回授权页地址里的 state。
-async fn start_link(fixture: &Fixture, session: &common::Session, password: &str) -> String {
+/// 以当前口令发起绑定，返回（授权页地址里的 state，发起端 state cookie）。
+async fn start_link(
+    fixture: &Fixture,
+    session: &common::Session,
+    password: &str,
+) -> (String, String) {
     let response = fixture
         .app
         .clone()
@@ -259,10 +272,13 @@ async fn start_link(fixture: &Fixture, session: &common::Session, password: &str
         )
         .await;
     assert_eq!(response.status(), StatusCode::OK);
+    let cookie =
+        set_cookie_of(&response, api::SOCIAL_STATE_COOKIE).expect("绑定发起必须写 state cookie");
     let json: serde_json::Value = serde_json::from_str(&common::body_text(response).await).unwrap();
     let authorize_url = json["authorize_url"].as_str().unwrap().to_owned();
     assert!(authorize_url.starts_with("https://provider.test/authorize"), "{authorize_url}");
-    authorize_url.split("state=").nth(1).unwrap().split('&').next().unwrap().to_owned()
+    let state = authorize_url.split("state=").nth(1).unwrap().split('&').next().unwrap().to_owned();
+    (state, format!("{}={cookie}", api::SOCIAL_STATE_COOKIE))
 }
 
 fn delete_request(uri: &str, cookie: &str, csrf: &str) -> axum::http::Request<axum::body::Body> {
@@ -298,16 +314,16 @@ async fn link_callback_binds_identity_to_current_user() {
     let fixture = fixture(Some(identity("google-1"))).await;
     let user_id = seed_user(&fixture, "nova", "nova@nebula.st").await;
     let session = login_as(&fixture.app, "nova@nebula.st", "Nebula!Passw0rd-2026").await;
-    let state = start_link(&fixture, &session, "Nebula!Passw0rd-2026").await;
+    let (state, cookie) = start_link(&fixture, &session, "Nebula!Passw0rd-2026").await;
 
-    // 绑定回调以中转态里的用户为准，不需要会话
+    // 绑定回调以中转态里的用户为准，不需要会话；但必须呈递发起端 state cookie
     let response = fixture
         .app
         .clone()
         .oneshot_get_with_cookie(
             "/api/auth/google/callback",
             &format!("code=abc&state={state}"),
-            "",
+            &cookie,
         )
         .await;
 
@@ -331,7 +347,7 @@ async fn identity_already_bound_elsewhere_is_rejected() {
     seed_bound_user(&fixture, "google-1").await;
     let other = seed_user(&fixture, "other", "other@nebula.st").await;
     let session = login_as(&fixture.app, "other@nebula.st", "Nebula!Passw0rd-2026").await;
-    let state = start_link(&fixture, &session, "Nebula!Passw0rd-2026").await;
+    let (state, cookie) = start_link(&fixture, &session, "Nebula!Passw0rd-2026").await;
 
     let response = fixture
         .app
@@ -339,7 +355,7 @@ async fn identity_already_bound_elsewhere_is_rejected() {
         .oneshot_get_with_cookie(
             "/api/auth/google/callback",
             &format!("code=abc&state={state}"),
-            "",
+            &cookie,
         )
         .await;
 

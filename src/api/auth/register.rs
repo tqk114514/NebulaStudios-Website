@@ -2,7 +2,6 @@
 //! 口令以 Argon2id 哈希落库；验证邮件发送随邮件切片接入。
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
@@ -10,10 +9,10 @@ use validator::{Validate, ValidationError, ValidationErrors};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::PreferredLocale;
+use crate::extractors::{JsonBody, PreferredLocale};
 use crate::model::audit::AuditAction;
 use crate::model::password::PasswordHash;
-use crate::model::user::{User, UserId, username_problem};
+use crate::model::user::{User, UserId, canonicalize_email, username_problem};
 use crate::storage::{UserRepo, UserRepoError};
 
 /// 注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 3–15 个
@@ -39,15 +38,21 @@ pub struct RegisterRequest {
 }
 
 impl RegisterRequest {
-    /// 归一化：去首尾空白、邮箱小写化；在验证前完成，长度按归一后计。
-    fn normalized(self) -> Self {
-        Self {
-            email: self.email.trim().to_lowercase(),
+    /// 归一化：去首尾空白、邮箱转 IDNA A-label；在验证前完成，长度按归一后计。
+    fn normalized(self) -> Result<Self, ApiError> {
+        let email = canonicalize_email(&self.email).ok_or_else(|| {
+            ApiError::Validation(vec![FieldInvalid {
+                field: "email",
+                code: "invalid_email".to_owned(),
+            }])
+        })?;
+        Ok(Self {
+            email,
             username: self.username.trim().to_owned(),
             // 口令的空白是口令的一部分，不 trim
             password: self.password,
             turnstile_token: self.turnstile_token,
-        }
+        })
     }
 }
 
@@ -96,12 +101,10 @@ fn field_issues(req: &RegisterRequest, errors: &ValidationErrors) -> Vec<FieldIn
 pub async fn register(
     State(state): State<AppState>,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<RegisterRequest>,
 ) -> Result<(StatusCode, Json<User>), ApiError> {
-    // 手工反序列化而非 Json 提取器：坏 JSON 必须走统一错误信封，不用 axum 默认 400
-    let req: RegisterRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    let req = req.normalized();
+    // JsonBody 保证坏 JSON 也走统一错误信封，并强制 application/json
+    let req = body.0.normalized()?;
     let mut issues =
         req.validate().err().map_or_else(Vec::new, |errors| field_issues(&req, &errors));
     if let Some(code) = username_problem(&req.username) {
@@ -122,6 +125,15 @@ pub async fn register(
                 code: "email_domain_not_allowed".to_owned(),
             }]));
         }
+    }
+    // 配置的管理员邮箱若被未验证账号抢占，允许真实所有者重新注册并释放地址；
+    // 已验证账号仍走 409，不能靠重注册接管。
+    if state.admin_emails.contains(&req.email)
+        && let Some(existing) =
+            state.user_repo.find_by_email(&req.email).await.map_err(anyhow::Error::from)?
+        && !existing.email_verified
+    {
+        state.account_repo.delete_user(&existing.id).await.map_err(anyhow::Error::new)?;
     }
 
     let plain = req.password.clone();

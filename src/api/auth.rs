@@ -115,6 +115,7 @@ pub(crate) async fn issue_and_send_code(
         code_hash: state.code_hasher.hash(code.as_str()),
         expires_at: now + VERIFICATION_TTL,
         purpose,
+        sent_to: user.email.clone(),
     };
     state.verification_repo.issue(&entry, now).await.map_err(anyhow::Error::from)?;
     crate::api::send_code_email(state, &user.email, purpose, &code, locale);
@@ -130,6 +131,7 @@ pub(crate) async fn issue_and_send_code(
 pub(crate) async fn check_verification_code(
     state: &AppState,
     user_id: &UserId,
+    expected_email: &str,
     code: &str,
     purpose: VerificationPurpose,
 ) -> Result<uuid::Uuid, ApiError> {
@@ -142,16 +144,24 @@ pub(crate) async fn check_verification_code(
     else {
         return Err(invalid);
     };
-    if verification.expires_at <= state.clock.now() || verification.attempts >= MAX_ATTEMPTS {
+    // 码绑定签发时的邮箱：改邮箱后，旧地址收到的码不得再确认
+    if !verification.sent_to.eq_ignore_ascii_case(expected_email) {
+        return Err(invalid);
+    }
+    if verification.expires_at <= state.clock.now() {
+        return Err(invalid);
+    }
+    // 先原子预占一次尝试，再做比较：并发请求不能各自读到旧计数
+    let reserved = state
+        .verification_repo
+        .reserve_attempt(&verification.id, MAX_ATTEMPTS)
+        .await
+        .map_err(anyhow::Error::from)?;
+    if !reserved {
         return Err(invalid);
     }
     let candidate = state.code_hasher.hash(code);
     if !constant_time_eq(candidate.as_bytes(), verification.code_hash.as_bytes()) {
-        state
-            .verification_repo
-            .record_attempt(&verification.id)
-            .await
-            .map_err(anyhow::Error::from)?;
         return Err(invalid);
     }
     Ok(verification.id)

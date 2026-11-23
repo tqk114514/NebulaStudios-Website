@@ -102,7 +102,11 @@ pub async fn users(
         .into_iter()
         .map(|row| UserView {
             avatar_url: crate::api::avatar_url(&row.id, row.avatar_version),
-            is_admin: state.admin_emails.contains(&row.email),
+            is_admin: crate::api::admin::is_admin_email(
+                &state.admin_emails,
+                &row.email,
+                row.email_verified,
+            ),
             id: row.id,
             username: row.username,
             email: row.email,

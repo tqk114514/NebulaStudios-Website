@@ -119,28 +119,30 @@ pub fn otpauth_uri(email: &str, secret: &str) -> String {
     )
 }
 
-/// 以注入时刻校验 TOTP 码（±1 时间片）。
+/// 以注入时刻校验 TOTP 码并返回命中的时间片（±1 时间片）。
 #[must_use]
-pub fn verify_code(secret: &str, code: &str, now: DateTime<Utc>) -> bool {
+pub fn verify_code_step(secret: &str, code: &str, now: DateTime<Utc>) -> Option<u64> {
     // 归一化（v3 语义）：去空白、仅接受纯数字六位
     let trimmed = code.trim().replace(' ', "");
     if trimmed.len() != usize::from(TOTP_DIGITS) || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
-        return false;
+        return None;
     }
-    let Ok(parsed) = totp_rs::Secret::try_from_base32(secret) else {
-        return false;
-    };
-    let Ok(totp) = totp_rs::Builder::new()
+    let parsed = totp_rs::Secret::try_from_base32(secret).ok()?;
+    let totp = totp_rs::Builder::new()
         .with_algorithm(TOTP_ALGORITHM)
         .with_digits(TOTP_DIGITS)
         .with_skew(u16::from(TOTP_SKEW))
         .with_step_duration(TOTP_PERIOD)
         .with_secret(parsed)
         .build()
-    else {
-        return false;
-    };
-    totp.check(&trimmed, now.timestamp().cast_unsigned()).is_some()
+        .ok()?;
+    totp.check(&trimmed, now.timestamp().cast_unsigned())
+}
+
+/// 以注入时刻校验 TOTP 码（±1 时间片）。
+#[must_use]
+pub fn verify_code(secret: &str, code: &str, now: DateTime<Utc>) -> bool {
+    verify_code_step(secret, code, now).is_some()
 }
 
 /// 恢复码：v3 同款无歧义字母表（30 字符），10 位。

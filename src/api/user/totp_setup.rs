@@ -2,14 +2,13 @@
 //! Pending 态重试即换新密钥（旧码作废）；已 Enabled 则 409；须当前口令再认证。
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::totp::{generate_secret, otpauth_uri};
 
 /// setup 请求；写操作要求当前口令，防止被盗会话直接绑定攻击者验证器。
@@ -38,10 +37,9 @@ pub struct SetupResponse {
 pub async fn setup(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    body: Bytes,
+    body: JsonBody<SetupRequest>,
 ) -> Result<Response, ApiError> {
-    let req: SetupRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     if req.password.is_empty() {
         return Err(ApiError::Validation(vec![FieldInvalid {
             field: "password",

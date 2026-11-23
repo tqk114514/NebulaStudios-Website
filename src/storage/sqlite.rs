@@ -27,8 +27,8 @@ use crate::model::totp::{RecoveryCodeRecord, TotpChallenge, TotpState};
 use crate::model::user::{Ban, LoginCredentials, User, UserAccess, UserId};
 use crate::model::verification::{EmailVerification, NewEmailVerification, VerificationPurpose};
 use crate::storage::{
-    AdminStats, AdminUserRow, CleanupReport, ClientBinding, LinkIdentityError, RotateRefreshError,
-    RotatedSession, StorageError, UserRepo, UserRepoError,
+    AdminStats, AdminUserRow, CleanupReport, ClientBinding, CodeExchange, LinkIdentityError,
+    RotateRefreshError, RotatedSession, StorageError, UserRepo, UserRepoError,
 };
 
 /// SQLite 用户仓储；克隆共享同一连接池。
@@ -266,7 +266,7 @@ type CredentialsTuple = (Uuid, String, String, bool, DateTime<Utc>, i64, Option<
 
 type AccessTuple = (String, bool, i64, Option<String>, Option<DateTime<Utc>>);
 type RefreshTuple = (Uuid, Uuid, String, DateTime<Utc>, String, Uuid, Option<String>, String, i64);
-type VerificationTuple = (Uuid, String, u32, DateTime<Utc>, DateTime<Utc>);
+type VerificationTuple = (Uuid, String, u32, DateTime<Utc>, DateTime<Utc>, String);
 type RecoveryTuple = (Uuid, Option<DateTime<Utc>>);
 type ChallengeTuple = (Uuid, Uuid, u32, DateTime<Utc>);
 type ClientTuple = (String, String, String, bool);
@@ -476,28 +476,19 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query(
-            "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id, scope)
-             VALUES (?1, ?2, 'active', ?3, ?4, ?5)",
+        // 封禁与建族必须同一事务：登录的封禁检查之后可能插入封禁
+        let banned: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_bans
+             WHERE user_id = ?1 AND (expires_at IS NULL OR expires_at > ?2)",
         )
-        .bind(family.family_id)
         .bind(family.user_id.as_uuid())
         .bind(created_at)
-        .bind(family.client_id.as_deref())
-        .bind(family.scope.as_str())
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
-        sqlx::query(
-            "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
-             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-        )
-        .bind(Uuid::now_v7())
-        .bind(family.family_id)
-        .bind(family.token_hash.as_str())
-        .bind(created_at)
-        .bind(family.expires_at)
-        .execute(&mut *tx)
-        .await?;
+        if banned > 0 {
+            return Err(StorageError::wrap(std::io::Error::other("用户处于封禁状态")));
+        }
+        insert_family_in_tx(&mut tx, family, created_at).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -510,88 +501,18 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         now: DateTime<Utc>,
         binding: ClientBinding<'_>,
     ) -> Result<RotatedSession, RotateRefreshError> {
-        let mut tx = self.pool.begin().await?;
-
-        // 家族字段与 token 一次带出：绑定校验与轮转在同一个事务内完成
-        let presented: Option<RefreshTuple> = sqlx::query_as(
-            "SELECT t.id, t.family_id, t.state, t.expires_at, f.state, f.user_id,
-                    f.client_id, f.scope, u.token_version
-             FROM refresh_tokens t
-             JOIN refresh_token_families f ON f.id = t.family_id
-             JOIN users u ON u.id = f.user_id
-             WHERE t.token_hash = ?1",
-        )
-        .bind(presented_hash)
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        let Some((
-            id,
-            family_id,
-            state,
-            expires_at,
-            family_state,
-            user_id,
-            client_id,
-            scope,
-            token_version,
-        )) = presented
-        else {
-            return Err(RotateRefreshError::Invalid);
-        };
-
-        // 先于状态判断：绑定不符的呈递不触碰家族状态
-        let binding_matches = match binding {
-            ClientBinding::FirstParty => client_id.is_none(),
-            ClientBinding::Client(expected) => client_id.as_deref() == Some(expected),
-        };
-        if !binding_matches {
-            return Err(RotateRefreshError::ClientMismatch);
-        }
-
-        match state.as_str() {
-            // 呈递已轮转 token = 重放：整族撤销后拒绝（事务保证撤销也落库）
-            "rotated" => {
-                revoke_family_in_tx(&mut tx, family_id, now).await?;
-                tx.commit().await?;
-                Err(RotateRefreshError::Replay)
-            }
-            "active" => {
-                if expires_at <= now || family_state != "active" {
-                    return Err(RotateRefreshError::Invalid);
+        let mut attempt = 0u32;
+        loop {
+            match rotate_once(&self.pool, presented_hash, new_hash, new_expires_at, now, binding)
+                .await
+            {
+                Err(RotateRefreshError::Storage(err)) if is_busy(&err) && attempt < 2 => {
+                    attempt += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(5 * u64::from(attempt)))
+                        .await;
                 }
-
-                let rotated = sqlx::query(
-                    "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
-                     WHERE id = ?1 AND state = 'active'",
-                )
-                .bind(id)
-                .bind(now)
-                .execute(&mut *tx)
-                .await?;
-                // 并发下状态可能已被他者改变；0 行受影响说明此刻不再是 active，按重放处置
-                if rotated.rows_affected() != 1 {
-                    revoke_family_in_tx(&mut tx, family_id, now).await?;
-                    tx.commit().await?;
-                    return Err(RotateRefreshError::Replay);
-                }
-
-                sqlx::query(
-                    "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
-                     VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-                )
-                .bind(Uuid::now_v7())
-                .bind(family_id)
-                .bind(new_hash)
-                .bind(now)
-                .bind(new_expires_at)
-                .execute(&mut *tx)
-                .await?;
-                tx.commit().await?;
-                Ok(RotatedSession { user_id: UserId::from_uuid(user_id), scope, token_version })
+                result => return result,
             }
-            // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
-            _ => Err(RotateRefreshError::Invalid),
         }
     }
 
@@ -604,6 +525,99 @@ impl crate::storage::RefreshTokenRepo for SqliteRefreshRepo {
         revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+async fn rotate_once(
+    pool: &SqlitePool,
+    presented_hash: &str,
+    new_hash: &str,
+    new_expires_at: DateTime<Utc>,
+    now: DateTime<Utc>,
+    binding: ClientBinding<'_>,
+) -> Result<RotatedSession, RotateRefreshError> {
+    let mut tx = pool.begin().await?;
+
+    // 家族字段与 token 一次带出：绑定校验与轮转在同一个事务内完成
+    let presented: Option<RefreshTuple> = sqlx::query_as(
+        "SELECT t.id, t.family_id, t.state, t.expires_at, f.state, f.user_id,
+                f.client_id, f.scope, u.token_version
+         FROM refresh_tokens t
+         JOIN refresh_token_families f ON f.id = t.family_id
+         JOIN users u ON u.id = f.user_id
+         WHERE t.token_hash = ?1",
+    )
+    .bind(presented_hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some((
+        id,
+        family_id,
+        state,
+        expires_at,
+        family_state,
+        user_id,
+        client_id,
+        scope,
+        token_version,
+    )) = presented
+    else {
+        return Err(RotateRefreshError::Invalid);
+    };
+
+    // 先于状态判断：绑定不符的呈递不触碰家族状态
+    let binding_matches = match binding {
+        ClientBinding::FirstParty => client_id.is_none(),
+        ClientBinding::Client(expected) => client_id.as_deref() == Some(expected),
+    };
+    if !binding_matches {
+        return Err(RotateRefreshError::ClientMismatch);
+    }
+
+    match state.as_str() {
+        // 呈递已轮转 token = 重放：整族撤销后拒绝（事务保证撤销也落库）
+        "rotated" => {
+            revoke_family_in_tx(&mut tx, family_id, now).await?;
+            tx.commit().await?;
+            Err(RotateRefreshError::Replay)
+        }
+        "active" => {
+            if expires_at <= now || family_state != "active" {
+                return Err(RotateRefreshError::Invalid);
+            }
+
+            let rotated = sqlx::query(
+                "UPDATE refresh_tokens SET state = 'rotated', rotated_at = ?2
+                 WHERE id = ?1 AND state = 'active'",
+            )
+            .bind(id)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+            // 并发下状态可能已被他者改变；0 行受影响说明此刻不再是 active，按重放处置
+            if rotated.rows_affected() != 1 {
+                revoke_family_in_tx(&mut tx, family_id, now).await?;
+                tx.commit().await?;
+                return Err(RotateRefreshError::Replay);
+            }
+
+            sqlx::query(
+                "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
+                 VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(family_id)
+            .bind(new_hash)
+            .bind(now)
+            .bind(new_expires_at)
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            Ok(RotatedSession { user_id: UserId::from_uuid(user_id), scope, token_version })
+        }
+        // revoked 或未知状态值（未知值属数据损坏，按无效拒绝）
+        _ => Err(RotateRefreshError::Invalid),
     }
 }
 
@@ -629,6 +643,16 @@ async fn revoke_all_sessions_in_tx(
     for family in families {
         revoke_family_in_tx(tx, family, now).await?;
     }
+    // 一次性能力随会话一起作废：导出令牌不得在改密/登出/封禁后继续可用
+    sqlx::query("DELETE FROM data_export_tokens WHERE user_id = ?1")
+        .bind(user_id.as_uuid())
+        .execute(&mut **tx)
+        .await?;
+    // 未兑换授权码也属于待完成能力；撤销后不得再换出新家族
+    sqlx::query("DELETE FROM oauth_authorization_codes WHERE user_id = ?1 AND consumed_at IS NULL")
+        .bind(user_id.as_uuid())
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
@@ -673,6 +697,83 @@ fn decode_ban(
     }
 }
 
+/// 在事务内追加一条审计记录。
+async fn insert_audit_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    entry: &NewAuditEntry,
+    now: DateTime<Utc>,
+) -> Result<(), StorageError> {
+    let details = entry
+        .details
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(StorageError::wrap)?;
+    sqlx::query(
+        "INSERT INTO audit_logs (id, actor_id, action, target_id, details, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(entry.actor_id.as_uuid())
+    .bind(entry.action.as_str())
+    .bind(entry.target_id.map(|id| *id.as_uuid()))
+    .bind(details)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// 管理端封禁/解封串行化：状态与审计的提交顺序必须一致，才能由审计还原最终状态。
+static ADMIN_WRITE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// SQLite 写锁冲突（`BUSY=5` / `BUSY_SNAPSHOT=517`）可安全重试。
+fn is_busy(err: &StorageError) -> bool {
+    let Some(source) = std::error::Error::source(err) else {
+        return false;
+    };
+    let Some(sqlx_error) = source.downcast_ref::<sqlx::Error>() else {
+        return false;
+    };
+    match sqlx_error {
+        sqlx::Error::Database(db) => {
+            db.code().as_deref().is_some_and(|code| matches!(code, "5" | "517"))
+        }
+        _ => false,
+    }
+}
+
+/// 在事务内插入 refresh 家族与首枚 token。
+async fn insert_family_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    family: &NewRefreshFamily,
+    created_at: DateTime<Utc>,
+) -> Result<(), StorageError> {
+    sqlx::query(
+        "INSERT INTO refresh_token_families (id, user_id, state, created_at, client_id, scope)
+         VALUES (?1, ?2, 'active', ?3, ?4, ?5)",
+    )
+    .bind(family.family_id)
+    .bind(family.user_id.as_uuid())
+    .bind(created_at)
+    .bind(family.client_id.as_deref())
+    .bind(family.scope.as_str())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO refresh_tokens (id, family_id, token_hash, state, created_at, expires_at)
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(family.family_id)
+    .bind(family.token_hash.as_str())
+    .bind(created_at)
+    .bind(family.expires_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// 在事务内撤销一个家族：家族置 revoked，族内未撤销 token 全部置 revoked。
 async fn revoke_family_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
@@ -703,8 +804,8 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         created_at: DateTime<Utc>,
     ) -> Result<(), StorageError> {
         sqlx::query(
-            "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at, purpose)
-             VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)",
+            "INSERT INTO email_verifications (id, user_id, code_hash, attempts, expires_at, created_at, purpose, sent_to)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6, ?7)",
         )
         .bind(Uuid::now_v7())
         .bind(entry.user_id.as_uuid())
@@ -712,6 +813,7 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         .bind(entry.expires_at)
         .bind(created_at)
         .bind(entry.purpose.as_str())
+        .bind(entry.sent_to.as_str())
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -723,7 +825,7 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         purpose: VerificationPurpose,
     ) -> Result<Option<EmailVerification>, StorageError> {
         let row: Option<VerificationTuple> = sqlx::query_as(
-            "SELECT id, code_hash, attempts, expires_at, created_at
+            "SELECT id, code_hash, attempts, expires_at, created_at, sent_to
              FROM email_verifications
              WHERE user_id = ?1 AND consumed_at IS NULL AND purpose = ?2
              ORDER BY created_at DESC LIMIT 1",
@@ -733,13 +835,16 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|(id, code_hash, attempts, expires_at, created_at)| EmailVerification {
-            id,
-            user_id: *user_id,
-            code_hash,
-            attempts,
-            expires_at,
-            created_at,
+        Ok(row.map(|(id, code_hash, attempts, expires_at, created_at, sent_to)| {
+            EmailVerification {
+                id,
+                user_id: *user_id,
+                code_hash,
+                attempts,
+                expires_at,
+                created_at,
+                sent_to,
+            }
         }))
     }
 
@@ -751,6 +856,18 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
         Ok(())
     }
 
+    async fn reserve_attempt(&self, id: &Uuid, max: u32) -> Result<bool, StorageError> {
+        let updated = sqlx::query(
+            "UPDATE email_verifications SET attempts = attempts + 1
+             WHERE id = ?1 AND attempts < ?2 AND consumed_at IS NULL",
+        )
+        .bind(id)
+        .bind(max)
+        .execute(&self.pool)
+        .await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn consume_and_mark_verified(
         &self,
         verification_id: &Uuid,
@@ -759,10 +876,11 @@ impl crate::storage::EmailVerificationRepo for SqliteEmailVerificationRepo {
     ) -> Result<bool, StorageError> {
         let mut tx = self.pool.begin().await?;
         let consumed = sqlx::query(
-            "UPDATE email_verifications SET consumed_at = ?2
-             WHERE id = ?1 AND consumed_at IS NULL",
+            "UPDATE email_verifications SET consumed_at = ?3
+             WHERE id = ?1 AND user_id = ?2 AND consumed_at IS NULL",
         )
         .bind(verification_id)
+        .bind(user_id.as_uuid())
         .bind(now)
         .execute(&mut *tx)
         .await?;
@@ -918,6 +1036,59 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         Ok(())
     }
 
+    async fn enable_with_recovery(
+        &self,
+        user_id: &UserId,
+        hashes: Vec<String>,
+        now: DateTime<Utc>,
+    ) -> Result<Option<i64>, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let enabled = sqlx::query(
+            "UPDATE users SET totp_state = 'enabled' WHERE id = ?1 AND totp_state = 'pending'",
+        )
+        .bind(user_id.as_uuid())
+        .execute(&mut *tx)
+        .await?;
+        if enabled.rows_affected() != 1 {
+            return Ok(None);
+        }
+        for hash in hashes {
+            sqlx::query(
+                "INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(user_id.as_uuid())
+            .bind(hash)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+        }
+        // 启用第二因子即撤销启用前的一切会话：旧 refresh 不得永久绕过 TOTP
+        revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
+        invalidate_challenges_in_tx(&mut tx, user_id, now).await?;
+        let version: i64 = sqlx::query_scalar("SELECT token_version FROM users WHERE id = ?1")
+            .bind(user_id.as_uuid())
+            .fetch_one(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(Some(version))
+    }
+
+    async fn consume_step(&self, user_id: &UserId, step: u64) -> Result<bool, StorageError> {
+        let step = i64::try_from(step)
+            .map_err(|_| StorageError::wrap(std::io::Error::other("TOTP 时间片超出可表示范围")))?;
+        let updated = sqlx::query(
+            "UPDATE users SET totp_last_step = ?2
+             WHERE id = ?1 AND (totp_last_step IS NULL OR totp_last_step < ?2)",
+        )
+        .bind(user_id.as_uuid())
+        .bind(step)
+        .execute(&self.pool)
+        .await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn consume_recovery_code(
         &self,
         user_id: &UserId,
@@ -999,6 +1170,18 @@ impl crate::storage::TotpRepo for SqliteTotpRepo {
         Ok(())
     }
 
+    async fn reserve_challenge_attempt(&self, id: &Uuid, max: u32) -> Result<bool, StorageError> {
+        let updated = sqlx::query(
+            "UPDATE totp_login_challenges SET attempts = attempts + 1
+             WHERE id = ?1 AND attempts < ?2 AND consumed_at IS NULL",
+        )
+        .bind(id)
+        .bind(max)
+        .execute(&self.pool)
+        .await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn consume_challenge(&self, id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
         let consumed = sqlx::query(
             "UPDATE totp_login_challenges SET consumed_at = ?2
@@ -1072,8 +1255,8 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
     ) -> Result<(), StorageError> {
         sqlx::query(
             "INSERT INTO oauth_authorization_codes
-             (id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge, expires_at, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge, expires_at, created_at, session_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(Uuid::now_v7())
         .bind(code_hash)
@@ -1084,6 +1267,7 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         .bind(&code.code_challenge)
         .bind(code.expires_at)
         .bind(created_at)
+        .bind(code.session_version)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -1110,16 +1294,61 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         }))
     }
 
-    async fn consume_code(&self, code_id: &Uuid, now: DateTime<Utc>) -> Result<bool, StorageError> {
-        let consumed = sqlx::query(
-            "UPDATE oauth_authorization_codes SET consumed_at = ?2
-             WHERE id = ?1 AND consumed_at IS NULL",
+    async fn exchange_code(
+        &self,
+        code_id: &Uuid,
+        now: DateTime<Utc>,
+        family: &NewRefreshFamily,
+    ) -> Result<CodeExchange, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        // 状态转移与建族同一事务：并发重放在写锁上排队，看到的一定是已提交的家族
+        let updated = sqlx::query(
+            "UPDATE oauth_authorization_codes
+             SET consumed_at = ?2, family_id = ?3
+             WHERE id = ?1
+               AND consumed_at IS NULL
+               AND expires_at > ?2
+               AND user_id = ?4
+               AND client_id = ?5
+               AND session_version = (SELECT token_version FROM users
+                                      WHERE id = oauth_authorization_codes.user_id)
+               AND NOT EXISTS (
+                   SELECT 1 FROM user_bans b
+                   WHERE b.user_id = oauth_authorization_codes.user_id
+                     AND (b.expires_at IS NULL OR b.expires_at > ?2)
+               )",
         )
         .bind(code_id)
         .bind(now)
-        .execute(&self.pool)
+        .bind(family.family_id)
+        .bind(family.user_id.as_uuid())
+        .bind(family.client_id.as_deref())
+        .execute(&mut *tx)
         .await?;
-        Ok(consumed.rows_affected() == 1)
+        if updated.rows_affected() == 1 {
+            insert_family_in_tx(&mut tx, family, now).await?;
+            tx.commit().await?;
+            return Ok(CodeExchange::Exchanged);
+        }
+
+        let row: Option<(Option<DateTime<Utc>>, Option<Uuid>)> = sqlx::query_as(
+            "SELECT consumed_at, family_id FROM oauth_authorization_codes WHERE id = ?1",
+        )
+        .bind(code_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        tx.rollback().await?;
+        Ok(match row {
+            Some((Some(_), family_id)) => CodeExchange::Replayed { family_id },
+            _ => CodeExchange::Invalid,
+        })
+    }
+
+    async fn revoke_family(&self, family_id: Uuid, now: DateTime<Utc>) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        revoke_family_in_tx(&mut tx, family_id, now).await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     async fn list_grants(
@@ -1174,17 +1403,29 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
         client_id: &str,
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
-        let revoked = sqlx::query(
-            "UPDATE refresh_token_families
-             SET state = 'revoked', revoked_at = ?3
+        let mut tx = self.pool.begin().await?;
+        let families: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM refresh_token_families
              WHERE user_id = ?1 AND client_id = ?2 AND state = 'active'",
         )
         .bind(user_id.as_uuid())
         .bind(client_id)
-        .bind(now)
-        .execute(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
-        Ok(revoked.rows_affected() > 0)
+        for family in &families {
+            revoke_family_in_tx(&mut tx, *family, now).await?;
+        }
+        // 待兑换授权码随授权一起作废，不能在撤销后换出新家族
+        sqlx::query(
+            "DELETE FROM oauth_authorization_codes
+             WHERE user_id = ?1 AND client_id = ?2 AND consumed_at IS NULL",
+        )
+        .bind(user_id.as_uuid())
+        .bind(client_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(!families.is_empty())
     }
 }
 
@@ -1192,9 +1433,12 @@ impl crate::storage::OAuthRepo for SqliteOAuthRepo {
 const CONSUMED_RETENTION: TimeDelta = TimeDelta::days(1);
 /// 空 refresh 家族保留期：留出观察窗口，不因一次清理立即抹掉。
 const EMPTY_FAMILY_RETENTION: TimeDelta = TimeDelta::days(30);
+/// 未验证账号保留期：过期后释放邮箱与用户名，防止长期抢注。
+const UNVERIFIED_USER_RETENTION: TimeDelta = TimeDelta::days(30);
 
 #[async_trait]
 impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
+    #[allow(clippy::too_many_lines)] // 每类过期数据一段，保持逐段可核对
     async fn purge_expired(&self, now: DateTime<Utc>) -> Result<CleanupReport, StorageError> {
         let consumed_cutoff = now - CONSUMED_RETENTION;
         let family_cutoff = now - EMPTY_FAMILY_RETENTION;
@@ -1292,6 +1536,13 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
                 .await?
                 .rows_affected();
 
+        let unverified_users =
+            sqlx::query("DELETE FROM users WHERE email_verified = 0 AND created_at < ?1")
+                .bind(now - UNVERIFIED_USER_RETENTION)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+
         tx.commit().await?;
         Ok(CleanupReport {
             refresh_tokens,
@@ -1304,6 +1555,7 @@ impl crate::storage::MaintenanceRepo for SqliteMaintenanceRepo {
             social_login_states,
             data_export_tokens,
             email_change_requests,
+            unverified_users,
         })
     }
 }
@@ -1400,9 +1652,10 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         user_id: &UserId,
         ban: &Ban,
         reason: &str,
-        actor_id: &UserId,
+        audit: &NewAuditEntry,
         now: DateTime<Utc>,
     ) -> Result<bool, StorageError> {
+        let _admin_guard = ADMIN_WRITE_LOCK.lock().await;
         let mut tx = self.pool.begin().await?;
         let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ?1")
             .bind(user_id.as_uuid())
@@ -1431,21 +1684,34 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         .bind(expires_at)
         .bind(reason)
         .bind(now)
-        .bind(actor_id.as_uuid())
+        .bind(audit.actor_id.as_uuid())
         .execute(&mut *tx)
         .await?;
-        // 封禁与撤销会话必须同事务：避免封禁生效但旧 refresh 仍可轮转
+        // 封禁、撤销会话与审计必须同事务：状态与审计不得互相矛盾
         revoke_all_sessions_in_tx(&mut tx, user_id, now).await?;
+        insert_audit_in_tx(&mut tx, audit, now).await?;
         tx.commit().await?;
         Ok(true)
     }
 
-    async fn unban_user(&self, user_id: &UserId) -> Result<bool, StorageError> {
+    async fn unban_user(
+        &self,
+        user_id: &UserId,
+        audit: &NewAuditEntry,
+        now: DateTime<Utc>,
+    ) -> Result<bool, StorageError> {
+        let _admin_guard = ADMIN_WRITE_LOCK.lock().await;
+        let mut tx = self.pool.begin().await?;
         let deleted = sqlx::query("DELETE FROM user_bans WHERE user_id = ?1")
             .bind(user_id.as_uuid())
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
-        Ok(deleted.rows_affected() == 1)
+        if deleted.rows_affected() != 1 {
+            return Ok(false);
+        }
+        insert_audit_in_tx(&mut tx, audit, now).await?;
+        tx.commit().await?;
+        Ok(true)
     }
 
     async fn record_audit(
@@ -1453,24 +1719,9 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         entry: &NewAuditEntry,
         now: DateTime<Utc>,
     ) -> Result<(), StorageError> {
-        let details = entry
-            .details
-            .as_ref()
-            .map(serde_json::to_string)
-            .transpose()
-            .map_err(StorageError::wrap)?;
-        sqlx::query(
-            "INSERT INTO audit_logs (id, actor_id, action, target_id, details, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )
-        .bind(Uuid::now_v7())
-        .bind(entry.actor_id.as_uuid())
-        .bind(entry.action.as_str())
-        .bind(entry.target_id.map(|id| *id.as_uuid()))
-        .bind(details)
-        .bind(now)
-        .execute(&self.pool)
-        .await?;
+        let mut tx = self.pool.begin().await?;
+        insert_audit_in_tx(&mut tx, entry, now).await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -1478,7 +1729,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
         let rows: Vec<AuditTuple> = sqlx::query_as(
             "SELECT id, actor_id, action, target_id, details, created_at
                  FROM audit_logs
-                 ORDER BY created_at DESC
+                 ORDER BY created_at DESC, id DESC
                  LIMIT ?1 OFFSET ?2",
         )
         .bind(limit)
@@ -1500,7 +1751,7 @@ impl crate::storage::AdminRepo for SqliteAdminRepo {
             "SELECT id, actor_id, action, target_id, details, created_at
              FROM audit_logs
              WHERE actor_id = ?1 OR target_id = ?1
-             ORDER BY created_at ASC",
+             ORDER BY created_at ASC, id ASC",
         )
         .bind(user_id.as_uuid())
         .fetch_all(&self.pool)
@@ -1656,12 +1907,41 @@ impl crate::storage::EmailChangeRepo for SqliteEmailChangeRepo {
         Ok(())
     }
 
+    async fn reserve_attempt(&self, user_id: &UserId, max: u32) -> Result<bool, StorageError> {
+        let updated = sqlx::query(
+            "UPDATE email_change_requests SET attempts = attempts + 1
+             WHERE user_id = ?1 AND attempts < ?2",
+        )
+        .bind(user_id.as_uuid())
+        .bind(max)
+        .execute(&self.pool)
+        .await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn apply(
         &self,
         user_id: &UserId,
         expected_email: &str,
+        expected_code_hash: &str,
+        now: DateTime<Utc>,
     ) -> Result<(), crate::storage::EmailChangeError> {
         let mut tx = self.pool.begin().await?;
+        // 状态转移前置条件：同一新邮箱、同一验证码且未过期；重发后旧码不命中
+        let deleted = sqlx::query(
+            "DELETE FROM email_change_requests
+             WHERE user_id = ?1 AND new_email = ?2 AND code_hash = ?3 AND expires_at > ?4",
+        )
+        .bind(user_id.as_uuid())
+        .bind(expected_email)
+        .bind(expected_code_hash)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        if deleted.rows_affected() != 1 {
+            return Err(crate::storage::EmailChangeError::NotFound);
+        }
+
         let updated = sqlx::query("UPDATE users SET email = ?2, email_verified = 1 WHERE id = ?1")
             .bind(user_id.as_uuid())
             .bind(expected_email)
@@ -1676,15 +1956,11 @@ impl crate::storage::EmailChangeRepo for SqliteEmailChangeRepo {
             Err(err) => return Err(StorageError::from(err).into()),
         }
 
-        let deleted =
-            sqlx::query("DELETE FROM email_change_requests WHERE user_id = ?1 AND new_email = ?2")
-                .bind(user_id.as_uuid())
-                .bind(expected_email)
-                .execute(&mut *tx)
-                .await?;
-        if deleted.rows_affected() != 1 {
-            return Err(crate::storage::EmailChangeError::NotFound);
-        }
+        // 旧地址签发的一切未消费验证码随邮箱变更作废（重置/注销/验证）
+        sqlx::query("DELETE FROM email_verifications WHERE user_id = ?1 AND consumed_at IS NULL")
+            .bind(user_id.as_uuid())
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -1763,7 +2039,8 @@ impl crate::storage::SocialRepo for SqliteSocialRepo {
                 .bind(provider.as_str())
                 .execute(&self.pool)
                 .await?;
-        Ok(deleted.rows_affected() == 1)
+        // 同一 provider 可能绑定多个身份；解绑即删除该 provider 的全部绑定
+        Ok(deleted.rows_affected() > 0)
     }
 
     async fn list_for_user(&self, user_id: &UserId) -> Result<Vec<SocialIdentity>, StorageError> {

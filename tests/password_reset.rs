@@ -141,12 +141,14 @@ async fn reset_request_is_cooling_down() {
 
     let first = request_reset(&app, EMAIL).await;
     assert_eq!(first.status(), StatusCode::NO_CONTENT);
+    // 发信在响应后异步 spawn，先等它落箱再取基线
+    common::await_mail_subject(&mailbox, "密码重置").await;
+    let sent = mailbox.messages().len();
 
+    // 冷却中同形 204，但不再发信：不暴露账号是否存在
     let second = request_reset(&app, EMAIL).await;
-    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
-    let json: serde_json::Value = serde_json::from_str(&body_text(second).await).unwrap();
-    assert_eq!(json["code"], "resend_cooldown");
-    assert!(json["details"]["retry_after"].as_u64().is_some());
+    assert_eq!(second.status(), StatusCode::NO_CONTENT);
+    assert_eq!(mailbox.messages().len(), sent, "冷却中不得重复发信");
 
     // 冷却结束后成功
     clock.advance(chrono::TimeDelta::seconds(61));

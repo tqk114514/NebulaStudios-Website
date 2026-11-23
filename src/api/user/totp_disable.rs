@@ -2,7 +2,6 @@
 //! （TOTP 码或恢复码）双因素；关闭即撤销全部会话（红线 #1：认证强度降级
 //! 必须下线）并作废全部恢复码与未消费挑战。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -10,10 +9,10 @@ use serde::Deserialize;
 
 use crate::api::{AppState, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::extractors::{FirstPartyUser, JsonBody, PreferredLocale};
 use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
-use crate::model::totp::verify_code;
+use crate::model::totp::verify_code_step;
 
 /// disable 请求。
 // 含明文口令与验证码，故意不实现 Debug，避免误日志。
@@ -35,10 +34,9 @@ pub async fn disable(
     State(state): State<AppState>,
     user: FirstPartyUser,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<DisableRequest>,
 ) -> Result<Response, ApiError> {
-    let req: DisableRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     let mut issues = Vec::new();
     if req.password.is_empty() {
         issues.push(FieldInvalid { field: "password", code: "password_missing".to_owned() });
@@ -73,7 +71,14 @@ pub async fn disable(
                 .secret_cipher
                 .decrypt(&encrypted)
                 .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
-            verify_code(&secret, code, now)
+            match verify_code_step(&secret, code, now) {
+                Some(step) => state
+                    .totp_repo
+                    .consume_step(&user.user_id, step)
+                    .await
+                    .map_err(anyhow::Error::from)?,
+                None => false,
+            }
         }
         _ => state
             .totp_repo

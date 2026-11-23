@@ -1919,6 +1919,7 @@ dependencies = [
  "config",
  "ed25519-dalek",
  "http-body-util",
+ "idna",
  "image",
  "insta",
  "jsonwebtoken",

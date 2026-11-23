@@ -172,6 +172,8 @@ pub struct NewAuthorizationCode {
     pub code_challenge: String,
     /// 过期时刻。
     pub expires_at: DateTime<Utc>,
+    /// 签发时用户的 `token_version`；兑换时须与当前值一致。
+    pub session_version: i64,
 }
 
 /// 库中读出的授权码记录。

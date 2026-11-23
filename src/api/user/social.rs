@@ -3,15 +3,15 @@
 //! 实际绑定在 provider 回调中完成（见 `api/auth/social.rs`）。
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, parse_social_provider};
+use crate::api::{AppState, cookie_max_age, parse_social_provider, set_social_state_cookie};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::audit::AuditAction;
 use crate::model::oauth2::{code_challenge_s256, generate_code_verifier};
 use crate::model::social::{SOCIAL_STATE_TTL, SocialLoginAction, SocialLoginState};
@@ -60,12 +60,11 @@ pub async fn link(
     State(state): State<AppState>,
     user: FirstPartyUser,
     Path(provider): Path<String>,
-    body: Bytes,
-) -> Result<Json<LinkResponse>, ApiError> {
+    body: JsonBody<LinkRequest>,
+) -> Result<Response, ApiError> {
     let provider = parse_social_provider(&provider)?;
     let client = state.social_clients.get(provider).ok_or(ApiError::SocialProviderDisabled)?;
-    let req: LinkRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     if req.password.is_empty() {
         return Err(ApiError::Validation(vec![FieldInvalid {
             field: "password",
@@ -94,7 +93,14 @@ pub async fn link(
         .await
         .map_err(anyhow::Error::from)?;
 
-    Ok(Json(LinkResponse { authorize_url: client.authorize_url(&nonce, &challenge) }))
+    Ok({
+        let mut response =
+            Json(LinkResponse { authorize_url: client.authorize_url(&nonce, &challenge) })
+                .into_response();
+        // 与登录流程同一绑定 cookie；回调必须呈递，防止登录 CSRF 式绑定
+        set_social_state_cookie(response.headers_mut(), &nonce, cookie_max_age(SOCIAL_STATE_TTL));
+        response
+    })
 }
 
 /// 列出当前用户已绑定的社交身份。

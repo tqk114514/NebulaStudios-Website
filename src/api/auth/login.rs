@@ -2,7 +2,6 @@
 //! 而是签发单次登录挑战（`totp_required` + `details.challenge_token`），由
 //! `/api/auth/login/totp` 完成二段验证。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -13,9 +12,11 @@ use super::{
 };
 use crate::api::{AppState, PASSWORD_INPUT_LIMIT};
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::JsonBody;
 use crate::model::audit::AuditAction;
 use crate::model::password::{PasswordCheck, PasswordHash};
 use crate::model::totp::{CHALLENGE_TTL, TotpState};
+use crate::model::user::canonicalize_email;
 
 /// 登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。
 // 含明文口令，故意不实现 Debug，避免误日志。
@@ -32,13 +33,15 @@ pub struct LoginRequest {
 ///
 /// # Errors
 /// JSON 非法 400、字段缺失 422、凭据错误 401、内部故障 500（ADR-0004）。
-pub async fn login(State(state): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
-    let req: LoginRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+pub async fn login(
+    State(state): State<AppState>,
+    body: JsonBody<LoginRequest>,
+) -> Result<Response, ApiError> {
+    let req = body.0;
     // 邮箱大小写不敏感，用户名大小写敏感（ADR-0015）：只有含 @ 的标识才小写化
     let raw_identifier = req.identifier.trim();
     let identifier = if raw_identifier.contains('@') {
-        raw_identifier.to_lowercase()
+        canonicalize_email(raw_identifier).unwrap_or_else(|| raw_identifier.to_lowercase())
     } else {
         raw_identifier.to_owned()
     };

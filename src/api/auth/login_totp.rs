@@ -1,7 +1,6 @@
 //! POST /api/auth/login/totp：二段验证。以密码步骤签发的单次挑战换取会话；
 //! 六位纯数字走 TOTP 码，其余按恢复码（单次消费）。校验失败计次，打满作废。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -10,9 +9,10 @@ use serde::Deserialize;
 use super::{issue_session, session_response};
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
+use crate::extractors::JsonBody;
 use crate::model::audit::AuditAction;
 use crate::model::tokens::RefreshToken;
-use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code};
+use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code_step};
 
 /// 二段请求。
 // 含挑战令牌与验证码，故意不实现 Debug，避免误日志。
@@ -29,9 +29,11 @@ pub struct LoginTotpRequest {
 ///
 /// # Errors
 /// 字段缺失 422；挑战缺失/过期/耗尽/码错 401 `totp_invalid`；内部故障 500。
-pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Response, ApiError> {
-    let req: LoginTotpRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+pub async fn login_totp(
+    State(state): State<AppState>,
+    body: JsonBody<LoginTotpRequest>,
+) -> Result<Response, ApiError> {
+    let req = body.0;
     let mut issues = Vec::new();
     if req.challenge_token.trim().is_empty() {
         issues
@@ -52,7 +54,7 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
         return Err(invalid);
     };
     let now = state.clock.now();
-    if challenge.expires_at <= now || challenge.attempts >= CHALLENGE_MAX_ATTEMPTS {
+    if challenge.expires_at <= now {
         return Err(invalid);
     }
 
@@ -76,6 +78,16 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
         return Err(invalid);
     };
 
+    // 在验证前原子预占一次尝试：并发猜码不能各自读到旧计数而突破 5 次上限
+    let reserved = state
+        .totp_repo
+        .reserve_challenge_attempt(&challenge.id, CHALLENGE_MAX_ATTEMPTS)
+        .await
+        .map_err(anyhow::Error::from)?;
+    if !reserved {
+        return Err(invalid);
+    }
+
     // 码校验：六位数字走 TOTP，其余按恢复码（字母表不含 0/1，无格式冲突）
     let code = req.code.trim();
     let verified = if code.len() == 6 && code.bytes().all(|b| b.is_ascii_digit()) {
@@ -83,7 +95,15 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
             .secret_cipher
             .decrypt(&encrypted)
             .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
-        verify_code(&secret, code, now)
+        match verify_code_step(&secret, code, now) {
+            // 同一时间片只能成功一次，跨挑战重放被封死
+            Some(step) => state
+                .totp_repo
+                .consume_step(&challenge.user_id, step)
+                .await
+                .map_err(anyhow::Error::from)?,
+            None => false,
+        }
     } else {
         state
             .totp_repo
@@ -92,11 +112,6 @@ pub async fn login_totp(State(state): State<AppState>, body: Bytes) -> Result<Re
             .map_err(anyhow::Error::from)?
     };
     if !verified {
-        state
-            .totp_repo
-            .record_challenge_attempt(&challenge.id)
-            .await
-            .map_err(anyhow::Error::from)?;
         return Err(invalid);
     }
 

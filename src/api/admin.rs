@@ -51,3 +51,14 @@ pub(crate) fn target_id(raw: &str) -> Result<UserId, ApiError> {
 pub(crate) fn invalid(field: &'static str, code: &'static str) -> ApiError {
     ApiError::Validation(vec![FieldInvalid { field, code: code.to_owned() }])
 }
+
+/// 配置化管理员判定：邮箱在名单内且已验证。
+///
+/// 注册不要求验证，若只看邮箱，攻击者可用未验证账号抢占管理员身份并阻止封禁。
+pub(crate) fn is_admin_email(
+    admin_emails: &std::collections::HashSet<String>,
+    email: &str,
+    email_verified: bool,
+) -> bool {
+    email_verified && admin_emails.contains(email)
+}

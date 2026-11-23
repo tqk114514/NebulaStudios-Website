@@ -57,6 +57,7 @@ async fn purge_expired_deletes_only_expired_rows() {
             social_login_states: 1,
             data_export_tokens: 2,
             email_change_requests: 1,
+            unverified_users: 0,
         }
     );
 

@@ -1,13 +1,12 @@
 //! `PATCH /api/user/username`：修改用户名（当前口令再认证）。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Deserialize;
 
 use crate::api::{AppState, verify_current_password};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::audit::AuditAction;
 use crate::model::user::username_problem;
 use crate::storage::UserRepoError;
@@ -31,10 +30,9 @@ pub struct UpdateUsernameRequest {
 pub async fn update_username(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    body: Bytes,
+    body: JsonBody<UpdateUsernameRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let request: UpdateUsernameRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let request = body.0;
     let username = request.username.trim().to_owned();
     if let Some(code) = username_problem(&username) {
         return Err(invalid("username", code));

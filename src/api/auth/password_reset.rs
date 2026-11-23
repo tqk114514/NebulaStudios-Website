@@ -3,7 +3,6 @@
 //! confirm：验码（用途 `password_reset`，与验证/注销互不相通）→ 换哈希 →
 //! 整族撤销全部会话并作废 TOTP 挑战（红线 #1）。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -12,9 +11,10 @@ use serde::Deserialize;
 use super::{hash_password_in_background, issue_and_send_code, password_problem};
 use crate::api::{AppState, clear_session_cookies, send_security_notice};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::PreferredLocale;
+use crate::extractors::{JsonBody, PreferredLocale};
 use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
+use crate::model::user::canonicalize_email;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 重置请求（request 端点）。
@@ -45,15 +45,14 @@ pub struct ResetConfirmPayload {
 /// POST /api/auth/password/reset/request：发重置验证码。
 ///
 /// # Errors
-/// 字段缺失 422；冷却中 429 `resend_cooldown`；内部故障 500。未知邮箱 204。
+/// 字段缺失 422；内部故障 500。未知邮箱与冷却中均为 204。
 pub async fn reset_request(
     State(state): State<AppState>,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<ResetRequestPayload>,
 ) -> Result<Response, ApiError> {
-    let req: ResetRequestPayload =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    let email = req.email.trim().to_lowercase();
+    let req = body.0;
+    let email = canonicalize_email(&req.email).unwrap_or_else(|| req.email.trim().to_lowercase());
     if email.is_empty() {
         return Err(ApiError::Validation(vec![FieldInvalid {
             field: "email",
@@ -71,8 +70,8 @@ pub async fn reset_request(
         {
             let elapsed = state.clock.now() - latest.created_at;
             if elapsed < RESEND_COOLDOWN {
-                let remaining = (RESEND_COOLDOWN - elapsed).num_seconds().max(1);
-                return Err(ApiError::ResendCooldown(remaining.cast_unsigned()));
+                // 冷却中对已注册与未注册邮箱同形返回 204
+                return Ok(StatusCode::NO_CONTENT.into_response());
             }
         }
         issue_and_send_code(&state, &user, VerificationPurpose::PasswordReset, locale.0).await?;
@@ -88,11 +87,10 @@ pub async fn reset_request(
 pub async fn reset_confirm(
     State(state): State<AppState>,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<ResetConfirmPayload>,
 ) -> Result<Response, ApiError> {
-    let req: ResetConfirmPayload =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
-    let email = req.email.trim().to_lowercase();
+    let req = body.0;
+    let email = canonicalize_email(&req.email).unwrap_or_else(|| req.email.trim().to_lowercase());
     let mut issues = Vec::new();
     if email.is_empty() {
         issues.push(FieldInvalid { field: "email", code: "email_missing".to_owned() });
@@ -117,6 +115,7 @@ pub async fn reset_confirm(
     let verification_id = super::check_verification_code(
         &state,
         &user.id,
+        &email,
         req.code.trim(),
         VerificationPurpose::PasswordReset,
     )

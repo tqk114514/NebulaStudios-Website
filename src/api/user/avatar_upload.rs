@@ -3,6 +3,7 @@
 use axum::Json;
 use axum::extract::multipart::MultipartRejection;
 use axum::extract::{Multipart, State};
+use axum::http::StatusCode;
 use serde::Serialize;
 
 use crate::api::AppState;
@@ -30,10 +31,13 @@ pub async fn upload(
     user: FirstPartyUser,
     multipart: Result<Multipart, MultipartRejection>,
 ) -> Result<Json<AvatarResponse>, ApiError> {
-    let mut multipart = multipart.map_err(|err| ApiError::MalformedMultipart(err.to_string()))?;
+    let mut multipart =
+        multipart.map_err(|err| map_multipart_rejection(err.status(), err.body_text()))?;
     let mut payload = None;
-    while let Some(field) =
-        multipart.next_field().await.map_err(|err| ApiError::MalformedMultipart(err.to_string()))?
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|err| map_multipart_rejection(err.status(), err.body_text()))?
     {
         if field.name() != Some("avatar") {
             continue;
@@ -41,8 +45,10 @@ pub async fn upload(
         if payload.is_some() {
             return Err(invalid("avatar_duplicate"));
         }
-        let bytes =
-            field.bytes().await.map_err(|err| ApiError::MalformedMultipart(err.to_string()))?;
+        let bytes = field
+            .bytes()
+            .await
+            .map_err(|err| map_multipart_rejection(err.status(), err.body_text()))?;
         if bytes.len() > MAX_UPLOAD_BYTES {
             return Err(ApiError::PayloadTooLarge);
         }
@@ -69,11 +75,20 @@ pub async fn upload(
         return Err(ApiError::Unauthorized);
     };
 
-    state.avatar_store.store(&user.user_id, &webp).await.map_err(anyhow::Error::new)?;
+    state.avatar_store.store(&user.user_id, version, &webp).await.map_err(anyhow::Error::new)?;
 
     let avatar_url = crate::api::avatar_url(&user.user_id, version)
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("头像版本非法: {version}")))?;
     Ok(Json(AvatarResponse { avatar_url }))
+}
+
+/// multipart 解析错误按状态分流：超限保持 413，其余仍是 400。
+fn map_multipart_rejection(status: StatusCode, message: String) -> ApiError {
+    if status == StatusCode::PAYLOAD_TOO_LARGE {
+        ApiError::PayloadTooLarge
+    } else {
+        ApiError::MalformedMultipart(message)
+    }
 }
 
 /// 把图像处理错误映射为字段级 422；编码失败属于服务端问题。

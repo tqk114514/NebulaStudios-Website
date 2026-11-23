@@ -51,6 +51,32 @@ pub const USERNAME_MIN_CHARS: usize = 3;
 /// 用户名最长字符数。
 pub const USERNAME_MAX_CHARS: usize = 15;
 
+/// 归一化邮箱：trim、local 小写、域名转 IDNA A-label。
+///
+/// 同一 IDNA 域的不同 Unicode 规范化形式（NFC/NFD）得到同一结果，
+/// 避免唯一索引把同一邮箱当成两个账户。输入不是 `local@domain` 时返回 `None`。
+///
+/// ```
+/// use nebula_server::model::user::canonicalize_email;
+///
+/// assert_eq!(
+///     canonicalize_email(" User@BÜCHER.example ").as_deref(),
+///     Some("user@xn--bcher-kva.example")
+/// );
+/// ```
+#[must_use]
+pub fn canonicalize_email(raw: &str) -> Option<String> {
+    let (local, domain) = raw.trim().rsplit_once('@')?;
+    if local.is_empty() || domain.is_empty() {
+        return None;
+    }
+    let ascii_domain = idna::domain_to_ascii(domain).ok()?;
+    if ascii_domain.is_empty() {
+        return None;
+    }
+    Some(format!("{}@{}", local.to_lowercase(), ascii_domain.to_ascii_lowercase()))
+}
+
 /// 用户名规则：3–15 个 ASCII 字母、数字、下划线或连字符；返回首个错误码。
 ///
 /// ```

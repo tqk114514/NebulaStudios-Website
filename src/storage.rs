@@ -264,6 +264,12 @@ pub trait EmailVerificationRepo: Send + Sync {
     /// 仅存储故障。
     async fn record_attempt(&self, id: &uuid::Uuid) -> Result<(), StorageError>;
 
+    /// 原子预占一次尝试：仅当未消费且 `attempts < max` 时成功。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn reserve_attempt(&self, id: &uuid::Uuid, max: u32) -> Result<bool, StorageError>;
+
     /// 原子完成验证：消费该验证码并把用户置为已验证；验证码已被消费时返回 `false`。
     ///
     /// # Errors
@@ -349,6 +355,8 @@ pub struct CleanupReport {
     pub data_export_tokens: u64,
     /// 删除的过期邮箱变更请求行数。
     pub email_change_requests: u64,
+    /// 删除的长期未验证用户行数。
+    pub unverified_users: u64,
 }
 
 /// 维护仓储：过期数据清理；删除在同一事务内完成。
@@ -428,8 +436,8 @@ pub trait AdminRepo: Send + Sync {
     /// 仅存储故障。
     async fn count_users(&self, search: Option<&str>) -> Result<i64, StorageError>;
 
-    /// 写入/覆盖封禁，并在同一事务内撤销该用户全部 refresh 家族；用户不存在返回
-    /// `false`。
+    /// 写入/覆盖封禁、撤销该用户全部 refresh 家族并追加审计；三者同一事务。
+    /// 用户不存在返回 `false`。
     ///
     /// # Errors
     /// 仅存储故障。
@@ -438,15 +446,20 @@ pub trait AdminRepo: Send + Sync {
         user_id: &UserId,
         ban: &Ban,
         reason: &str,
-        actor_id: &UserId,
+        audit: &NewAuditEntry,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
 
-    /// 删除封禁记录；原本不存在返回 `false`。
+    /// 删除封禁记录并在同一事务内追加审计；原本不存在返回 `false`。
     ///
     /// # Errors
     /// 仅存储故障。
-    async fn unban_user(&self, user_id: &UserId) -> Result<bool, StorageError>;
+    async fn unban_user(
+        &self,
+        user_id: &UserId,
+        audit: &NewAuditEntry,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, StorageError>;
 
     /// 追加一条审计记录。
     ///
@@ -523,6 +536,30 @@ pub trait TotpRepo: Send + Sync {
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), StorageError>;
 
+    /// 启用 TOTP、落恢复码并在同一事务内递增 `token_version`、撤销全部会话。
+    ///
+    /// 返回 `None` 表示当前不在 pending 态；成功返回新的 `token_version`，
+    /// 调用方须为当前设备重签会话。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn enable_with_recovery(
+        &self,
+        user_id: &crate::model::user::UserId,
+        hashes: Vec<String>,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<i64>, StorageError>;
+
+    /// 原子记录 TOTP 时间片：仅当大于该用户上次成功使用的时间片时成功。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn consume_step(
+        &self,
+        user_id: &crate::model::user::UserId,
+        step: u64,
+    ) -> Result<bool, StorageError>;
+
     /// 原子消费匹配的恢复码；未命中或已消费返回 `false`。
     ///
     /// # Errors
@@ -568,6 +605,16 @@ pub trait TotpRepo: Send + Sync {
     /// 仅存储故障。
     async fn record_challenge_attempt(&self, id: &uuid::Uuid) -> Result<(), StorageError>;
 
+    /// 原子预占一次挑战尝试：仅当未消费且 `attempts < max` 时成功。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn reserve_challenge_attempt(
+        &self,
+        id: &uuid::Uuid,
+        max: u32,
+    ) -> Result<bool, StorageError>;
+
     /// 原子消费挑战（成功二段验证时）；已被消费返回 `false`。
     ///
     /// # Errors
@@ -577,6 +624,20 @@ pub trait TotpRepo: Send + Sync {
         id: &uuid::Uuid,
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, StorageError>;
+}
+
+/// 授权码兑换的原子结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodeExchange {
+    /// 本次请求完成兑换并创建家族。
+    Exchanged,
+    /// 码已被兑换；携带首次兑换创建的家族标识（用于重放时撤销）。
+    Replayed {
+        /// 首次兑换创建的 refresh 家族。
+        family_id: Option<uuid::Uuid>,
+    },
+    /// 码不存在、已过期、会话版本已变化或用户被封禁。
+    Invalid,
 }
 
 /// `OAuth2` Provider 仓储。
@@ -624,15 +685,30 @@ pub trait OAuthRepo: Send + Sync {
     /// 仅存储故障。
     async fn find_code(&self, code_hash: &str) -> Result<Option<AuthorizationCode>, StorageError>;
 
-    /// 原子消费授权码（Fulfilled → Exchanged）；已被消费返回 `false`。
+    /// 原子兑换授权码：消费码、创建 refresh 家族并在码行记录家族标识。
+    ///
+    /// 同一事务内校验未消费、未过期、用户 `token_version` 未变且未被封禁；
+    /// 并发兑换只有一个赢家。已消费返回 [`CodeExchange::Replayed`]，
+    /// 调用方须撤销 `family_id` 对应的家族。
     ///
     /// # Errors
-    /// 仅存储故障。
-    async fn consume_code(
+    /// 仅存储故障；不满足兑换条件不是错误。
+    async fn exchange_code(
         &self,
         code_id: &uuid::Uuid,
         now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<bool, StorageError>;
+        family: &NewRefreshFamily,
+    ) -> Result<CodeExchange, StorageError>;
+
+    /// 撤销一个 refresh 家族（授权码重放时使用）。
+    ///
+    /// # Errors
+    /// 仅存储故障。
+    async fn revoke_family(
+        &self,
+        family_id: uuid::Uuid,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
 
     /// 用户当前有效的第三方应用授权；按客户端聚合 scope，按 `client_id` 升序。
     ///
@@ -753,16 +829,28 @@ pub trait EmailChangeRepo: Send + Sync {
     /// 仅存储故障。
     async fn record_attempt(&self, user_id: &UserId) -> Result<(), StorageError>;
 
-    /// 原子应用邮箱变更：写新邮箱、置已验证、删除待确认请求。
+    /// 原子预占一次尝试：仅当 `attempts < max` 时成功。
     ///
-    /// `expected_email` 必须与当前请求的新邮箱一致，防止并发重发后旧验证码
-    /// 作用到新地址；唯一约束冲突返回 [`EmailChangeError::Conflict`] 且回滚，
+    /// # Errors
+    /// 仅存储故障。
+    async fn reserve_attempt(&self, user_id: &UserId, max: u32) -> Result<bool, StorageError>;
+
+    /// 原子应用邮箱变更：写新邮箱、置已验证、删除待确认请求与全部旧验证码。
+    ///
+    /// `expected_email`、`expected_code_hash` 与 `now` 必须与当前请求一致；
+    /// 重发后旧码不再命中。唯一约束冲突返回 [`EmailChangeError::Conflict`] 且回滚，
     /// 待确认请求保留。
     ///
     /// # Errors
-    /// 邮箱冲突返回 [`EmailChangeError::Conflict`]；待确认请求缺失或已变化返回
+    /// 邮箱冲突返回 [`EmailChangeError::Conflict`]；待确认请求缺失、已变化或过期返回
     /// [`EmailChangeError::NotFound`]；存储故障返回 [`EmailChangeError::Storage`]。
-    async fn apply(&self, user_id: &UserId, expected_email: &str) -> Result<(), EmailChangeError>;
+    async fn apply(
+        &self,
+        user_id: &UserId,
+        expected_email: &str,
+        expected_code_hash: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), EmailChangeError>;
 }
 
 /// 社交身份绑定错误。

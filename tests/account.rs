@@ -118,7 +118,7 @@ async fn change_password_rejects_overlong_current_password() {
     let session = common::login_session(&app).await;
 
     let body = serde_json::json!({
-        "current_password": "a".repeat(129),
+        "current_password": "a".repeat(257),
         "new_password": NEW_PASSWORD,
     })
     .to_string();

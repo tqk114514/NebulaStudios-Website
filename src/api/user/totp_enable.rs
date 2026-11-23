@@ -2,17 +2,19 @@
 //! 恢复码批次（明文仅在本次响应出现，库中只存带 pepper 的 HMAC-SHA256）。
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{AppState, send_security_notice};
+use crate::api::{
+    AppState, cookie_max_age, send_security_notice, set_access_cookie, set_csrf_cookie,
+    set_refresh_cookie,
+};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::extractors::{FirstPartyUser, JsonBody, PreferredLocale};
 use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
-use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code};
+use crate::model::totp::{RECOVERY_CODE_COUNT, RecoveryCode, verify_code_step};
 
 /// enable 请求。
 // 含明文口令与验证码，故意不实现 Debug，避免误日志。
@@ -43,10 +45,9 @@ pub async fn enable(
     State(state): State<AppState>,
     user: FirstPartyUser,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<EnableRequest>,
 ) -> Result<Response, ApiError> {
-    let req: EnableRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     let mut issues = Vec::new();
     if req.password.is_empty() {
         issues.push(FieldInvalid { field: "password", code: "password_missing".to_owned() });
@@ -58,6 +59,10 @@ pub async fn enable(
         return Err(ApiError::Validation(issues));
     }
     crate::api::verify_current_password(&state, &user.user_id, &req.password).await?;
+    // 未验证邮箱的账户不得启用第二因子：否则地址被抢注后可锁死真实所有者
+    if !user.email_verified {
+        return Err(ApiError::EmailUnverified);
+    }
 
     let Some((totp_state, secret)) =
         state.totp_repo.find(&user.user_id).await.map_err(anyhow::Error::from)?
@@ -77,20 +82,31 @@ pub async fn enable(
         .secret_cipher
         .decrypt(&encrypted)
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
-    if !verify_code(&secret, req.code.trim(), state.clock.now()) {
+    let now = state.clock.now();
+    let Some(step) = verify_code_step(&secret, req.code.trim(), now) else {
+        return Err(ApiError::TotpInvalid);
+    };
+    // 同一时间片只能成功一次：启用所用码不得立即重放为登录码
+    let fresh =
+        state.totp_repo.consume_step(&user.user_id, step).await.map_err(anyhow::Error::from)?;
+    if !fresh {
         return Err(ApiError::TotpInvalid);
     }
-
-    state.totp_repo.enable(&user.user_id, state.clock.now()).await.map_err(anyhow::Error::from)?;
 
     let codes: Vec<RecoveryCode> =
         (0..RECOVERY_CODE_COUNT).map(|_| RecoveryCode::generate()).collect();
     let hashes = codes.iter().map(|code| state.code_hasher.hash(code.as_str())).collect();
-    state
+    let Some(version) = state
         .totp_repo
-        .add_recovery_codes(&user.user_id, hashes, state.clock.now())
+        .enable_with_recovery(&user.user_id, hashes, now)
         .await
-        .map_err(anyhow::Error::from)?;
+        .map_err(anyhow::Error::from)?
+    else {
+        return Err(ApiError::TotpNotPending);
+    };
+
+    // 启用已撤销全部旧会话；为当前设备重签一对，避免用户当场掉线
+    let tokens = crate::api::auth::issue_session(&state, user.user_id, version).await?;
 
     crate::api::record_audit(
         &state,
@@ -102,8 +118,13 @@ pub async fn enable(
     .await;
     send_security_notice(&state, &user.email, SecurityNotice::TotpEnabled, locale.0);
 
-    Ok(Json(EnableResponse {
+    let mut response = Json(EnableResponse {
         recovery_codes: codes.iter().map(|c| c.as_str().to_owned()).collect(),
     })
-    .into_response())
+    .into_response();
+    let headers = response.headers_mut();
+    set_access_cookie(headers, &tokens.access, cookie_max_age(state.session.access_ttl));
+    set_refresh_cookie(headers, &tokens.refresh, cookie_max_age(state.session.refresh_ttl));
+    set_csrf_cookie(headers, &tokens.csrf, cookie_max_age(state.session.refresh_ttl));
+    Ok(response)
 }

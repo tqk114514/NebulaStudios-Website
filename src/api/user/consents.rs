@@ -3,14 +3,13 @@
 use std::collections::HashSet;
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::consent::PolicyConsent;
 use crate::model::policy::Policy;
 
@@ -67,10 +66,9 @@ pub async fn list(
 pub async fn record(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    body: Bytes,
+    body: JsonBody<RecordConsentRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let request: RecordConsentRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let request = body.0;
     let policy = request.policy.trim();
     let version = request.version.trim();
     if policy.is_empty() {

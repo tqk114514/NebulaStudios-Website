@@ -2,7 +2,6 @@
 //! 整族撤销全部会话、作废未消费 TOTP 挑战并清 cookie（红线 #1：与登出、注销
 //! 同一条撤销路径）。CSRF 由 [`FirstPartyUser`] 内建门禁承担（cookie 来源的写方法）。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -14,7 +13,7 @@ use crate::api::{
     verify_current_password,
 };
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::{FirstPartyUser, PreferredLocale};
+use crate::extractors::{FirstPartyUser, JsonBody, PreferredLocale};
 use crate::mailer::SecurityNotice;
 use crate::model::audit::AuditAction;
 
@@ -38,10 +37,9 @@ pub async fn change_password(
     State(state): State<AppState>,
     user: FirstPartyUser,
     locale: PreferredLocale,
-    body: Bytes,
+    body: JsonBody<ChangePasswordRequest>,
 ) -> Result<Response, ApiError> {
-    let req: ChangePasswordRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
 
     let mut issues = Vec::new();
     if req.current_password.is_empty() {

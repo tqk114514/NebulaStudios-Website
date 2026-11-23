@@ -28,6 +28,11 @@ fn totp_code_at_fixed_now(secret: &str, now: chrono::DateTime<chrono::Utc>) -> S
     totp.generate(now.timestamp().cast_unsigned()).to_string()
 }
 
+/// 启用时已消费当前时间片；后续操作使用下一片的码（仍在 ±1 窗口内）。
+fn totp_code_after_enable(secret: &str, now: chrono::DateTime<chrono::Utc>) -> String {
+    totp_code_at_fixed_now(secret, now + chrono::TimeDelta::seconds(30))
+}
+
 /// 造已验证用户 → setup → enable，返回（恢复码，机密）。
 async fn verified_session(app: &axum::Router, mailbox: &Mailbox) -> Session {
     register_user(app, EMAIL, USERNAME, PASSWORD).await;
@@ -76,6 +81,12 @@ async fn enable_totp(
         )
         .await;
     assert_eq!(enable.status(), StatusCode::OK);
+    // 启用会撤销全部旧会话并为当前设备重签；后续请求必须使用新 cookie
+    let session = Session {
+        access: set_cookie_of(&enable, "nebula_access").expect("启用必须重签 access"),
+        refresh: set_cookie_of(&enable, "nebula_refresh").expect("启用必须重签 refresh"),
+        csrf: set_cookie_of(&enable, "nebula_csrf").expect("启用必须重签 csrf"),
+    };
     let enable_json: serde_json::Value =
         serde_json::from_str(&common::body_text(enable).await).unwrap();
     let codes: Vec<String> = enable_json["recovery_codes"]
@@ -250,7 +261,7 @@ async fn change_password_invalidates_pending_totp_challenge() {
         .await;
     assert_eq!(changed.status(), StatusCode::NO_CONTENT);
 
-    let code = totp_code_at_fixed_now(&secret, state.clock.now());
+    let code = totp_code_after_enable(&secret, state.clock.now());
     let after = app
         .clone()
         .oneshot_post(
@@ -300,7 +311,7 @@ async fn enabled_login_requires_second_factor_then_completes() {
     assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
     let json: serde_json::Value = serde_json::from_str(&body_text(second).await).unwrap();
     let challenge = json["details"]["challenge_token"].as_str().unwrap().to_owned();
-    let code = totp_code_at_fixed_now(&secret, state.clock.now());
+    let code = totp_code_after_enable(&secret, state.clock.now());
     let done = app
         .clone()
         .oneshot_post(
@@ -351,7 +362,7 @@ async fn disable_with_password_and_code_revokes_sessions() {
     let (app, state, _clock, mailbox, _dir) = common::app().await;
     let (session, _codes, secret) = enable_totp(&app, &state, &mailbox).await;
 
-    let code = totp_code_at_fixed_now(&secret, state.clock.now());
+    let code = totp_code_after_enable(&secret, state.clock.now());
     let response = app
         .clone()
         .oneshot_post_with(
@@ -397,7 +408,7 @@ async fn disable_requires_correct_password() {
     let (app, state, _clock, mailbox, _dir) = common::app().await;
     let (session, _codes, secret) = enable_totp(&app, &state, &mailbox).await;
 
-    let code = totp_code_at_fixed_now(&secret, state.clock.now());
+    let code = totp_code_after_enable(&secret, state.clock.now());
     let response = app
         .clone()
         .oneshot_post_with(

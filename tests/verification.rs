@@ -133,13 +133,11 @@ async fn resend_cooldown_then_new_code_invalidates_old() {
     register(&app).await;
     let first_code = extract_code(&await_first_mail(&mailbox).await);
 
-    // 立即重发：冷却中
+    // 立即重发：冷却中同形 204，但不发新信
     let body = format!(r#"{{"email":"{EMAIL}"}}"#);
     let blocked = app.clone().oneshot_post("/api/auth/register/resend", &body).await;
-    assert_eq!(blocked.status(), StatusCode::TOO_MANY_REQUESTS);
-    let json: serde_json::Value = serde_json::from_str(&body_text(blocked).await).unwrap();
-    assert_eq!(json["code"], "resend_cooldown");
-    assert!(json["details"]["retry_after"].as_u64().is_some());
+    assert_eq!(blocked.status(), StatusCode::NO_CONTENT);
+    assert_eq!(mailbox.messages().len(), 1, "冷却中不得重复发信");
 
     // 冷却结束后重发成功，旧码失效（生效的是最新未消费）
     clock.advance(chrono::TimeDelta::seconds(61));

@@ -191,12 +191,12 @@ async fn account_deletion_removes_avatar_file() {
         .await
         .expect("查询必须成功")
         .expect("用户必须存在");
-    assert!(state.avatar_store.load(&user.id).await.expect("读取必须成功").is_some());
+    assert!(state.avatar_store.load(&user.id, 1).await.expect("读取必须成功").is_some());
 
     request_and_confirm_deletion(&app, &session, &mailbox).await;
 
     assert!(
-        state.avatar_store.load(&user.id).await.expect("读取必须成功").is_none(),
+        state.avatar_store.load(&user.id, 1).await.expect("读取必须成功").is_none(),
         "注销后头像文件必须删除"
     );
     let response = app

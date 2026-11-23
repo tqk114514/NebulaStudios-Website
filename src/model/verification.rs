@@ -100,6 +100,8 @@ pub struct NewEmailVerification {
     pub expires_at: DateTime<Utc>,
     /// 用途。
     pub purpose: VerificationPurpose,
+    /// 签发时发送到的邮箱；确认时须与账户当前邮箱一致。
+    pub sent_to: String,
 }
 
 /// 库中读出的验证码记录。
@@ -117,6 +119,8 @@ pub struct EmailVerification {
     pub expires_at: DateTime<Utc>,
     /// 签发时刻；重发冷却以它为基准。
     pub created_at: DateTime<Utc>,
+    /// 签发时发送到的邮箱；账户改邮箱后旧码不得再确认。
+    pub sent_to: String,
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
 //! POST /api/auth/account/delete/confirm：以注册邮箱收到的注销确认码完成
 //! 账户删除（硬删：用户及其全部从属数据，单事务）。删除即最终撤销。
 
-use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -10,7 +9,7 @@ use serde::Deserialize;
 use super::check_verification_code;
 use crate::api::{AppState, clear_session_cookies};
 use crate::error::{ApiError, FieldInvalid};
-use crate::extractors::FirstPartyUser;
+use crate::extractors::{FirstPartyUser, JsonBody};
 use crate::model::audit::AuditAction;
 use crate::model::verification::VerificationPurpose;
 
@@ -30,10 +29,9 @@ pub struct DeleteConfirmRequest {
 pub async fn delete_confirm(
     State(state): State<AppState>,
     user: FirstPartyUser,
-    body: Bytes,
+    body: JsonBody<DeleteConfirmRequest>,
 ) -> Result<Response, ApiError> {
-    let req: DeleteConfirmRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    let req = body.0;
     if req.code.trim().is_empty() {
         return Err(ApiError::Validation(vec![FieldInvalid {
             field: "code",
@@ -44,6 +42,7 @@ pub async fn delete_confirm(
     let verification_id = check_verification_code(
         &state,
         &user.user_id,
+        &user.email,
         req.code.trim(),
         VerificationPurpose::DeleteAccount,
     )

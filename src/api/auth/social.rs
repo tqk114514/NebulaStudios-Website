@@ -11,15 +11,18 @@ use serde::Deserialize;
 
 use super::{SessionTokens, issue_session};
 use crate::api::{
-    AppState, cookie_max_age, set_access_cookie, set_csrf_cookie, set_refresh_cookie,
+    AppState, SOCIAL_STATE_COOKIE, clear_social_state_cookie, cookie_max_age, cookie_value,
+    set_access_cookie, set_csrf_cookie, set_refresh_cookie, set_social_state_cookie,
 };
 use crate::error::ApiError;
+use crate::extractors::constant_time_eq;
 use crate::model::audit::AuditAction;
 use crate::model::oauth2::{code_challenge_s256, generate_code_verifier};
 use crate::model::social::{
     NewSocialIdentity, SOCIAL_STATE_TTL, SocialLoginAction, SocialLoginState, SocialProvider,
 };
-use crate::model::tokens::random_hex_32;
+use crate::model::tokens::{RefreshToken, random_hex_32};
+use crate::model::totp::{CHALLENGE_TTL, TotpState};
 use crate::storage::LinkIdentityError;
 
 /// 登录流程的前端落点。
@@ -84,7 +87,10 @@ pub async fn start(
     };
     state.social_repo.put_state(&entry, now).await.map_err(anyhow::Error::from)?;
 
-    location_response(&client.authorize_url(&state_nonce, &challenge))
+    let mut response = location_response(&client.authorize_url(&state_nonce, &challenge))?;
+    // 发起浏览器绑定：回调必须同时呈递该 cookie 与 URL 中的 state
+    set_social_state_cookie(response.headers_mut(), &state_nonce, cookie_max_age(SOCIAL_STATE_TTL));
+    Ok(response)
 }
 
 /// 处理回调：取出中转态 → 换身份 → 登录（按绑定）或绑定。
@@ -93,12 +99,17 @@ pub async fn start(
 pub async fn callback(
     State(state): State<AppState>,
     Path(provider): Path<String>,
+    headers: HeaderMap,
     RawQuery(raw): RawQuery,
 ) -> Response {
-    match complete(&state, &provider, raw.as_deref()).await {
-        Ok(response) => response,
-        Err(failure) => frontend_redirect(&state, failure.path, "social_error", failure.slug),
-    }
+    let cookie_state = cookie_value(&headers, SOCIAL_STATE_COOKIE);
+    let mut response =
+        match complete(&state, &provider, raw.as_deref(), cookie_state.as_deref()).await {
+            Ok(response) => response,
+            Err(failure) => frontend_redirect(&state, failure.path, "social_error", failure.slug),
+        };
+    clear_social_state_cookie(response.headers_mut());
+    response
 }
 
 /// 回调主体；失败以 [`Failure`] 表达跳转意图。
@@ -106,6 +117,7 @@ async fn complete(
     state: &AppState,
     provider_raw: &str,
     raw: Option<&str>,
+    cookie_state: Option<&str>,
 ) -> Result<Response, Failure> {
     let provider = SocialProvider::from_str_raw(provider_raw)
         .ok_or_else(|| Failure::login("unknown_provider"))?;
@@ -116,6 +128,14 @@ async fn complete(
         serde_urlencoded::from_str(raw).map_err(|_| Failure::login("invalid_request"))?;
     if query.code.is_empty() || query.state.is_empty() {
         return Err(Failure::login("invalid_request"));
+    }
+    // URL state 必须与本浏览器发起时写入的 __Host- cookie 恒时一致；
+    // 攻击者自建的 state 无法注入受害者浏览器，登录 CSRF 因此不成立
+    let Some(cookie_state) = cookie_state else {
+        return Err(Failure::login("invalid_state"));
+    };
+    if !constant_time_eq(cookie_state.as_bytes(), query.state.as_bytes()) {
+        return Err(Failure::login("invalid_state"));
     }
 
     let now = state.clock.now();
@@ -176,6 +196,33 @@ async fn complete_login(
     };
     if access.ban.is_some() {
         return Err(Failure::login("account_unavailable"));
+    }
+
+    // 第二因子与密码登录同策略：TOTP 已启用时不直接建会话，改发一次性挑战。
+    // 挑战经 URL 回前端（全局 Referrer-Policy: no-referrer，5 分钟且单次使用）。
+    let totp = state.totp_repo.find(&binding.user_id).await.map_err(|err| {
+        tracing::error!(error = ?err, "查询社交登录 TOTP 状态失败");
+        Failure::login("server_error")
+    })?;
+    if matches!(totp, Some((TotpState::Enabled, _))) {
+        let challenge = RefreshToken::generate();
+        state
+            .totp_repo
+            .issue_challenge(&binding.user_id, &challenge.to_hash_hex(), now + CHALLENGE_TTL, now)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "签发社交登录 TOTP 挑战失败");
+                Failure::login("server_error")
+            })?;
+        let base = state.social_base_url.trim_end_matches('/');
+        let location = format!(
+            "{base}{LOGIN_PATH}?social=totp_required&challenge_token={}",
+            challenge.as_str()
+        );
+        return location_response(&location).map_err(|err| {
+            tracing::error!(error = ?err, location, "社交 TOTP 回跳地址非法");
+            Failure::login("server_error")
+        });
     }
 
     let tokens =

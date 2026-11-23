@@ -2,7 +2,7 @@
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -11,7 +11,7 @@ use serde_json::json;
 use super::{invalid, target_id};
 use crate::api::AppState;
 use crate::error::ApiError;
-use crate::extractors::AdminUser;
+use crate::extractors::{AdminUser, parse_json_body};
 use crate::model::audit::{AuditAction, NewAuditEntry};
 use crate::model::user::Ban;
 
@@ -35,14 +35,15 @@ pub async fn ban(
     State(state): State<AppState>,
     admin: AdminUser,
     Path(raw_id): Path<String>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ApiError> {
     let target = target_id(&raw_id)?;
     if target == admin.user.user_id {
         return Err(ApiError::CannotBanSelf);
     }
-    let req: BanRequest =
-        serde_json::from_slice(&body).map_err(|err| ApiError::MalformedJson(err.to_string()))?;
+    // 目标检查先于 body 解析：畸形 JSON 不得把 409/404 变成 400
+    let req: BanRequest = parse_json_body(&headers, &body)?;
     let now = state.clock.now();
     let reason = req.reason.trim();
     if reason.is_empty() {
@@ -78,17 +79,9 @@ pub async fn ban(
     else {
         return Err(ApiError::UserNotFound);
     };
-    if state.admin_emails.contains(&access.email) {
+    if crate::api::admin::is_admin_email(&state.admin_emails, &access.email, access.email_verified)
+    {
         return Err(ApiError::CannotBanAdmin);
-    }
-
-    let banned = state
-        .admin_repo
-        .ban_user(&target, &ban, reason, &admin.user.user_id, now)
-        .await
-        .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
-    if !banned {
-        return Err(ApiError::UserNotFound);
     }
 
     let (kind, expires_at) = match &ban {
@@ -96,19 +89,21 @@ pub async fn ban(
         Ban::Temporary(expires_at) => ("temporary", Some(expires_at)),
     };
     let details = json!({ "kind": kind, "expires_at": expires_at, "reason": reason });
-    state
+    let audit = NewAuditEntry {
+        actor_id: admin.user.user_id,
+        action: AuditAction::AdminUserBan,
+        target_id: Some(target),
+        details: Some(details),
+    };
+
+    let banned = state
         .admin_repo
-        .record_audit(
-            &NewAuditEntry {
-                actor_id: admin.user.user_id,
-                action: AuditAction::AdminUserBan,
-                target_id: Some(target),
-                details: Some(details),
-            },
-            now,
-        )
+        .ban_user(&target, &ban, reason, &audit, now)
         .await
         .map_err(|err| ApiError::Internal(anyhow::Error::new(err)))?;
+    if !banned {
+        return Err(ApiError::UserNotFound);
+    }
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

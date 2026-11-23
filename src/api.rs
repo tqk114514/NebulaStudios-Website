@@ -14,10 +14,11 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::header::SET_COOKIE;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware;
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, patch, post};
 use chrono::TimeDelta;
@@ -55,12 +56,15 @@ pub const ACCESS_COOKIE: &str = "nebula_access";
 pub const REFRESH_COOKIE: &str = "nebula_refresh";
 /// CSRF 双提交 cookie 名；非 HttpOnly（SPA 读取后经 `X-CSRF-Token` 回显，ADR-0005）。
 pub const CSRF_COOKIE: &str = "nebula_csrf";
+/// 社交授权 state 的浏览器绑定 cookie；`__Host-` 前缀禁止子域以 Domain 覆盖。
+pub const SOCIAL_STATE_COOKIE: &str = "__Host-nebula_social_state";
 /// 请求 ID 头；入站透传与出站回显共用。
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
 /// 全局请求体上限：当前认证端点均为小 JSON，上传路由将来单独放宽。
 pub const MAX_BODY_BYTES: usize = 64 * 1024;
-/// 口令输入上限；只为挡住异常长度进入 Argon2，不代替强度规则。
-pub(crate) const PASSWORD_INPUT_LIMIT: usize = 128;
+/// 口令输入上限（字节）；注册允许 64 个字符，UTF-8 最多 4 字节/字符，故取 256。
+/// 只为挡住异常长度进入 Argon2，不代替强度规则。
+pub(crate) const PASSWORD_INPUT_LIMIT: usize = 256;
 
 /// 生成 uuid v7 请求 ID；v7 时间有序，日志按字面排序即按时间排序。
 #[derive(Debug, Clone, Copy, Default)]
@@ -74,17 +78,19 @@ impl TowerMakeRequestId for MakeV7RequestId {
 }
 
 /// 从请求 Cookie 头解析指定名字的值；提取器与端点共用同一解析规则。
+///
+/// 同名 cookie 出现多次（子域注入的 cookie tossing）一律视为无效：返回 `None`，
+/// 由调用方按未认证/CSRF 失败处理，绝不静默选用第一个。
 #[must_use]
 pub fn cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
     let prefix = format!("{name}=");
-    headers.get(axum::http::header::COOKIE).and_then(|value| value.to_str().ok()).and_then(
-        |cookies| {
-            cookies
-                .split(';')
-                .map(str::trim)
-                .find_map(|pair| pair.strip_prefix(&prefix).map(ToOwned::to_owned))
-        },
-    )
+    let raw = headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    let mut matches = raw.split(';').map(str::trim).filter_map(|pair| pair.strip_prefix(&prefix));
+    let first = matches.next()?.to_owned();
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(first)
 }
 
 /// cookie 的 Max-Age 取整秒；负值（异常配置）钳到 0。
@@ -131,6 +137,24 @@ pub(crate) fn clear_session_cookies(headers: &mut HeaderMap) {
         &format!("{REFRESH_COOKIE}=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
     );
     append_cookie(headers, &format!("{CSRF_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Lax"));
+}
+
+/// 写入社交 state 绑定 cookie；`__Host-` 必须 Path=/ 且无 Domain。
+pub(crate) fn set_social_state_cookie(headers: &mut HeaderMap, value: &str, max_age_secs: u64) {
+    append_cookie(
+        headers,
+        &format!(
+            "{SOCIAL_STATE_COOKIE}={value}; Path=/; Max-Age={max_age_secs}; HttpOnly; Secure; SameSite=Lax"
+        ),
+    );
+}
+
+/// 清除社交 state 绑定 cookie。
+pub(crate) fn clear_social_state_cookie(headers: &mut HeaderMap) {
+    append_cookie(
+        headers,
+        &format!("{SOCIAL_STATE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"),
+    );
 }
 
 fn append_cookie(headers: &mut HeaderMap, cookie: &str) {
@@ -406,16 +430,13 @@ pub fn router(state: AppState) -> Router {
         .route("/metrics", get(metrics::metrics))
         .route(
             "/api/auth/logout",
-            post(auth::logout::logout)
-                .layer(middleware::map_response(clear_cookies_on_auth_failure)),
+            post(auth::logout::logout).layer(middleware::from_fn(clear_cookies_on_auth_failure)),
         )
         .route("/api/user", get(user::profile::profile))
         .route("/api/admin/stats", get(admin::stats::stats))
         .route("/api/admin/users", get(admin::users::users))
         .route("/api/admin/users/{user_id}/ban", post(admin::ban::ban).delete(admin::unban::unban))
         .route("/api/admin/audit", get(admin::audit::audit))
-        .route("/api/auth/{provider}", get(auth::social::start))
-        .route("/api/auth/{provider}/callback", get(auth::social::callback))
         .route("/api/auth/turnstile", get(auth::turnstile::settings))
         .route("/api/policies", get(policy::policies))
         .route("/api/users/{user_id}/avatar", get(user::avatar_serve::avatar))
@@ -424,10 +445,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/user/oauth/grants", get(user::oauth_grants::list))
         .route("/api/user/oauth/grants/{client_id}", delete(user::oauth_grants::revoke))
         .route("/api/user/social", get(user::social::list))
-        .route("/api/user/social/{provider}", post(user::social::link).delete(user::social::unlink))
-        .route("/api/oauth/authorize", get(oauth::authorize::authorize))
-        .route("/api/oauth/authorize/consent", post(oauth::authorize::consent))
-        .route("/api/oauth/token", post(oauth::token::token));
+        .route(
+            "/api/user/social/{provider}",
+            post(user::social::link).delete(user::social::unlink),
+        );
 
     let mut router = open
         .merge(limited_routes())
@@ -449,6 +470,7 @@ pub fn router(state: AppState) -> Router {
 
 /// 按端点风险装配 GCRA 限额；参数沿用 v3（`per_second` 是补 1 个令牌的
 /// 间隔秒数，`tower_governor` 命名反直觉）。
+#[allow(clippy::too_many_lines)] // 路由分组即安全策略，拆散反而难以核对
 fn limited_routes() -> Router<AppState> {
     // 注册：突发 3、每 20 秒补 1
     let register_limited = limited(
@@ -538,9 +560,32 @@ fn limited_routes() -> Router<AppState> {
     let refresh_limited = limited(
         Router::new()
             .route("/api/auth/refresh", post(auth::refresh::refresh))
-            .layer(middleware::map_response(clear_cookies_on_forbidden)),
+            .layer(middleware::from_fn(clear_cookies_on_forbidden)),
         1,
         30,
+    );
+
+    // OAuth token 的失败路径每次跑 Argon2（约 19 MiB）；单独严格限流。
+    // 突发 5、每 10 秒补 1：单次 Argon2 耗时较长，补桶过快会让连续爆破绕过突发上限。
+    let oauth_token_limited =
+        limited(Router::new().route("/api/oauth/token", post(oauth::token::token)), 10, 5);
+
+    // 授权页与同意端点匿名可达但不做昂贵计算；额度独立且宽松，避免与 token 桶互相挤占
+    let oauth_authorize_limited = limited(
+        Router::new()
+            .route("/api/oauth/authorize", get(oauth::authorize::authorize))
+            .route("/api/oauth/authorize/consent", post(oauth::authorize::consent)),
+        1,
+        60,
+    );
+
+    // 社交登录发起/回调会写 state 行并触发 provider 出站请求
+    let social_limited = limited(
+        Router::new()
+            .route("/api/auth/{provider}", get(auth::social::start))
+            .route("/api/auth/{provider}/callback", get(auth::social::callback)),
+        2,
+        10,
     );
 
     register_limited
@@ -553,6 +598,9 @@ fn limited_routes() -> Router<AppState> {
         .merge(avatar_limited)
         .merge(export_limited)
         .merge(refresh_limited)
+        .merge(oauth_token_limited)
+        .merge(oauth_authorize_limited)
+        .merge(social_limited)
 }
 
 /// 给子路由挂 GCRA 限额层；`per_second` 是补 1 个令牌的间隔秒数，
@@ -603,6 +651,11 @@ fn security_headers(mut router: Router) -> Router {
         ("permissions-policy", "camera=(), microphone=(), geolocation=()"),
         ("x-frame-options", "DENY"),
         ("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"),
+        // 会话与个人数据默认不可缓存；头像等公开资源在自己的 handler 里覆盖本值
+        ("cache-control", "no-store"),
+        ("pragma", "no-cache"),
+        // TLS 在反代终止时该头也会透传；无 HSTS 的首次明文访问可被降级
+        ("strict-transport-security", "max-age=31536000"),
     ] {
         router = router.layer(SetResponseHeaderLayer::if_not_present(
             HeaderName::from_static(name),
@@ -623,18 +676,31 @@ async fn envelope_payload_too_large(response: Response) -> Response {
 
 /// 登出与刷新在提取器阶段被 CSRF 拒绝时 handler 不会执行；按 ADR-0005 决策 5
 /// 补发清会话 cookie 头。这两个路由的 403 只可能来自认证/CSRF 门禁。
-#[allow(clippy::unused_async)] // axum map_response 只接受 async fn
-async fn clear_cookies_on_forbidden(response: Response) -> Response {
-    clear_cookies_if(response, |status| status == StatusCode::FORBIDDEN)
+///
+/// 只有请求确实携带过会话 cookie 才清除：零 cookie 的跨站请求不应被用来强制登出。
+async fn clear_cookies_on_forbidden(request: Request, next: Next) -> Response {
+    respond_clearing_cookies(request, next, |status| status == StatusCode::FORBIDDEN).await
 }
 
 /// 登出的 401（缺失/过期 access）与 403（CSRF/封禁）都发生在 handler 之前，
 /// 同样按 ADR-0005 决策 5 清掉死 cookie；刷新 401 已由 handler 自行清理。
-#[allow(clippy::unused_async)] // axum map_response 只接受 async fn
-async fn clear_cookies_on_auth_failure(response: Response) -> Response {
-    clear_cookies_if(response, |status| {
+async fn clear_cookies_on_auth_failure(request: Request, next: Next) -> Response {
+    respond_clearing_cookies(request, next, |status| {
         status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN
     })
+    .await
+}
+
+async fn respond_clearing_cookies(
+    request: Request,
+    next: Next,
+    should_clear: impl FnOnce(StatusCode) -> bool,
+) -> Response {
+    let had_session = [ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE]
+        .iter()
+        .any(|name| cookie_value(request.headers(), name).is_some());
+    let response = next.run(request).await;
+    if had_session { clear_cookies_if(response, should_clear) } else { response }
 }
 
 fn clear_cookies_if(response: Response, should_clear: impl FnOnce(StatusCode) -> bool) -> Response {
@@ -658,7 +724,12 @@ fn governor_error_response(error: &GovernorError) -> Response {
             message: "请求过于频繁".to_owned(),
             details: Some(serde_json::json!({ "retry_after": wait_time })),
         };
-        return (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+        let mut response = (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+        // 标准退避头；信封里的 retry_after 只服务本项目前端
+        if let Ok(value) = wait_time.to_string().parse() {
+            response.headers_mut().insert(header::RETRY_AFTER, value);
+        }
+        return response;
     }
     tracing::error!(%error, "限额键提取失败");
     let body = crate::error::ErrorBody {
