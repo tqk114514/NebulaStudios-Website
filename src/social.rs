@@ -37,6 +37,14 @@ pub enum SocialError {
     Malformed(&'static str),
 }
 
+/// 把响应体解码失败归为 provider 结构错误；其余 reqwest 错误仍是传输故障。
+///
+/// `.json()` 对读体失败与反序列化失败都返回 `reqwest::Error`，二者后果不同：
+/// 前者可重试，后者是 provider 违约。
+pub(crate) fn decode_error(err: reqwest::Error, message: &'static str) -> SocialError {
+    if err.is_decode() { SocialError::Malformed(message) } else { SocialError::Transport(err) }
+}
+
 /// provider 身份客户端：授权页地址与用授权码换身份。
 ///
 /// 返回 `+ Send` 的 future：handler 在多线程 runtime 下运行。

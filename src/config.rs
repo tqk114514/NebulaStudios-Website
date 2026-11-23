@@ -315,7 +315,11 @@ impl Config {
                 "turnstile.verify_url",
                 "https://challenges.cloudflare.com/turnstile/v0/siteverify",
             )?
-            .add_source(config::Environment::with_prefix("NEBULA").separator("__"))
+            // prefix_separator 默认等于 separator；必须显式设为单下划线，
+            // 否则 NEBULA_BIND 会被当成 NEBULA__BIND，文档约定全部失效
+            .add_source(
+                config::Environment::with_prefix("NEBULA").prefix_separator("_").separator("__"),
+            )
             .build()?;
         let mut config: Self = settings.try_deserialize()?;
         config.oauth.clients = load_oauth_clients(&config.oauth.clients_file)?;

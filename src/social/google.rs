@@ -10,7 +10,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::Deserialize;
 
 use super::worker::{WorkerEnvelope, verify_envelope};
-use super::{ProviderIdentity, SocialError, SocialProviderClient};
+use super::{ProviderIdentity, SocialError, SocialProviderClient, decode_error};
 use crate::context::Clock;
 use crate::model::social::SocialProvider;
 
@@ -123,7 +123,10 @@ impl SocialProviderClient for GoogleClient {
         if !response.status().is_success() {
             return Err(SocialError::Provider(format!("worker token 返回 {}", response.status())));
         }
-        let envelope: WorkerEnvelope = response.json().await.map_err(SocialError::Transport)?;
+        let envelope: WorkerEnvelope = response
+            .json()
+            .await
+            .map_err(|err| decode_error(err, "worker token 响应不是合法 JSON"))?;
         let data =
             verify_envelope(&envelope, &self.config.worker_signing_public_key, self.clock.now())?;
         let token: TokenResponse = serde_json::from_str(&data)

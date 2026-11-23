@@ -1,3 +1,7 @@
 # 嵌入测试的 PEM 密钥是 base64，会被当成拼写噪声；长 base64 串整体跳过
 [default]
 extend-ignore-re = ["[A-Za-z0-9+/]{40,}={0,2}"]
+
+# SMTP 的 HELO 是协议命令（RFC 5321），不是 HELLO 的拼写错误
+[default.extend-words]
+helo = "helo"

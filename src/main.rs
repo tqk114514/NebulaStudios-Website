@@ -164,7 +164,9 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .with_context(|| format!("监听 {}", config.bind))?;
-    tracing::info!(bind = %config.bind, "listening");
+    // 记录实际地址而非配置值：bind 端口为 0 时由系统分配
+    let local_addr = listener.local_addr().context("读取实际监听地址")?;
+    tracing::info!(bind = %local_addr, "listening");
     // 监听成功后再启动后台任务，避免端口占用时留下无意义的清理循环
     let cleanup = nebula_server::jobs::spawn_cleanup(
         state.clone(),

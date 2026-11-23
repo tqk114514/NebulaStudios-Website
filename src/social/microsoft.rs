@@ -4,9 +4,10 @@
 use std::fmt;
 
 use async_trait::async_trait;
+use reqwest::Url;
 use serde::Deserialize;
 
-use super::{ProviderIdentity, SocialError, SocialProviderClient};
+use super::{ProviderIdentity, SocialError, SocialProviderClient, decode_error};
 use crate::model::social::SocialProvider;
 
 /// 授权端点（`common` 租户，覆盖个人与组织账户）。
@@ -29,9 +30,35 @@ pub struct MicrosoftConfig {
     pub redirect_uri: String,
 }
 
+/// 端点集合；默认指向公共云。需要非公共云或本地契约测试时经
+/// [`MicrosoftClient::with_endpoints`] 替换；当前装配仍使用默认端点。
+#[derive(Debug, Clone)]
+pub struct MicrosoftEndpoints {
+    /// 授权页端点。
+    pub authorize: Url,
+    /// 令牌端点。
+    pub token: Url,
+    /// Graph 当前用户端点。
+    pub graph_me: Url,
+}
+
+impl Default for MicrosoftEndpoints {
+    fn default() -> Self {
+        let parse = |raw: &str| {
+            Url::parse(raw).unwrap_or_else(|_| unreachable!("Microsoft 默认端点为合法 URL"))
+        };
+        Self {
+            authorize: parse(AUTHORIZE_ENDPOINT),
+            token: parse(TOKEN_ENDPOINT),
+            graph_me: parse(GRAPH_ME_ENDPOINT),
+        }
+    }
+}
+
 /// Microsoft 身份客户端。
 pub struct MicrosoftClient {
     config: MicrosoftConfig,
+    endpoints: MicrosoftEndpoints,
     http: reqwest::Client,
 }
 
@@ -48,13 +75,24 @@ struct GraphUser {
 }
 
 impl MicrosoftClient {
-    /// 构建客户端。
+    /// 以公共云端点构建客户端。
     ///
     /// # Errors
     /// reqwest 客户端构建失败（TLS 后端初始化失败）时返回 [`SocialError::Transport`]。
     pub fn new(config: MicrosoftConfig) -> Result<Self, SocialError> {
+        Self::with_endpoints(config, MicrosoftEndpoints::default())
+    }
+
+    /// 以指定端点构建客户端。
+    ///
+    /// # Errors
+    /// reqwest 客户端构建失败（TLS 后端初始化失败）时返回 [`SocialError::Transport`]。
+    pub fn with_endpoints(
+        config: MicrosoftConfig,
+        endpoints: MicrosoftEndpoints,
+    ) -> Result<Self, SocialError> {
         let http = reqwest::Client::builder().build().map_err(SocialError::Transport)?;
-        Ok(Self { config, http })
+        Ok(Self { config, endpoints, http })
     }
 }
 
@@ -72,8 +110,7 @@ impl SocialProviderClient for MicrosoftClient {
     }
 
     fn authorize_url(&self, state: &str, code_challenge: &str) -> String {
-        let mut url = reqwest::Url::parse(AUTHORIZE_ENDPOINT)
-            .unwrap_or_else(|_| unreachable!("microsoft authorize 端点为常量 URL"));
+        let mut url = self.endpoints.authorize.clone();
         url.query_pairs_mut()
             .append_pair("client_id", &self.config.client_id)
             .append_pair("redirect_uri", &self.config.redirect_uri)
@@ -94,7 +131,7 @@ impl SocialProviderClient for MicrosoftClient {
     ) -> Result<ProviderIdentity, SocialError> {
         let token: TokenResponse = self
             .http
-            .post(TOKEN_ENDPOINT)
+            .post(self.endpoints.token.clone())
             .form(&[
                 ("client_id", self.config.client_id.as_str()),
                 ("client_secret", self.config.client_secret.as_str()),
@@ -110,11 +147,11 @@ impl SocialProviderClient for MicrosoftClient {
             .map_err(|err| SocialError::Provider(format!("microsoft token 失败: {err}")))?
             .json()
             .await
-            .map_err(SocialError::Transport)?;
+            .map_err(|err| decode_error(err, "microsoft token 响应不符合约定"))?;
 
         let user: GraphUser = self
             .http
-            .get(GRAPH_ME_ENDPOINT)
+            .get(self.endpoints.graph_me.clone())
             .bearer_auth(&token.access_token)
             .send()
             .await
@@ -123,7 +160,7 @@ impl SocialProviderClient for MicrosoftClient {
             .map_err(|err| SocialError::Provider(format!("graph /me 失败: {err}")))?
             .json()
             .await
-            .map_err(SocialError::Transport)?;
+            .map_err(|err| decode_error(err, "Microsoft /me 响应不符合约定"))?;
 
         if user.id.is_empty() {
             return Err(SocialError::Malformed("Microsoft /me 缺少 id"));
