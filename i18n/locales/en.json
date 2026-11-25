@@ -80,7 +80,21 @@
     "socialErrorAccountUnavailable": "This account is currently unavailable",
     "socialErrorServerError": "Sign-in failed. Please try again later.",
     "socialErrorAlreadyLinked": "This social account is already linked to another account",
-    "socialErrorGeneric": "Sign-in failed. Please try again later."
+    "socialErrorGeneric": "Sign-in failed. Please try again later.",
+    "signedInTitle": "Signed in",
+    "signedInHint": "Signed in as {username}",
+    "backHome": "Back to home"
+  },
+  "api": {
+    "working": "Working…",
+    "genericError": "Request failed. Please try again later.",
+    "invalidCredentials": "Incorrect email, username or password",
+    "banned": "This account has been banned",
+    "rateLimited": "Too many requests. Please try again later.",
+    "turnstileInvalid": "Verification failed. Please try again.",
+    "turnstileUnavailable": "Verification is unavailable. Please try again later.",
+    "emailTaken": "That email is already registered",
+    "usernameTaken": "That username is already taken"
   },
   "register": {
     "title": "Create account",
@@ -91,9 +105,22 @@
     "usernameTooShort": "Your username must be at least 3 characters",
     "usernameTooLong": "Your username must be at most 15 characters",
     "usernameInvalidCharacters": "Use only letters, numbers, underscores and hyphens",
+    "emailInvalid": "Enter a valid email address",
+    "emailDomainNotAllowed": "Registration is not allowed for this email domain",
     "fieldsRequired": "Fill in every field",
     "submit": "Create account",
-    "backToLogin": "Already have an account? Back to Sign In"
+    "backToLogin": "Already have an account? Back to Sign In",
+    "codeSent": "We sent a code to your inbox",
+    "verifyTitle": "Verify your email",
+    "verifyHint": "We sent a code to {email}",
+    "code": "Code",
+    "codeMissing": "Enter the code",
+    "invalidCode": "The code is incorrect or expired",
+    "verifySubmit": "Verify email",
+    "resend": "Resend code",
+    "changeEmail": "Change email",
+    "verifiedTitle": "Email verified",
+    "verifiedHint": "Your account is ready. You can sign in now."
   },
   "password": {
     "hint": "16–64 characters with upper case, lower case, a number and a symbol",
@@ -116,14 +143,18 @@
     "backToEmail": "Use a different email",
     "backToLogin": "Back to Sign In",
     "emailMissing": "Enter your email address",
+    "emailInvalid": "That email is invalid. Go back and enter it again.",
     "codeMissing": "Enter the code",
-    "passwordMissing": "Enter a new password"
+    "passwordMissing": "Enter a new password",
+    "invalidCode": "The code is incorrect or expired",
+    "doneTitle": "Password reset",
+    "doneHint": "All sessions were signed out. Sign in with your new password."
   },
   "totp": {
     "title": "Two-factor verification",
-    "hint": "Enter the 6-digit code from your authenticator. It expires after 30 seconds.",
-    "code": "Code",
-    "invalidCode": "The code is 6 digits.",
+    "hint": "Enter the 6-digit code from your authenticator, or use a recovery code.",
+    "code": "Code or recovery code",
+    "invalidCode": "Enter a 6-digit code or a 10-character recovery code",
     "submit": "Verify",
     "back": "Back"
   },

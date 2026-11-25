@@ -5,6 +5,18 @@ export default defineNuxtConfig({
 
   devtools: { enabled: false },
 
+  // 同源部署留空；前后端分离开发时用 NUXT_PUBLIC_API_BASE 指向后端来源
+  runtimeConfig: {
+    public: {
+      apiBase: '',
+    },
+  },
+
+  // workspace 内的 API client 以 TS 源码分发，需由 Nuxt 转译
+  build: {
+    transpile: ['@nebula/api-client'],
+  },
+
   // 类型感知规则只在给出 tsconfigPath 时才叠加；strict 默认为 true，会再叠一层
   // strict-type-checked，§7 要的是 recommended-type-checked，故关掉
   eslint: {

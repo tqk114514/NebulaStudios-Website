@@ -1,6 +1,6 @@
 # usePasswordReset
 
-忘记密码的两步表单状态。
+忘记密码两步：发码 → 验证码 + 新口令，已接入 `/api/auth/password/reset/request` 与 `/confirm`。
 
 ```ts
 const {
@@ -8,6 +8,9 @@ const {
   code,
   password,
   step,
+  pending,
+  completed,
+  formError,
   emailError,
   codeError,
   passwordError,
@@ -17,8 +20,7 @@ const {
 } = usePasswordReset()
 ```
 
-- `submitEmail` 只校验邮箱非空，通过后切到 `reset` 步骤
-- `submitReset` 校验验证码非空与新口令强度；密码强度与白名单由服务端最终判定
-- 口令规则与注册一致：16–64 位且含大小写、数字与标点（`app/utils/password.ts`）
-- 后端接入前，两个提交都不发请求；`backToEmail` 清空验证码与密码
-- 发码端点对未注册邮箱与冷却中同样返回 204，界面只能提示「如果该邮箱已注册，验证码已发送」，不得据此判断账户是否存在
+- `submitEmail(token?)`：Turnstile 启用时传当前 token；发码成功（含未注册与冷却中的 204）都进入 `reset`
+- `submitReset`：验码并设置新口令；成功后 `completed` 为真，全部会话已被服务端撤销
+- 口令规则与注册一致（`app/utils/password.ts`）；服务端字段错误按 `details.fields[]` 落回对应输入
+- 发码端点不泄露账户是否存在，界面只提示「如果该邮箱已注册，验证码已发送」

@@ -1,13 +1,23 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  // 路由页与布局由 Nuxt 在运行时挂载，没有静态 import 方，只能列为 entry
-  "entry": ["app/pages/**/*.vue", "app/layouts/**/*.vue", "scripts/**/*.mjs", "test/**/*.test.ts"],
-  "project": ["app/**/*.{ts,vue}", "test/**/*.ts"],
+  // 根应用与 API client 是两个 workspace：路由页与脚本没有静态 import 方，列为 entry
+  "workspaces": {
+    ".": {
+      "entry": ["app/pages/**/*.vue", "app/layouts/**/*.vue", "scripts/**/*.mjs", "test/**/*.test.ts"],
+      "project": ["app/**/*.{ts,vue}", "test/**/*.ts"]
+    },
+    "packages/api-client": {
+      "entry": ["scripts/**/*.mjs"],
+      "project": ["src/**/*.ts"]
+    }
+  },
   // knip 跟随 .gitignore，Reference/ 与 .nuxt/ 已在其中
   "ignoreDependencies": [
     "vue-tsc",
     "@fontsource/unbounded",
     "@fontsource/azeret-mono",
-    "@fontsource-variable/newsreader"
+    "@fontsource-variable/newsreader",
+    // 生成脚本通过 node_modules 路径调用 CLI，不是静态 import
+    "openapi-typescript"
   ]
 }

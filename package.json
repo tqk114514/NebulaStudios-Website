@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
@@ -16,6 +19,7 @@
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "codegen:api": "npm run codegen --workspace @nebula/api-client",
     "check": "npm run lint && npm run lint:style && npm run typecheck && npm run test && npm run check:i18n && npm run knip",
     "postinstall": "nuxt prepare"
   },

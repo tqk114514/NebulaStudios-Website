@@ -11,7 +11,8 @@ export function checkCredentials(identifier: string, password: string): Credenti
   return 'none'
 }
 
-/** 动态码固定 6 位数字；粘贴带来的空白字符先剥掉 */
-export function isCompleteCode(value: string): boolean {
-  return /^\d{6}$/.test(value.trim())
+/** 二段接受 6 位 TOTP 动态码或 10 位恢复码；粘贴带来的空白字符先剥掉 */
+export function isCompleteTotpInput(value: string): boolean {
+  const code = value.trim()
+  return /^\d{6}$/.test(code) || /^[A-Za-z0-9]{10}$/.test(code)
 }

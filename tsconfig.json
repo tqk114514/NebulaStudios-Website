@@ -1,13 +1,14 @@
 {
   "extends": ["./.nuxt/tsconfig.json"],
   // 派生配置的 include 整体替换基底的，所以这里要重列 Nuxt 的那几项（含 nuxt.node.d.ts，
-  // defineNuxtConfig 由它提供）。加进来的只有 test/**：test/unit 原本落在基底之外，
-  // 既不进 nuxt typecheck，也不进类型感知 lint。
+  // defineNuxtConfig 由它提供）。加进来的有 test/** 与 packages/**：test/unit 原本落在
+  // 基底之外，API client 是 app 之外仍要被类型检查的 workspace 包。
   "include": [
     "./.nuxt/nuxt.d.ts",
     "./.nuxt/nuxt.node.d.ts",
     "./app/**/*",
     "./i18n/**/*",
+    "./packages/**/*.ts",
     "./shared/**/*",
     "./test/**/*.ts",
     "./nuxt.config.*",

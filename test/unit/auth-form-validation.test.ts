@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkCredentials, isCompleteCode } from '~/composables/useSignIn/validation'
+import { checkCredentials, isCompleteTotpInput } from '~/composables/useSignIn/validation'
 import { checkSignUp } from '~/composables/useSignUp/validation'
 import { checkPassword } from '~/utils/password'
 
@@ -20,18 +20,23 @@ describe('checkCredentials', () => {
   })
 })
 
-describe('isCompleteCode', () => {
-  it('六位数字才算完整', () => {
-    expect(isCompleteCode('492107')).toBe(true)
+describe('isCompleteTotpInput', () => {
+  it('六位数字动态码通过', () => {
+    expect(isCompleteTotpInput('492107')).toBe(true)
   })
 
-  it('位数不足或含非数字都不通过', () => {
-    expect(isCompleteCode('49210')).toBe(false)
-    expect(isCompleteCode('49a107')).toBe(false)
+  it('十位恢复码通过', () => {
+    expect(isCompleteTotpInput('ABCDEFGHJK')).toBe(true)
+  })
+
+  it('位数不足或六位含非数字都不通过', () => {
+    expect(isCompleteTotpInput('49210')).toBe(false)
+    expect(isCompleteTotpInput('49a107')).toBe(false)
+    expect(isCompleteTotpInput('ABCDEFGHJ')).toBe(false)
   })
 
   it('粘贴带入的首尾空白不影响判定', () => {
-    expect(isCompleteCode('  492107 ')).toBe(true)
+    expect(isCompleteTotpInput('  492107 ')).toBe(true)
   })
 })
 

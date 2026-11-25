@@ -1,0 +1,1117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nebula API",
+    "description": "Nebula Studios 身份认证服务；错误响应统一为 ErrorBody，详见 ADR-0004。",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理登录：取凭据 → 验证（时序对齐）→ 参数落后时升级哈希 → 签发会话。",
+        "description": "# Errors\nJSON 非法 400、字段缺失 422、凭据错误 401、内部故障 500（ADR-0004）。",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功，返回用户并下发会话 cookie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "凭据错误，或 `totp_required` 需要二段挑战",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "账户已被封禁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/totp": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理二段：挑战有效 → 码校验 → 原子消费挑战 → 建会话。",
+        "description": "# Errors\n字段缺失 422；挑战缺失/过期/耗尽/码错 401 `totp_invalid`；内部故障 500。",
+        "operationId": "login_totp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginTotpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "二段通过，返回用户并下发会话 cookie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "挑战或验证码无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "账户已被封禁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理登出：鉴权前置由 [`FirstPartyUser`] 提取器承担——无有效 access token 时\nhandler 根本不会执行（v3 的登出路由没挂鉴权，撤销逻辑永不执行，红线 #1）；\ncookie 来源的写请求同时过 CSRF 门禁（ADR-0005）。",
+        "description": "# Errors\n未认证 401；撤销失败 500。",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "已撤销全部会话并清除 cookie"
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF 校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password/reset/confirm": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "POST /api/auth/password/reset/confirm：验码并完成重置。\n「用户不存在」与「码错」同体 401（防枚举）。",
+        "description": "# Errors\n字段缺失/新口令不合规 422；码错/过期/耗尽 401 `invalid_code`；内部故障 500。",
+        "operationId": "reset_confirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetConfirmPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "密码已重置，全部会话已撤销"
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "验证码错误或已失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password/reset/request": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "POST /api/auth/password/reset/request：发重置验证码。",
+        "description": "# Errors\n字段缺失 422；内部故障 500。未知邮箱与冷却中均为 204。",
+        "operationId": "reset_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequestPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "已受理（未注册与冷却中同样返回）"
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "人机验证暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理刷新：CSRF 门禁（cookie-only 写端点，ADR-0005）→ 呈递 cookie 中的\nrefresh 明文 → 原子轮转 → 续发 access 与新 csrf。\n401/403 附带清 cookie 头：安全不依赖它（服务端已撤销），但不清会让浏览器\n揣着死 cookie 重放最长 30 天，污染 401 指标与日志（§9.8），也拖累盗用恢复体验。",
+        "description": "# Errors\nCSRF 校验失败 403 `csrf_invalid`；cookie 缺失/未知/过期 401 `refresh_invalid`；\n重放 401 `refresh_reused`（家族已整族撤销）；内部故障 500。",
+        "operationId": "refresh",
+        "responses": {
+          "204": {
+            "description": "轮转成功，新凭据经 Set-Cookie 下发"
+          },
+          "401": {
+            "description": "refresh token 缺失、无效或重放",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF 校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理注册：归一化 → 校验 → 哈希（`spawn_blocking`）→ 落库 → 201 裸用户。",
+        "description": "# Errors\nJSON 非法 400、字段校验失败 422、用户名或邮箱占用 409、内部故障 500（ADR-0004）。",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "注册成功，返回未验证用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "邮箱或用户名已被占用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "人机验证暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register/resend": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理重发：冷却检查 → 签发新码并异步发送。",
+        "description": "# Errors\n字段缺失 422；内部故障 500。冷却与未注册均为 204，响应不泄露账户状态。",
+        "operationId": "resend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "已受理（未注册与冷却中同样返回）"
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "人机验证暂不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "处理验证：取最新未消费验证码 → 时效/限次检查 → 恒时哈希比较 → 原子消费并置已验证。",
+        "description": "# Errors\n字段缺失 422；验证码错误/过期/耗尽/用户不存在 401 `invalid_code`；内部故障 500。",
+        "operationId": "verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "邮箱已验证"
+          },
+          "400": {
+            "description": "请求体非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "验证码错误或已失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type 必须为 application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/turnstile": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "返回 Turnstile 启用状态与 site key；不含 secret。",
+        "operationId": "settings",
+        "responses": {
+          "200": {
+            "description": "Turnstile 站点配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnstileSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "返回当前用户；不包含口令哈希等凭据。",
+        "description": "# Errors\n未认证 401；用户已不存在 401；存储故障 500。",
+        "operationId": "profile",
+        "responses": {
+          "200": {
+            "description": "当前用户资料",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "账户已被封禁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorBody": {
+        "type": "object",
+        "description": "错误响应体；所有非 2xx 响应共用此形状。`details` 是唯一扩展位，\n携带结构化附加数据（如字段级校验错误）。",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "机器可读错误码，跨版本稳定（如 `internal_error`）。"
+          },
+          "details": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "结构化附加数据；无则为 `None`，序列化时省略。"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "概要信息，供日志与排查；不承诺可直接展示给终端用户。"
+          }
+        }
+      },
+      "FieldInvalid": {
+        "type": "object",
+        "description": "单个字段校验失败；`code` 机器可读（如 `password_too_short`），\n前端按 `field` + `code` 取本地化文案。",
+        "required": [
+          "field",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "该字段的机器可读错误码。"
+          },
+          "field": {
+            "type": "string",
+            "description": "字段名，与请求载荷的键一致。"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "登录请求；`identifier` 为邮箱或用户名（§4：同一意图一个键名）。",
+        "required": [
+          "identifier",
+          "password"
+        ],
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "登录标识。"
+          },
+          "password": {
+            "type": "string",
+            "description": "明文口令。"
+          }
+        }
+      },
+      "LoginTotpRequest": {
+        "type": "object",
+        "description": "二段请求。",
+        "required": [
+          "challenge_token",
+          "code"
+        ],
+        "properties": {
+          "challenge_token": {
+            "type": "string",
+            "description": "密码步骤响应 `details.challenge_token`。"
+          },
+          "code": {
+            "type": "string",
+            "description": "TOTP 码或恢复码。"
+          }
+        }
+      },
+      "ProfileResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/User",
+            "description": "用户快照；不含口令哈希与头像版本。"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "avatar_url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "头像公开地址；从未上传为 `None`。"
+              }
+            }
+          }
+        ],
+        "description": "当前用户资料；用户字段平铺，另加派生的头像地址。"
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "注册请求；字段规则沿用 v3（ADR-0002）：邮箱非空且 ≤254、用户名 3–15 个\nASCII 字母/数字/下划线/连字符、密码 16–64 且须含大小写字母、数字与标点。\n用户名禁止 `@` 等邮箱字符，保证登录标识在 email 与 username 两列之间不歧义。",
+        "required": [
+          "email",
+          "username",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "邮箱；服务端 trim 并小写化后入库（v3 语义）。"
+          },
+          "password": {
+            "type": "string",
+            "description": "明文口令；只在本端点边界出现，不进日志与响应。"
+          },
+          "turnstile_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Turnstile token；启用校验时必填，未启用时忽略。"
+          },
+          "username": {
+            "type": "string",
+            "description": "展示用户名。"
+          }
+        }
+      },
+      "ResendRequest": {
+        "type": "object",
+        "description": "重发请求。",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "需要重发的邮箱。"
+          },
+          "turnstile_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Turnstile token；启用校验时必填。"
+          }
+        }
+      },
+      "ResetConfirmPayload": {
+        "type": "object",
+        "description": "重置完成（confirm 端点）。",
+        "required": [
+          "email",
+          "code",
+          "new_password"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "邮件中的六位验证码。"
+          },
+          "email": {
+            "type": "string",
+            "description": "注册邮箱。"
+          },
+          "new_password": {
+            "type": "string",
+            "description": "新口令；强度规则与注册一致。"
+          }
+        }
+      },
+      "ResetRequestPayload": {
+        "type": "object",
+        "description": "重置请求（request 端点）。",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "注册邮箱。"
+          },
+          "turnstile_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Turnstile token；启用校验时必填。"
+          }
+        }
+      },
+      "TurnstileSettingsResponse": {
+        "type": "object",
+        "description": "前端渲染 Turnstile 所需的站点配置；未启用时只返回 `enabled: false`。",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "是否启用服务端校验。"
+          },
+          "site_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "公开 site key；未启用时省略。"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "description": "注册用户快照。登录标识为邮箱或用户名（ADR-0002）；\n字段合法形状（长度、字符集）在注册端点经 `validator` 校验，领域层不重复编码规则。",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "created_at",
+          "email_verified"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "注册时刻；RFC3339 存储于数据库（ADR-0003）。"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱地址，全库唯一（大小写不敏感），入库前小写化。"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "description": "邮箱是否已验证；注册时为 false，验证端点置 true。"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "永久标识（API 字段名 `id`），UUID v7，即稳定 UID；修改用户名或邮箱不变。"
+          },
+          "username": {
+            "type": "string",
+            "description": "展示用用户名，全库唯一且大小写敏感（ADR-0015）。"
+          }
+        }
+      },
+      "Value": {},
+      "VerifyRequest": {
+        "type": "object",
+        "description": "验证请求。",
+        "required": [
+          "email",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "邮件中的六位验证码。"
+          },
+          "email": {
+            "type": "string",
+            "description": "邮箱。"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "注册、登录、会话与密码重置"
+    },
+    {
+      "name": "user",
+      "description": "第一方用户资料"
+    }
+  ]
+}

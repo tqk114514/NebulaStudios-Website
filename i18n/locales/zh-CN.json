@@ -80,7 +80,21 @@
     "socialErrorAccountUnavailable": "该账户当前不可用",
     "socialErrorServerError": "登录失败，请稍后再试",
     "socialErrorAlreadyLinked": "该第三方账号已绑定其他账户",
-    "socialErrorGeneric": "登录失败，请稍后再试"
+    "socialErrorGeneric": "登录失败，请稍后再试",
+    "signedInTitle": "已登录",
+    "signedInHint": "当前账户：{username}",
+    "backHome": "返回首页"
+  },
+  "api": {
+    "working": "处理中…",
+    "genericError": "请求失败，请稍后再试",
+    "invalidCredentials": "邮箱、用户名或密码错误",
+    "banned": "该账户已被封禁",
+    "rateLimited": "请求过于频繁，请稍后再试",
+    "turnstileInvalid": "人机验证未通过，请重试",
+    "turnstileUnavailable": "人机验证暂不可用，请稍后再试",
+    "emailTaken": "该邮箱已被注册",
+    "usernameTaken": "该用户名已被占用"
   },
   "register": {
     "title": "创建账户",
@@ -91,9 +105,22 @@
     "usernameTooShort": "用户名至少 3 个字符",
     "usernameTooLong": "用户名最多 15 个字符",
     "usernameInvalidCharacters": "用户名只能包含字母、数字、下划线和连字符",
+    "emailInvalid": "请输入有效的邮箱地址",
+    "emailDomainNotAllowed": "该邮箱域名不允许注册",
     "fieldsRequired": "请填写全部字段",
     "submit": "创建账户",
-    "backToLogin": "已有账户？返回登录"
+    "backToLogin": "已有账户？返回登录",
+    "codeSent": "验证码已发送，请查收邮件",
+    "verifyTitle": "验证邮箱",
+    "verifyHint": "验证码已发送至 {email}",
+    "code": "验证码",
+    "codeMissing": "请输入验证码",
+    "invalidCode": "验证码错误或已失效",
+    "verifySubmit": "验证邮箱",
+    "resend": "重新发送验证码",
+    "changeEmail": "修改邮箱",
+    "verifiedTitle": "邮箱已验证",
+    "verifiedHint": "账户已创建，现在可以登录了"
   },
   "password": {
     "hint": "16–64 个字符，含大写、小写、数字与标点",
@@ -116,14 +143,18 @@
     "backToEmail": "重新输入邮箱",
     "backToLogin": "返回登录",
     "emailMissing": "请输入邮箱地址",
+    "emailInvalid": "邮箱地址无效，请返回重新输入",
     "codeMissing": "请输入验证码",
-    "passwordMissing": "请输入新密码"
+    "passwordMissing": "请输入新密码",
+    "invalidCode": "验证码错误或已失效",
+    "doneTitle": "密码已重置",
+    "doneHint": "全部会话已退出，请用新密码重新登录"
   },
   "totp": {
     "title": "两步验证",
-    "hint": "输入验证器上的 6 位动态码，30 秒后失效。",
-    "code": "动态码",
-    "invalidCode": "动态码是 6 位数字",
+    "hint": "输入验证器上的 6 位动态码，或使用恢复码。",
+    "code": "动态码或恢复码",
+    "invalidCode": "请输入 6 位动态码或 10 位恢复码",
     "submit": "验证",
     "back": "返回"
   },

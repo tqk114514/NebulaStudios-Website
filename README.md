@@ -37,6 +37,24 @@ cargo run --release
 siteverify）、
 `NEBULA_SOCIAL__*`（社交登录，ADR-0012）。
 
+## 前端与 API client
+
+前端在 `app/`，API client 是独立 workspace 包 `packages/api-client`。后端 `ApiDoc`
+暴露 `GET /api/openapi.json`，`cargo run --bin openapi` 输出同一份文档；
+`npm run codegen:api` 生成 `packages/api-client/openapi.json` 与 `src/schema.d.ts`。
+生成物入库，端点或 DTO 改动后重跑。
+
+`useApi()` 返回共享 client：写请求自动回显 `nebula_csrf`，并固定
+`credentials: 'include'`。同源部署时 `NUXT_PUBLIC_API_BASE` 留空；前后端分离开发时：
+
+```bash
+NEBULA_CORS__ALLOWED_ORIGIN=http://127.0.0.1:3000 cargo run
+NUXT_PUBLIC_API_BASE=http://127.0.0.1:8080 npm run dev
+```
+
+社交登录按钮与 API client 共用该基地址；启用社交登录时
+`NEBULA_SOCIAL__BASE_URL` 仍须指向前端来源。
+
 ## OAuth Provider 客户端
 
 `NEBULA_OAUTH__CLIENTS_FILE` 指向一个 TOML 文件；启动时按 `client_id` upsert，

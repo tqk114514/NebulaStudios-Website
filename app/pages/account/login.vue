@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useI18n, useRoute, useRouter, useSeoMeta } from '#imports'
+import { useI18n, useRoute, useRouter, useRuntimeConfig, useSeoMeta } from '#imports'
 import { parseSocialCallback, socialErrorKey } from '~/composables/useSignIn/social'
 import { useSignIn } from '~/composables/useSignIn'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const apiBase = useRuntimeConfig().public.apiBase
 const {
   backToCredentials,
   code,
   codeError,
+  formError,
   identifier,
   identifierError,
   password,
   passwordError,
+  pending,
+  signedInUser,
   startTotpChallenge,
   step,
   submitCode,
@@ -45,22 +49,24 @@ onMounted(() => {
   delete query.challenge_token
   void router.replace({ query })
 })
-
 // 标签页标题与页面主标题同源，不另立一份文案
 useSeoMeta({ title: () => t('login.title') })
 </script>
 
 <template>
   <main>
+    <AuthPanel v-if="signedInUser" :title="t('login.signedInTitle')" :subtitle="t('login.signedInHint', { username: signedInUser.username })">
+      <BaseButton to="/">{{ t('login.backHome') }}</BaseButton>
+    </AuthPanel>
     <AuthPanel
-      v-if="step === 'credentials'"
+      v-else-if="step === 'credentials'"
       num="01"
       :title="t('login.title')"
       :subtitle="t('login.subtitle')"
     >
       <p v-if="socialNotice" class="notice" role="status">{{ socialNotice }}</p>
       <p v-if="socialError" class="form-error" role="alert">{{ socialError }}</p>
-
+      <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
       <form class="stack" novalidate @submit.prevent="submitCredentials">
         <BaseField
           v-model="identifier"
@@ -81,18 +87,17 @@ useSeoMeta({ title: () => t('login.title') })
           :error="passwordError"
           required
         />
-
-        <BaseButton type="submit">{{ t('login.submit') }}</BaseButton>
+        <BaseButton type="submit" :disabled="pending">
+          {{ pending ? t('api.working') : t('login.submit') }}
+        </BaseButton>
       </form>
-
       <p class="divider">{{ t('login.providers') }}</p>
-
       <div class="stack">
         <!-- 标识位需替换为官方下载素材：Google 四色 G 只能原色置于白底，Microsoft logo 不得改动 -->
-        <BaseButton variant="secondary" href="/api/auth/google">
+        <BaseButton variant="secondary" :href="`${apiBase}/api/auth/google`">
           {{ t('login.signinGoogle') }}
         </BaseButton>
-        <BaseButton variant="secondary" href="/api/auth/microsoft">
+        <BaseButton variant="secondary" :href="`${apiBase}/api/auth/microsoft`">
           {{ t('login.signinMicrosoft') }}
         </BaseButton>
       </div>
@@ -103,27 +108,29 @@ useSeoMeta({ title: () => t('login.title') })
         <NuxtLink class="quiet" to="/account/register">{{ t('login.register') }}</NuxtLink>
       </div>
     </AuthPanel>
-
     <AuthPanel
       v-else
       num="02"
       :title="t('totp.title')"
       :subtitle="t('totp.hint')">
+      <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+
       <form class="stack" novalidate @submit.prevent="submitCode">
         <BaseField
           v-model="code"
           :label="t('totp.code')"
           name="code"
-          inputmode="numeric"
           autocomplete="one-time-code"
           :spellcheck="false"
           autocorrect="off"
-          autocapitalize="none"
-          :maxlength="6"
+          autocapitalize="characters"
+          :maxlength="10"
           :error="codeError"
           required
         />
-        <BaseButton type="submit">{{ t('totp.submit') }}</BaseButton>
+        <BaseButton type="submit" :disabled="pending">
+          {{ pending ? t('api.working') : t('totp.submit') }}
+        </BaseButton>
       </form>
 
       <div class="foot">
@@ -140,21 +147,18 @@ useSeoMeta({ title: () => t('login.title') })
   display: grid;
   gap: var(--space-4);
 }
-
-.notice {
-  margin-bottom: var(--space-4);
-  font-size: var(--text-xs);
-  letter-spacing: var(--track-label);
-  color: var(--success);
-}
-
+.notice,
 .form-error {
   margin-bottom: var(--space-4);
   font-size: var(--text-xs);
   letter-spacing: var(--track-label);
+}
+.notice {
+  color: var(--success);
+}
+.form-error {
   color: var(--error);
 }
-
 .quiet {
   font-size: var(--text-xs);
   letter-spacing: var(--track-mono);
@@ -164,15 +168,12 @@ useSeoMeta({ title: () => t('login.title') })
   padding: 0;
   cursor: pointer;
 }
-
 .quiet:hover {
   color: var(--fg);
 }
-
 .sep {
   color: var(--fg-faint);
 }
-
 .divider {
   display: flex;
   align-items: center;
@@ -182,14 +183,12 @@ useSeoMeta({ title: () => t('login.title') })
   letter-spacing: var(--track-mono);
   color: var(--fg-faint);
 }
-
 .divider::before,
 .divider::after {
   content: '';
   flex: 1;
   border-top: 1px solid var(--line);
 }
-
 .foot {
   display: flex;
   align-items: center;

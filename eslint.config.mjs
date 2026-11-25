@@ -10,8 +10,9 @@ import withNuxt from './.nuxt/eslint.config.mjs'
 export default withNuxt(
   {
     name: 'nebula/ignores',
-    // Reference/ 是 v3 归档，不参与构建、测试与检索（AGENTS.md 开头）
-    ignores: ['Reference/**'],
+    // Reference/ 是 v3 归档，不参与构建、测试与检索（AGENTS.md 开头）；
+    // schema.d.ts 由 openapi-typescript 生成，不手改、不按项目行数规则检查
+    ignores: ['Reference/**', 'packages/api-client/src/schema.d.ts'],
   },
   {
     name: 'nebula/line-budget',
