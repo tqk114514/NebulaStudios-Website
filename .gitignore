@@ -10,6 +10,7 @@ target/
 .env.*
 
 # 编辑器与工具缓存
+.zcode/
 .vscode/
 .idea/
 .DS_Store
