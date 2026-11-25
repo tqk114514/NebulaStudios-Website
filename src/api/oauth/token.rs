@@ -281,6 +281,6 @@ fn token_response(access: String, refresh: &str, scope: &str, expires_in: i64) -
 }
 
 fn internal(err: impl Into<anyhow::Error>) -> Response {
-    tracing::error!(error = ?err.into(), "oauth token internal error");
+    tracing::error!(error = ?err.into(), "OAuth token 内部错误");
     super::rfc_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
 }

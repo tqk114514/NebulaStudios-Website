@@ -116,7 +116,7 @@ pub async fn authorize(State(state): State<AppState>, RawQuery(raw): RawQuery) -
             .into_response(),
         Err(ApiError::OAuthAuthorize(code)) => rfc_error(StatusCode::BAD_REQUEST, code),
         Err(err) => {
-            tracing::error!(error = ?err, "oauth authorize internal error");
+            tracing::error!(error = ?err, "OAuth 授权内部错误");
             rfc_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error")
         }
     }

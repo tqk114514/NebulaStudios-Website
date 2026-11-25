@@ -149,7 +149,7 @@ test/{unit,nuxt,e2e}
 
 `[workspace.lints]` 见仓库根的 `workspace-lints.toml`（复制进 `Cargo.toml`；成员 crate 写 `[lints] workspace = true`），含 `unsafe_code = "forbid"`、`missing_docs`、clippy `unwrap_used`/`expect_used`/`missing_errors_doc`/`missing_panics_doc`、rustdoc `broken_intra_doc_links = "deny"`。`rustfmt.toml` 用仓库根的 `rustfmt.toml`，只含 stable 选项；`group_imports`/`imports_granularity` 为 nightly-only，启用则 CI 必须改用 `cargo +nightly fmt`。
 
-**错误处理**（C-GOOD-ERR）：库侧 thiserror 派生专用枚举，anyhow 只出现在 `main.rs` 与边界；公开 `Result` 的错误类型必须 `impl Error + Send + Sync + 'static'` 且 `impl Debug`；`()` 不作错误类型；`Display` 小写开头、结尾无标点；不用已废弃的 `description()`。
+**错误处理**（C-GOOD-ERR）：库侧 thiserror 派生专用枚举，anyhow 只出现在 `main.rs` 与边界；公开 `Result` 的错误类型必须 `impl Error + Send + Sync + 'static'` 且 `impl Debug`；`()` 不作错误类型；`Display` 小写开头、结尾无标点；不用已废弃的 `description()`。**错误文本语言**：机器码一律英文 snake_case（`ErrorBody.code`、`details.fields[].code`、OAuth 错误码），前端只按码映射；`ErrorBody.message` 用英文陈述式，小写开头、无尾标点，只陈述事实；服务端错误文本统一陈述式，不写 please / 请 / try again 等祈使句；`thiserror` 的 `Display` 与 `tracing` 日志保持中文，同一句内不混写英文散文（JWT、SQLite 等技术名词除外）；用户可见文案只放前端 i18n 与邮件模板。
 
 **CI 必跑**：`cargo fmt --all -- --check`、`cargo clippy -- -D warnings`、`cargo test`、`cargo doc --no-deps`（`RUSTDOCFLAGS` 含 `-D rustdoc::broken_intra_doc_links`）、`cargo deny check`、`cargo machete`、`typos`。
 

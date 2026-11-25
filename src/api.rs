@@ -720,10 +720,10 @@ fn clear_cookies_if(response: Response, should_clear: impl FnOnce(StatusCode) ->
 fn governor_error_response(error: &GovernorError) -> Response {
     if let GovernorError::TooManyRequests { wait_time, .. } = error {
         ::metrics::counter!("nebula_rate_limit_hits_total").increment(1);
-        tracing::warn!(retry_after = wait_time, "rate limited");
+        tracing::warn!(retry_after = wait_time, "请求命中限流");
         let body = crate::error::ErrorBody {
             code: "rate_limited",
-            message: "请求过于频繁".to_owned(),
+            message: "too many requests".to_owned(),
             details: Some(serde_json::json!({ "retry_after": wait_time })),
         };
         let mut response = (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();

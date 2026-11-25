@@ -3,4 +3,4 @@ source: tests/register.rs
 assertion_line: 134
 expression: body_text(response).await
 ---
-{"code":"email_taken","message":"邮箱已被注册"}
+{"code":"email_taken","message":"email is already registered"}

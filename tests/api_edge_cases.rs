@@ -357,7 +357,7 @@ async fn cookie_write_endpoints_reject_missing_csrf_header() {
         // cookie 来源且无 X-CSRF-Token：必须在 handler 之前被 403 拦下
         let response = fixture.send_cookie_write(&write, None).await;
         let json = assert_error(response, StatusCode::FORBIDDEN, "csrf_invalid").await;
-        assert_eq!(json["message"], "CSRF 校验失败", "{} 未被 CSRF 门禁拦下", write.label);
+        assert_eq!(json["message"], "csrf validation failed", "{} 未被 CSRF 门禁拦下", write.label);
     }
 }
 

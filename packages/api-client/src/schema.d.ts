@@ -250,7 +250,10 @@ export interface components {
             /** @description 机器可读错误码，跨版本稳定（如 `internal_error`）。 */
             code: string;
             details?: components["schemas"]["Value"] | null;
-            /** @description 概要信息，供日志与排查；不承诺可直接展示给终端用户。 */
+            /**
+             * @description 英文诊断文本（陈述式，小写开头、无尾标点），供日志与排查；
+             *     不得直接展示给终端用户。
+             */
             message: string;
         };
         /**

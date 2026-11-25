@@ -167,7 +167,7 @@ fn map_body_rejection(rejection: &axum::extract::rejection::BytesRejection) -> A
     if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
         ApiError::PayloadTooLarge
     } else {
-        ApiError::MalformedJson("无法读取请求体".to_owned())
+        ApiError::MalformedJson("request body is not readable".to_owned())
     }
 }
 

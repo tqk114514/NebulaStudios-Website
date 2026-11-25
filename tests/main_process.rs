@@ -2,7 +2,7 @@
 //!
 //! 每个用例用独立临时目录（库、JWT PEM、头像目录），配置只经 `Command::env`
 //! 传给子进程。stdout/stderr 由读线程持续消费，避免管道写满阻塞子进程；
-//! 就绪以日志中的 `listening` 行（实际监听地址）为信号。
+//! 就绪以日志中的 `服务监听已启动` 行（实际监听地址）为信号。
 
 // 断言失败即 panic 是测试的正确失败语义；unwrap/expect 禁令面向生产路径
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -147,7 +147,10 @@ fn spawn_reader<R: Read + Send + 'static>(
     })
 }
 
-/// 等待 `listening` 日志行并返回实际监听地址；超时或提前退出时打印已捕获日志。
+/// 启动就绪日志标记；与 `main.rs` 的 tracing 文案保持一致。
+const LISTENING_MARKER: &str = "服务监听已启动";
+
+/// 等待启动就绪日志行并返回实际监听地址；超时或提前退出时打印已捕获日志。
 fn await_listening(rx: &mpsc::Receiver<String>, capture: &LogCapture) -> SocketAddr {
     let deadline = Instant::now() + STARTUP_TIMEOUT;
     loop {
@@ -160,7 +163,7 @@ fn await_listening(rx: &mpsc::Receiver<String>, capture: &LogCapture) -> SocketA
             }
             Err(mpsc::RecvTimeoutError::Timeout | mpsc::RecvTimeoutError::Disconnected) => {
                 panic!(
-                    "子进程未在 {} 秒内输出 listening；已捕获日志:\n{}",
+                    "子进程未在 {} 秒内输出 {LISTENING_MARKER}；已捕获日志:\n{}",
                     STARTUP_TIMEOUT.as_secs(),
                     capture.dump()
                 );
@@ -172,7 +175,7 @@ fn await_listening(rx: &mpsc::Receiver<String>, capture: &LogCapture) -> SocketA
 /// 从一行日志解析 `bind=` 后的地址；先去掉 ANSI 转义，再只取地址字符。
 fn parse_listening(line: &str) -> Option<SocketAddr> {
     let plain = strip_ansi(line);
-    if !plain.contains("listening") {
+    if !plain.contains(LISTENING_MARKER) {
         return None;
     }
     let (_, tail) = plain.split_once("bind=")?;
@@ -272,7 +275,11 @@ async fn minimal_config_serves_healthz_and_metrics() {
         "metrics 缺少真实指标名 axum_http_requests_total:\n{metrics}"
     );
 
-    assert!(logs.dump().contains("listening"), "启动日志必须包含 listening:\n{}", logs.dump());
+    assert!(
+        logs.dump().contains(LISTENING_MARKER),
+        "启动日志必须包含 {LISTENING_MARKER}:\n{}",
+        logs.dump()
+    );
 }
 
 #[tokio::test]
@@ -453,7 +460,7 @@ async fn sigint_triggers_graceful_shutdown() {
     let (mut guard, logs, rx) = ChildGuard::spawn(&mut command);
     let addr = await_listening(&rx, &logs);
 
-    // listening 日志早于 axum::serve 内 shutdown future 的首次轮询：
+    // 启动就绪日志早于 axum::serve 内 shutdown future 的首次轮询：
     // 先确认服务已能应答，并留出信号处理器注册窗口，否则 SIGINT 走默认终止
     let client = reqwest::Client::new();
     let response =
