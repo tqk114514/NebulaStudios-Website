@@ -1,6 +1,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
+import { passwordIssueKey, type PasswordIssue } from '~/utils/password'
 import { checkSignUp, type SignUpIssue } from './validation'
+
+/** 口令问题与用户名问题共用一套 issue 联合类型，靠前缀分流文案来源。 */
+function isPasswordIssue(issue: SignUpIssue): issue is PasswordIssue {
+  return issue.startsWith('password')
+}
 
 /**
  * 注册表单的字段状态与本地校验。首次提交前不报错，之后错误随输入更新。
@@ -26,11 +32,14 @@ export function useSignUp() {
 
   // 键写字面量：§3 第 4 条的缺项检查只扫得到静态键
   const issueText = computed(() => {
+    if (isPasswordIssue(issue.value)) return t(passwordIssueKey(issue.value))
     switch (issue.value) {
       case 'fieldsRequired':
         return t('register.fieldsRequired')
       case 'usernameTooShort':
         return t('register.usernameTooShort')
+      case 'usernameTooLong':
+        return t('register.usernameTooLong')
       case 'usernameInvalidCharacters':
         return t('register.usernameInvalidCharacters')
       default:
@@ -41,9 +50,14 @@ export function useSignUp() {
   // 缺项无法归到某一个字段，由表单级错误行承担
   const formError = computed(() => (issue.value === 'fieldsRequired' ? issueText.value : ''))
   const usernameError = computed(() =>
-    issue.value === 'usernameTooShort' || issue.value === 'usernameInvalidCharacters'
+    issue.value === 'usernameTooShort'
+    || issue.value === 'usernameTooLong'
+    || issue.value === 'usernameInvalidCharacters'
       ? issueText.value
       : '',
+  )
+  const passwordError = computed(() =>
+    isPasswordIssue(issue.value) ? issueText.value : '',
   )
 
   function submit() {
@@ -58,6 +72,7 @@ export function useSignUp() {
     password,
     formError,
     usernameError,
+    passwordError,
     submit,
   }
 }

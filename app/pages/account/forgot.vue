@@ -45,6 +45,7 @@ useSeoMeta({ title: () => t('forgot.title') })
         class="stack"
         novalidate
         @submit.prevent="submitReset">
+        <p class="notice" role="status">{{ t('forgot.codeSent') }}</p>
         <BaseField
           v-model="code"
           :label="t('forgot.code')"
@@ -66,6 +67,7 @@ useSeoMeta({ title: () => t('forgot.title') })
           :error="passwordError"
           required
         />
+        <p class="hint">{{ t('password.hint') }}</p>
         <BaseButton type="submit">{{ t('forgot.submit') }}</BaseButton>
         <button class="quiet" type="button" @click="backToEmail">
           {{ t('forgot.backToEmail') }}
@@ -83,6 +85,19 @@ useSeoMeta({ title: () => t('forgot.title') })
 .stack {
   display: grid;
   gap: var(--space-4);
+}
+
+.notice {
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--success);
+}
+
+.hint {
+  margin-top: calc(var(--space-2) * -1);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--fg-faint);
 }
 
 .quiet {

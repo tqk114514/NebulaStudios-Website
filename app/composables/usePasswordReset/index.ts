@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from '#imports'
+import { checkPassword, passwordIssueKey } from '~/utils/password'
 
 export type PasswordResetStep = 'email' | 'reset'
 
@@ -23,14 +24,18 @@ export function usePasswordReset() {
   const codeError = computed(() =>
     attemptedReset.value && !code.value.trim() ? t('forgot.codeMissing') : '',
   )
-  const passwordError = computed(() =>
-    attemptedReset.value && !password.value.trim() ? t('forgot.passwordMissing') : '',
-  )
+  const passwordError = computed(() => {
+    if (!attemptedReset.value) return ''
+    if (!password.value.trim()) return t('forgot.passwordMissing')
+    const issue = checkPassword(password.value)
+    return issue ? t(passwordIssueKey(issue)) : ''
+  })
 
   function submitEmail() {
     attemptedEmail.value = true
     if (emailError.value) return
-    // 后端接入后在此发起 /api/auth/password/reset/request
+    // 后端接入后在此发起 /api/auth/password/reset/request；
+    // 该端点对未注册邮箱与冷却中同样返回 204，界面不得据此判断账户是否存在
     step.value = 'reset'
   }
 
@@ -38,6 +43,7 @@ export function usePasswordReset() {
     attemptedReset.value = true
     if (codeError.value || passwordError.value) return
     // 后端接入后在此发起 /api/auth/password/reset/confirm
+    // 请求体为 { email, code, new_password }，成功后清空会话并回登录页
   }
 
   function backToEmail() {

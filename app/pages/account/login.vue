@@ -1,20 +1,50 @@
 <script setup lang="ts">
-import { useI18n, useSeoMeta } from '#imports'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n, useRoute, useRouter, useSeoMeta } from '#imports'
+import { parseSocialCallback, socialErrorKey } from '~/composables/useSignIn/social'
 import { useSignIn } from '~/composables/useSignIn'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const {
   backToCredentials,
   code,
   codeError,
-  email,
-  emailError,
+  identifier,
+  identifierError,
   password,
   passwordError,
+  startTotpChallenge,
   step,
   submitCode,
   submitCredentials,
 } = useSignIn()
+
+// 回调参数只在进入页面时读一次：随后从地址栏移除，避免挑战令牌留在历史记录里
+const socialSignedIn = ref(false)
+const socialErrorSlug = ref('')
+const callback = parseSocialCallback(route.query)
+if (callback?.kind === 'ok') socialSignedIn.value = true
+else if (callback?.kind === 'error') socialErrorSlug.value = callback.slug
+else if (callback?.kind === 'totp') startTotpChallenge(callback.challengeToken)
+
+const socialNotice = computed(() => (socialSignedIn.value ? t('login.socialSignedIn') : ''))
+const socialError = computed(() =>
+  socialErrorSlug.value ? t(socialErrorKey(socialErrorSlug.value)) : '',
+)
+
+onMounted(() => {
+  if (!('social' in route.query || 'social_error' in route.query || 'challenge_token' in route.query)) {
+    return
+  }
+  // 只移除回调参数，保留后续接线要用的 redirect 等查询项
+  const query = { ...route.query }
+  delete query.social
+  delete query.social_error
+  delete query.challenge_token
+  void router.replace({ query })
+})
 
 // 标签页标题与页面主标题同源，不另立一份文案
 useSeoMeta({ title: () => t('login.title') })
@@ -28,15 +58,18 @@ useSeoMeta({ title: () => t('login.title') })
       :title="t('login.title')"
       :subtitle="t('login.subtitle')"
     >
+      <p v-if="socialNotice" class="notice" role="status">{{ socialNotice }}</p>
+      <p v-if="socialError" class="form-error" role="alert">{{ socialError }}</p>
+
       <form class="stack" novalidate @submit.prevent="submitCredentials">
         <BaseField
-          v-model="email"
-          :label="t('login.email')"
-          name="email"
-          type="email"
+          v-model="identifier"
+          :label="t('login.identifier')"
+          name="identifier"
+          type="text"
           autocomplete="username"
           :spellcheck="false"
-          :error="emailError"
+          :error="identifierError"
           required
         />
         <BaseField
@@ -106,6 +139,20 @@ useSeoMeta({ title: () => t('login.title') })
 .stack {
   display: grid;
   gap: var(--space-4);
+}
+
+.notice {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--success);
+}
+
+.form-error {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--error);
 }
 
 .quiet {

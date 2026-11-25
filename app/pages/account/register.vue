@@ -7,6 +7,7 @@ const {
   email,
   formError,
   password,
+  passwordError,
   submit,
   username,
   usernameError,
@@ -46,8 +47,10 @@ useSeoMeta({ title: () => t('register.title') })
           name="new-password"
           type="password"
           autocomplete="new-password"
+          :error="passwordError"
           required
         />
+        <p class="hint">{{ t('password.hint') }}</p>
 
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
 
@@ -65,6 +68,13 @@ useSeoMeta({ title: () => t('register.title') })
 .stack {
   display: grid;
   gap: var(--space-4);
+}
+
+.hint {
+  margin-top: calc(var(--space-2) * -1);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-label);
+  color: var(--fg-faint);
 }
 
 .form-error {

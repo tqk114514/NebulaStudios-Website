@@ -1,11 +1,12 @@
 /**
- * 登录表单的纯校验规则：邮箱先于密码判定，一次只报一个字段。
+ * 登录表单的纯校验规则：标识先于密码判定，一次只报一个字段。
+ * 标识为邮箱或用户名；服务端只对含 `@` 的标识做邮箱归一化（ADR-0015）。
  */
 
-export type CredentialIssue = 'none' | 'emailMissing' | 'passwordMissing'
+export type CredentialIssue = 'none' | 'identifierMissing' | 'passwordMissing'
 
-export function checkCredentials(email: string, password: string): CredentialIssue {
-  if (email.trim().length === 0) return 'emailMissing'
+export function checkCredentials(identifier: string, password: string): CredentialIssue {
+  if (identifier.trim().length === 0) return 'identifierMissing'
   if (password.trim().length === 0) return 'passwordMissing'
   return 'none'
 }
