@@ -106,7 +106,7 @@ pub fn username_problem(username: &str) -> Option<&'static str> {
 pub struct User {
     /// 永久标识（API 字段名 `id`），UUID v7，即稳定 UID；修改用户名或邮箱不变。
     pub id: UserId,
-    /// 展示用用户名，全库唯一（大小写不敏感）。
+    /// 展示用用户名，全库唯一且大小写敏感（ADR-0015）。
     pub username: String,
     /// 邮箱地址，全库唯一（大小写不敏感），入库前小写化。
     pub email: String,
