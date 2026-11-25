@@ -20,7 +20,7 @@ use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 /// 重置请求（request 端点）。
 // 含 Turnstile token，故意不实现 Debug，避免误日志。
 #[allow(missing_debug_implementations)]
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ResetRequestPayload {
     /// 注册邮箱。
     pub email: String,
@@ -32,7 +32,7 @@ pub struct ResetRequestPayload {
 /// 重置完成（confirm 端点）。
 // 含验证码与新口令，故意不实现 Debug，避免误日志。
 #[allow(missing_debug_implementations)]
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ResetConfirmPayload {
     /// 注册邮箱。
     pub email: String,
@@ -46,6 +46,21 @@ pub struct ResetConfirmPayload {
 ///
 /// # Errors
 /// 字段缺失 422；内部故障 500。未知邮箱与冷却中均为 204。
+#[utoipa::path(
+    post,
+    path = "/api/auth/password/reset/request",
+    tag = "auth",
+    request_body = ResetRequestPayload,
+    responses(
+        (status = 204, description = "已受理（未注册与冷却中同样返回）"),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+        (status = 503, description = "人机验证暂不可用", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn reset_request(
     State(state): State<AppState>,
     locale: PreferredLocale,
@@ -84,6 +99,21 @@ pub async fn reset_request(
 ///
 /// # Errors
 /// 字段缺失/新口令不合规 422；码错/过期/耗尽 401 `invalid_code`；内部故障 500。
+#[utoipa::path(
+    post,
+    path = "/api/auth/password/reset/confirm",
+    tag = "auth",
+    request_body = ResetConfirmPayload,
+    responses(
+        (status = 204, description = "密码已重置，全部会话已撤销"),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 401, description = "验证码错误或已失效", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn reset_confirm(
     State(state): State<AppState>,
     locale: PreferredLocale,

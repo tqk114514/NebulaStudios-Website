@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::api::AppState;
 
 /// 前端渲染 Turnstile 所需的站点配置；未启用时只返回 `enabled: false`。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct TurnstileSettingsResponse {
     /// 是否启用服务端校验。
     pub enabled: bool,
@@ -17,6 +17,12 @@ pub struct TurnstileSettingsResponse {
 }
 
 /// 返回 Turnstile 启用状态与 site key；不含 secret。
+#[utoipa::path(
+    get,
+    path = "/api/auth/turnstile",
+    tag = "auth",
+    responses((status = 200, description = "Turnstile 站点配置", body = TurnstileSettingsResponse))
+)]
 pub async fn settings(State(state): State<AppState>) -> Json<TurnstileSettingsResponse> {
     Json(TurnstileSettingsResponse {
         enabled: state.turnstile.is_some(),

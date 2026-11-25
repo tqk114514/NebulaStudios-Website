@@ -102,9 +102,10 @@ pub fn username_problem(username: &str) -> Option<&'static str> {
 
 /// 注册用户快照。登录标识为邮箱或用户名（ADR-0002）；
 /// 字段合法形状（长度、字符集）在注册端点经 `validator` 校验，领域层不重复编码规则。
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, utoipa::ToSchema)]
 pub struct User {
     /// 永久标识（API 字段名 `id`），UUID v7，即稳定 UID；修改用户名或邮箱不变。
+    #[schema(value_type = String, format = "uuid")]
     pub id: UserId,
     /// 展示用用户名，全库唯一且大小写敏感（ADR-0015）。
     pub username: String,

@@ -5,6 +5,7 @@ pub mod auth;
 pub mod healthz;
 pub mod metrics;
 pub mod oauth;
+pub mod openapi;
 pub mod policy;
 pub mod user;
 
@@ -428,6 +429,7 @@ pub fn router(state: AppState) -> Router {
     let open = Router::new()
         .route("/healthz", get(healthz::healthz))
         .route("/metrics", get(metrics::metrics))
+        .route("/api/openapi.json", get(openapi::json))
         .route(
             "/api/auth/logout",
             post(auth::logout::logout).layer(middleware::from_fn(clear_cookies_on_auth_failure)),

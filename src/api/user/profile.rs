@@ -10,7 +10,7 @@ use crate::extractors::FirstPartyUser;
 use crate::model::user::User;
 
 /// 当前用户资料；用户字段平铺，另加派生的头像地址。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ProfileResponse {
     /// 用户快照；不含口令哈希与头像版本。
     #[serde(flatten)]
@@ -23,6 +23,17 @@ pub struct ProfileResponse {
 ///
 /// # Errors
 /// 未认证 401；用户已不存在 401；存储故障 500。
+#[utoipa::path(
+    get,
+    path = "/api/user",
+    tag = "user",
+    responses(
+        (status = 200, description = "当前用户资料", body = ProfileResponse),
+        (status = 401, description = "未认证", body = crate::error::ErrorBody),
+        (status = 403, description = "账户已被封禁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn profile(
     State(state): State<AppState>,
     user: FirstPartyUser,

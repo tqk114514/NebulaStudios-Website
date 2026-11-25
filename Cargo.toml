@@ -26,6 +26,8 @@ version = "0.1.0"
 edition = "2024"
 license-file = "LICENSE"
 publish = false
+# `openapi` 是构建期辅助 bin；默认运行仍然启动服务
+default-run = "nebula-server"
 
 [lints]
 workspace = true
@@ -71,6 +73,7 @@ tower-http = { version = "0.7.1", features = ["cors", "limit", "request-id", "se
 tower_governor = "0.8.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+utoipa = { version = "6.0.0", features = ["chrono", "uuid"] }
 uuid = { version = "1.29.2", features = ["serde", "v7"] }
 validator = { version = "0.21.0", features = ["derive"] }
 webp = { version = "0.3.1", default-features = false }

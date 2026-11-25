@@ -16,6 +16,17 @@ use crate::model::audit::AuditAction;
 ///
 /// # Errors
 /// 未认证 401；撤销失败 500。
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 204, description = "已撤销全部会话并清除 cookie"),
+        (status = 401, description = "未认证", body = crate::error::ErrorBody),
+        (status = 403, description = "CSRF 校验失败", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn logout(
     State(state): State<AppState>,
     user: FirstPartyUser,

@@ -17,7 +17,7 @@ use crate::model::totp::{CHALLENGE_MAX_ATTEMPTS, verify_code_step};
 /// 二段请求。
 // 含挑战令牌与验证码，故意不实现 Debug，避免误日志。
 #[allow(missing_debug_implementations)]
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct LoginTotpRequest {
     /// 密码步骤响应 `details.challenge_token`。
     pub challenge_token: String,
@@ -29,6 +29,22 @@ pub struct LoginTotpRequest {
 ///
 /// # Errors
 /// 字段缺失 422；挑战缺失/过期/耗尽/码错 401 `totp_invalid`；内部故障 500。
+#[utoipa::path(
+    post,
+    path = "/api/auth/login/totp",
+    tag = "auth",
+    request_body = LoginTotpRequest,
+    responses(
+        (status = 200, description = "二段通过，返回用户并下发会话 cookie", body = crate::model::user::User),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 401, description = "挑战或验证码无效", body = crate::error::ErrorBody),
+        (status = 403, description = "账户已被封禁", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn login_totp(
     State(state): State<AppState>,
     body: JsonBody<LoginTotpRequest>,

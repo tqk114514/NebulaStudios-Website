@@ -14,7 +14,7 @@ use crate::model::user::canonicalize_email;
 use crate::model::verification::VerificationPurpose;
 
 /// 验证请求。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct VerifyRequest {
     /// 邮箱。
     pub email: String,
@@ -26,6 +26,21 @@ pub struct VerifyRequest {
 ///
 /// # Errors
 /// 字段缺失 422；验证码错误/过期/耗尽/用户不存在 401 `invalid_code`；内部故障 500。
+#[utoipa::path(
+    post,
+    path = "/api/auth/register/verify",
+    tag = "auth",
+    request_body = VerifyRequest,
+    responses(
+        (status = 204, description = "邮箱已验证"),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 401, description = "验证码错误或已失效", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn verify(
     State(state): State<AppState>,
     body: JsonBody<VerifyRequest>,

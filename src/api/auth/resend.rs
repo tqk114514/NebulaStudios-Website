@@ -15,7 +15,7 @@ use crate::model::user::canonicalize_email;
 use crate::model::verification::{RESEND_COOLDOWN, VerificationPurpose};
 
 /// 重发请求。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ResendRequest {
     /// 需要重发的邮箱。
     pub email: String,
@@ -28,6 +28,21 @@ pub struct ResendRequest {
 ///
 /// # Errors
 /// 字段缺失 422；内部故障 500。冷却与未注册均为 204，响应不泄露账户状态。
+#[utoipa::path(
+    post,
+    path = "/api/auth/register/resend",
+    tag = "auth",
+    request_body = ResendRequest,
+    responses(
+        (status = 204, description = "已受理（未注册与冷却中同样返回）"),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+        (status = 503, description = "人机验证暂不可用", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn resend(
     State(state): State<AppState>,
     locale: PreferredLocale,

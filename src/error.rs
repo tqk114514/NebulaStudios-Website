@@ -10,9 +10,10 @@ use serde_json::Value as JsonValue;
 
 /// 错误响应体；所有非 2xx 响应共用此形状。`details` 是唯一扩展位，
 /// 携带结构化附加数据（如字段级校验错误）。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ErrorBody {
     /// 机器可读错误码，跨版本稳定（如 `internal_error`）。
+    #[schema(value_type = String)]
     pub code: &'static str,
     /// 概要信息，供日志与排查；不承诺可直接展示给终端用户。
     pub message: String,
@@ -23,9 +24,10 @@ pub struct ErrorBody {
 
 /// 单个字段校验失败；`code` 机器可读（如 `password_too_short`），
 /// 前端按 `field` + `code` 取本地化文案。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct FieldInvalid {
     /// 字段名，与请求载荷的键一致。
+    #[schema(value_type = String)]
     pub field: &'static str,
     /// 该字段的机器可读错误码。
     pub code: String,

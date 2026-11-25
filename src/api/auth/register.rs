@@ -20,7 +20,7 @@ use crate::storage::{UserRepo, UserRepoError};
 /// 用户名禁止 `@` 等邮箱字符，保证登录标识在 email 与 username 两列之间不歧义。
 // 含明文口令与 Turnstile token，故意不实现 Debug，避免误日志。
 #[allow(missing_debug_implementations)]
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Validate, utoipa::ToSchema)]
 pub struct RegisterRequest {
     /// 邮箱；服务端 trim 并小写化后入库（v3 语义）。
     #[validate(length(min = 1, max = 254))]
@@ -98,6 +98,22 @@ fn field_issues(req: &RegisterRequest, errors: &ValidationErrors) -> Vec<FieldIn
 ///
 /// # Errors
 /// JSON 非法 400、字段校验失败 422、用户名或邮箱占用 409、内部故障 500（ADR-0004）。
+#[utoipa::path(
+    post,
+    path = "/api/auth/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "注册成功，返回未验证用户", body = User),
+        (status = 400, description = "请求体非法", body = crate::error::ErrorBody),
+        (status = 409, description = "邮箱或用户名已被占用", body = crate::error::ErrorBody),
+        (status = 415, description = "Content-Type 必须为 application/json", body = crate::error::ErrorBody),
+        (status = 422, description = "字段校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+        (status = 503, description = "人机验证暂不可用", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn register(
     State(state): State<AppState>,
     locale: PreferredLocale,

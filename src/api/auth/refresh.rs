@@ -22,6 +22,18 @@ use crate::storage::{ClientBinding, RotateRefreshError};
 /// # Errors
 /// CSRF 校验失败 403 `csrf_invalid`；cookie 缺失/未知/过期 401 `refresh_invalid`；
 /// 重放 401 `refresh_reused`（家族已整族撤销）；内部故障 500。
+#[utoipa::path(
+    post,
+    path = "/api/auth/refresh",
+    tag = "auth",
+    responses(
+        (status = 204, description = "轮转成功，新凭据经 Set-Cookie 下发"),
+        (status = 401, description = "refresh token 缺失、无效或重放", body = crate::error::ErrorBody),
+        (status = 403, description = "CSRF 校验失败", body = crate::error::ErrorBody),
+        (status = 429, description = "请求过于频繁", body = crate::error::ErrorBody),
+        (status = 500, description = "内部错误", body = crate::error::ErrorBody),
+    )
+)]
 pub async fn refresh(
     State(state): State<AppState>,
     _csrf: CsrfGuard,

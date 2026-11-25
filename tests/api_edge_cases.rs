@@ -780,3 +780,27 @@ async fn avatar_with_non_multipart_content_type_uses_error_envelope() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_error(response, StatusCode::BAD_REQUEST, "malformed_multipart").await;
 }
+
+#[tokio::test]
+async fn openapi_document_lists_frontend_auth_paths() {
+    let (state, _clock, _mailbox, _dir) = common::app_state().await;
+    let app = api::router(state);
+
+    let response = send(&app, Method::GET, "/api/openapi.json", &[], Body::empty()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = json_body(response).await;
+    for path in [
+        "/api/auth/turnstile",
+        "/api/auth/register",
+        "/api/auth/register/verify",
+        "/api/auth/login",
+        "/api/auth/login/totp",
+        "/api/auth/refresh",
+        "/api/auth/logout",
+        "/api/auth/password/reset/request",
+        "/api/auth/password/reset/confirm",
+        "/api/user",
+    ] {
+        assert!(json["paths"][path].is_object(), "OpenAPI 缺少路径 {path}");
+    }
+}
